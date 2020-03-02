@@ -1,4 +1,3 @@
-
 use crate::encoding::Type;
 
 #[test]
