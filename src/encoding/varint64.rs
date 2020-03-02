@@ -1,5 +1,10 @@
 pub fn read(x: i64, buf: &mut [u8]) -> usize {
-    // undo zigzag encoding
+    // convert negative numbers to positive using zigzag encoding:
+	//  0 => 0
+	//  -1 => 1
+	//  1 => 2
+	//  -2 => 3
+	//  2 => 4
     let mut ux = (x as u64) << 1;
     if x < 0 {
         ux = !ux
@@ -18,6 +23,7 @@ pub fn read(x: i64, buf: &mut [u8]) -> usize {
     }
     // change little-endian to big-endian
     buf[..i].reverse();
+    // number of bytes read into buf
     i
 }
 
@@ -39,6 +45,7 @@ pub fn write(x: &mut i64, buf: &[u8]) -> usize {
     if ux&1 != 0 {
         *x = !*x;
     }
+    // number of bytes consumed from buf
     i
 }
 

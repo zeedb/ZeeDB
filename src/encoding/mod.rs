@@ -18,7 +18,3 @@ pub enum Type {
     Struct(Vec<(String, Type)>),
     Array(Box<Type>),
 }
-
-pub trait Serialize {
-    fn serialize(&self, buf: &mut [u8]) -> usize;
-}
