@@ -2,5 +2,5 @@
     "files.exclude": {
         "target": true
     },
-    "rust.show_warnings": false
+    "rust-analyzer.displayInlayHints": false
 }

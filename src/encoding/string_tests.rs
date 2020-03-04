@@ -1,4 +1,4 @@
-use crate::encoding::Type;
+use super::Type;
 
 #[test]
 fn test_to_string() {

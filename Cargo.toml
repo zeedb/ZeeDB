@@ -1,21 +1,7 @@
-[package]
-name = "rcalvin"
-version = "0.1.0"
-authors = ["George Fraser <george@fivetran.com>"]
-edition = "2018"
-
-[[bin]]
-name = "helloworld-server"
-path = "src/helloworld/server.rs"
-
-[[bin]]
-name = "helloworld-client"
-path = "src/helloworld/client.rs"
-
-[dependencies]
-tonic = "0.1"
-prost = "0.6"
-tokio = { version = "0.2", features = ["macros"] }
-
-[build-dependencies]
-tonic-build = "0.1.1"
+[workspace]
+members = [
+    "src/encoding",
+    "src/helloworld",
+    "src/parser",
+    "src/zetasql",
+]
