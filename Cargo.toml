@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "src/encoding",
-    "src/helloworld",
     "src/parser",
     "src/zetasql",
 ]

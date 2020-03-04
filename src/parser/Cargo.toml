@@ -7,10 +7,6 @@ publish = false
 [lib]
 path = "lib.rs"
 
-[[bin]]
-name = "client"
-path = "client.rs"
-
 [dependencies]
 futures = "0.3.4"
 tokio = { version = "0.2", features = ["macros"] }
