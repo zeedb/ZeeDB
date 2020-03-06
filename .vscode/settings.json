@@ -2,5 +2,5 @@
     "files.exclude": {
         "target": true
     },
-    "rust-analyzer.displayInlayHints": false
+    "rust-analyzer.cargo-watch.enable": false
 }
