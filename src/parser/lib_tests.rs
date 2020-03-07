@@ -1,6 +1,8 @@
 use std::process::Command;
 use super::analyze;
-use zetasql::{FunctionSignatureId, LanguageFeature, LanguageOptionsProto, SimpleCatalogProto, ZetaSqlBuiltinFunctionOptionsProto};
+use tokio::runtime::Runtime;
+use zetasql::{AnyResolvedStatementProto, FunctionSignatureId, LanguageFeature, LanguageOptionsProto, SimpleCatalogProto, ZetaSqlBuiltinFunctionOptionsProto};
+use zetasql::any_resolved_statement_proto::{Node};
 
 const SCRIPT: &str = r"
 if [[ `docker ps --filter name=test-zetasql-server -q` ]]; then 
@@ -251,10 +253,8 @@ fn enabled_functions() -> Vec<i32> {
     ]
 }
 
-#[test]
-fn test_analyze() {
-    create_zetasql_server();
-    let catalog = SimpleCatalogProto{
+fn empty_catalog() -> SimpleCatalogProto {
+    SimpleCatalogProto{
         builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto{
             language_options: Some(LanguageOptionsProto{
                 enabled_language_features: enabled_features(),
@@ -264,6 +264,24 @@ fn test_analyze() {
             ..Default::default()
         }),
         ..Default::default()
-    };
-    assert_eq!("SELECT\n  foo;", format!("{:?}", analyze(String::from("select foo"), 0, catalog)));
+    }
+}
+
+#[tokio::test]
+async fn test_analyze() {
+    create_zetasql_server();
+    match analyze("select 1", 0, empty_catalog()).await {
+        Ok((_, AnyResolvedStatementProto{node: Some(Node::ResolvedQueryStmtNode(_))})) => (),
+        other => panic!("{:?}", other)
+    }
+}
+
+#[test]
+fn test_sync_analyze() {
+    create_zetasql_server();
+    let mut runtime = Runtime::new().expect("runtime failed to start");
+    match runtime.block_on(analyze("select 1", 0, empty_catalog())) {
+        Ok((_, AnyResolvedStatementProto{node: Some(Node::ResolvedQueryStmtNode(_))})) => (),
+        other => panic!("{:?}", other)
+    }
 }
