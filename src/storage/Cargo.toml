@@ -1,0 +1,11 @@
+[package]
+name = "storage"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+rocksdb = "0.13.0"
