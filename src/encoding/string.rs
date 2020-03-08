@@ -13,9 +13,9 @@ impl ToString for Type {
             Type::Enum => String::from("ENUM"),
             Type::Numeric => String::from("NUMERIC"),
             Type::Struct(fields) => {
-                let strings: Vec<String> = fields.iter().map(field_to_string).collect(); 
+                let strings: Vec<String> = fields.iter().map(field_to_string).collect();
                 format!("STRUCT<{}>", strings.join(", "))
-            },
+            }
             Type::Array(element) => format!("ARRAY<{}>", element.to_string()),
         }
     }

@@ -12,6 +12,7 @@ macro_rules! assert_round_trip {
 }
 
 #[test]
+#[rustfmt::skip]
 fn test_round_trip() {
     assert_round_trip!(1, [0b10]);
     assert_round_trip!(0b_0111111_1111111_1111111_1111111_1111111_1111111_1111111_1111111, [0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b11111111, 0b01111110]);

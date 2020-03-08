@@ -36,7 +36,7 @@ pub fn write(x: &mut i128, buf: &[u8]) -> usize {
     i += 1;
     // undo zigzag encoding
     *x = (ux >> 1) as i128;
-    if ux&1 != 0 {
+    if ux & 1 != 0 {
         *x = !*x;
     }
     i

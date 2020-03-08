@@ -1,20 +1,31 @@
 use tonic::Status;
 use zetasql::local_service::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
-use zetasql::local_service::{AnalyzeRequest, analyze_request, analyze_response};
-use zetasql::{AnyResolvedStatementProto, FunctionSignatureId, LanguageFeature, LanguageOptionsProto, ParseResumeLocationProto, SimpleCatalogProto, ZetaSqlBuiltinFunctionOptionsProto};
+use zetasql::local_service::{analyze_request, analyze_response, AnalyzeRequest};
+use zetasql::{
+    AnyResolvedStatementProto, FunctionSignatureId, LanguageFeature, LanguageOptionsProto,
+    ParseResumeLocationProto, SimpleCatalogProto, ZetaSqlBuiltinFunctionOptionsProto,
+};
 
 mod lib_tests;
 
-pub async fn analyze(sql: &str, offset: i32, catalog: SimpleCatalogProto) -> Result<(i32, AnyResolvedStatementProto), Status> {
-    let mut client = ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051").await.expect("client failed to connect");
+pub async fn analyze(
+    sql: &str,
+    offset: i32,
+    catalog: SimpleCatalogProto,
+) -> Result<(i32, AnyResolvedStatementProto), Status> {
+    let mut client = ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051")
+        .await
+        .expect("client failed to connect");
     let request = tonic::Request::new(AnalyzeRequest {
         simple_catalog: Some(catalog),
-        target: Some(analyze_request::Target::ParseResumeLocation(ParseResumeLocationProto{
-            input: Some(String::from(sql)),
-            byte_position: Some(offset),
-            .. Default::default()
-        })),
-        .. Default::default()
+        target: Some(analyze_request::Target::ParseResumeLocation(
+            ParseResumeLocationProto {
+                input: Some(String::from(sql)),
+                byte_position: Some(offset),
+                ..Default::default()
+            },
+        )),
+        ..Default::default()
     });
     let response = client.analyze(request).await?.into_inner();
     let offset = response.resume_byte_position.unwrap_or(-1);
@@ -25,10 +36,10 @@ pub async fn analyze(sql: &str, offset: i32, catalog: SimpleCatalogProto) -> Res
     Ok((offset, statement))
 }
 
-pub fn empty_catalog() -> SimpleCatalogProto {
-    SimpleCatalogProto{
-        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto{
-            language_options: Some(LanguageOptionsProto{
+pub fn catalog() -> SimpleCatalogProto {
+    SimpleCatalogProto {
+        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
+            language_options: Some(LanguageOptionsProto {
                 enabled_language_features: enabled_features(),
                 ..Default::default()
             }),

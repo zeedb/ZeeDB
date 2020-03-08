@@ -12,6 +12,7 @@ macro_rules! assert_round_trip {
 }
 
 #[test]
+#[rustfmt::skip]
 fn test_read() {
     assert_round_trip!(1, [0b00000010]);
     assert_round_trip!(-1, [0b00000001]);

@@ -1,8 +1,10 @@
+use super::{analyze, catalog};
 use std::process::Command;
-use super::{analyze, empty_catalog};
 use tokio::runtime::Runtime;
-use zetasql::{AnyResolvedStatementProto, SimpleColumnProto, SimpleTableProto, TypeProto, TypeKind};
-use zetasql::any_resolved_statement_proto::{Node};
+use zetasql::any_resolved_statement_proto::Node;
+use zetasql::{
+    AnyResolvedStatementProto, SimpleColumnProto, SimpleTableProto, TypeKind, TypeProto,
+};
 
 const SCRIPT: &str = r"
 if [[ `docker ps --filter name=test-zetasql-server -q` ]]; then 
@@ -33,10 +35,10 @@ done
 
 fn create_zetasql_server() {
     Command::new("sh")
-            .arg("-c")
-            .arg(SCRIPT)
-            .output()
-            .expect("failed to start docker");
+        .arg("-c")
+        .arg(SCRIPT)
+        .output()
+        .expect("failed to start docker");
 }
 
 #[test]
@@ -47,8 +49,13 @@ fn test_create_server() {
 #[tokio::test]
 async fn test_analyze() {
     create_zetasql_server();
-    match analyze("select 1", 0, empty_catalog()).await {
-        Ok((_, AnyResolvedStatementProto{node: Some(Node::ResolvedQueryStmtNode(_))})) => (),
+    match analyze("select 1", 0, catalog()).await {
+        Ok((
+            _,
+            AnyResolvedStatementProto {
+                node: Some(Node::ResolvedQueryStmtNode(_)),
+            },
+        )) => (),
         other => panic!("{:?}", other),
     }
 }
@@ -57,16 +64,18 @@ async fn test_analyze() {
 async fn test_split() {
     create_zetasql_server();
     let sql = "select 1; select 2";
-    let (select1, _) = analyze(sql, 0, empty_catalog()).await.expect("failed to parse");
+    let (select1, _) = analyze(sql, 0, catalog()).await.expect("failed to parse");
     assert!(select1 > 0);
-    let (select2, _) = analyze(sql, select1, empty_catalog()).await.expect("failed to parse");
+    let (select2, _) = analyze(sql, select1, catalog())
+        .await
+        .expect("failed to parse");
     assert_eq!(select2 as usize, sql.len());
 }
 
 #[tokio::test]
 async fn test_not_available_fn() {
     create_zetasql_server();
-    match analyze("select to_proto(true)", 0, empty_catalog()).await {
+    match analyze("select to_proto(true)", 0, catalog()).await {
         Err(_) => (),
         other => panic!("{:?}", other),
     }
@@ -76,20 +85,25 @@ async fn test_not_available_fn() {
 fn test_sync_analyze() {
     create_zetasql_server();
     let mut runtime = Runtime::new().expect("runtime failed to start");
-    match runtime.block_on(analyze("select 1", 0, empty_catalog())) {
-        Ok((_, AnyResolvedStatementProto{node: Some(Node::ResolvedQueryStmtNode(_))})) => (),
-        other => panic!("{:?}", other)
+    match runtime.block_on(analyze("select 1", 0, catalog())) {
+        Ok((
+            _,
+            AnyResolvedStatementProto {
+                node: Some(Node::ResolvedQueryStmtNode(_)),
+            },
+        )) => (),
+        other => panic!("{:?}", other),
     }
 }
 
 #[test]
 fn test_add_table() {
-    let table = SimpleTableProto{
+    let table = SimpleTableProto {
         name: Some(String::from("test_table")),
         serialization_id: Some(1),
-        column: vec![SimpleColumnProto{
+        column: vec![SimpleColumnProto {
             name: Some(String::from("test_column")),
-            r#type: Some(TypeProto{
+            r#type: Some(TypeProto {
                 type_kind: Some(TypeKind::TypeInt64 as i32),
                 ..Default::default()
             }),
@@ -97,6 +111,6 @@ fn test_add_table() {
         }],
         ..Default::default()
     };
-    let mut catalog = empty_catalog();
+    let mut catalog = catalog();
     catalog.table.push(table);
 }
