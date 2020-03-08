@@ -272,7 +272,26 @@ async fn test_analyze() {
     create_zetasql_server();
     match analyze("select 1", 0, empty_catalog()).await {
         Ok((_, AnyResolvedStatementProto{node: Some(Node::ResolvedQueryStmtNode(_))})) => (),
-        other => panic!("{:?}", other)
+        other => panic!("{:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn test_split() {
+    create_zetasql_server();
+    let sql = "select 1; select 2";
+    let (select1, _) = analyze(sql, 0, empty_catalog()).await.expect("failed to parse");
+    assert!(select1 > 0);
+    let (select2, _) = analyze(sql, select1, empty_catalog()).await.expect("failed to parse");
+    assert_eq!(select2 as usize, sql.len());
+}
+
+#[tokio::test]
+async fn test_not_available_fn() {
+    create_zetasql_server();
+    match analyze("select to_proto(true)", 0, empty_catalog()).await {
+        Err(_) => (),
+        other => panic!("{:?}", other),
     }
 }
 
