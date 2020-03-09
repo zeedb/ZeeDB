@@ -1,20 +1,26 @@
 use crate::convert::convert;
 use crate::server::create_zetasql_server;
 use tokio::runtime::Runtime;
-use tonic::Status;
+use tonic::transport::channel::Channel;
+use tonic::{Response, Status};
+use zetasql::local_service::analyze_response::Result::*;
 use zetasql::local_service::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
-use zetasql::local_service::{analyze_request, analyze_response, AnalyzeRequest};
-use zetasql::{AnyResolvedStatementProto, ParseResumeLocationProto, SimpleCatalogProto};
+use zetasql::local_service::*;
+use zetasql::*;
 
 pub struct ParseProvider {
     runtime: Runtime,
+    client: ZetaSqlLocalServiceClient<Channel>,
 }
 
 impl ParseProvider {
     pub fn new() -> ParseProvider {
         create_zetasql_server();
         let mut runtime = Runtime::new().expect("runtime failed to start");
-        ParseProvider { runtime }
+        let client = runtime
+            .block_on(ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051"))
+            .expect("client failed to connect");
+        ParseProvider { runtime, client }
     }
 
     pub fn parse(
@@ -23,22 +29,26 @@ impl ParseProvider {
         offset: i32,
         catalog: SimpleCatalogProto, // TODO eliminate catalog in favor of rocksdb reference
     ) -> Result<(i32, node::Plan), String> {
-        let future = ParseProvider::analyze(sql, offset, catalog);
-        let result = self.runtime.block_on(future);
-        match result {
-            Ok((offset, stmt)) => Ok((offset, convert(stmt))),
+        match self.analyze(sql, offset, catalog) {
+            Ok(response) => {
+                let response = response.into_inner();
+                let offset = response.resume_byte_position.unwrap();
+                let plan = match response.result.unwrap() {
+                    ResolvedStatement(stmt) => convert(stmt),
+                    ResolvedExpression(_) => panic!("expected statement but found expression"),
+                };
+                Ok((offset, plan))
+            }
             Err(status) => Err(String::from(status.message())),
         }
     }
 
-    async fn analyze(
+    fn analyze(
+        &mut self,
         sql: &str,
         offset: i32,
         catalog: SimpleCatalogProto,
-    ) -> Result<(i32, AnyResolvedStatementProto), Status> {
-        let mut client = ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051")
-            .await
-            .expect("client failed to connect");
+    ) -> Result<Response<AnalyzeResponse>, Status> {
         let request = tonic::Request::new(AnalyzeRequest {
             simple_catalog: Some(catalog),
             target: Some(analyze_request::Target::ParseResumeLocation(
@@ -50,12 +60,6 @@ impl ParseProvider {
             )),
             ..Default::default()
         });
-        let response = client.analyze(request).await?.into_inner();
-        let offset = response.resume_byte_position.unwrap_or(-1);
-        let statement = match response.result.unwrap() {
-            analyze_response::Result::ResolvedStatement(statement) => statement,
-            _ => panic!("expression"),
-        };
-        Ok((offset, statement))
+        self.runtime.block_on(self.client.analyze(request))
     }
 }
