@@ -303,7 +303,7 @@ impl Converter {
         let ignore_nulls = parent.null_handling_modifier.unwrap() == 1;
         let argument = self.aggregate_argument(grandparent.clone(), project);
         let function = grandparent.function.unwrap().name.unwrap();
-        Aggregate::from(function, distinct, ignore_nulls, argument)
+        Aggregate::from(&function.as_str(), distinct, ignore_nulls, argument)
     }
 
     fn aggregate_argument(
@@ -411,7 +411,7 @@ impl Converter {
     fn scalar_function_call(&self, x: ResolvedFunctionCallProto) -> Scalar {
         let x = x.parent.unwrap();
         let f = x.function.unwrap().name.unwrap();
-        Scalar::Call(Function::from(f), self.exprs(x.argument_list))
+        Scalar::Call(Function::from(&f.as_str()), self.exprs(x.argument_list))
     }
 
     fn cast(&self, x: ResolvedCastProto) -> Scalar {
