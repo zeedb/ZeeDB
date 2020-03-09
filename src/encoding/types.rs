@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Type {
     Bool,
     Int64,
@@ -13,7 +13,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from(typ: zetasql::TypeProto) -> Type {
+    pub fn from(typ: zetasql::TypeProto) -> Self {
         match typ.type_kind.unwrap() {
             // TypeInt64
             2 => Type::Int64,

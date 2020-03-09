@@ -78,14 +78,14 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn from(table: zetasql::TableRefProto) -> Table {
+    pub fn from(table: zetasql::TableRefProto) -> Self {
         let id = table.serialization_id.expect("no serialization id");
         let name = table.name.expect("no table name");
         Table { id, name }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Column {
     pub id: i64,
     pub name: String,
@@ -93,7 +93,7 @@ pub struct Column {
 }
 
 impl Column {
-    pub fn from(column: zetasql::ResolvedColumnProto) -> Column {
+    pub fn from(column: zetasql::ResolvedColumnProto) -> Self {
         let id = column.column_id.unwrap();
         let name = column.name.unwrap();
         let typ = encoding::Type::from(column.r#type.unwrap());
@@ -365,7 +365,7 @@ pub enum Function {
 }
 
 impl Function {
-    pub fn from(name: String) -> Function {
+    pub fn from(name: String) -> Self {
         unimplemented!()
     }
 }
@@ -374,27 +374,38 @@ impl Function {
 #[derive(Debug)]
 pub enum Aggregate {
     CountStar,
-    AnyValue,
-    ArrayAgg(Distinct, IgnoreNulls),
-    ArrayConcatAgg,
-    AvgInt64(Distinct),
-    AvgDouble(Distinct),
-    AvgNumeric(Distinct),
-    BitAndInt64(Distinct),
-    BitOrInt64(Distinct),
-    BitXorInt64(Distinct),
-    Count(Distinct),
-    LogicalAnd,
-    LogicalOr,
-    Max,
-    Min,
-    StringAggString(Distinct),
-    StringAggDelimString(Distinct),
-    StringAggBytes(Distinct),
-    StringAggDelimBytes(Distinct),
-    SumInt64(Distinct),
-    SumDouble(Distinct),
-    SumNumeric(Distinct),
+    AnyValue(Column),
+    ArrayAgg(Distinct, IgnoreNulls, Column),
+    ArrayConcatAgg(Column),
+    AvgInt64(Distinct, Column),
+    AvgDouble(Distinct, Column),
+    AvgNumeric(Distinct, Column),
+    BitAndInt64(Distinct, Column),
+    BitOrInt64(Distinct, Column),
+    BitXorInt64(Distinct, Column),
+    Count(Distinct, Column),
+    LogicalAnd(Column),
+    LogicalOr(Column),
+    Max(Column),
+    Min(Column),
+    StringAggString(Distinct, Column),
+    StringAggDelimString(Distinct, Column),
+    StringAggBytes(Distinct, Column),
+    StringAggDelimBytes(Distinct, Column),
+    SumInt64(Distinct, Column),
+    SumDouble(Distinct, Column),
+    SumNumeric(Distinct, Column),
+}
+
+impl Aggregate {
+    pub fn from(
+        name: String,
+        distinct: bool,
+        ignore_nulls: bool,
+        argument: Option<Column>,
+    ) -> Self {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

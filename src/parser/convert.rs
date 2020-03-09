@@ -7,6 +7,7 @@ use zetasql::any_resolved_create_statement_proto::Node::*;
 use zetasql::any_resolved_create_table_stmt_base_proto::Node::*;
 use zetasql::any_resolved_expr_proto::Node::*;
 use zetasql::any_resolved_function_call_base_proto::Node::*;
+use zetasql::any_resolved_non_scalar_function_call_base_proto::Node::*;
 use zetasql::any_resolved_scan_proto::Node::*;
 use zetasql::any_resolved_statement_proto::Node::*;
 use zetasql::value_proto::Value::*;
@@ -228,7 +229,96 @@ impl Converter {
     }
 
     fn aggregate(&self, q: ResolvedAggregateScanProto) -> Plan {
-        unimplemented!()
+        let q = *q.parent.unwrap();
+        let mut project = vec![];
+        let mut group_by = vec![];
+        let mut aggregate = vec![];
+        self.group_by(q.clone(), &mut project, &mut group_by);
+        for c in q.aggregate_list {
+            let call = self.coerce_aggregate_call(c.clone());
+            let function = self.convert_aggregate_call(call, &mut project);
+            let column = Column::from(c.column.unwrap());
+            aggregate.push((function, column));
+        }
+        let input = self.any_resolved_scan(*q.input_scan.unwrap());
+        if project.len() == 0 {
+            return Plan(LogicalAggregate(group_by, aggregate), vec![input]);
+        }
+        return Plan(
+            LogicalAggregate(group_by, aggregate),
+            vec![Plan(LogicalProject(project), vec![input])],
+        );
+    }
+
+    fn group_by(
+        &self,
+        q: ResolvedAggregateScanBaseProto,
+        project: &mut Vec<(Scalar, Column)>,
+        group_by: &mut Vec<Column>,
+    ) {
+        for c in q.group_by_list {
+            let value = self.expr(c.expr.unwrap());
+            let column = Column::from(c.column.unwrap());
+            project.push((value, column.clone()));
+            group_by.push(column);
+        }
+    }
+
+    fn coerce_aggregate_call(
+        &self,
+        c: ResolvedComputedColumnProto,
+    ) -> ResolvedAggregateFunctionCallProto {
+        match c.expr.unwrap().node.unwrap() {
+            ResolvedFunctionCallBaseNode(f) => match (*f).node.unwrap() {
+                ResolvedNonScalarFunctionCallBaseNode(f) => match (*f).node.unwrap() {
+                    ResolvedAggregateFunctionCallNode(f) => *f,
+                    other => panic!("expected aggregate but found {:?}", other),
+                },
+                other => panic!("expected aggregate but found {:?}", other),
+            },
+            other => panic!("expected aggregate but found {:?}", other),
+        }
+    }
+
+    fn convert_aggregate_call(
+        &self,
+        call: ResolvedAggregateFunctionCallProto,
+        project: &mut Vec<(Scalar, Column)>,
+    ) -> Aggregate {
+        let parent = call.parent.unwrap();
+        let grandparent = parent.parent.unwrap();
+        let distinct = parent.distinct.unwrap();
+        let ignore_nulls = parent.null_handling_modifier.unwrap() == 1;
+        let argument = self.aggregate_argument(grandparent.clone(), project);
+        let function = grandparent.function.unwrap().name.unwrap();
+        Aggregate::from(function, distinct, ignore_nulls, argument)
+    }
+
+    fn aggregate_argument(
+        &self,
+        call: ResolvedFunctionCallBaseProto,
+        project: &mut Vec<(Scalar, Column)>,
+    ) -> Option<Column> {
+        if call.argument_list.is_empty() {
+            None
+        } else if call.argument_list.len() == 0 {
+            match self.expr(call.argument_list.first().unwrap().clone()) {
+                // If aggregate has a column references as its arg, add the column reference directly and continue.
+                Scalar::Column(column) => Some(column),
+                // Otherwise, generate a pseudo-column to hold the intermediate expression.
+                argument => {
+                    let function = call.function.unwrap().name.unwrap();
+                    let column = self.create(String::from("$project"), function);
+                    project.push((argument, column.clone()));
+                    Some(column)
+                }
+            }
+        } else {
+            panic!(
+                "expected 1 or 0 arguments but found {:?}",
+                call.argument_list
+            );
+        }
     }
 
     fn create_index(&self, q: ResolvedCreateIndexStmtProto) -> Plan {
@@ -317,6 +407,10 @@ impl Converter {
     }
 
     fn subquery_expr(&self, x: ResolvedSubqueryExprProto) -> Scalar {
+        unimplemented!()
+    }
+
+    fn create(&self, table: String, column: String) -> Column {
         unimplemented!()
     }
 }
