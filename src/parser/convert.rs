@@ -427,24 +427,24 @@ impl Converter {
     }
 }
 
-fn literal(value: ValueProto, typ: TypeProto) -> Literal {
+fn literal(value: ValueProto, typ: TypeProto) -> Value {
     match value.value.unwrap() {
-        Int64Value(x) => Literal::Int(x),
-        BoolValue(x) => Literal::Bool(x),
-        DoubleValue(x) => Literal::Double(x),
-        StringValue(x) => Literal::String(x),
-        BytesValue(x) => Literal::Bytes(x),
-        DateValue(x) => Literal::Date(date_value(x)),
-        TimestampValue(x) => Literal::Timestamp(timestamp_value(x)),
+        Int64Value(x) => Value::Int(x),
+        BoolValue(x) => Value::Bool(x),
+        DoubleValue(x) => Value::Double(x),
+        StringValue(x) => Value::String(x),
+        BytesValue(x) => Value::Bytes(x),
+        DateValue(x) => Value::Date(date_value(x)),
+        TimestampValue(x) => Value::Timestamp(timestamp_value(x)),
         ArrayValue(x) => {
             let typ = *typ.array_type.unwrap().element_type.unwrap();
-            Literal::Array(array_value(x.element, typ))
+            Value::Array(array_value(x.element, typ))
         }
         StructValue(x) => {
             let types = typ.struct_type.unwrap().field;
-            Literal::Struct(struct_value(x.field, types))
+            Value::Struct(struct_value(x.field, types))
         }
-        NumericValue(x) => Literal::Numeric(int128::decode(x)),
+        NumericValue(x) => Value::Numeric(int128::decode(x)),
         other => panic!("{:?} not supported", other),
     }
 }
@@ -457,7 +457,7 @@ fn timestamp_value(time: prost_types::Timestamp) -> chrono::DateTime<chrono::Utc
     unimplemented!()
 }
 
-fn array_value(values: Vec<ValueProto>, typ: TypeProto) -> Vec<Literal> {
+fn array_value(values: Vec<ValueProto>, typ: TypeProto) -> Vec<Value> {
     let mut list = vec![];
     for v in values {
         list.push(literal(v.clone(), typ.clone()));
@@ -465,7 +465,7 @@ fn array_value(values: Vec<ValueProto>, typ: TypeProto) -> Vec<Literal> {
     list
 }
 
-fn struct_value(values: Vec<ValueProto>, types: Vec<StructFieldProto>) -> Vec<(String, Literal)> {
+fn struct_value(values: Vec<ValueProto>, types: Vec<StructFieldProto>) -> Vec<(String, Value)> {
     let mut list = vec![];
     for i in 0..list.len() {
         list.push(struct_field(values[i].clone(), types[i].clone()));
@@ -473,7 +473,7 @@ fn struct_value(values: Vec<ValueProto>, types: Vec<StructFieldProto>) -> Vec<(S
     list
 }
 
-fn struct_field(value: ValueProto, typ: StructFieldProto) -> (String, Literal) {
+fn struct_field(value: ValueProto, typ: StructFieldProto) -> (String, Value) {
     let name = typ.field_name.unwrap();
     let literal = literal(value, typ.field_type.unwrap());
     (name, literal)

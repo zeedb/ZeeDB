@@ -245,7 +245,7 @@ pub struct Rename {
 
 #[derive(Debug)]
 pub enum Scalar {
-    Literal(Literal),
+    Literal(Value),
     Column(Column),
     Call(Function, Vec<Scalar>),
     Cast(Box<Scalar>, encoding::Type),
@@ -263,7 +263,7 @@ impl fmt::Display for Scalar {
 }
 
 #[derive(Debug)]
-pub enum Literal {
+pub enum Value {
     Int(i64),
     Bool(bool),
     Double(f64),
@@ -271,24 +271,24 @@ pub enum Literal {
     Bytes(Vec<u8>),
     Date(chrono::Date<chrono::Utc>),
     Timestamp(chrono::DateTime<chrono::Utc>),
-    Array(Vec<Literal>),
-    Struct(Vec<(String, Literal)>),
+    Array(Vec<Value>),
+    Struct(Vec<(String, Value)>),
     Numeric(decimal::d128),
 }
 
-impl fmt::Display for Literal {
+impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Literal::Int(i) => write!(f, "{}", i),
-            Literal::Bool(b) => write!(f, "TODO"),
-            Literal::Double(d) => write!(f, "TODO"),
-            Literal::String(s) => write!(f, "TODO"),
-            Literal::Bytes(bs) => write!(f, "TODO"),
-            Literal::Date(date) => write!(f, "TODO"),
-            Literal::Timestamp(time) => write!(f, "TODO"),
-            Literal::Array(xs) => write!(f, "TODO"),
-            Literal::Struct(xs) => write!(f, "TODO"),
-            Literal::Numeric(n) => write!(f, "TODO"),
+            Value::Int(i) => write!(f, "{}", i),
+            Value::Bool(b) => write!(f, "TODO"),
+            Value::Double(d) => write!(f, "TODO"),
+            Value::String(s) => write!(f, "TODO"),
+            Value::Bytes(bs) => write!(f, "TODO"),
+            Value::Date(date) => write!(f, "TODO"),
+            Value::Timestamp(time) => write!(f, "TODO"),
+            Value::Array(xs) => write!(f, "TODO"),
+            Value::Struct(xs) => write!(f, "TODO"),
+            Value::Numeric(n) => write!(f, "TODO"),
         }
     }
 }
