@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "src/encoding",
+    "src/node",
     "src/parser",
     "src/storage",
     "src/zetasql",

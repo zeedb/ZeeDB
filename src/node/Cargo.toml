@@ -1,5 +1,5 @@
 [package]
-name = "parser"
+name = "node"
 version = "0.1.0"
 edition = "2018"
 publish = false
@@ -11,9 +11,4 @@ path = "lib.rs"
 chrono = "0.4"
 decimal = "2.0.4"
 encoding = { path = "../encoding" }
-futures = "0.3.4"
-node = { path = "../node" }
-prost-types = "0.6.1"
-tokio = { version = "0.2", features = ["macros"] }
-tonic = "0.1.1"
 zetasql = { path = "../zetasql" }

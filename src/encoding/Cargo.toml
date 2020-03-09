@@ -6,3 +6,6 @@ publish = false
 
 [lib]
 path = "lib.rs"
+
+[dependencies]
+zetasql = { path = "../zetasql" }

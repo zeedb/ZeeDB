@@ -10,7 +10,6 @@ impl ToString for Type {
             Type::Bytes => String::from("BYTES"),
             Type::Date => String::from("DATE"),
             Type::Timestamp => String::from("TIMESTAMP"),
-            Type::Enum => String::from("ENUM"),
             Type::Numeric => String::from("NUMERIC"),
             Type::Struct(fields) => {
                 let strings: Vec<String> = fields.iter().map(field_to_string).collect();

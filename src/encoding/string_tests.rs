@@ -9,7 +9,6 @@ fn test_to_string() {
     assert_eq!(String::from("BYTES"), Type::Bytes.to_string());
     assert_eq!(String::from("DATE"), Type::Date.to_string());
     assert_eq!(String::from("TIMESTAMP"), Type::Timestamp.to_string());
-    assert_eq!(String::from("ENUM"), Type::Enum.to_string());
     assert_eq!(String::from("NUMERIC"), Type::Numeric.to_string());
     assert_eq!(
         String::from("STRUCT<i INT64, s STRING>"),
