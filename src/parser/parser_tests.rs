@@ -7,7 +7,7 @@ fn test_analyze() {
     let mut parser = ParseProvider::new();
     let (_, plan) = parser.parse("select 1", 0, catalog()).unwrap();
     match plan {
-        Plan(LogicalProject(_), _) => (),
+        Unary(LogicalProject(_), _) => (),
         other => panic!("{:?}", other),
     }
 }

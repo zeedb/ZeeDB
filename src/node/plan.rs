@@ -1,5 +1,21 @@
+use std::fmt;
+
 #[derive(Debug)]
-pub struct Plan(pub Operator, pub Vec<Plan>);
+pub enum Plan {
+    Root(Operator),
+    Unary(Operator, Box<Plan>),
+    Binary(Operator, Box<Plan>, Box<Plan>),
+}
+
+impl fmt::Display for Plan {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Plan::Root(op) => write!(f, "{}", op),
+            Plan::Unary(op, input) => write!(f, "({} {})", op, *input),
+            Plan::Binary(op, left, right) => write!(f, "({} {} {})", op, *left, *right),
+        }
+    }
+}
 
 // Operator plan nodes combine inputs in a Plan tree.
 #[derive(Debug)]
@@ -69,6 +85,54 @@ pub enum Operator {
     LogicalDrop(Drop),
     // LogicalRename implements the RENAME operation.
     LogicalRename(Rename),
+}
+
+impl fmt::Display for Operator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
+            Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
+            Operator::LogicalFilter(predicates) => {
+                let mut strings = vec![];
+                for p in predicates {
+                    strings.push(format!("{}", p));
+                }
+                write!(f, "LogicalFilter {}", strings.join(" "))
+            }
+            Operator::LogicalProject(projects) => {
+                let mut strings = vec![];
+                for (x, c) in projects {
+                    strings.push(format!("[{} {}]", x, c.name));
+                }
+                write!(f, "LogicalProject {}", strings.join(" "))
+            }
+            Operator::LogicalInnerJoin(predicates) => write!(f, "TODO"),
+            Operator::LogicalRightJoin(predicates) => write!(f, "TODO"),
+            Operator::LogicalOuterJoin(predicates) => write!(f, "TODO"),
+            Operator::LogicalSemiJoin(predicates) => write!(f, "TODO"),
+            Operator::LogicalAntiJoin(predicates) => write!(f, "TODO"),
+            Operator::LogicalSingleJoin(predicates) => write!(f, "TODO"),
+            Operator::LogicalMarkJoin(predicates, Column) => write!(f, "TODO"),
+            Operator::LogicalWith(name) => write!(f, "TODO"),
+            Operator::LogicalGetWith(name) => write!(f, "TODO"),
+            Operator::LogicalAggregate(group_by, aggregate) => write!(f, "TODO"),
+            Operator::LogicalLimit(limit) => write!(f, "TODO"),
+            Operator::LogicalSort(order_by) => write!(f, "TODO"),
+            Operator::LogicalUnion => write!(f, "TODO"),
+            Operator::LogicalIntersect => write!(f, "TODO"),
+            Operator::LogicalExcept => write!(f, "TODO"),
+            Operator::LogicalInsert(table, columns) => write!(f, "TODO"),
+            Operator::LogicalValues(rows, columns) => write!(f, "TODO"),
+            Operator::LogicalUpdate(updates) => write!(f, "TODO"),
+            Operator::LogicalDelete(table) => write!(f, "TODO"),
+            Operator::LogicalCreateDatabase(name) => write!(f, "TODO"),
+            Operator::LogicalCreateTable(create) => write!(f, "TODO"),
+            Operator::LogicalCreateIndex(create) => write!(f, "TODO"),
+            Operator::LogicalAlterTable(alter) => write!(f, "TODO"),
+            Operator::LogicalDrop(drop) => write!(f, "TODO"),
+            Operator::LogicalRename(rename) => write!(f, "TODO"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -187,6 +251,17 @@ pub enum Scalar {
     Cast(Box<Scalar>, encoding::Type),
 }
 
+impl fmt::Display for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Scalar::Literal(value) => write!(f, "{}", value),
+            Scalar::Column(column) => write!(f, "TODO"),
+            Scalar::Call(function, arguments) => write!(f, "TODO"),
+            Scalar::Cast(value, typ) => write!(f, "TODO"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Literal {
     Int(i64),
@@ -199,6 +274,23 @@ pub enum Literal {
     Array(Vec<Literal>),
     Struct(Vec<(String, Literal)>),
     Numeric(decimal::d128),
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::Int(i) => write!(f, "{}", i),
+            Literal::Bool(b) => write!(f, "TODO"),
+            Literal::Double(d) => write!(f, "TODO"),
+            Literal::String(s) => write!(f, "TODO"),
+            Literal::Bytes(bs) => write!(f, "TODO"),
+            Literal::Date(date) => write!(f, "TODO"),
+            Literal::Timestamp(time) => write!(f, "TODO"),
+            Literal::Array(xs) => write!(f, "TODO"),
+            Literal::Struct(xs) => write!(f, "TODO"),
+            Literal::Numeric(n) => write!(f, "TODO"),
+        }
+    }
 }
 
 // Functions appear in scalar expressions.

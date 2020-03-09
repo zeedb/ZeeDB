@@ -22,6 +22,18 @@ struct Converter {
     max_column_id: i64,
 }
 
+fn root(operator: Operator) -> Plan {
+    return Root(operator);
+}
+
+fn unary(operator: Operator, input: Plan) -> Plan {
+    return Unary(operator, Box::new(input));
+}
+
+fn binary(operator: Operator, left: Plan, right: Plan) -> Plan {
+    return Binary(operator, Box::new(left), Box::new(right));
+}
+
 impl Converter {
     fn new() -> Converter {
         let created_columns = vec![];
@@ -82,13 +94,13 @@ impl Converter {
         }
     }
     fn single_row(&self, q: ResolvedSingleRowScanProto) -> Plan {
-        Plan(LogicalSingleGet, vec![])
+        root(LogicalSingleGet)
     }
 
     fn table_scan(&self, q: ResolvedTableScanProto) -> Plan {
         let table = q.table.unwrap();
         let op = LogicalGet(Table::from(table));
-        Plan(op, vec![])
+        root(op)
     }
 
     fn join(&self, q: ResolvedJoinScanProto) -> Plan {
@@ -100,13 +112,13 @@ impl Converter {
         };
         match q.join_type.unwrap() {
             // Inner
-            0 => Plan(LogicalOuterJoin(predicates), vec![left, right]),
+            0 => binary(LogicalOuterJoin(predicates), left, right),
             // Left
-            1 => Plan(LogicalRightJoin(predicates), vec![right, left]),
+            1 => binary(LogicalRightJoin(predicates), right, left),
             // Right
-            2 => Plan(LogicalRightJoin(predicates), vec![left, right]),
+            2 => binary(LogicalRightJoin(predicates), left, right),
             // Full
-            3 => Plan(LogicalOuterJoin(predicates), vec![left, right]),
+            3 => binary(LogicalOuterJoin(predicates), left, right),
             // Invalid
             other => panic!("{:?} not supported", other),
         }
@@ -115,7 +127,7 @@ impl Converter {
     fn filter(&self, q: ResolvedFilterScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let predicates = self.predicate(*q.filter_expr.unwrap());
-        Plan(LogicalFilter(predicates), vec![input])
+        unary(LogicalFilter(predicates), input)
     }
 
     fn predicate(&self, x: AnyResolvedExprProto) -> Vec<Scalar> {
@@ -143,7 +155,7 @@ impl Converter {
             let operation = self.set_operation_operation(q.op_type.unwrap());
             let input = q.input_item_list[i].scan.clone();
             let left = self.any_resolved_scan(input.unwrap());
-            right = Plan(operation, vec![left, right]);
+            right = binary(operation, left, right);
         }
         right
     }
@@ -175,14 +187,14 @@ impl Converter {
             list.push(Sort { column, desc });
         }
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
-        Plan(LogicalSort(list), vec![input])
+        unary(LogicalSort(list), input)
     }
 
     fn limit_offset(&self, q: ResolvedLimitOffsetScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let limit = self.int_literal(q.limit);
         let offset = self.int_literal(q.offset);
-        Plan(LogicalLimit(Limit { limit, offset }), vec![input])
+        unary(LogicalLimit(Limit { limit, offset }), input)
     }
 
     fn int_literal(&self, x: Option<Box<AnyResolvedExprProto>>) -> i32 {
@@ -209,7 +221,7 @@ impl Converter {
             let column = Column::from(x.column.unwrap());
             list.push((value, column))
         }
-        Plan(LogicalProject(list), vec![input])
+        unary(LogicalProject(list), input)
     }
 
     fn with(&self, q: ResolvedWithScanProto) -> Plan {
@@ -218,14 +230,14 @@ impl Converter {
             let q = q.with_entry_list[i].clone();
             let name = q.with_query_name.unwrap();
             let next = self.any_resolved_scan(q.with_subquery.unwrap());
-            result = Plan(LogicalWith(name), vec![next, result]);
+            result = binary(LogicalWith(name), next, result);
         }
         result
     }
 
     fn with_ref(&self, q: ResolvedWithRefScanProto) -> Plan {
         let name = q.with_query_name.unwrap();
-        Plan(LogicalGetWith(name), vec![])
+        root(LogicalGetWith(name))
     }
 
     fn aggregate(&self, q: ResolvedAggregateScanProto) -> Plan {
@@ -242,11 +254,11 @@ impl Converter {
         }
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         if project.len() == 0 {
-            return Plan(LogicalAggregate(group_by, aggregate), vec![input]);
+            return unary(LogicalAggregate(group_by, aggregate), input);
         }
-        return Plan(
+        return unary(
             LogicalAggregate(group_by, aggregate),
-            vec![Plan(LogicalProject(project), vec![input])],
+            unary(LogicalProject(project), input),
         );
     }
 
