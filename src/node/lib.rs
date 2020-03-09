@@ -1,3 +1,4 @@
-mod logical;
+mod plan;
 
-pub use logical::*;
+pub use plan::Operator::*;
+pub use plan::*;

@@ -1,75 +1,74 @@
 #[derive(Debug)]
-pub enum Plan {
-    Logical(Logical, Vec<Plan>),
-}
+pub struct Plan(pub Operator, pub Vec<Plan>);
 
-// Logical plan nodes represent the query between parsing by ZetaSQL and optimization by the query planner.
+// Operator plan nodes combine inputs in a Plan tree.
 #[derive(Debug)]
-pub enum Logical {
-    // GetNone implements SELECT with no FROM clause.
-    GetNone,
-    /// Get(table) implements the FROM clause.
-    Get(Table),
-    // Filter(predicates) implements the WHERE/HAVING clauses.
-    Filter(Vec<Scalar>),
-    // Project(columns) implements the SELECT clause.
-    Project(Vec<(Scalar, Column)>),
-    // InnerJoin implements the default SQL join.
-    InnerJoin(Vec<Scalar>),
-    // RightJoin(predicates) is used for both left and right joins.
+pub enum Operator {
+    // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
+    LogicalSingleGet,
+    // LogicalGet(table) implements the FROM clause.
+    LogicalGet(Table),
+    // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
+    LogicalFilter(Vec<Scalar>),
+    // LogicalProject(columns) implements the SELECT clause.
+    LogicalProject(Vec<(Scalar, Column)>),
+    // LogicalInnerJoin implements the default SQL join.
+    LogicalInnerJoin(Vec<Scalar>),
+    // LogicalRightJoin(predicates) is used for both left and right joins.
     // When parsing a left join, we convert it to a right join by reversing the order of left and right.
     // The left side is the build side of the join.
-    RightJoin(Vec<Scalar>),
-    OuterJoin(Vec<Scalar>),
-    // SemiJoin(predicates) indicates a semi-join like `select 1 from customer where store_id in (select store_id from store)`.
+    LogicalRightJoin(Vec<Scalar>),
+    // LogicalOuterJoin is a cartesian product join.
+    LogicalOuterJoin(Vec<Scalar>),
+    // LogicalSemiJoin(predicates) indicates a semi-join like `select 1 from customer where store_id in (select store_id from store)`.
     // Note that the left side is the build side of the join, which is the reverse of the usual convention.
-    SemiJoin(Vec<Scalar>),
-    // AntiJoin(predicates) indicates an anti-join like `select 1 from customer where store_id not in (select store_id from store)`.
+    LogicalSemiJoin(Vec<Scalar>),
+    // LogicalAntiJoin(predicates) indicates an anti-join like `select 1 from customer where store_id not in (select store_id from store)`.
     // Note that like Semi, the left side is the build side of the join.
-    AntiJoin(Vec<Scalar>),
-    // SingleJoin(predicates) implements "Single Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
+    LogicalAntiJoin(Vec<Scalar>),
+    // LogicalSingleJoin(predicates) implements "Single Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
-    SingleJoin(Vec<Scalar>),
-    // MarkJoin(predicates, mark) implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
+    LogicalSingleJoin(Vec<Scalar>),
+    // LogicalMarkJoin(predicates, mark) implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
-    MarkJoin(Vec<Scalar>, Column),
-    // With(table) implements with subquery as  _.
+    LogicalMarkJoin(Vec<Scalar>, Column),
+    // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
-    With(String),
-    // GetWith(table) reads the subquery that was created by With.
-    GetWith(String),
-    // Aggregate(group_by, aggregate) implements the GROUP BY clause.
-    Aggregate(Vec<Column>, Vec<(Aggregate, Column)>),
-    // Limit(n) implements the LIMIT / OFFSET / TOP clause.
-    Limit(Limit),
-    // Sort(columns) implements the ORDER BY clause.
-    Sort(Vec<Sort>),
-    // Union implements SELECT _ UNION ALL SELECT _.
-    Union,
-    // Intersect implements SELECT _ INTERSECT SELECT _.
-    Intersect,
-    // Except implements SELECT _ EXCEPT SELECT _.
-    Except,
-    // Insert(table, columns) implements the INSERT operation.
-    Insert(Table, Vec<Column>),
-    // Values(rows, columns) implements VALUES expressions.
-    Values(Vec<Vec<Scalar>>, Vec<Column>),
-    // Update(sets) implements the UPDATE operation.
-    Update(Vec<(Column, Column)>),
-    // Delete(table) implements the DELETE operation.
-    Delete(Table),
-    // CreateDatabase(database) implements the CREATE DATABASE operation.
-    CreateDatabase(Name),
-    // CreateTable implements the CREATE TABLE operation.
-    CreateTable(CreateTable),
-    // CreateIndex implements the CREATE INDEX operation.
-    CreateIndex(CreateIndex),
-    // AlterTable implements the ALTER TABLE operation.
-    AlterTable(AlterTable),
-    // Drop implements the DROP DATABASE/TABLE/INDEX operation.
-    Drop(Drop),
-    // Rename implements the RENAME operation.
-    Rename(Rename),
+    LogicalWith(String),
+    // LogicalGetWith(table) reads the subquery that was created by With.
+    LogicalGetWith(String),
+    // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
+    LogicalAggregate(Vec<Column>, Vec<(Aggregate, Column)>),
+    // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
+    LogicalLimit(Limit),
+    // LogicalSort(columns) implements the ORDER BY clause.
+    LogicalSort(Vec<Sort>),
+    // LogicalUnion implements SELECT _ UNION ALL SELECT _.
+    LogicalUnion,
+    // LogicalIntersect implements SELECT _ INTERSECT SELECT _.
+    LogicalIntersect,
+    // LogicalExcept implements SELECT _ EXCEPT SELECT _.
+    LogicalExcept,
+    // LogicalInsert(table, columns) implements the INSERT operation.
+    LogicalInsert(Table, Vec<Column>),
+    // LogicalValues(rows, columns) implements VALUES expressions.
+    LogicalValues(Vec<Vec<Scalar>>, Vec<Column>),
+    // LogicalUpdate(sets) implements the UPDATE operation.
+    LogicalUpdate(Vec<(Column, Column)>),
+    // LogicalDelete(table) implements the DELETE operation.
+    LogicalDelete(Table),
+    // LogicalCreateDatabase(database) implements the CREATE DATABASE operation.
+    LogicalCreateDatabase(Name),
+    // LogicalCreateTable implements the CREATE TABLE operation.
+    LogicalCreateTable(CreateTable),
+    // LogicalCreateIndex implements the CREATE INDEX operation.
+    LogicalCreateIndex(CreateIndex),
+    // LogicalAlterTable implements the ALTER TABLE operation.
+    LogicalAlterTable(AlterTable),
+    // LogicalDrop implements the DROP DATABASE/TABLE/INDEX operation.
+    LogicalDrop(Drop),
+    // LogicalRename implements the RENAME operation.
+    LogicalRename(Rename),
 }
 
 #[derive(Debug)]
@@ -106,7 +105,7 @@ impl Column {
 pub struct Name(Vec<String>);
 
 #[derive(Debug)]
-pub enum Object {
+pub enum ObjectType {
     Database,
     Table,
     Index,
@@ -169,13 +168,13 @@ pub struct DropColumn {
 
 #[derive(Debug)]
 pub struct Drop {
-    pub object: Object,
+    pub object: ObjectType,
     pub ignore_if_not_exists: bool,
 }
 
 #[derive(Debug)]
 pub struct Rename {
-    pub object: Object,
+    pub object: ObjectType,
     pub from: String,
     pub to: String,
 }

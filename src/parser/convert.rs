@@ -81,13 +81,13 @@ impl Converter {
         }
     }
     fn single_row(&self, q: ResolvedSingleRowScanProto) -> Plan {
-        Plan::Logical(Logical::GetNone, vec![])
+        Plan(LogicalSingleGet, vec![])
     }
 
     fn table_scan(&self, q: ResolvedTableScanProto) -> Plan {
         let table = q.table.unwrap();
-        let op = Logical::Get(Table::from(table));
-        Plan::Logical(op, vec![])
+        let op = LogicalGet(Table::from(table));
+        Plan(op, vec![])
     }
 
     fn join(&self, q: ResolvedJoinScanProto) -> Plan {
@@ -99,13 +99,13 @@ impl Converter {
         };
         match q.join_type.unwrap() {
             // Inner
-            0 => Plan::Logical(Logical::OuterJoin(predicates), vec![left, right]),
+            0 => Plan(LogicalOuterJoin(predicates), vec![left, right]),
             // Left
-            1 => Plan::Logical(Logical::RightJoin(predicates), vec![right, left]),
+            1 => Plan(LogicalRightJoin(predicates), vec![right, left]),
             // Right
-            2 => Plan::Logical(Logical::RightJoin(predicates), vec![left, right]),
+            2 => Plan(LogicalRightJoin(predicates), vec![left, right]),
             // Full
-            3 => Plan::Logical(Logical::OuterJoin(predicates), vec![left, right]),
+            3 => Plan(LogicalOuterJoin(predicates), vec![left, right]),
             // Invalid
             other => panic!("{:?} not supported", other),
         }
@@ -114,7 +114,7 @@ impl Converter {
     fn filter(&self, q: ResolvedFilterScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let predicates = self.predicate(*q.filter_expr.unwrap());
-        Plan::Logical(Logical::Filter(predicates), vec![input])
+        Plan(LogicalFilter(predicates), vec![input])
     }
 
     fn predicate(&self, x: AnyResolvedExprProto) -> Vec<Scalar> {
@@ -142,23 +142,23 @@ impl Converter {
             let operation = self.set_operation_operation(q.op_type.unwrap());
             let input = q.input_item_list[i].scan.clone();
             let left = self.any_resolved_scan(input.unwrap());
-            right = Plan::Logical(operation, vec![left, right]);
+            right = Plan(operation, vec![left, right]);
         }
         right
     }
 
-    fn set_operation_operation(&self, i: i32) -> Logical {
+    fn set_operation_operation(&self, i: i32) -> Operator {
         match i {
             // UnionAll
-            0 => Logical::Union,
+            0 => LogicalUnion,
             // UnionDistinct
             1 => panic!("UNION DISTINCT is not supported"), // TODO
             // IntersectAll
-            2 => Logical::Intersect,
+            2 => LogicalIntersect,
             // IntersectDistinct
             3 => panic!("INTERSECT DISTINCT is not supported"), // TODO
             // ExceptAll
-            4 => Logical::Except,
+            4 => LogicalExcept,
             // ExceptDistinct
             5 => panic!("EXCEPT DISTINCT is not supported"), // TODO
             // Other
@@ -174,14 +174,14 @@ impl Converter {
             list.push(Sort { column, desc });
         }
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
-        Plan::Logical(Logical::Sort(list), vec![input])
+        Plan(LogicalSort(list), vec![input])
     }
 
     fn limit_offset(&self, q: ResolvedLimitOffsetScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let limit = self.int_literal(q.limit);
         let offset = self.int_literal(q.offset);
-        Plan::Logical(Logical::Limit(Limit { limit, offset }), vec![input])
+        Plan(LogicalLimit(Limit { limit, offset }), vec![input])
     }
 
     fn int_literal(&self, x: Option<Box<AnyResolvedExprProto>>) -> i32 {
@@ -208,7 +208,7 @@ impl Converter {
             let column = Column::from(x.column.unwrap());
             list.push((value, column))
         }
-        Plan::Logical(Logical::Project(list), vec![input])
+        Plan(LogicalProject(list), vec![input])
     }
 
     fn with(&self, q: ResolvedWithScanProto) -> Plan {
@@ -217,14 +217,14 @@ impl Converter {
             let q = q.with_entry_list[i].clone();
             let name = q.with_query_name.unwrap();
             let next = self.any_resolved_scan(q.with_subquery.unwrap());
-            result = Plan::Logical(Logical::With(name), vec![next, result]);
+            result = Plan(LogicalWith(name), vec![next, result]);
         }
         result
     }
 
     fn with_ref(&self, q: ResolvedWithRefScanProto) -> Plan {
         let name = q.with_query_name.unwrap();
-        Plan::Logical(Logical::GetWith(name), vec![])
+        Plan(LogicalGetWith(name), vec![])
     }
 
     fn aggregate(&self, q: ResolvedAggregateScanProto) -> Plan {
