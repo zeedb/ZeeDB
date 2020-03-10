@@ -159,8 +159,14 @@ fn test_convert() {
         "select count(*) from person",
         "(LogicalAggregate [(CountStar) $agg1] (LogicalGet person))"
     );
-    ok!("select sum(1) from person", "");
-    ok!("select distinct store_id from customer", "");
+    ok!(
+        "select sum(1) from person",
+        "(LogicalAggregate [(Sum $sum) $agg1] (LogicalProject [1 $sum] (LogicalGet person)))"
+    );
+    ok!(
+        "select distinct store_id from customer",
+        "(LogicalAggregate store_id (LogicalProject [store_id store_id] (LogicalGet customer)))"
+    );
     ok!(
         "select (select name from store where store.store_id = customer.store_id) from customer",
         ""

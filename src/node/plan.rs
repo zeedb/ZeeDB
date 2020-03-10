@@ -294,6 +294,17 @@ pub enum Scalar {
     Cast(Box<Scalar>, encoding::Type),
 }
 
+impl Scalar {
+    pub fn typ(&self) -> encoding::Type {
+        match self {
+            Scalar::Literal(value) => value.typ(),
+            Scalar::Column(column) => column.typ.clone(),
+            Scalar::Call(function, arguments) => function.typ(arguments),
+            Scalar::Cast(_, typ) => typ.clone(),
+        }
+    }
+}
+
 impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -313,7 +324,7 @@ impl fmt::Display for Scalar {
 
 #[derive(Debug)]
 pub enum Value {
-    Int(i64),
+    Int64(i64),
     Bool(bool),
     Double(f64),
     String(String),
@@ -325,10 +336,27 @@ pub enum Value {
     Struct(Vec<(String, Value)>),
 }
 
+impl Value {
+    pub fn typ(&self) -> encoding::Type {
+        match self {
+            Value::Int64(_) => encoding::Type::Int64,
+            Value::Bool(_) => encoding::Type::Bool,
+            Value::Double(_) => encoding::Type::Double,
+            Value::String(_) => encoding::Type::String,
+            Value::Bytes(_) => encoding::Type::Bytes,
+            Value::Date(_) => encoding::Type::Date,
+            Value::Timestamp(_) => encoding::Type::Timestamp,
+            Value::Numeric(_) => encoding::Type::Numeric,
+            Value::Array(_) => unimplemented!(),
+            Value::Struct(_) => unimplemented!(),
+        }
+    }
+}
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Int(x) => write!(f, "{}", x),
+            Value::Int64(x) => write!(f, "{}", x),
             Value::Bool(x) => write!(f, "{}", x),
             Value::Double(x) => write!(f, "{}", x),
             Value::String(x) => write!(f, "{:?}", x),
@@ -580,6 +608,10 @@ impl Function {
             other => panic!("{} is not supported", other),
         }
     }
+
+    pub fn typ(&self, arguments: &Vec<Scalar>) -> encoding::Type {
+        unimplemented!()
+    }
 }
 
 // Aggregate functions appear in GROUP BY expressions.
@@ -649,15 +681,15 @@ impl fmt::Display for Aggregate {
             Aggregate::BitAnd(Distinct(true), column) => {
                 write!(f, "(BitAnd (Distinct {}))", column)
             }
-            Aggregate::BitAnd(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::BitAnd(Distinct(false), column) => write!(f, "(BitAnd {})", column),
             Aggregate::BitOr(Distinct(true), column) => write!(f, "(BitOr (Distinct {}))", column),
-            Aggregate::BitOr(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::BitOr(Distinct(false), column) => write!(f, "(BitOr {})", column),
             Aggregate::BitXor(Distinct(true), column) => {
                 write!(f, "(BitXor (Distinct {}))", column)
             }
             Aggregate::BitXor(Distinct(false), column) => write!(f, "(Avg {})", column),
             Aggregate::Count(Distinct(true), column) => write!(f, "(Count (Distinct {}))", column),
-            Aggregate::Count(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::Count(Distinct(false), column) => write!(f, "(Count {})", column),
             Aggregate::CountStar => write!(f, "(CountStar)"),
             Aggregate::LogicalAnd(column) => write!(f, "(LogicalAnd {})", column),
             Aggregate::LogicalOr(column) => write!(f, "(LogicalOr {})", column),
@@ -668,7 +700,7 @@ impl fmt::Display for Aggregate {
             }
             Aggregate::StringAgg(Distinct(false), column) => write!(f, "(Avg {})", column),
             Aggregate::Sum(Distinct(true), column) => write!(f, "(Sum (Distinct {}))", column),
-            Aggregate::Sum(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::Sum(Distinct(false), column) => write!(f, "(Sum {})", column),
         }
     }
 }

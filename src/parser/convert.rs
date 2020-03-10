@@ -18,7 +18,7 @@ pub fn convert(q: AnyResolvedStatementProto) -> Plan {
 }
 
 struct Converter {
-    created_columns: Vec<Column>,
+    next_column_id: i64,
 }
 
 fn root(operator: Operator) -> Plan {
@@ -35,12 +35,10 @@ fn binary(operator: Operator, left: Plan, right: Plan) -> Plan {
 
 impl Converter {
     fn new() -> Converter {
-        let created_columns = vec![];
-        let max_column_id = 0;
-        Converter { created_columns }
+        Converter { next_column_id: -1 }
     }
 
-    fn any_stmt(&self, q: AnyResolvedStatementProto) -> Plan {
+    fn any_stmt(&mut self, q: AnyResolvedStatementProto) -> Plan {
         match q.node.unwrap() {
             ResolvedQueryStmtNode(q) => self.query(q),
             ResolvedCreateStatementNode(q) => match q.node.unwrap() {
@@ -66,11 +64,11 @@ impl Converter {
         }
     }
 
-    fn query(&self, q: ResolvedQueryStmtProto) -> Plan {
+    fn query(&mut self, q: ResolvedQueryStmtProto) -> Plan {
         self.any_resolved_scan(q.query.unwrap())
     }
 
-    fn any_resolved_scan(&self, q: AnyResolvedScanProto) -> Plan {
+    fn any_resolved_scan(&mut self, q: AnyResolvedScanProto) -> Plan {
         match q.node.unwrap() {
             ResolvedSingleRowScanNode(q) => self.single_row(q),
             ResolvedTableScanNode(q) => self.table_scan(*q),
@@ -89,17 +87,17 @@ impl Converter {
             other => panic!("{:?} not supported", other),
         }
     }
-    fn single_row(&self, q: ResolvedSingleRowScanProto) -> Plan {
+    fn single_row(&mut self, q: ResolvedSingleRowScanProto) -> Plan {
         root(LogicalSingleGet)
     }
 
-    fn table_scan(&self, q: ResolvedTableScanProto) -> Plan {
+    fn table_scan(&mut self, q: ResolvedTableScanProto) -> Plan {
         let table = q.table.unwrap();
         let op = LogicalGet(Table::from(table));
         root(op)
     }
 
-    fn join(&self, q: ResolvedJoinScanProto) -> Plan {
+    fn join(&mut self, q: ResolvedJoinScanProto) -> Plan {
         let left = self.any_resolved_scan(*q.left_scan.unwrap());
         let right = self.any_resolved_scan(*q.right_scan.unwrap());
         let predicates = match q.join_expr {
@@ -120,13 +118,13 @@ impl Converter {
         }
     }
 
-    fn filter(&self, q: ResolvedFilterScanProto) -> Plan {
+    fn filter(&mut self, q: ResolvedFilterScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let predicates = self.predicate(*q.filter_expr.unwrap());
         unary(LogicalFilter(predicates), input)
     }
 
-    fn predicate(&self, x: AnyResolvedExprProto) -> Vec<Scalar> {
+    fn predicate(&mut self, x: AnyResolvedExprProto) -> Vec<Scalar> {
         if let ResolvedFunctionCallBaseNode(x) = x.clone().node.unwrap() {
             if let ResolvedFunctionCallNode(x) = x.node.unwrap() {
                 let x = x.parent.unwrap();
@@ -140,7 +138,7 @@ impl Converter {
         vec![self.expr(x)]
     }
 
-    fn set_operation(&self, q: ResolvedSetOperationScanProto) -> Plan {
+    fn set_operation(&mut self, q: ResolvedSetOperationScanProto) -> Plan {
         // Note that this nests the operations backwards.
         // For example, `a U b U c` will be nested as (c (b a)).
         // This is important for `a EXCEPT b`, which needs to be nested as
@@ -156,7 +154,7 @@ impl Converter {
         right
     }
 
-    fn set_operation_operation(&self, i: i32) -> Operator {
+    fn set_operation_operation(&mut self, i: i32) -> Operator {
         match i {
             // UnionAll
             0 => LogicalUnion,
@@ -175,7 +173,7 @@ impl Converter {
         }
     }
 
-    fn order_by(&self, q: ResolvedOrderByScanProto) -> Plan {
+    fn order_by(&mut self, q: ResolvedOrderByScanProto) -> Plan {
         let mut list = vec![];
         for x in q.order_by_item_list {
             let column = Column::from(x.column_ref.unwrap().column.unwrap());
@@ -186,14 +184,14 @@ impl Converter {
         unary(LogicalSort(list), input)
     }
 
-    fn limit_offset(&self, q: ResolvedLimitOffsetScanProto) -> Plan {
+    fn limit_offset(&mut self, q: ResolvedLimitOffsetScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let limit = self.int_literal(q.limit);
         let offset = self.int_literal(q.offset);
         unary(LogicalLimit(Limit { limit, offset }), input)
     }
 
-    fn int_literal(&self, x: Option<Box<AnyResolvedExprProto>>) -> i64 {
+    fn int_literal(&mut self, x: Option<Box<AnyResolvedExprProto>>) -> i64 {
         match x {
             Some(x) => match (*x).node.unwrap() {
                 ResolvedLiteralNode(x) => match x.value.unwrap().value.unwrap().value.unwrap() {
@@ -206,7 +204,7 @@ impl Converter {
         }
     }
 
-    fn project(&self, q: ResolvedProjectScanProto) -> Plan {
+    fn project(&mut self, q: ResolvedProjectScanProto) -> Plan {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         if q.expr_list.len() == 0 {
             return input;
@@ -220,7 +218,7 @@ impl Converter {
         unary(LogicalProject(list), input)
     }
 
-    fn with(&self, q: ResolvedWithScanProto) -> Plan {
+    fn with(&mut self, q: ResolvedWithScanProto) -> Plan {
         let mut result = self.any_resolved_scan(*q.query.unwrap());
         for i in (0..q.with_entry_list.len()).rev() {
             let q = q.with_entry_list[i].clone();
@@ -231,12 +229,12 @@ impl Converter {
         result
     }
 
-    fn with_ref(&self, q: ResolvedWithRefScanProto) -> Plan {
+    fn with_ref(&mut self, q: ResolvedWithRefScanProto) -> Plan {
         let name = q.with_query_name.unwrap();
         root(LogicalGetWith(name))
     }
 
-    fn aggregate(&self, q: ResolvedAggregateScanProto) -> Plan {
+    fn aggregate(&mut self, q: ResolvedAggregateScanProto) -> Plan {
         let q = *q.parent.unwrap();
         let mut project = vec![];
         let mut group_by = vec![];
@@ -259,7 +257,7 @@ impl Converter {
     }
 
     fn group_by(
-        &self,
+        &mut self,
         q: ResolvedAggregateScanBaseProto,
         project: &mut Vec<(Scalar, Column)>,
         group_by: &mut Vec<Column>,
@@ -273,7 +271,7 @@ impl Converter {
     }
 
     fn coerce_aggregate_call(
-        &self,
+        &mut self,
         c: ResolvedComputedColumnProto,
     ) -> ResolvedAggregateFunctionCallProto {
         match c.expr.unwrap().node.unwrap() {
@@ -289,7 +287,7 @@ impl Converter {
     }
 
     fn convert_aggregate_call(
-        &self,
+        &mut self,
         call: ResolvedAggregateFunctionCallProto,
         project: &mut Vec<(Scalar, Column)>,
     ) -> Aggregate {
@@ -303,7 +301,7 @@ impl Converter {
     }
 
     fn aggregate_argument(
-        &self,
+        &mut self,
         call: ResolvedFunctionCallBaseProto,
         project: &mut Vec<(Scalar, Column)>,
     ) -> Option<Column> {
@@ -316,7 +314,8 @@ impl Converter {
                 // Otherwise, generate a pseudo-column to hold the intermediate expression.
                 argument => {
                     let function = call.function.unwrap().name.unwrap();
-                    let column = self.create_column(String::from("$project"), function);
+                    let name = function_name(function);
+                    let column = self.create_column(String::from("$project"), name, argument.typ());
                     project.push((argument, column.clone()));
                     Some(column)
                 }
@@ -329,47 +328,47 @@ impl Converter {
         }
     }
 
-    fn create_index(&self, q: ResolvedCreateIndexStmtProto) -> Plan {
+    fn create_index(&mut self, q: ResolvedCreateIndexStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn create_table_as(&self, q: ResolvedCreateTableAsSelectStmtProto) -> Plan {
+    fn create_table_as(&mut self, q: ResolvedCreateTableAsSelectStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn create_table(&self, q: ResolvedCreateTableStmtProto) -> Plan {
+    fn create_table(&mut self, q: ResolvedCreateTableStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn drop(&self, q: ResolvedDropStmtProto) -> Plan {
+    fn drop(&mut self, q: ResolvedDropStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn insert(&self, q: ResolvedInsertStmtProto) -> Plan {
+    fn insert(&mut self, q: ResolvedInsertStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn delete(&self, q: ResolvedDeleteStmtProto) -> Plan {
+    fn delete(&mut self, q: ResolvedDeleteStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn update(&self, q: ResolvedUpdateStmtProto) -> Plan {
+    fn update(&mut self, q: ResolvedUpdateStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn rename(&self, q: ResolvedRenameStmtProto) -> Plan {
+    fn rename(&mut self, q: ResolvedRenameStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn create_database(&self, q: ResolvedCreateDatabaseStmtProto) -> Plan {
+    fn create_database(&mut self, q: ResolvedCreateDatabaseStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn alter_table(&self, q: ResolvedAlterTableStmtProto) -> Plan {
+    fn alter_table(&mut self, q: ResolvedAlterTableStmtProto) -> Plan {
         unimplemented!()
     }
 
-    fn exprs(&self, xs: Vec<AnyResolvedExprProto>) -> Vec<Scalar> {
+    fn exprs(&mut self, xs: Vec<AnyResolvedExprProto>) -> Vec<Scalar> {
         let mut list = vec![];
         for x in xs {
             list.push(self.expr(x))
@@ -377,7 +376,7 @@ impl Converter {
         list
     }
 
-    fn expr(&self, x: AnyResolvedExprProto) -> Scalar {
+    fn expr(&mut self, x: AnyResolvedExprProto) -> Scalar {
         match x.node.unwrap() {
             ResolvedLiteralNode(x) => {
                 let x = x.value.unwrap();
@@ -393,39 +392,49 @@ impl Converter {
         }
     }
 
-    fn column(&self, x: ResolvedColumnRefProto) -> Scalar {
+    fn column(&mut self, x: ResolvedColumnRefProto) -> Scalar {
         Scalar::Column(Column::from(x.column.unwrap()))
     }
 
-    fn function_call(&self, x: AnyResolvedFunctionCallBaseProto) -> Scalar {
+    fn function_call(&mut self, x: AnyResolvedFunctionCallBaseProto) -> Scalar {
         match x.node.unwrap() {
             ResolvedFunctionCallNode(x) => self.scalar_function_call(x),
             other => panic!("{:?} not supported", other),
         }
     }
 
-    fn scalar_function_call(&self, x: ResolvedFunctionCallProto) -> Scalar {
+    fn scalar_function_call(&mut self, x: ResolvedFunctionCallProto) -> Scalar {
         let x = x.parent.unwrap();
         let f = x.function.unwrap().name.unwrap();
         Scalar::Call(Function::from(&f.as_str()), self.exprs(x.argument_list))
     }
 
-    fn cast(&self, x: ResolvedCastProto) -> Scalar {
+    fn cast(&mut self, x: ResolvedCastProto) -> Scalar {
         unimplemented!()
     }
 
-    fn subquery_expr(&self, x: ResolvedSubqueryExprProto) -> Scalar {
+    fn subquery_expr(&mut self, x: ResolvedSubqueryExprProto) -> Scalar {
         unimplemented!()
     }
 
-    fn create_column(&self, table: String, name: String) -> Column {
-        unimplemented!()
+    fn create_column(&mut self, table: String, name: String, typ: Type) -> Column {
+        let column = Column {
+            id: self.next_column_id,
+            name,
+            typ,
+        };
+        self.next_column_id -= 1;
+        column
     }
+}
+
+fn function_name(name: String) -> String {
+    format!("${}", name.trim_start_matches("ZetaSQL:"))
 }
 
 fn literal(value: ValueProto, typ: TypeProto) -> Value {
     match value.value.unwrap() {
-        Int64Value(x) => Value::Int(x),
+        Int64Value(x) => Value::Int64(x),
         BoolValue(x) => Value::Bool(x),
         DoubleValue(x) => Value::Double(x),
         StringValue(x) => Value::String(x),
