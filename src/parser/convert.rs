@@ -18,8 +18,7 @@ pub fn convert(q: AnyResolvedStatementProto) -> Plan {
 }
 
 struct Converter {
-    created_columns: Vec<(String, Type)>,
-    max_column_id: i64,
+    created_columns: Vec<Column>,
 }
 
 fn root(operator: Operator) -> Plan {
@@ -38,10 +37,7 @@ impl Converter {
     fn new() -> Converter {
         let created_columns = vec![];
         let max_column_id = 0;
-        Converter {
-            created_columns,
-            max_column_id,
-        }
+        Converter { created_columns }
     }
 
     fn any_stmt(&self, q: AnyResolvedStatementProto) -> Plan {
@@ -112,7 +108,7 @@ impl Converter {
         };
         match q.join_type.unwrap() {
             // Inner
-            0 => binary(LogicalOuterJoin(predicates), left, right),
+            0 => binary(LogicalInnerJoin(predicates), left, right),
             // Left
             1 => binary(LogicalRightJoin(predicates), right, left),
             // Right
@@ -197,16 +193,16 @@ impl Converter {
         unary(LogicalLimit(Limit { limit, offset }), input)
     }
 
-    fn int_literal(&self, x: Option<Box<AnyResolvedExprProto>>) -> i32 {
+    fn int_literal(&self, x: Option<Box<AnyResolvedExprProto>>) -> i64 {
         match x {
             Some(x) => match (*x).node.unwrap() {
                 ResolvedLiteralNode(x) => match x.value.unwrap().value.unwrap().value.unwrap() {
-                    Int32Value(x) => x,
-                    _ => 0,
+                    Int64Value(x) => x,
+                    other => panic!("{:?}", other),
                 },
-                _ => 0,
+                other => panic!("{:?}", other),
             },
-            _ => 0,
+            None => 0,
         }
     }
 
@@ -226,7 +222,7 @@ impl Converter {
 
     fn with(&self, q: ResolvedWithScanProto) -> Plan {
         let mut result = self.any_resolved_scan(*q.query.unwrap());
-        for i in (1..q.with_entry_list.len()).rev() {
+        for i in (0..q.with_entry_list.len()).rev() {
             let q = q.with_entry_list[i].clone();
             let name = q.with_query_name.unwrap();
             let next = self.any_resolved_scan(q.with_subquery.unwrap());
@@ -313,14 +309,14 @@ impl Converter {
     ) -> Option<Column> {
         if call.argument_list.is_empty() {
             None
-        } else if call.argument_list.len() == 0 {
+        } else if call.argument_list.len() == 1 {
             match self.expr(call.argument_list.first().unwrap().clone()) {
                 // If aggregate has a column references as its arg, add the column reference directly and continue.
                 Scalar::Column(column) => Some(column),
                 // Otherwise, generate a pseudo-column to hold the intermediate expression.
                 argument => {
                     let function = call.function.unwrap().name.unwrap();
-                    let column = self.create(String::from("$project"), function);
+                    let column = self.create_column(String::from("$project"), function);
                     project.push((argument, column.clone()));
                     Some(column)
                 }
@@ -328,7 +324,7 @@ impl Converter {
         } else {
             panic!(
                 "expected 1 or 0 arguments but found {:?}",
-                call.argument_list
+                call.argument_list.len()
             );
         }
     }
@@ -422,7 +418,7 @@ impl Converter {
         unimplemented!()
     }
 
-    fn create(&self, table: String, column: String) -> Column {
+    fn create_column(&self, table: String, name: String) -> Column {
         unimplemented!()
     }
 }

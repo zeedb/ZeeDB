@@ -10,7 +10,7 @@ pub enum Plan {
 impl fmt::Display for Plan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Plan::Root(op) => write!(f, "{}", op),
+            Plan::Root(op) => write!(f, "({})", op),
             Plan::Unary(op, input) => write!(f, "({} {})", op, *input),
             Plan::Binary(op, left, right) => write!(f, "({} {} {})", op, *left, *right),
         }
@@ -34,7 +34,7 @@ pub enum Operator {
     // When parsing a left join, we convert it to a right join by reversing the order of left and right.
     // The left side is the build side of the join.
     LogicalRightJoin(Vec<Scalar>),
-    // LogicalOuterJoin is a cartesian product join.
+    // LogicalOuterJoin includes non-matching rows from both sides.
     LogicalOuterJoin(Vec<Scalar>),
     // LogicalSemiJoin(predicates) indicates a semi-join like `select 1 from customer where store_id in (select store_id from store)`.
     // Note that the left side is the build side of the join, which is the reverse of the usual convention.
@@ -92,13 +92,7 @@ impl fmt::Display for Operator {
         match self {
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
-            Operator::LogicalFilter(predicates) => {
-                let mut strings = vec![];
-                for p in predicates {
-                    strings.push(format!("{}", p));
-                }
-                write!(f, "LogicalFilter {}", strings.join(" "))
-            }
+            Operator::LogicalFilter(predicates) => write!(f, "LogicalFilter{}", join(predicates)),
             Operator::LogicalProject(projects) => {
                 let mut strings = vec![];
                 for (x, c) in projects {
@@ -106,18 +100,53 @@ impl fmt::Display for Operator {
                 }
                 write!(f, "LogicalProject {}", strings.join(" "))
             }
-            Operator::LogicalInnerJoin(predicates) => write!(f, "TODO"),
-            Operator::LogicalRightJoin(predicates) => write!(f, "TODO"),
-            Operator::LogicalOuterJoin(predicates) => write!(f, "TODO"),
-            Operator::LogicalSemiJoin(predicates) => write!(f, "TODO"),
-            Operator::LogicalAntiJoin(predicates) => write!(f, "TODO"),
-            Operator::LogicalSingleJoin(predicates) => write!(f, "TODO"),
-            Operator::LogicalMarkJoin(predicates, Column) => write!(f, "TODO"),
-            Operator::LogicalWith(name) => write!(f, "TODO"),
-            Operator::LogicalGetWith(name) => write!(f, "TODO"),
-            Operator::LogicalAggregate(group_by, aggregate) => write!(f, "TODO"),
-            Operator::LogicalLimit(limit) => write!(f, "TODO"),
-            Operator::LogicalSort(order_by) => write!(f, "TODO"),
+            Operator::LogicalInnerJoin(predicates) => {
+                write!(f, "LogicalInnerJoin{}", join(predicates))
+            }
+            Operator::LogicalRightJoin(predicates) => {
+                write!(f, "LogicalRightJoin{}", join(predicates))
+            }
+            Operator::LogicalOuterJoin(predicates) => {
+                write!(f, "LogicalOuterJoin{}", join(predicates))
+            }
+            Operator::LogicalSemiJoin(predicates) => {
+                write!(f, "LogicalSemiJoin{}", join(predicates))
+            }
+            Operator::LogicalAntiJoin(predicates) => {
+                write!(f, "LogicalAntiJoin{}", join(predicates))
+            }
+            Operator::LogicalSingleJoin(predicates) => {
+                write!(f, "LogicalSingleJoin{}", join(predicates))
+            }
+            Operator::LogicalMarkJoin(predicates, Column) => {
+                write!(f, "LogicalSingleJoin{}", join(predicates))
+            }
+            Operator::LogicalWith(name) => write!(f, "LogicalWith {}", name),
+            Operator::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
+            Operator::LogicalAggregate(group_by, aggregate) => {
+                write!(f, "LogicalAggregate");
+                for c in group_by {
+                    write!(f, " {}", c.name)?;
+                }
+                for (x, c) in aggregate {
+                    write!(f, " [{} {}]", x, c.name)?;
+                }
+                Ok(())
+            }
+            Operator::LogicalLimit(limit) => {
+                write!(f, "LogicalLimit {} {}", limit.limit, limit.offset)
+            }
+            Operator::LogicalSort(order_by) => {
+                let mut strings = vec![];
+                for sort in order_by {
+                    if sort.desc {
+                        strings.push(format!("(Desc {})", sort.column.name))
+                    } else {
+                        strings.push(format!("{}", sort.column.name))
+                    }
+                }
+                write!(f, "LogicalSort {}", strings.join(" "))
+            }
             Operator::LogicalUnion => write!(f, "TODO"),
             Operator::LogicalIntersect => write!(f, "TODO"),
             Operator::LogicalExcept => write!(f, "TODO"),
@@ -133,6 +162,14 @@ impl fmt::Display for Operator {
             Operator::LogicalRename(rename) => write!(f, "TODO"),
         }
     }
+}
+
+fn join(xs: &Vec<Scalar>) -> String {
+    let mut strings = vec![String::from("")];
+    for x in xs {
+        strings.push(format!("{}", x));
+    }
+    strings.join(" ")
 }
 
 #[derive(Debug)]
@@ -165,6 +202,12 @@ impl Column {
     }
 }
 
+impl fmt::Display for Column {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
 #[derive(Debug)]
 pub struct Name(Vec<String>);
 
@@ -178,8 +221,8 @@ pub enum ObjectType {
 
 #[derive(Debug)]
 pub struct Limit {
-    pub limit: i32,
-    pub offset: i32,
+    pub limit: i64,
+    pub offset: i64,
 }
 
 #[derive(Debug)]
@@ -255,8 +298,14 @@ impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Scalar::Literal(value) => write!(f, "{}", value),
-            Scalar::Column(column) => write!(f, "TODO"),
-            Scalar::Call(function, arguments) => write!(f, "TODO"),
+            Scalar::Column(column) => write!(f, "{}", column.name),
+            Scalar::Call(function, arguments) => {
+                let mut strings = vec![];
+                for a in arguments {
+                    strings.push(format!("{}", a))
+                }
+                write!(f, "({:?} {})", function, strings.join(" "))
+            }
             Scalar::Cast(value, typ) => write!(f, "TODO"),
         }
     }
@@ -550,17 +599,11 @@ pub enum Aggregate {
     Max(Column),
     Min(Column),
     StringAgg(Distinct, Column),
-    // TODO what happens to string_agg(_, ', ')
-    Sum(Distinct, Column),
+    Sum(Distinct, Column), // TODO what happens to string_agg(_, ', ')
 }
 
 impl Aggregate {
-    pub fn from(
-        name: &str,
-        distinct: bool,
-        ignore_nulls: bool,
-        argument: Option<Column>,
-    ) -> Self {
+    pub fn from(name: &str, distinct: bool, ignore_nulls: bool, argument: Option<Column>) -> Self {
         let distinct = Distinct(distinct);
         let ignore_nulls = IgnoreNulls(ignore_nulls);
         match name {
@@ -580,6 +623,52 @@ impl Aggregate {
             "ZetaSQL:string_agg" => Aggregate::StringAgg(distinct, argument.unwrap()),
             "ZetaSQL:sum" => Aggregate::Sum(distinct, argument.unwrap()),
             other => panic!("{} is not supported", name),
+        }
+    }
+}
+
+impl fmt::Display for Aggregate {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Aggregate::AnyValue(column) => write!(f, "(AnyValue {})", column),
+            Aggregate::ArrayAgg(Distinct(true), IgnoreNulls(true), column) => {
+                write!(f, "(ArrayAgg (Distinct {}))", column)
+            }
+            Aggregate::ArrayAgg(Distinct(true), IgnoreNulls(false), column) => {
+                write!(f, "(ArrayAgg (Distinct (IgnoreNulls {})))", column)
+            }
+            Aggregate::ArrayAgg(Distinct(false), IgnoreNulls(true), column) => {
+                write!(f, "(ArrayAgg IgnoreNulls({}))", column)
+            }
+            Aggregate::ArrayAgg(Distinct(false), IgnoreNulls(false), column) => {
+                write!(f, "(ArrayAgg (IgnoreNulls {}))", column)
+            }
+            Aggregate::ArrayConcatAgg(column) => write!(f, "(ArrayConcatAgg {})", column),
+            Aggregate::Avg(Distinct(true), column) => write!(f, "(Avg (Distinct {}))", column),
+            Aggregate::Avg(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::BitAnd(Distinct(true), column) => {
+                write!(f, "(BitAnd (Distinct {}))", column)
+            }
+            Aggregate::BitAnd(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::BitOr(Distinct(true), column) => write!(f, "(BitOr (Distinct {}))", column),
+            Aggregate::BitOr(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::BitXor(Distinct(true), column) => {
+                write!(f, "(BitXor (Distinct {}))", column)
+            }
+            Aggregate::BitXor(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::Count(Distinct(true), column) => write!(f, "(Count (Distinct {}))", column),
+            Aggregate::Count(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::CountStar => write!(f, "(CountStar)"),
+            Aggregate::LogicalAnd(column) => write!(f, "(LogicalAnd {})", column),
+            Aggregate::LogicalOr(column) => write!(f, "(LogicalOr {})", column),
+            Aggregate::Max(column) => write!(f, "(Max {})", column),
+            Aggregate::Min(column) => write!(f, "(Min {})", column),
+            Aggregate::StringAgg(Distinct(true), column) => {
+                write!(f, "(StringAgg (Distinct {}))", column)
+            }
+            Aggregate::StringAgg(Distinct(false), column) => write!(f, "(Avg {})", column),
+            Aggregate::Sum(Distinct(true), column) => write!(f, "(Sum (Distinct {}))", column),
+            Aggregate::Sum(Distinct(false), column) => write!(f, "(Avg {})", column),
         }
     }
 }
