@@ -1,6 +1,7 @@
 use super::int128;
 use encoding::*;
 use node::*;
+use std::mem;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
 use zetasql::any_resolved_alter_object_stmt_proto::Node::*;
 use zetasql::any_resolved_create_statement_proto::Node::*;
@@ -100,8 +101,9 @@ impl Converter {
     fn join(&mut self, q: ResolvedJoinScanProto) -> Plan {
         let left = self.any_resolved_scan(*q.left_scan.unwrap());
         let right = self.any_resolved_scan(*q.right_scan.unwrap());
+        let mut input = Root(Leaf); // TODO this is clearly wrong
         let predicates = match q.join_expr {
-            Some(expr) => self.predicate(*expr),
+            Some(expr) => self.predicate(*expr, &mut input),
             None => vec![],
         };
         match q.join_type.unwrap() {
@@ -119,23 +121,23 @@ impl Converter {
     }
 
     fn filter(&mut self, q: ResolvedFilterScanProto) -> Plan {
-        let input = self.any_resolved_scan(*q.input_scan.unwrap());
-        let predicates = self.predicate(*q.filter_expr.unwrap());
+        let mut input = self.any_resolved_scan(*q.input_scan.unwrap());
+        let predicates = self.predicate(*q.filter_expr.unwrap(), &mut input);
         unary(LogicalFilter(predicates), input)
     }
 
-    fn predicate(&mut self, x: AnyResolvedExprProto) -> Vec<Scalar> {
+    fn predicate(&mut self, x: AnyResolvedExprProto, outer: &mut Plan) -> Vec<Scalar> {
         if let ResolvedFunctionCallBaseNode(x) = x.clone().node.unwrap() {
             if let ResolvedFunctionCallNode(x) = x.node.unwrap() {
                 let x = x.parent.unwrap();
                 let f = x.function.unwrap();
                 let name = f.name.unwrap();
                 if name == "ZetaSQL:$and" {
-                    return self.exprs(x.argument_list);
+                    return self.exprs(x.argument_list, outer);
                 }
             }
         }
-        vec![self.expr(x)]
+        vec![self.expr(x, outer)]
     }
 
     fn set_operation(&mut self, q: ResolvedSetOperationScanProto) -> Plan {
@@ -205,13 +207,13 @@ impl Converter {
     }
 
     fn project(&mut self, q: ResolvedProjectScanProto) -> Plan {
-        let input = self.any_resolved_scan(*q.input_scan.unwrap());
+        let mut input = self.any_resolved_scan(*q.input_scan.unwrap());
         if q.expr_list.len() == 0 {
             return input;
         }
         let mut list = vec![];
         for x in q.expr_list {
-            let value = self.expr(x.expr.unwrap());
+            let value = self.expr(x.expr.unwrap(), &mut input);
             let column = Column::from(x.column.unwrap());
             list.push((value, column))
         }
@@ -236,17 +238,17 @@ impl Converter {
 
     fn aggregate(&mut self, q: ResolvedAggregateScanProto) -> Plan {
         let q = *q.parent.unwrap();
+        let mut input = self.any_resolved_scan(*q.clone().input_scan.unwrap());
         let mut project = vec![];
         let mut group_by = vec![];
         let mut aggregate = vec![];
-        self.group_by(q.clone(), &mut project, &mut group_by);
+        self.group_by(q.clone(), &mut project, &mut group_by, &mut input);
         for c in q.aggregate_list {
             let call = self.coerce_aggregate_call(c.clone());
-            let function = self.convert_aggregate_call(call, &mut project);
+            let function = self.convert_aggregate_call(call, &mut project, &mut input);
             let column = Column::from(c.column.unwrap());
             aggregate.push((function, column));
         }
-        let input = self.any_resolved_scan(*q.input_scan.unwrap());
         if project.len() == 0 {
             return unary(LogicalAggregate(group_by, aggregate), input);
         }
@@ -261,9 +263,10 @@ impl Converter {
         q: ResolvedAggregateScanBaseProto,
         project: &mut Vec<(Scalar, Column)>,
         group_by: &mut Vec<Column>,
+        outer: &mut Plan,
     ) {
         for c in q.group_by_list {
-            let value = self.expr(c.expr.unwrap());
+            let value = self.expr(c.expr.unwrap(), outer);
             let column = Column::from(c.column.unwrap());
             project.push((value, column.clone()));
             group_by.push(column);
@@ -290,25 +293,27 @@ impl Converter {
         &mut self,
         call: ResolvedAggregateFunctionCallProto,
         project: &mut Vec<(Scalar, Column)>,
+        outer: &mut Plan,
     ) -> Aggregate {
         let parent = call.parent.unwrap();
         let grandparent = parent.parent.unwrap();
         let distinct = parent.distinct.unwrap();
         let ignore_nulls = parent.null_handling_modifier.unwrap() == 1;
-        let argument = self.aggregate_argument(grandparent.clone(), project);
+        let argument = self.aggregate_argument(grandparent.clone(), project, outer);
         let function = grandparent.function.unwrap().name.unwrap();
-        Aggregate::from(&function.as_str(), distinct, ignore_nulls, argument)
+        Aggregate::from(function, distinct, ignore_nulls, argument)
     }
 
     fn aggregate_argument(
         &mut self,
         call: ResolvedFunctionCallBaseProto,
         project: &mut Vec<(Scalar, Column)>,
+        outer: &mut Plan,
     ) -> Option<Column> {
         if call.argument_list.is_empty() {
             None
         } else if call.argument_list.len() == 1 {
-            match self.expr(call.argument_list.first().unwrap().clone()) {
+            match self.expr(call.argument_list.first().unwrap().clone(), outer) {
                 // If aggregate has a column references as its arg, add the column reference directly and continue.
                 Scalar::Column(column) => Some(column),
                 // Otherwise, generate a pseudo-column to hold the intermediate expression.
@@ -368,15 +373,15 @@ impl Converter {
         unimplemented!()
     }
 
-    fn exprs(&mut self, xs: Vec<AnyResolvedExprProto>) -> Vec<Scalar> {
+    fn exprs(&mut self, xs: Vec<AnyResolvedExprProto>, outer: &mut Plan) -> Vec<Scalar> {
         let mut list = vec![];
         for x in xs {
-            list.push(self.expr(x))
+            list.push(self.expr(x, outer));
         }
         list
     }
 
-    fn expr(&mut self, x: AnyResolvedExprProto) -> Scalar {
+    fn expr(&mut self, x: AnyResolvedExprProto, outer: &mut Plan) -> Scalar {
         match x.node.unwrap() {
             ResolvedLiteralNode(x) => {
                 let x = x.value.unwrap();
@@ -384,37 +389,73 @@ impl Converter {
                 let typ = x.r#type.unwrap();
                 Scalar::Literal(literal(value, typ))
             }
-            ResolvedColumnRefNode(x) => self.column(x),
-            ResolvedFunctionCallBaseNode(x) => self.function_call(*x),
+            ResolvedColumnRefNode(x) => self.column(x.column.unwrap()),
+            ResolvedFunctionCallBaseNode(x) => self.function_call(*x, outer),
             ResolvedCastNode(x) => self.cast(*x),
-            ResolvedSubqueryExprNode(x) => self.subquery_expr(*x),
+            ResolvedSubqueryExprNode(x) => self.subquery_expr(*x, outer),
             other => panic!("{:?} not supported", other),
         }
     }
 
-    fn column(&mut self, x: ResolvedColumnRefProto) -> Scalar {
-        Scalar::Column(Column::from(x.column.unwrap()))
+    fn column(&mut self, x: ResolvedColumnProto) -> Scalar {
+        Scalar::Column(Column::from(x))
     }
 
-    fn function_call(&mut self, x: AnyResolvedFunctionCallBaseProto) -> Scalar {
+    fn function_call(&mut self, x: AnyResolvedFunctionCallBaseProto, outer: &mut Plan) -> Scalar {
         match x.node.unwrap() {
-            ResolvedFunctionCallNode(x) => self.scalar_function_call(x),
+            ResolvedFunctionCallNode(x) => self.scalar_function_call(x, outer),
             other => panic!("{:?} not supported", other),
         }
     }
 
-    fn scalar_function_call(&mut self, x: ResolvedFunctionCallProto) -> Scalar {
+    fn scalar_function_call(&mut self, x: ResolvedFunctionCallProto, outer: &mut Plan) -> Scalar {
         let x = x.parent.unwrap();
-        let f = x.function.unwrap().name.unwrap();
-        Scalar::Call(Function::from(&f.as_str()), self.exprs(x.argument_list))
+        let f = Function::from(x.function.unwrap().name.unwrap());
+        let arguments = self.exprs(x.argument_list, outer);
+        Scalar::Call(f, arguments)
     }
 
     fn cast(&mut self, x: ResolvedCastProto) -> Scalar {
         unimplemented!()
     }
 
-    fn subquery_expr(&mut self, x: ResolvedSubqueryExprProto) -> Scalar {
-        unimplemented!()
+    fn subquery_expr(&mut self, x: ResolvedSubqueryExprProto, outer: &mut Plan) -> Scalar {
+        match x.subquery_type.unwrap() {
+            // Scalar
+            0 => {
+                let subquery = *x.subquery.unwrap();
+                let corr = self.any_resolved_scan(subquery.clone());
+                let scalar = Scalar::Column(Column::from(single_column(subquery)));
+                *outer = binary(
+                    LogicalSingleJoin(vec![]),
+                    corr,
+                    mem::replace(outer, Root(Leaf)),
+                );
+                scalar
+            }
+            // Array
+            1 => unimplemented!(),
+            // Exists
+            2 => unimplemented!(),
+            // In
+            3 => {
+                let subquery = *x.subquery.unwrap();
+                let mark = self.create_column("$mark".to_string(), "$in".to_string(), Type::Bool);
+                let corr = self.any_resolved_scan(subquery.clone());
+                let inx = self.expr(*x.in_expr.unwrap(), outer);
+                let sel = self.column(single_column(subquery));
+                let args = vec![inx, sel];
+                let equals = Scalar::Call(Function::Equal, args);
+                let predicates = vec![equals];
+                *outer = binary(
+                    LogicalMarkJoin(predicates, mark.clone()),
+                    corr,
+                    mem::replace(outer, Root(Leaf)),
+                );
+                Scalar::Column(mark)
+            }
+            n => panic!("{} is not a subquery type", n),
+        }
     }
 
     fn create_column(&mut self, table: String, name: String, typ: Type) -> Column {
@@ -425,6 +466,32 @@ impl Converter {
         };
         self.next_column_id -= 1;
         column
+    }
+}
+
+fn single_column(q: AnyResolvedScanProto) -> ResolvedColumnProto {
+    match q.node.unwrap() {
+        ResolvedSingleRowScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedTableScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedJoinScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedArrayScanNode(q) => q.element_column.unwrap(),
+        ResolvedFilterScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedSetOperationScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedOrderByScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedLimitOffsetScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedWithRefScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedAnalyticScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedSampleScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedProjectScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedWithScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedTvfscanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedRelationArgumentScanNode(q) => q.parent.unwrap().column_list[0].clone(),
+        ResolvedAggregateScanBaseNode(q) => {
+            let inner = match q.node.unwrap() {
+                ResolvedAggregateScanNode(q) => *q,
+            };
+            inner.parent.unwrap().parent.unwrap().column_list[0].clone()
+        }
     }
 }
 

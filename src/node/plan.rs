@@ -20,6 +20,8 @@ impl fmt::Display for Plan {
 // Operator plan nodes combine inputs in a Plan tree.
 #[derive(Debug)]
 pub enum Operator {
+    // Leaf is a wildcard using during optimization.
+    Leaf,
     // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
     LogicalSingleGet,
     // LogicalGet(table) implements the FROM clause.
@@ -90,6 +92,7 @@ pub enum Operator {
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Operator::Leaf => write!(f, "Leaf"),
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
             Operator::LogicalFilter(predicates) => write!(f, "LogicalFilter{}", join(predicates)),
@@ -219,18 +222,21 @@ pub enum ObjectType {
     Column,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct Limit {
     pub limit: i64,
     pub offset: i64,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct Sort {
     pub column: Column,
     pub desc: bool,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct CreateTable {
     pub name: Name,
@@ -241,6 +247,7 @@ pub struct CreateTable {
     pub replace_if_not_exists: bool,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct CreateIndex {
     pub name: Name,
@@ -248,6 +255,7 @@ pub struct CreateIndex {
     pub columns: Vec<String>,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct AlterTable {
     pub name: Name,
@@ -260,6 +268,7 @@ pub enum Alter {
     DropColumn(DropColumn),
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct AddColumn {
     pub name: String,
@@ -267,18 +276,21 @@ pub struct AddColumn {
     pub ignore_if_exists: bool,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct DropColumn {
     pub name: String,
     pub ignore_if_not_exists: bool,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct Drop {
     pub object: ObjectType,
     pub ignore_if_not_exists: bool,
 }
 
+// TODO convert to inline struct
 #[derive(Debug)]
 pub struct Rename {
     pub object: ObjectType,
@@ -490,8 +502,8 @@ pub enum Function {
 }
 
 impl Function {
-    pub fn from(name: &str) -> Self {
-        match name {
+    pub fn from(name: String) -> Self {
+        match name.as_str() {
             "ZetaSQL:abs" => Function::Abs,
             "ZetaSQL:acos" => Function::Acos,
             "ZetaSQL:acosh" => Function::Acosh,
@@ -635,10 +647,15 @@ pub enum Aggregate {
 }
 
 impl Aggregate {
-    pub fn from(name: &str, distinct: bool, ignore_nulls: bool, argument: Option<Column>) -> Self {
+    pub fn from(
+        name: String,
+        distinct: bool,
+        ignore_nulls: bool,
+        argument: Option<Column>,
+    ) -> Self {
         let distinct = Distinct(distinct);
         let ignore_nulls = IgnoreNulls(ignore_nulls);
-        match name {
+        match name.as_str() {
             "ZetaSQL:any_value" => Aggregate::AnyValue(argument.unwrap()),
             "ZetaSQL:array_agg" => Aggregate::ArrayAgg(distinct, ignore_nulls, argument.unwrap()),
             "ZetaSQL:array_concat_agg" => Aggregate::ArrayConcatAgg(argument.unwrap()),

@@ -82,6 +82,10 @@ fn adventure_works() -> SimpleCatalogProto {
 
 #[test]
 fn test_convert() {
+    ok!(
+        "select 1 from person left join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)", 
+        ""
+    );
     ok!("select 1", "(LogicalProject [1 $col1] (LogicalSingleGet))");
     ok!(
         "select \"foo\" as a",
@@ -173,16 +177,20 @@ fn test_convert() {
     );
     ok!(
         "select exists (select store_id from store where store.store_id = customer.store_id) as ok from customer", 
-    "");
+        ""
+    );
     ok!(
         "select 1 in (select store_id from store where store.store_id = customer.store_id) as ok from customer", 
-    "");
+        ""
+    );
     ok!(
         "select 1 from person where exists (select person_id from customer where customer.person_id = person.person_id)", 
-    "");
+        ""
+    );
     ok!(
         "select 1 from person where not exists (select person_id from customer where customer.person_id = person.person_id)", 
-    "");
+        ""
+    );
     ok!(
         "select 1 from person where person_id in (select person_id from customer)",
         ""
@@ -199,19 +207,36 @@ fn test_convert() {
     ok!("select cast(1 as numeric) as bignum", "");
     ok!(
         "select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)", 
-    "");
+        ""
+    );
+    ok!(
+        "select 1 from person left join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)", 
+        ""
+    );
+    ok!(
+        "select 1 from person join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)",
+        ""
+    );
+    ok!(
+        "select 1 from person join customer on (select person.person_id = customer.person_id)",
+        ""
+    );
     ok!(
         "select 1 from person, customer, store where person.person_id = customer.person_id and customer.store_id in (select store_id from store)", 
-    "");
+        ""
+    );
     ok!(
         "insert into person (person_id, first_name, last_name, modified_date) values (1, \"Foo\", \"Bar\", current_timestamp())", 
-    "");
+        ""
+    );
     ok!(
         "insert into person (person_id, first_name, last_name, modified_date) values (1, \"Foo\", \"Bar\", (select current_timestamp()))", 
-    "");
+        ""
+    );
     ok!(
         "insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))", 
-    "");
+        ""
+    );
     ok!(
         "update person set first_name = \"Foo\" where person_id = 1",
         ""
@@ -222,13 +247,16 @@ fn test_convert() {
     );
     ok!(
         "update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id", 
-    "");
+        ""
+    );
     ok!(
         "update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id", 
-    "");
+        ""
+    );
     ok!(
         "update customer set account_number = 0 where person_id in (select person_id from person where first_name = \"Joe\")", 
-    "");
+        ""
+    );
     ok!("delete customer where person_id = 1", "");
     ok!("create database foo", "");
     ok!("create table foo (id int64 primary key, attr string)", "");
@@ -242,7 +270,8 @@ fn test_convert() {
     );
     ok!(
         "create table foo (person_id int64 primary key, store_id int64) as select person_id, store_id from customer", 
-    "");
+        ""
+    );
     ok!("create index first_name_index on person (first_name)", "");
     ok!("alter table customer add column foo string", "");
     ok!("alter table if exists customer add column foo string", "");
