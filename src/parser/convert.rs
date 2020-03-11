@@ -190,7 +190,7 @@ impl Converter {
         let input = self.any_resolved_scan(*q.input_scan.unwrap());
         let limit = self.int_literal(q.limit);
         let offset = self.int_literal(q.offset);
-        unary(LogicalLimit(Limit { limit, offset }), input)
+        unary(LogicalLimit { limit, offset }, input)
     }
 
     fn int_literal(&mut self, x: Option<Box<AnyResolvedExprProto>>) -> i64 {

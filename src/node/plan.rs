@@ -58,7 +58,10 @@ pub enum Operator {
     // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
     LogicalAggregate(Vec<Column>, Vec<(Aggregate, Column)>),
     // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
-    LogicalLimit(Limit),
+    LogicalLimit {
+        limit: i64,
+        offset: i64,
+    },
     // LogicalSort(columns) implements the ORDER BY clause.
     LogicalSort(Vec<Sort>),
     // LogicalUnion implements SELECT _ UNION ALL SELECT _.
@@ -78,15 +81,36 @@ pub enum Operator {
     // LogicalCreateDatabase(database) implements the CREATE DATABASE operation.
     LogicalCreateDatabase(Name),
     // LogicalCreateTable implements the CREATE TABLE operation.
-    LogicalCreateTable(CreateTable),
+    LogicalCreateTable {
+        name: Name,
+        columns: Vec<(String, encoding::Type)>,
+        partition_by: Vec<i32>,
+        cluster_by: Vec<i32>,
+        primary_key: Vec<i32>,
+        replace_if_not_exists: bool,
+    },
     // LogicalCreateIndex implements the CREATE INDEX operation.
-    LogicalCreateIndex(CreateIndex),
+    LogicalCreateIndex {
+        name: Name,
+        table: Name,
+        columns: Vec<String>,
+    },
     // LogicalAlterTable implements the ALTER TABLE operation.
-    LogicalAlterTable(AlterTable),
+    LogicalAlterTable {
+        name: Name,
+        actions: Vec<Alter>,
+    },
     // LogicalDrop implements the DROP DATABASE/TABLE/INDEX operation.
-    LogicalDrop(Drop),
+    LogicalDrop {
+        object: ObjectType,
+        ignore_if_not_exists: bool,
+    },
     // LogicalRename implements the RENAME operation.
-    LogicalRename(Rename),
+    LogicalRename {
+        object: ObjectType,
+        from: String,
+        to: String,
+    },
 }
 
 impl fmt::Display for Operator {
@@ -136,8 +160,8 @@ impl fmt::Display for Operator {
                 }
                 Ok(())
             }
-            Operator::LogicalLimit(limit) => {
-                write!(f, "LogicalLimit {} {}", limit.limit, limit.offset)
+            Operator::LogicalLimit { limit, offset } => {
+                write!(f, "LogicalLimit {} {}", limit, offset)
             }
             Operator::LogicalSort(order_by) => {
                 let mut strings = vec![];
@@ -158,11 +182,11 @@ impl fmt::Display for Operator {
             Operator::LogicalUpdate(updates) => write!(f, "TODO"),
             Operator::LogicalDelete(table) => write!(f, "TODO"),
             Operator::LogicalCreateDatabase(name) => write!(f, "TODO"),
-            Operator::LogicalCreateTable(create) => write!(f, "TODO"),
-            Operator::LogicalCreateIndex(create) => write!(f, "TODO"),
-            Operator::LogicalAlterTable(alter) => write!(f, "TODO"),
-            Operator::LogicalDrop(drop) => write!(f, "TODO"),
-            Operator::LogicalRename(rename) => write!(f, "TODO"),
+            Operator::LogicalCreateTable { .. } => write!(f, "TODO"),
+            Operator::LogicalCreateIndex { .. } => write!(f, "TODO"),
+            Operator::LogicalAlterTable { .. } => write!(f, "TODO"),
+            Operator::LogicalDrop { .. } => write!(f, "TODO"),
+            Operator::LogicalRename { .. } => write!(f, "TODO"),
         }
     }
 }
@@ -222,44 +246,10 @@ pub enum ObjectType {
     Column,
 }
 
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct Limit {
-    pub limit: i64,
-    pub offset: i64,
-}
-
-// TODO convert to inline struct
 #[derive(Debug)]
 pub struct Sort {
     pub column: Column,
     pub desc: bool,
-}
-
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct CreateTable {
-    pub name: Name,
-    pub columns: Vec<(String, encoding::Type)>,
-    pub partition_by: Vec<i32>,
-    pub cluster_by: Vec<i32>,
-    pub primary_key: Vec<i32>,
-    pub replace_if_not_exists: bool,
-}
-
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct CreateIndex {
-    pub name: Name,
-    pub table: Name,
-    pub columns: Vec<String>,
-}
-
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct AlterTable {
-    pub name: Name,
-    pub actions: Vec<Alter>,
 }
 
 #[derive(Debug)]
@@ -281,21 +271,6 @@ pub struct AddColumn {
 pub struct DropColumn {
     pub name: String,
     pub ignore_if_not_exists: bool,
-}
-
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct Drop {
-    pub object: ObjectType,
-    pub ignore_if_not_exists: bool,
-}
-
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct Rename {
-    pub object: ObjectType,
-    pub from: String,
-    pub to: String,
 }
 
 #[derive(Debug)]
