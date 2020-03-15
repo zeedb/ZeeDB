@@ -27,14 +27,14 @@ impl ParseProvider {
         &mut self,
         sql: &str,
         offset: i32,
-        catalog: SimpleCatalogProto, // TODO eliminate catalog in favor of rocksdb reference
+        catalog: &SimpleCatalogProto, // TODO eliminate catalog in favor of rocksdb reference
     ) -> Result<(i32, node::Plan), String> {
         match self.analyze(sql, offset, catalog) {
             Ok(response) => {
                 let response = response.into_inner();
                 let offset = response.resume_byte_position.unwrap();
                 let plan = match response.result.unwrap() {
-                    ResolvedStatement(stmt) => convert(stmt),
+                    ResolvedStatement(stmt) => convert(&stmt),
                     ResolvedExpression(_) => panic!("expected statement but found expression"),
                 };
                 Ok((offset, plan))
@@ -47,10 +47,10 @@ impl ParseProvider {
         &mut self,
         sql: &str,
         offset: i32,
-        catalog: SimpleCatalogProto,
+        catalog: &SimpleCatalogProto,
     ) -> Result<Response<AnalyzeResponse>, Status> {
         let request = tonic::Request::new(AnalyzeRequest {
-            simple_catalog: Some(catalog),
+            simple_catalog: Some(catalog.clone()),
             target: Some(analyze_request::Target::ParseResumeLocation(
                 ParseResumeLocationProto {
                     input: Some(String::from(sql)),

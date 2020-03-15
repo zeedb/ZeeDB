@@ -206,10 +206,18 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn from(table: zetasql::TableRefProto) -> Self {
-        let id = table.serialization_id.expect("no serialization id");
-        let name = table.name.expect("no table name");
-        Table { id, name }
+    pub fn from(table: &zetasql::TableRefProto) -> Self {
+        match table {
+            zetasql::TableRefProto {
+                serialization_id: Some(id),
+                name: Some(name),
+                ..
+            } => Table {
+                id: *id,
+                name: name.clone(),
+            },
+            other => panic!("{:?}", other),
+        }
     }
 }
 
@@ -221,10 +229,10 @@ pub struct Column {
 }
 
 impl Column {
-    pub fn from(column: zetasql::ResolvedColumnProto) -> Self {
+    pub fn from(column: &zetasql::ResolvedColumnProto) -> Self {
         let id = column.column_id.unwrap();
-        let name = column.name.unwrap();
-        let typ = encoding::Type::from(column.r#type.unwrap());
+        let name = column.name.clone().unwrap();
+        let typ = encoding::Type::from(column.r#type.as_ref().unwrap());
         Column { id, name, typ }
     }
 }

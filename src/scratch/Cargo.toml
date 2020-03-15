@@ -1,0 +1,9 @@
+[package]
+name = "scratch"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[[bin]]
+name = "main"
+path = "main.rs"

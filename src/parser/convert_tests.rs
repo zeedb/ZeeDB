@@ -5,7 +5,7 @@ use zetasql::*;
 macro_rules! ok {
     ($sql:expr, $expect:expr) => {
         let sql = $sql;
-        match ParseProvider::new().parse(sql, 0, adventure_works()) {
+        match ParseProvider::new().parse(sql, 0, &adventure_works()) {
             Ok((_, found)) => {
                 let expect = $expect;
                 let found = format!("{}", found);
@@ -82,10 +82,6 @@ fn adventure_works() -> SimpleCatalogProto {
 
 #[test]
 fn test_convert() {
-    ok!(
-        "select 1 from person left join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)", 
-        ""
-    );
     ok!("select 1", "(LogicalProject [1 $col1] (LogicalSingleGet))");
     ok!(
         "select \"foo\" as a",

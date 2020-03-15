@@ -13,7 +13,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn from(typ: zetasql::TypeProto) -> Self {
+    pub fn from(typ: &zetasql::TypeProto) -> Self {
         match typ.type_kind.unwrap() {
             // TypeInt64
             2 => Type::Int64,
@@ -31,12 +31,14 @@ impl Type {
             19 => Type::Timestamp,
             // TypeArray
             16 => {
-                let array = *typ.array_type.unwrap();
-                let element = *array.element_type.unwrap();
-                Type::Array(Box::from(Type::from(element)))
+                let t = typ.clone().array_type.unwrap().element_type.unwrap();
+                Type::Array(Box::from(Type::from(&t)))
             }
             // TypeStruct
-            17 => Type::Struct(fields(typ.struct_type.unwrap().field)),
+            17 => {
+                let fs = typ.clone().struct_type.unwrap().field;
+                Type::Struct(fields(fs))
+            }
             // TypeNumeric
             23 => Type::Numeric,
             // Other types
@@ -48,8 +50,8 @@ impl Type {
 fn fields(fs: Vec<zetasql::StructFieldProto>) -> Vec<(String, Type)> {
     let mut list = vec![];
     for f in fs {
-        let name = f.field_name.unwrap();
-        let typ = Type::from(f.field_type.unwrap());
+        let name = f.field_name.as_ref().unwrap().clone();
+        let typ = Type::from(f.field_type.as_ref().unwrap());
         list.push((name, typ))
     }
     list
