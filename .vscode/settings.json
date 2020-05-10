@@ -1,11 +1,5 @@
 {
     "files.exclude": {
         "target": true
-    },
-    // "rust-analyzer.cargo-watch.enable": false,
-    "rust-analyzer.displayInlayHints": false,
-    "[rust]": {
-        "editor.formatOnSave": true,
-        "editor.codeLens": false
     }
 }

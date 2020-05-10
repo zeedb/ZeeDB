@@ -145,13 +145,13 @@ impl fmt::Display for Operator {
             Operator::LogicalSingleJoin(predicates) => {
                 write!(f, "LogicalSingleJoin{}", join(predicates))
             }
-            Operator::LogicalMarkJoin(predicates, Column) => {
-                write!(f, "LogicalSingleJoin{}", join(predicates))
+            Operator::LogicalMarkJoin(predicates, column) => {
+                write!(f, "LogicalMarkJoin {}{}", column, join(predicates))
             }
             Operator::LogicalWith(name) => write!(f, "LogicalWith {}", name),
             Operator::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
             Operator::LogicalAggregate(group_by, aggregate) => {
-                write!(f, "LogicalAggregate");
+                write!(f, "LogicalAggregate")?;
                 for c in group_by {
                     write!(f, " {}", c.name)?;
                 }

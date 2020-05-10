@@ -33,4 +33,5 @@ pub fn create_zetasql_server() {
         .arg(SCRIPT)
         .output()
         .expect("failed to start docker");
+    // TODO server is not yet accepting connections when we first call this function
 }

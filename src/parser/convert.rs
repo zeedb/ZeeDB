@@ -73,7 +73,6 @@ impl Converter {
             ResolvedWithScanNode(q) => self.with(q),
             ResolvedAggregateScanBaseNode(q) => match q.node.get() {
                 ResolvedAggregateScanNode(q) => self.aggregate(q),
-                other => panic!("{:?}", other),
             },
             other => panic!("{:?}", other),
         }
@@ -470,7 +469,16 @@ impl Converter {
             // Array
             1 => unimplemented!(),
             // Exists
-            2 => unimplemented!(),
+            2 => {
+                let mark =
+                    self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
+                *outer = binary(
+                    LogicalMarkJoin(vec![], mark.clone()),
+                    corr,
+                    mem::replace(outer, Root(Leaf)),
+                );
+                Scalar::Column(mark.clone())
+            }
             // In
             3 => {
                 let mark = self.create_column("$mark".to_string(), "$in".to_string(), Type::Bool);
@@ -524,7 +532,6 @@ fn single_column(q: &AnyResolvedScanProto) -> &ResolvedColumnProto {
         ResolvedTvfscanNode(q) => q.parent.get(),
         ResolvedRelationArgumentScanNode(q) => q.parent.get(),
         ResolvedAggregateScanBaseNode(q) => single_column_aggregate(q),
-        other => panic!("{:?}", other),
     };
     &q.column_list[0]
 }
@@ -532,7 +539,6 @@ fn single_column(q: &AnyResolvedScanProto) -> &ResolvedColumnProto {
 fn single_column_aggregate(q: &AnyResolvedAggregateScanBaseProto) -> &ResolvedScanProto {
     match q.node.get() {
         ResolvedAggregateScanNode(q) => q.parent.get().parent.get(),
-        other => panic!("{:?}", other),
     }
 }
 

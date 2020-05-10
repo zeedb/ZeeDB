@@ -1,5 +1,4 @@
 use crate::*;
-use node::*;
 use zetasql::*;
 
 macro_rules! ok {
@@ -33,7 +32,7 @@ fn adventure_works() -> SimpleCatalogProto {
             ..Default::default()
         }
     };
-    let mut column = |name: &str, kind: TypeKind| -> SimpleColumnProto {
+    let column = |name: &str, kind: TypeKind| -> SimpleColumnProto {
         SimpleColumnProto {
             name: Some(String::from(name)),
             r#type: Some(TypeProto {
@@ -169,19 +168,19 @@ fn test_convert() {
     );
     ok!(
         "select (select name from store where store.store_id = customer.store_id) from customer",
-        ""
+        "(LogicalProject [name $col1] (LogicalSingleJoin (LogicalFilter (Equal store_id store_id) (LogicalGet store)) (LogicalGet customer)))"
     );
     ok!(
         "select exists (select store_id from store where store.store_id = customer.store_id) as ok from customer", 
-        ""
+        "(LogicalProject [$exists ok] (LogicalMarkJoin $exists (LogicalFilter (Equal store_id store_id) (LogicalGet store)) (LogicalGet customer)))"
     );
     ok!(
         "select 1 in (select store_id from store where store.store_id = customer.store_id) as ok from customer", 
-        ""
+        "(LogicalProject [$in ok] (LogicalMarkJoin $in (Equal 1 store_id) (LogicalFilter (Equal store_id store_id) (LogicalGet store)) (LogicalGet customer)))"
     );
     ok!(
         "select 1 from person where exists (select person_id from customer where customer.person_id = person.person_id)", 
-        ""
+        "(LogicalProject [1 $col1] (LogicalFilter $exists (LogicalMarkJoin $exists (LogicalFilter (Equal person_id person_id) (LogicalGet customer)) (LogicalGet person))))"
     );
     ok!(
         "select 1 from person where not exists (select person_id from customer where customer.person_id = person.person_id)", 
