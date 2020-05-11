@@ -462,7 +462,7 @@ pub enum Value {
     Double(f64),
     String(String),
     Bytes(Vec<u8>),
-    Date(chrono::Date<chrono::Utc>),
+    Date(chrono::NaiveDate),
     Timestamp(chrono::DateTime<chrono::Utc>),
     Numeric(i128),
     Array(Vec<Value>),

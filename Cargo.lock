@@ -634,6 +634,7 @@ dependencies = [
  "futures",
  "node",
  "prost-types",
+ "time",
  "tokio",
  "tonic",
  "zetasql",

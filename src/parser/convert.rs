@@ -838,12 +838,15 @@ fn field_types(typ: &TypeProto) -> &Vec<StructFieldProto> {
     }
 }
 
-fn date_value(date: i32) -> chrono::Date<chrono::Utc> {
-    unimplemented!()
+fn date_value(date: i32) -> chrono::NaiveDate {
+    chrono::NaiveDate::from_ymd(1970, 1, 1) + time::Duration::days(date as i64)
 }
 
 fn timestamp_value(time: &prost_types::Timestamp) -> chrono::DateTime<chrono::Utc> {
-    unimplemented!()
+    chrono::DateTime::from_utc(
+        chrono::NaiveDateTime::from_timestamp(time.seconds, time.nanos as u32),
+        chrono::Utc,
+    )
 }
 
 fn array_value(values: &Vec<ValueProto>, typ: &TypeProto) -> Vec<Value> {

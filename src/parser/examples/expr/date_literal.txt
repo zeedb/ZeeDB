@@ -1,0 +1,4 @@
+select date '2001-01-01'
+
+LogicalProject $query.$col1:2001-01-01
+	LogicalSingleGet

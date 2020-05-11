@@ -129,6 +129,8 @@ fn test_convert() {
     ok!("examples/dml/update_where_in.txt", "update customer set account_number = 0 where person_id in (select person_id from person where first_name = \"Joe\")", errors);
     ok!("examples/expr/cast_column.txt", "select cast(customer_id as string) from customer", errors);
     ok!("examples/expr/cast_literal.txt", "select cast(1 as numeric) as bignum", errors);
+    ok!("examples/expr/date_literal.txt", "select date '2001-01-01'", errors);
+    ok!("examples/expr/timestamp_literal.txt", "select timestamp '2001-01-01'", errors);
     ok!("examples/expr/numeric_max.txt", "select cast(99999999999999999999999999999.999999999 as numeric)", errors); // TODO this is wrong
     ok!("examples/expr/numeric_min.txt", "select cast(-99999999999999999999999999999.999999999 as numeric)", errors); // TODO this is wrong
     ok!("examples/expr/numeric_neg.txt", "select cast(-1 as numeric)", errors); // TODO this is wrong

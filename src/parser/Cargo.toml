@@ -8,11 +8,12 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-chrono = "0.4"
+chrono = "0.4.11"
 encoding = { path = "../encoding" }
 futures = "0.3.4"
 node = { path = "../node" }
 prost-types = "0.6.1"
+time = "0.1.39"
 tokio = { version = "0.2", features = ["macros"] }
 tonic = "0.1.1"
 zetasql = { path = "../zetasql" }
