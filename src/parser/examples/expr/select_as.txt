@@ -1,0 +1,4 @@
+select "foo" as a
+
+LogicalProject $query.a:foo
+	LogicalSingleGet

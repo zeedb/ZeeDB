@@ -195,20 +195,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "decimal"
-version = "2.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6458723bc760383275fbc02f4c769b2e5f3de782abaf5e7e0b9b7f0368a63ed"
-dependencies = [
- "bitflags",
- "cc",
- "libc",
- "ord_subset",
- "rustc-serialize",
- "serde",
-]
-
-[[package]]
 name = "either"
 version = "1.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -606,7 +592,6 @@ name = "node"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "decimal",
  "encoding",
  "zetasql",
 ]
@@ -641,17 +626,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "ord_subset"
-version = "3.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7ce14664caf5b27f5656ff727defd68ae1eb75ef3c4d95259361df1eb376bef"
-
-[[package]]
 name = "parser"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "decimal",
  "encoding",
  "futures",
  "node",
@@ -877,20 +855,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
-name = "rustc-serialize"
-version = "0.3.24"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dcf128d1287d2ea9d80910b5f1120d0b8eede3fbf1abe91c40d39ea7d51e6fda"
-
-[[package]]
 name = "scratch"
 version = "0.1.0"
-
-[[package]]
-name = "serde"
-version = "1.0.104"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "414115f25f818d7dfccec8ee535d76949ae78584fc4f79a6f45a904bf8ab4449"
 
 [[package]]
 name = "shlex"

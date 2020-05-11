@@ -1,0 +1,10 @@
+select 1 as a, 2 as b union all select 4 as b, 3 as a union all select 5 as a, 6 as b
+
+LogicalUnion
+	LogicalProject $union_all3.a:5 $union_all3.b:6
+		LogicalSingleGet
+	LogicalUnion
+		LogicalProject $union_all2.b:4 $union_all2.a:3
+			LogicalSingleGet
+		LogicalProject $union_all1.a:1 $union_all1.b:2
+			LogicalSingleGet

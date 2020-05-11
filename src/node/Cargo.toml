@@ -9,6 +9,5 @@ path = "lib.rs"
 
 [dependencies]
 chrono = "0.4"
-decimal = "2.0.4"
 encoding = { path = "../encoding" }
 zetasql = { path = "../zetasql" }

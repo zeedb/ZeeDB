@@ -1,0 +1,4 @@
+select cast(-1 as numeric)
+
+LogicalProject $query.$col1:0
+	LogicalSingleGet

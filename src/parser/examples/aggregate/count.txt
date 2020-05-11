@@ -1,0 +1,4 @@
+select count(*) from person
+
+LogicalAggregate $aggregate.$agg1:(CountStar)
+	LogicalGet person

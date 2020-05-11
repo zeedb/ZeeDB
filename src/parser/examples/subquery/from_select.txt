@@ -1,0 +1,3 @@
+select customer_id from (select customer_id from customer) as foo
+
+LogicalGet customer

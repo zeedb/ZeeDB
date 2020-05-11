@@ -5,27 +5,29 @@ use zetasql::*;
 #[test]
 fn test_analyze() {
     let mut parser = ParseProvider::new();
-    let (_, plan) = parser.parse("select 1", 0, &catalog()).unwrap();
+    let (_, plan) = parser
+        .parse(&"select 1".to_string(), 0, &catalog())
+        .unwrap();
     match plan {
         Unary(LogicalProject(_), _) => (),
-        other => panic!("{:?}", other),
+        other => panic!("{}", other),
     }
 }
 
 #[test]
 fn test_split() {
     let mut parser = ParseProvider::new();
-    let sql = "select 1; select 2";
-    let (select1, _) = parser.parse(sql, 0, &catalog()).unwrap();
+    let sql = "select 1; select 2".to_string();
+    let (select1, _) = parser.parse(&sql, 0, &catalog()).unwrap();
     assert!(select1 > 0);
-    let (select2, _) = parser.parse(sql, select1, &catalog()).unwrap();
+    let (select2, _) = parser.parse(&sql, select1, &catalog()).unwrap();
     assert_eq!(select2 as usize, sql.len());
 }
 
 #[test]
 fn test_not_available_fn() {
     let mut parser = ParseProvider::new();
-    match parser.parse("select to_proto(true)", 0, &catalog()) {
+    match parser.parse(&"select to_proto(true)".to_string(), 0, &catalog()) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
     }

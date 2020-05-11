@@ -1,3 +1,4 @@
+use fmt::Debug;
 use std::fmt;
 
 #[derive(Debug)]
@@ -9,10 +10,36 @@ pub enum Plan {
 
 impl fmt::Display for Plan {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.print(f, 0)
+    }
+}
+
+impl Plan {
+    fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
         match self {
-            Plan::Root(op) => write!(f, "({})", op),
-            Plan::Unary(op, input) => write!(f, "({} {})", op, *input),
-            Plan::Binary(op, left, right) => write!(f, "({} {} {})", op, *left, *right),
+            Plan::Root(op) => write!(f, "{}", op),
+            Plan::Unary(op, input) => {
+                write!(f, "{}", op)?;
+                write!(f, "\n")?;
+                for _ in 0..indent + 1 {
+                    write!(f, "\t")?;
+                }
+                input.print(f, indent + 1)
+            }
+            Plan::Binary(op, left, right) => {
+                write!(f, "{}", op)?;
+                write!(f, "\n")?;
+                for _ in 0..indent + 1 {
+                    write!(f, "\t")?;
+                }
+                left.print(f, indent + 1)?;
+                write!(f, "\n")?;
+                for _ in 0..indent + 1 {
+                    write!(f, "\t")?;
+                }
+                right.print(f, indent + 1)?;
+                Ok(())
+            }
         }
     }
 }
@@ -75,7 +102,8 @@ pub enum Operator {
     // LogicalValues(rows, columns) implements VALUES expressions.
     LogicalValues(Vec<Vec<Scalar>>, Vec<Column>),
     // LogicalUpdate(sets) implements the UPDATE operation.
-    LogicalUpdate(Vec<(Column, Column)>),
+    // (column, None) indicates set column to default value.
+    LogicalUpdate(Vec<(Column, Option<Column>)>),
     // LogicalDelete(table) implements the DELETE operation.
     LogicalDelete(Table),
     // LogicalCreateDatabase(database) implements the CREATE DATABASE operation.
@@ -84,10 +112,9 @@ pub enum Operator {
     LogicalCreateTable {
         name: Name,
         columns: Vec<(String, encoding::Type)>,
-        partition_by: Vec<i32>,
-        cluster_by: Vec<i32>,
-        primary_key: Vec<i32>,
-        replace_if_not_exists: bool,
+        partition_by: Vec<i64>,
+        cluster_by: Vec<i64>,
+        primary_key: Vec<i64>,
     },
     // LogicalCreateIndex implements the CREATE INDEX operation.
     LogicalCreateIndex {
@@ -103,13 +130,13 @@ pub enum Operator {
     // LogicalDrop implements the DROP DATABASE/TABLE/INDEX operation.
     LogicalDrop {
         object: ObjectType,
-        ignore_if_not_exists: bool,
+        name: Name,
     },
     // LogicalRename implements the RENAME operation.
     LogicalRename {
         object: ObjectType,
-        from: String,
-        to: String,
+        from: Name,
+        to: Name,
     },
 }
 
@@ -119,44 +146,44 @@ impl fmt::Display for Operator {
             Operator::Leaf => write!(f, "Leaf"),
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
-            Operator::LogicalFilter(predicates) => write!(f, "LogicalFilter{}", join(predicates)),
+            Operator::LogicalFilter(predicates) => write!(f, "LogicalFilter {}", join(predicates)),
             Operator::LogicalProject(projects) => {
                 let mut strings = vec![];
                 for (x, c) in projects {
-                    strings.push(format!("[{} {}]", x, c.name));
+                    strings.push(format!("{}:{}", c, x));
                 }
                 write!(f, "LogicalProject {}", strings.join(" "))
             }
             Operator::LogicalInnerJoin(predicates) => {
-                write!(f, "LogicalInnerJoin{}", join(predicates))
+                write!(f, "LogicalInnerJoin {}", join(predicates))
             }
             Operator::LogicalRightJoin(predicates) => {
-                write!(f, "LogicalRightJoin{}", join(predicates))
+                write!(f, "LogicalRightJoin {}", join(predicates))
             }
             Operator::LogicalOuterJoin(predicates) => {
-                write!(f, "LogicalOuterJoin{}", join(predicates))
+                write!(f, "LogicalOuterJoin {}", join(predicates))
             }
             Operator::LogicalSemiJoin(predicates) => {
-                write!(f, "LogicalSemiJoin{}", join(predicates))
+                write!(f, "LogicalSemiJoin {}", join(predicates))
             }
             Operator::LogicalAntiJoin(predicates) => {
-                write!(f, "LogicalAntiJoin{}", join(predicates))
+                write!(f, "LogicalAntiJoin {}", join(predicates))
             }
             Operator::LogicalSingleJoin(predicates) => {
-                write!(f, "LogicalSingleJoin{}", join(predicates))
+                write!(f, "LogicalSingleJoin {}", join(predicates))
             }
             Operator::LogicalMarkJoin(predicates, column) => {
-                write!(f, "LogicalMarkJoin {}{}", column, join(predicates))
+                write!(f, "LogicalMarkJoin {} {}", column, join(predicates))
             }
             Operator::LogicalWith(name) => write!(f, "LogicalWith {}", name),
             Operator::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
             Operator::LogicalAggregate(group_by, aggregate) => {
                 write!(f, "LogicalAggregate")?;
                 for c in group_by {
-                    write!(f, " {}", c.name)?;
+                    write!(f, " {}", c)?;
                 }
                 for (x, c) in aggregate {
-                    write!(f, " [{} {}]", x, c.name)?;
+                    write!(f, " {}:{}", c, x)?;
                 }
                 Ok(())
             }
@@ -167,32 +194,109 @@ impl fmt::Display for Operator {
                 let mut strings = vec![];
                 for sort in order_by {
                     if sort.desc {
-                        strings.push(format!("(Desc {})", sort.column.name))
+                        strings.push(format!("(Desc {})", sort.column))
                     } else {
-                        strings.push(format!("{}", sort.column.name))
+                        strings.push(format!("{}", sort.column))
                     }
                 }
                 write!(f, "LogicalSort {}", strings.join(" "))
             }
-            Operator::LogicalUnion => write!(f, "TODO"),
-            Operator::LogicalIntersect => write!(f, "TODO"),
-            Operator::LogicalExcept => write!(f, "TODO"),
-            Operator::LogicalInsert(table, columns) => write!(f, "TODO"),
-            Operator::LogicalValues(rows, columns) => write!(f, "TODO"),
-            Operator::LogicalUpdate(updates) => write!(f, "TODO"),
-            Operator::LogicalDelete(table) => write!(f, "TODO"),
-            Operator::LogicalCreateDatabase(name) => write!(f, "TODO"),
-            Operator::LogicalCreateTable { .. } => write!(f, "TODO"),
-            Operator::LogicalCreateIndex { .. } => write!(f, "TODO"),
-            Operator::LogicalAlterTable { .. } => write!(f, "TODO"),
-            Operator::LogicalDrop { .. } => write!(f, "TODO"),
-            Operator::LogicalRename { .. } => write!(f, "TODO"),
+            Operator::LogicalUnion => write!(f, "LogicalUnion"),
+            Operator::LogicalIntersect => write!(f, "LogicalIntersect"),
+            Operator::LogicalExcept => write!(f, "LogicalExcept"),
+            Operator::LogicalInsert(table, columns) => {
+                write!(f, "LogicalInsert {}", table.name)?;
+                for c in columns {
+                    write!(f, " {}", c)?;
+                }
+                Ok(())
+            }
+            Operator::LogicalValues(rows, _) => {
+                write!(f, "LogicalValues")?;
+                for row in rows {
+                    write!(f, " [{}]", join(row))?;
+                }
+                Ok(())
+            }
+            Operator::LogicalUpdate(updates) => {
+                let mut strings = vec![];
+                for (target, value) in updates {
+                    let part = match value {
+                        Some(value) => format!("{}:{}", target, value),
+                        None => format!("{}:_", target),
+                    };
+                    strings.push(part);
+                }
+                write!(f, "LogicalUpdate {}", strings.join(" "))
+            }
+            Operator::LogicalDelete(table) => write!(f, "LogicalDelete {}", table.name),
+            Operator::LogicalCreateDatabase(name) => {
+                write!(f, "LogicalCreateDatabase {}", name.path.join("."))
+            }
+            Operator::LogicalCreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+            } => {
+                write!(f, "LogicalCreateTable {}", name)?;
+                for (name, typ) in columns {
+                    write!(f, " {}:{}", name, typ)?;
+                }
+                if !partition_by.is_empty() {
+                    write!(f, " (PartitionBy")?;
+                    for p in partition_by {
+                        write!(f, " {}", p)?;
+                    }
+                    write!(f, ")")?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " (ClusterBy")?;
+                    for p in cluster_by {
+                        write!(f, " {}", p)?;
+                    }
+                    write!(f, ")")?;
+                }
+                if !primary_key.is_empty() {
+                    write!(f, " (PrimaryKey")?;
+                    for p in primary_key {
+                        write!(f, " {}", p)?;
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            Operator::LogicalCreateIndex {
+                name,
+                table,
+                columns,
+            } => write!(
+                f,
+                "LogicalCreateIndex {} {} {}",
+                name,
+                table,
+                columns.join(" ")
+            ),
+            Operator::LogicalAlterTable { name, actions } => {
+                write!(f, "LogicalAlterTable {}", name)?;
+                for a in actions {
+                    write!(f, " {}", a)?;
+                }
+                Ok(())
+            }
+            Operator::LogicalDrop { object, name } => {
+                write!(f, "LogicalDrop {:?} {}", object, name)
+            }
+            Operator::LogicalRename { object, from, to } => {
+                write!(f, "LogicalRename {:?} {} {}", object, from, to)
+            }
         }
     }
 }
 
 fn join(xs: &Vec<Scalar>) -> String {
-    let mut strings = vec![String::from("")];
+    let mut strings = vec![];
     for x in xs {
         strings.push(format!("{}", x));
     }
@@ -225,6 +329,7 @@ impl Table {
 pub struct Column {
     pub id: i64,
     pub name: String,
+    pub table: Option<String>,
     pub typ: encoding::Type,
 }
 
@@ -232,19 +337,36 @@ impl Column {
     pub fn from(column: &zetasql::ResolvedColumnProto) -> Self {
         let id = column.column_id.unwrap();
         let name = column.name.clone().unwrap();
+        let table = column.table_name.clone();
         let typ = encoding::Type::from(column.r#type.as_ref().unwrap());
-        Column { id, name, typ }
+        Column {
+            id,
+            name,
+            table,
+            typ,
+        }
     }
 }
 
 impl fmt::Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(table) = &self.table {
+            write!(f, "{}.", table)?;
+        }
         write!(f, "{}", self.name)
     }
 }
 
 #[derive(Debug)]
-pub struct Name(Vec<String>);
+pub struct Name {
+    pub path: Vec<String>,
+}
+
+impl fmt::Display for Name {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.path.join("."))
+    }
+}
 
 #[derive(Debug)]
 pub enum ObjectType {
@@ -254,38 +376,54 @@ pub enum ObjectType {
     Column,
 }
 
+impl ObjectType {
+    pub fn from(name: &String) -> Self {
+        match name.to_lowercase().as_str() {
+            "database" => ObjectType::Database,
+            "table" => ObjectType::Table,
+            "index" => ObjectType::Index,
+            "column" => ObjectType::Column,
+            _ => panic!("{}", name),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Sort {
     pub column: Column,
     pub desc: bool,
 }
 
+impl fmt::Display for Sort {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.desc {
+            write!(f, "-{}", self.column)
+        } else {
+            write!(f, "{}", self.column)
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Alter {
-    AddColumn(AddColumn),
-    DropColumn(DropColumn),
+    AddColumn { name: String, typ: encoding::Type },
+    DropColumn { name: String },
 }
 
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct AddColumn {
-    pub name: String,
-    pub typ: encoding::Type,
-    pub ignore_if_exists: bool,
-}
-
-// TODO convert to inline struct
-#[derive(Debug)]
-pub struct DropColumn {
-    pub name: String,
-    pub ignore_if_not_exists: bool,
+impl fmt::Display for Alter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Alter::AddColumn { name, typ } => write!(f, "(AddColumn {}:{})", name, typ),
+            Alter::DropColumn { name } => write!(f, "(DropColumn {})", name),
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum Scalar {
     Literal(Value),
     Column(Column),
-    Call(Function, Vec<Scalar>),
+    Call(Function, Vec<Scalar>, encoding::Type),
     Cast(Box<Scalar>, encoding::Type),
 }
 
@@ -294,7 +432,7 @@ impl Scalar {
         match self {
             Scalar::Literal(value) => value.typ(),
             Scalar::Column(column) => column.typ.clone(),
-            Scalar::Call(function, arguments) => function.typ(arguments),
+            Scalar::Call(_, _, returns) => returns.clone(),
             Scalar::Cast(_, typ) => typ.clone(),
         }
     }
@@ -304,15 +442,15 @@ impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Scalar::Literal(value) => write!(f, "{}", value),
-            Scalar::Column(column) => write!(f, "{}", column.name),
-            Scalar::Call(function, arguments) => {
-                let mut strings = vec![];
-                for a in arguments {
-                    strings.push(format!("{}", a))
+            Scalar::Column(column) => write!(f, "{}", column),
+            Scalar::Call(function, arguments, _) => {
+                if arguments.is_empty() {
+                    write!(f, "({:?})", function)
+                } else {
+                    write!(f, "({:?} {})", function, join(arguments))
                 }
-                write!(f, "({:?} {})", function, strings.join(" "))
             }
-            Scalar::Cast(value, typ) => write!(f, "TODO"),
+            Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
         }
     }
 }
@@ -326,7 +464,7 @@ pub enum Value {
     Bytes(Vec<u8>),
     Date(chrono::Date<chrono::Utc>),
     Timestamp(chrono::DateTime<chrono::Utc>),
-    Numeric(decimal::d128),
+    Numeric(i128),
     Array(Vec<Value>),
     Struct(Vec<(String, Value)>),
 }
@@ -354,13 +492,13 @@ impl fmt::Display for Value {
             Value::Int64(x) => write!(f, "{}", x),
             Value::Bool(x) => write!(f, "{}", x),
             Value::Double(x) => write!(f, "{}", x),
-            Value::String(x) => write!(f, "{:?}", x),
-            Value::Bytes(x) => write!(f, "TODO"),
+            Value::String(x) => write!(f, "{}", x),
+            Value::Bytes(x) => write!(f, "{:?}", x),
             Value::Date(x) => write!(f, "{}", x),
             Value::Timestamp(x) => write!(f, "{}", x),
-            Value::Numeric(x) => write!(f, "TODO"),
-            Value::Array(x) => write!(f, "TODO"),
-            Value::Struct(x) => write!(f, "TODO"),
+            Value::Numeric(x) => write!(f, "{}", x),
+            Value::Array(x) => write!(f, "{:?}", x),
+            Value::Struct(x) => write!(f, "{:?}", x),
         }
     }
 }
@@ -603,10 +741,6 @@ impl Function {
             other => panic!("{} is not supported", other),
         }
     }
-
-    pub fn typ(&self, arguments: &Vec<Scalar>) -> encoding::Type {
-        unimplemented!()
-    }
 }
 
 // Aggregate functions appear in GROUP BY expressions.
@@ -654,7 +788,7 @@ impl Aggregate {
             "ZetaSQL:min" => Aggregate::Min(argument.unwrap()),
             "ZetaSQL:string_agg" => Aggregate::StringAgg(distinct, argument.unwrap()),
             "ZetaSQL:sum" => Aggregate::Sum(distinct, argument.unwrap()),
-            other => panic!("{} is not supported", name),
+            _ => panic!("{} is not supported", name),
         }
     }
 }

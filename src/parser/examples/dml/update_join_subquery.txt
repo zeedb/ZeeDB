@@ -1,0 +1,11 @@
+update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id
+
+LogicalUpdate customer.account_number:$update.$expr
+	LogicalProject $update.$expr:$expr_subquery.person_id
+		LogicalSingleJoin 
+			LogicalProject $expr_subquery.person_id:person.person_id
+				LogicalSingleGet
+			LogicalFilter (Equal customer.person_id person.person_id)
+				LogicalInnerJoin 
+					LogicalGet customer
+					LogicalGet person

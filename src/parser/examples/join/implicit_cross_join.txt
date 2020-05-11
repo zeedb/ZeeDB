@@ -1,0 +1,5 @@
+select customer.customer_id, store.store_id from customer, store
+
+LogicalInnerJoin 
+	LogicalGet customer
+	LogicalGet store

@@ -1,0 +1,4 @@
+create table foo (person_id int64 primary key, store_id int64) as select person_id, store_id from customer
+
+LogicalProject foo.person_id:customer.person_id foo.store_id:customer.store_id
+	LogicalGet customer

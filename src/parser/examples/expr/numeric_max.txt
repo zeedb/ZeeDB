@@ -1,0 +1,4 @@
+select cast(99999999999999999999999999999.999999999 as numeric)
+
+LogicalProject $query.$col1:-17179869152
+	LogicalSingleGet

@@ -1,0 +1,4 @@
+select cast(customer_id as string) from customer
+
+LogicalProject $query.$col1:(Cast customer.customer_id STRING)
+	LogicalGet customer

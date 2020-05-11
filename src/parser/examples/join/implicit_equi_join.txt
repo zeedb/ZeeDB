@@ -1,0 +1,6 @@
+select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id
+
+LogicalFilter (Equal customer.store_id store.store_id)
+	LogicalInnerJoin 
+		LogicalGet customer
+		LogicalGet store

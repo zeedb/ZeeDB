@@ -1,0 +1,7 @@
+select exists (select store_id from store where store.store_id = customer.store_id) as ok from customer
+
+LogicalProject $query.ok:$mark.$exists
+	LogicalMarkJoin $mark.$exists 
+		LogicalFilter (Equal store.store_id customer.store_id)
+			LogicalGet store
+		LogicalGet customer

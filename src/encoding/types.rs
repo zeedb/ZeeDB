@@ -1,3 +1,5 @@
+use std::fmt;
+
 #[derive(Debug, Clone)]
 pub enum Type {
     Bool,
@@ -7,6 +9,7 @@ pub enum Type {
     Bytes,
     Date,
     Timestamp,
+    Enum,
     Numeric,
     Struct(Vec<(String, Type)>),
     Array(Box<Type>),
@@ -57,22 +60,23 @@ fn fields(fs: Vec<zetasql::StructFieldProto>) -> Vec<(String, Type)> {
     list
 }
 
-impl ToString for Type {
-    fn to_string(&self) -> String {
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Type::Bool => String::from("BOOL"),
-            Type::Int64 => String::from("INT64"),
-            Type::Double => String::from("DOUBLE"),
-            Type::String => String::from("STRING"),
-            Type::Bytes => String::from("BYTES"),
-            Type::Date => String::from("DATE"),
-            Type::Timestamp => String::from("TIMESTAMP"),
-            Type::Numeric => String::from("NUMERIC"),
+            Type::Bool => write!(f, "BOOL"),
+            Type::Int64 => write!(f, "INT64"),
+            Type::Double => write!(f, "DOUBLE"),
+            Type::String => write!(f, "STRING"),
+            Type::Bytes => write!(f, "BYTES"),
+            Type::Date => write!(f, "DATE"),
+            Type::Timestamp => write!(f, "TIMESTAMP"),
+            Type::Enum => write!(f, "ENUM"),
+            Type::Numeric => write!(f, "NUMERIC"),
             Type::Struct(fields) => {
                 let strings: Vec<String> = fields.iter().map(field_to_string).collect();
-                format!("STRUCT<{}>", strings.join(", "))
+                write!(f, "STRUCT<{}>", strings.join(", "))
             }
-            Type::Array(element) => format!("ARRAY<{}>", element.to_string()),
+            Type::Array(element) => write!(f, "ARRAY<{}>", element.to_string()),
         }
     }
 }

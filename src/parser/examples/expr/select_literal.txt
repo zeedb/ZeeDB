@@ -1,0 +1,4 @@
+select customer_id as a, "foo" as b from customer
+
+LogicalProject $query.b:foo
+	LogicalGet customer

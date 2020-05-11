@@ -1,0 +1,5 @@
+select customer_id from customer order by customer_id + 1
+
+LogicalSort $orderby.$orderbycol1
+	LogicalProject $orderby.$orderbycol1:(Add customer.customer_id 1)
+		LogicalGet customer

@@ -1,21 +1,35 @@
 use crate::*;
+use std::fs;
+use std::io;
+use std::io::{Read, Write};
 use zetasql::*;
 
+fn read_expected(path: &String) -> io::Result<String> {
+    let mut file = fs::File::open(path)?;
+    let mut expect = String::new();
+    file.read_to_string(&mut expect)?;
+    Ok(expect)
+}
+
+fn matches_expected(path: &String, found: String) -> bool {
+    match read_expected(path) {
+        Ok(expect) if expect == found => true,
+        _ => {
+            let mut file = fs::File::create(path).unwrap();
+            file.write_all(found.as_bytes()).unwrap();
+            false
+        }
+    }
+}
+
 macro_rules! ok {
-    ($sql:expr, $expect:expr) => {
-        let sql = $sql;
-        match ParseProvider::new().parse(sql, 0, &adventure_works()) {
-            Ok((_, found)) => {
-                let expect = $expect;
-                let found = format!("{}", found);
-                if found != expect {
-                    panic!(
-                        "\n\tparse:\t{}\n\texpect:\t{}\n\tfound:\t{}\n",
-                        sql, expect, found
-                    )
-                }
-            }
-            Err(err) => panic!("\n\tparse:\t{}\n\terror:\t{}\n", sql, err),
+    ($path:expr, $sql:expr, $errors:expr) => {
+        let mut parser = ParseProvider::new();
+        let sql = $sql.to_string();
+        let (_, found) = parser.parse(&sql, 0, &adventure_works()).unwrap();
+        let found = format!("{}\n\n{}", &sql, found);
+        if !matches_expected(&$path.to_string(), found) {
+            $errors.push($path.to_string());
         }
     };
 }
@@ -80,209 +94,71 @@ fn adventure_works() -> SimpleCatalogProto {
 }
 
 #[test]
+#[rustfmt::skip]
 fn test_convert() {
-    ok!("select 1", "(LogicalProject [1 $col1] (LogicalSingleGet))");
-    ok!(
-        "select \"foo\" as a",
-        "(LogicalProject [\"foo\" a] (LogicalSingleGet))"
-    );
-    ok!(
-        "select customer_id as a from customer",
-        "(LogicalGet customer)"
-    );
-    ok!(
-        "select customer_id as a, \"foo\" as b from customer",
-        "(LogicalProject [\"foo\" b] (LogicalGet customer))"
-    );
-    ok!(
-        "select customer_id from customer where store_id = 1",
-        "(LogicalFilter (Equal store_id 1) (LogicalGet customer))"
-    );
-    ok!(
-        "select customer.customer_id, store.store_id from customer, store",
-        "(LogicalInnerJoin (LogicalGet customer) (LogicalGet store))"
-    );
-    ok!(
-        "select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id", 
-        "(LogicalFilter (Equal store_id store_id) (LogicalInnerJoin (LogicalGet customer) (LogicalGet store)))"
-    );
-    ok!(
-        "select customer.customer_id, store.store_id from customer join store on customer.store_id = store.store_id", 
-        "(LogicalInnerJoin (Equal store_id store_id) (LogicalGet customer) (LogicalGet store))"
-    );
-    ok!(
-        "select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id", 
-        "(LogicalRightJoin (Equal store_id store_id) (LogicalGet store) (LogicalGet customer))"
-    );
-    ok!(
-        "select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id", 
-        "(LogicalOuterJoin (Equal store_id store_id) (LogicalGet customer) (LogicalGet store))"
-    );
-    ok!(
-        "select customer_id from customer limit 100 offset 10",
-        "(LogicalLimit 100 10 (LogicalGet customer))"
-    );
-    ok!(
-        "select customer_id from customer order by customer_id",
-        "(LogicalSort customer_id (LogicalGet customer))"
-    );
-    ok!(
-        "select customer_id from customer order by modified_date",
-        "(LogicalSort modified_date (LogicalGet customer))"
-    );
-    ok!(
-        "select customer_id from customer order by modified_date limit 100 offset 10",
-        "(LogicalLimit 100 10 (LogicalSort modified_date (LogicalGet customer)))"
-    );
-    ok!(
-        "select customer_id from customer order by customer_id + 1",
-        "(LogicalSort $orderbycol1 (LogicalProject [(Add customer_id 1) $orderbycol1] (LogicalGet customer)))"
-    );
-    ok!(
-        "select customer_id from (select customer_id from customer) as foo",
-        "(LogicalGet customer)"
-    );
-    ok!(
-        "with foo as (select customer_id from customer) select customer_id from foo",
-        "(LogicalWith foo (LogicalGet customer) (LogicalGetWith foo))"
-    );
-    ok!(
-        "select store_id from customer group by 1",
-        "(LogicalAggregate store_id (LogicalProject [store_id store_id] (LogicalGet customer)))"
-    );
-    ok!(
-        "select store_id from customer group by 1 having count(*) > 1",
-        "(LogicalFilter (Greater $agg1 1) (LogicalAggregate store_id [(CountStar) $agg1] (LogicalProject [store_id store_id] (LogicalGet customer))))"
-    );
-    ok!(
-        "select count(*) from person",
-        "(LogicalAggregate [(CountStar) $agg1] (LogicalGet person))"
-    );
-    ok!(
-        "select sum(1) from person",
-        "(LogicalAggregate [(Sum $sum) $agg1] (LogicalProject [1 $sum] (LogicalGet person)))"
-    );
-    ok!(
-        "select distinct store_id from customer",
-        "(LogicalAggregate store_id (LogicalProject [store_id store_id] (LogicalGet customer)))"
-    );
-    ok!(
-        "select (select name from store where store.store_id = customer.store_id) from customer",
-        "(LogicalProject [name $col1] (LogicalSingleJoin (LogicalFilter (Equal store_id store_id) (LogicalGet store)) (LogicalGet customer)))"
-    );
-    ok!(
-        "select exists (select store_id from store where store.store_id = customer.store_id) as ok from customer", 
-        "(LogicalProject [$exists ok] (LogicalMarkJoin $exists (LogicalFilter (Equal store_id store_id) (LogicalGet store)) (LogicalGet customer)))"
-    );
-    ok!(
-        "select 1 in (select store_id from store where store.store_id = customer.store_id) as ok from customer", 
-        "(LogicalProject [$in ok] (LogicalMarkJoin $in (Equal 1 store_id) (LogicalFilter (Equal store_id store_id) (LogicalGet store)) (LogicalGet customer)))"
-    );
-    ok!(
-        "select 1 from person where exists (select person_id from customer where customer.person_id = person.person_id)", 
-        "(LogicalProject [1 $col1] (LogicalFilter $exists (LogicalMarkJoin $exists (LogicalFilter (Equal person_id person_id) (LogicalGet customer)) (LogicalGet person))))"
-    );
-    ok!(
-        "select 1 from person where not exists (select person_id from customer where customer.person_id = person.person_id)", 
-        ""
-    );
-    ok!(
-        "select 1 from person where person_id in (select person_id from customer)",
-        ""
-    );
-    ok!(
-        "select 1 from person where person_id not in (select person_id from customer)",
-        ""
-    );
-    ok!(
-        "select 1 as a, 2 as b union all select 4 as b, 3 as a union all select 5 as a, 6 as b",
-        ""
-    );
-    ok!("select cast(customer_id as string) from customer", "");
-    ok!("select cast(1 as numeric) as bignum", "");
-    ok!(
-        "select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)", 
-        ""
-    );
-    ok!(
-        "select 1 from person left join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)", 
-        ""
-    );
-    ok!(
-        "select 1 from person join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)",
-        ""
-    );
-    ok!(
-        "select 1 from person join customer on (select person.person_id = customer.person_id)",
-        ""
-    );
-    ok!(
-        "select 1 from person, customer, store where person.person_id = customer.person_id and customer.store_id in (select store_id from store)", 
-        ""
-    );
-    ok!(
-        "insert into person (person_id, first_name, last_name, modified_date) values (1, \"Foo\", \"Bar\", current_timestamp())", 
-        ""
-    );
-    ok!(
-        "insert into person (person_id, first_name, last_name, modified_date) values (1, \"Foo\", \"Bar\", (select current_timestamp()))", 
-        ""
-    );
-    ok!(
-        "insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))", 
-        ""
-    );
-    ok!(
-        "update person set first_name = \"Foo\" where person_id = 1",
-        ""
-    );
-    ok!(
-        "update person set first_name = (select last_name) where person_id = 1",
-        ""
-    );
-    ok!(
-        "update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id", 
-        ""
-    );
-    ok!(
-        "update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id", 
-        ""
-    );
-    ok!(
-        "update customer set account_number = 0 where person_id in (select person_id from person where first_name = \"Joe\")", 
-        ""
-    );
-    ok!("delete customer where person_id = 1", "");
-    ok!("create database foo", "");
-    ok!("create table foo (id int64 primary key, attr string)", "");
-    ok!(
-        "create or replace table foo (id int64 primary key, attr string)",
-        ""
-    );
-    ok!(
-        "create table foo (id int64, data string) partition by (id) cluster by (id)",
-        ""
-    );
-    ok!(
-        "create table foo (person_id int64 primary key, store_id int64) as select person_id, store_id from customer", 
-        ""
-    );
-    ok!("create index first_name_index on person (first_name)", "");
-    ok!("alter table customer add column foo string", "");
-    ok!("alter table if exists customer add column foo string", "");
-    ok!("rename column person.last_name to name", "");
-    ok!("RENAME COLUMN PERSON.LAST_NAME TO NAME", "");
-    ok!("alter table person drop column last_name", "");
-    ok!("drop table person", "");
-    ok!("select cast(0 as numeric)", "");
-    ok!("select cast(-1 as numeric)", "");
-    ok!("select cast(1 as numeric)", "");
-    ok!(
-        "select cast(99999999999999999999999999999.999999999 as numeric)",
-        ""
-    );
-    ok!(
-        "select cast(-99999999999999999999999999999.999999999 as numeric)",
-        ""
-    );
+    let mut errors = vec![];
+    ok!("examples/aggregate/count.txt", "select count(*) from person", errors);
+    ok!("examples/aggregate/distinct.txt", "select distinct store_id from customer", errors);
+    ok!("examples/aggregate/group_by.txt", "select store_id from customer group by 1", errors);
+    ok!("examples/aggregate/group_by_having.txt", "select store_id from customer group by 1 having count(*) > 1", errors);
+    ok!("examples/aggregate/sum.txt", "select sum(1) from person", errors);
+    ok!("examples/correlated/exists.txt", "select exists (select store_id from store where store.store_id = customer.store_id) as ok from customer", errors);
+    ok!("examples/correlated/in.txt", "select 1 in (select store_id from store where store.store_id = customer.store_id) as ok from customer", errors);
+    ok!("examples/correlated/join_on_in.txt", "select 1 from person join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)", errors); // TODO this is wrong
+    ok!("examples/correlated/join_on_subquery.txt", "select 1 from person join customer on (select person.person_id = customer.person_id)", errors);
+    ok!("examples/correlated/left_join_on_in.txt", "select 1 from person left join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)", errors); // TODO this is wrong
+    ok!("examples/correlated/subquery.txt", "select (select name from store where store.store_id = customer.store_id) from customer", errors);
+    ok!("examples/ddl/add_column.txt", "alter table customer add column foo string", errors);
+    ok!("examples/ddl/create_database.txt", "create database foo", errors);
+    ok!("examples/ddl/create_index.txt", "create index first_name_index on person (first_name)", errors);
+    ok!("examples/ddl/create_table.txt", "create table foo (id int64 primary key, attr string)", errors);
+    ok!("examples/ddl/create_table_as.txt", "create table foo (person_id int64 primary key, store_id int64) as select person_id, store_id from customer", errors);
+    ok!("examples/ddl/create_table_partition_cluster.txt", "create table foo (id int64, data string) partition by (id) cluster by (id)", errors);
+    ok!("examples/ddl/drop_column.txt", "alter table person drop column last_name", errors);
+    ok!("examples/ddl/drop_table.txt", "drop table person", errors);
+    ok!("examples/ddl/rename_column.txt", "rename column person.last_name to name", errors);
+    ok!("examples/ddl/rename_column_upper.txt", "RENAME COLUMN PERSON.LAST_NAME TO NAME", errors);
+    ok!("examples/dml/delete.txt", "delete customer where person_id = 1", errors);
+    ok!("examples/dml/insert_multiple.txt", "insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))", errors);
+    ok!("examples/dml/insert_subquery.txt", "insert into person (person_id, first_name, last_name, modified_date) values (1, \"Foo\", \"Bar\", (select current_timestamp()))", errors);
+    ok!("examples/dml/insert_values.txt", "insert into person (person_id, first_name, last_name, modified_date) values (1, \"Foo\", \"Bar\", current_timestamp())", errors);
+    ok!("examples/dml/update.txt", "update person set first_name = \"Foo\" where person_id = 1", errors);
+    ok!("examples/dml/update_join.txt", "update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id", errors);
+    ok!("examples/dml/update_join_subquery.txt", "update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id", errors);
+    ok!("examples/dml/update_subquery.txt", "update person set first_name = (select last_name) where person_id = 1", errors);
+    ok!("examples/dml/update_where_in.txt", "update customer set account_number = 0 where person_id in (select person_id from person where first_name = \"Joe\")", errors);
+    ok!("examples/expr/cast_column.txt", "select cast(customer_id as string) from customer", errors);
+    ok!("examples/expr/cast_literal.txt", "select cast(1 as numeric) as bignum", errors);
+    ok!("examples/expr/numeric_max.txt", "select cast(99999999999999999999999999999.999999999 as numeric)", errors); // TODO this is wrong
+    ok!("examples/expr/numeric_min.txt", "select cast(-99999999999999999999999999999.999999999 as numeric)", errors); // TODO this is wrong
+    ok!("examples/expr/numeric_neg.txt", "select cast(-1 as numeric)", errors); // TODO this is wrong
+    ok!("examples/expr/numeric_one.txt", "select cast(1 as numeric)", errors); // TODO this is wrong
+    ok!("examples/expr/numeric_zero.txt", "select cast(0 as numeric)", errors); // TODO this is wrong
+    ok!("examples/expr/select_as.txt", "select \"foo\" as a", errors);
+    ok!("examples/expr/select_from.txt", "select customer_id as a from customer", errors);
+    ok!("examples/expr/select_literal.txt", "select customer_id as a, \"foo\" as b from customer", errors);
+    ok!("examples/expr/select_one.txt", "select 1", errors);
+    ok!("examples/filter/where.txt", "select customer_id from customer where store_id = 1", errors);
+    ok!("examples/filter/where_exists.txt", "select 1 from person where exists (select person_id from customer where customer.person_id = person.person_id)", errors);
+    ok!("examples/filter/where_in_correlated_subquery.txt", "select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)", errors); // TODO check this
+    ok!("examples/filter/where_in_subquery.txt", "select 1 from person where person_id in (select person_id from customer)", errors);
+    ok!("examples/filter/where_not_exists.txt", "select 1 from person where not exists (select person_id from customer where customer.person_id = person.person_id)", errors);
+    ok!("examples/filter/where_not_in_subquery.txt", "select 1 from person where person_id not in (select person_id from customer)", errors);
+    ok!("examples/join/explicit_equi_join.txt", "select customer.customer_id, store.store_id from customer join store on customer.store_id = store.store_id", errors);
+    ok!("examples/join/full_join.txt", "select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id", errors);
+    ok!("examples/join/implicit_cross_join.txt", "select customer.customer_id, store.store_id from customer, store", errors);
+    ok!("examples/join/implicit_equi_join.txt", "select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id", errors);
+    ok!("examples/join/join_on_subquery_and_equi.txt", "select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)", errors);
+    ok!("examples/join/left_join.txt", "select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id", errors);
+    ok!("examples/join/union.txt", "select 1 as a, 2 as b union all select 4 as b, 3 as a union all select 5 as a, 6 as b", errors);
+    ok!("examples/sort/order_by_different.txt", "select customer_id from customer order by modified_date", errors);
+    ok!("examples/sort/order_by_expr.txt", "select customer_id from customer order by customer_id + 1", errors);
+    ok!("examples/sort/order_by_limit_offset.txt", "select customer_id from customer order by modified_date limit 100 offset 10", errors);
+    ok!("examples/sort/order_by_same.txt", "select customer_id from customer order by customer_id", errors);
+    ok!("examples/sort/unordered_limit_offset.txt", "select customer_id from customer limit 100 offset 10", errors);
+    ok!("examples/subquery/from_select.txt", "select customer_id from (select customer_id from customer) as foo", errors);
+    ok!("examples/subquery/with.txt", "with foo as (select customer_id from customer) select customer_id from foo", errors);   
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
 }
