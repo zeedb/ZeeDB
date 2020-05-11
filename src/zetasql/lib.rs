@@ -63,6 +63,13 @@ pub mod field_format {
         ///
         /// Can be applied to bytes fields.
         Numeric = 10,
+        /// A ZetaSQL BIGNUMERIC value. These values are encoded as scaled integers
+        /// in two's complement form with the most significant bit storing the sign.
+        /// See BigNumericValue::SerializeAsProtoBytes() for serialization format
+        /// details.
+        ///
+        /// Can be applied to bytes fields.
+        Bignumeric = 11,
         /// User code that switches on this enum must have a default case so
         /// builds won't break if new enums get added.
         FieldFormatTypeSwitchMustHaveADefault = -1,
@@ -159,7 +166,7 @@ pub struct EnumTypeProto {
     #[prost(int32, optional, tag = "3", default = "0")]
     pub file_descriptor_set_index: ::std::option::Option<i32>,
 }
-/// NEXT_ID: 24
+/// NEXT_ID: 25
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum TypeKind {
@@ -192,8 +199,10 @@ pub enum TypeKind {
     TypeGeography = 22,
     /// NUMERIC is controlled by FEATURE_NUMERIC_TYPE
     TypeNumeric = 23,
+    /// BIGNUMERIC is controlled by FEATURE_BIGNUMERIC_TYPE
+    TypeBignumeric = 24,
 }
-/// This proto is used as a util::Status error payload to give the location
+/// This proto is used as a absl::Status error payload to give the location
 /// for SQL parsing and analysis errors.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ErrorLocation {
@@ -254,7 +263,7 @@ pub struct ErrorSource {
     pub error_location: ::std::option::Option<ErrorLocation>,
 }
 /// Contains information about a deprecation warning emitted by the
-/// analyzer. Currently attached to any util::Status returned by
+/// analyzer. Currently attached to any absl::Status returned by
 /// AnalyzerOutput::deprecation_warnings().
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeprecationWarning {
@@ -276,7 +285,7 @@ pub mod deprecation_warning {
         Proto3FieldPresence = 3,
     }
 }
-/// A non-util::Status-based representation of a deprecation warning that can be
+/// A non-absl::Status-based representation of a deprecation warning that can be
 /// stored in objects that can be stored in the resolved AST (e.g.,
 /// FunctionSignatures).
 ///
@@ -387,6 +396,7 @@ pub mod function_enums {
         FixedOutputSchemaTvf = 1,
         ForwardInputSchemaToOutputSchemaTvf = 2,
         TemplatedSqlTvf = 3,
+        ForwardInputSchemaToOutputSchemaWithAppendedColumns = 7,
     }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -453,10 +463,15 @@ pub enum SignatureArgumentKind {
     /// table_valued_function.h.
     ArgTypeModel = 11,
     /// Connection type. This is only valid for table-valued functions (TVFs). This
-    /// sepcifies a connection for EXTERNAL_QUERY TVF.
+    /// specifies a connection for EXTERNAL_QUERY TVF.
     /// For more information, please see TVFConnectionArgument in
     /// table_valued_function.h.
     ArgTypeConnection = 12,
+    /// Descriptor type. This is only valid for table-valued functions (TVFs). This
+    /// specifies a descriptor with a list of column names.
+    /// For more information, please see TVFDescriptorArgument in
+    /// table_valued_function.h.
+    ArgTypeDescriptor = 13,
     SwitchMustHaveADefault = -1,
 }
 /// Annotations for LanguageFeature enum values. Only for consumption by
@@ -726,6 +741,11 @@ pub enum LanguageFeature {
     /// Enables support for NUMERIC data type as input in the unary statistics
     /// functions.
     FeatureNumericVarianceStddevSignatures = 39,
+    /// Enables using NOT ENFORCED in primary keys.
+    /// See (broken link).
+    FeatureUnenforcedPrimaryKeys = 40,
+    /// BIGNUMERIC data type. (broken link)
+    FeatureBignumericType = 41,
     // -> Add more cross-version features here.
     // -> DO NOT add more versioned features into versions that are frozen.
     //    New features should be added for the *next* version number.
@@ -945,12 +965,12 @@ pub enum StatementContext {
     ContextModule = 1,
 }
 /// Mode describing how errors should be constructed in the returned
-/// util::Status.
+/// absl::Status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum ErrorMessageMode {
     /// The error string does not contain a location.
-    /// An ErrorLocation proto will be attached to the util::Status with
+    /// An ErrorLocation proto will be attached to the absl::Status with
     /// a location, when applicable.
     /// See error_helpers.h for working with these payloads.
     /// See error_location.proto for how line and column are defined.
@@ -1020,7 +1040,7 @@ pub struct ValueProto {
     /// Null values will have no fields set.
     #[prost(
         oneof = "value_proto::Value",
-        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 255"
+        tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 255"
     )]
     pub value: ::std::option::Option<value_proto::Value>,
 }
@@ -1097,6 +1117,10 @@ pub mod value_proto {
         /// NumericValue::SerializeAsProtoBytes().
         #[prost(bytes, tag = "20")]
         NumericValue(std::vec::Vec<u8>),
+        /// Encoded bignumeric value. For the encoding format see documentation for
+        /// BigNumericValue::SerializeAsProtoBytes().
+        #[prost(bytes, tag = "21")]
+        BignumericValue(std::vec::Vec<u8>),
         /// User code that switches on this oneoff enum must have a default case so
         /// builds won't break when new fields are added.
         #[prost(bool, tag = "255")]
@@ -1240,6 +1264,11 @@ pub struct TvfConnectionProto {
     #[prost(string, optional, tag = "2")]
     pub full_name: ::std::option::Option<std::string::String>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct TvfDescriptorProto {
+    #[prost(string, repeated, tag = "1")]
+    pub column_name: ::std::vec::Vec<std::string::String>,
+}
 /// The fields in here are in FunctionArgumentTypeOptions in the c++ API.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionArgumentTypeOptionsProto {
@@ -1281,6 +1310,8 @@ pub struct FunctionArgumentTypeOptionsProto {
     pub procedure_argument_mode: ::std::option::Option<i32>,
     #[prost(bool, optional, tag = "15", default = "false")]
     pub argument_name_is_mandatory: ::std::option::Option<bool>,
+    #[prost(int32, optional, tag = "16", default = "-1")]
+    pub descriptor_resolution_table_offset: ::std::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionArgumentTypeProto {
@@ -1414,6 +1445,8 @@ pub struct TvfArgumentProto {
     pub model_argument: ::std::option::Option<TvfModelProto>,
     #[prost(message, optional, tag = "4")]
     pub connection_argument: ::std::option::Option<TvfConnectionProto>,
+    #[prost(message, optional, tag = "5")]
+    pub descriptor_argument: ::std::option::Option<TvfDescriptorProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfSignatureOptionsProto {
@@ -1751,7 +1784,7 @@ pub mod any_resolved_node_proto {
 pub struct AnyResolvedArgumentProto {
     #[prost(
         oneof = "any_resolved_argument_proto::Node",
-        tags = "14, 23, 32, 33, 34, 52, 53, 54, 55, 56, 57, 58, 59, 61, 62, 65, 67, 77, 79, 82, 84, 85, 91, 92, 93, 94, 96, 100, 102, 104, 105, 109, 110, 113, 116, 126, 128, 141, 143"
+        tags = "14, 23, 32, 33, 34, 52, 53, 54, 55, 56, 57, 58, 59, 61, 62, 65, 67, 77, 79, 82, 84, 85, 91, 92, 93, 94, 96, 100, 102, 104, 105, 109, 110, 113, 116, 126, 128, 141, 143, 144"
     )]
     pub node: ::std::option::Option<any_resolved_argument_proto::Node>,
 }
@@ -1836,6 +1869,8 @@ pub mod any_resolved_argument_proto {
         ResolvedConnectionNode(super::ResolvedConnectionProto),
         #[prost(message, tag = "143")]
         ResolvedExecuteImmediateArgumentNode(super::ResolvedExecuteImmediateArgumentProto),
+        #[prost(message, tag = "144")]
+        ResolvedDescriptorNode(super::ResolvedDescriptorProto),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -2260,8 +2295,11 @@ pub struct ResolvedGetProtoFieldProto {
     /// get_has_bit is true.
     #[prost(enumeration = "field_format::Format", optional, tag = "6")]
     pub format: ::std::option::Option<i32>,
-    /// Indicates that the default value should be returned if <expr> is
-    /// NULL.
+    /// Indicates that the default value should be returned if <expr>
+    /// (the parent message) is NULL.  Note that this does *not* affect
+    /// the return value when the extracted field itself is unset, in
+    /// which case the return value depends on the extracted field's
+    /// annotations (e.g., use_field_defaults).
     ///
     /// This can only be set for non-message fields. If the field is a
     /// proto2 field, then it must be annotated with
@@ -2510,6 +2548,21 @@ pub struct ResolvedConnectionProto {
     pub parent: ::std::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
     pub connection: ::std::option::Option<ConnectionRefProto>,
+}
+/// Represents a descriptor object as a TVF argument.
+/// <descriptor_column_list> contains resolved columns from the related input
+/// table argument if FunctionArgumentTypeOptions.get_resolve_descriptor_names_table_offset()
+/// returns a valid argument offset.
+/// <descriptor_column_name_list> contains strings which represent columns
+/// names.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ResolvedDescriptorProto {
+    #[prost(message, optional, tag = "1")]
+    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    #[prost(message, repeated, tag = "2")]
+    pub descriptor_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    #[prost(string, repeated, tag = "3")]
+    pub descriptor_column_name_list: ::std::vec::Vec<std::string::String>,
 }
 /// Scan that produces a single row with no columns.  Used for queries without
 /// a FROM clause, where all output comes from the select list.
@@ -3021,6 +3074,8 @@ pub struct ResolvedColumnDefinitionProto {
 /// <column_offset_list> provides the offsets of the column definitions that
 ///                      comprise the primary key. This is empty when a
 ///                      0-element primary key is defined.
+///
+/// <unenforced> specifies whether the constraint is unenforced.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedPrimaryKeyProto {
     #[prost(message, optional, tag = "1")]
@@ -3029,6 +3084,8 @@ pub struct ResolvedPrimaryKeyProto {
     pub column_offset_list: ::std::vec::Vec<i64>,
     #[prost(message, repeated, tag = "3")]
     pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    #[prost(bool, optional, tag = "4")]
+    pub unenforced: ::std::option::Option<bool>,
 }
 /// This represents the FOREIGN KEY constraint on a table. It is of the form:
 ///
@@ -3205,13 +3262,15 @@ pub struct ResolvedTvfScanProto {
     pub alias: ::std::option::Option<std::string::String>,
 }
 /// This represents an argument to a table-valued function (TVF). The argument
-/// can be semantically scalar, relational, represent a model or a connection.
-/// Only one of the four fields will be set.
+/// can be semantically scalar, relational, represent a model, a connection or
+/// a descriptor. Only one of the five fields will be set.
 ///
 /// <expr> The expression representing a scalar TVF argument.
 /// <scan> The scan representing a relational TVF argument.
 /// <model> The model representing an ML model TVF argument.
 /// <connection> The connection representing a connection object TVF argument.
+/// <descriptor_arg> The descriptor representing a descriptor object TVF
+/// argument.
 ///
 /// <argument_column_list> maps columns from <scan> into specific columns
 /// of the TVF argument's input schema, matching those columns positionally.
@@ -3229,6 +3288,8 @@ pub struct ResolvedTvfArgumentProto {
     pub model: ::std::option::Option<ResolvedModelProto>,
     #[prost(message, optional, tag = "6")]
     pub connection: ::std::option::Option<ResolvedConnectionProto>,
+    #[prost(message, optional, tag = "7")]
+    pub descriptor_arg: ::std::option::Option<ResolvedDescriptorProto>,
     #[prost(message, repeated, tag = "4")]
     pub argument_column_list: ::std::vec::Vec<ResolvedColumnProto>,
 }
@@ -5699,6 +5760,7 @@ pub enum ResolvedNodeKind {
     ResolvedSubqueryExpr = 17,
     ResolvedModel = 109,
     ResolvedConnection = 141,
+    ResolvedDescriptor = 144,
     ResolvedSingleRowScan = 19,
     ResolvedTableScan = 20,
     ResolvedJoinScan = 21,
@@ -5827,11 +5889,11 @@ pub enum FunctionSignatureId {
     // other special functions (CASE).  FunctionSignatureIds are assigned
     // in ranges:
     //
-    // 0002-0999 Non-standard function calls   (NextId: 261)
+    // 0002-0999 Non-standard function calls   (NextId: 266)
     // 1000-1099 String functions              (NextId: 1065)
     // 1100-1199 Control flow functions        (NextId: 1104)
     // 1200-1299 Time functions                (Fully used)
-    // 1300-1399 Math functions                (NextId: 1388)
+    // 1300-1399 Math functions                (NextId: 1393)
     // 1400-1499 Aggregate functions           (NextId: 1478)
     // 1500-1599 Analytic functions            (NextId: 1513)
     // 1600-1699 Misc functions                (NextId: 1682)
@@ -5850,6 +5912,8 @@ pub enum FunctionSignatureId {
     FnAddUint64 = 119,
     /// $add
     FnAddNumeric = 248,
+    /// $add
+    FnAddBignumeric = 261,
     /// $and
     FnAnd = 5,
     /// $case_no_value
@@ -5860,6 +5924,8 @@ pub enum FunctionSignatureId {
     FnDivideDouble = 40,
     /// $divide
     FnDivideNumeric = 250,
+    /// $divide
+    FnDivideBignumeric = 263,
     /// $greater
     FnGreater = 107,
     /// $greater
@@ -5926,6 +5992,8 @@ pub enum FunctionSignatureId {
     FnMultiplyUint64 = 114,
     /// $multiply
     FnMultiplyNumeric = 251,
+    /// $multiply
+    FnMultiplyBignumeric = 264,
     /// $not
     FnNot = 45,
     /// $not_equal
@@ -5944,6 +6012,8 @@ pub enum FunctionSignatureId {
     FnSubtractUint64 = 117,
     /// $subtract
     FnSubtractNumeric = 249,
+    /// $subtract
+    FnSubtractBignumeric = 262,
     /// $unary_minus
     FnUnaryMinusInt32 = 83,
     /// $unary_minus
@@ -5954,6 +6024,8 @@ pub enum FunctionSignatureId {
     FnUnaryMinusDouble = 88,
     /// $unary_minus
     FnUnaryMinusNumeric = 252,
+    /// $unary_minus
+    FnUnaryMinusBignumeric = 265,
     /// Bitwise unary operators.
     ///
     /// $bitwise_not
@@ -6440,6 +6512,8 @@ pub enum FunctionSignatureId {
     FnSafeDivideDouble = 1358,
     /// safe_divide
     FnSafeDivideNumeric = 1361,
+    /// safe_divide
+    FnSafeDivideBignumeric = 1388,
     /// safe_add
     FnSafeAddInt64 = 1371,
     /// safe_add
@@ -6448,6 +6522,8 @@ pub enum FunctionSignatureId {
     FnSafeAddDouble = 1373,
     /// safe_add
     FnSafeAddNumeric = 1374,
+    /// safe_add
+    FnSafeAddBignumeric = 1389,
     /// safe_subtract
     FnSafeSubtractInt64 = 1375,
     /// safe_subtract
@@ -6456,6 +6532,8 @@ pub enum FunctionSignatureId {
     FnSafeSubtractDouble = 1377,
     /// safe_subtract
     FnSafeSubtractNumeric = 1378,
+    /// safe_subtract
+    FnSafeSubtractBignumeric = 1390,
     /// safe_multiply
     FnSafeMultiplyInt64 = 1379,
     /// safe_multiply
@@ -6464,6 +6542,8 @@ pub enum FunctionSignatureId {
     FnSafeMultiplyDouble = 1381,
     /// safe_multiply
     FnSafeMultiplyNumeric = 1382,
+    /// safe_multiply
+    FnSafeMultiplyBignumeric = 1391,
     /// safe_negate
     FnSafeUnaryMinusInt32 = 1383,
     /// safe_negate
@@ -6474,6 +6554,8 @@ pub enum FunctionSignatureId {
     FnSafeUnaryMinusDouble = 1386,
     /// safe_negate
     FnSafeUnaryMinusNumeric = 1387,
+    /// safe_negate
+    FnSafeUnaryMinusBignumeric = 1392,
     /// greatest
     FnGreatest = 1321,
     /// least
@@ -7091,7 +7173,7 @@ pub mod allowed_hints_and_options_proto {
     }
 }
 /// Serialized form of AnalyzerOptions.
-/// next id: 19
+/// next id: 21
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzerOptionsProto {
     #[prost(message, optional, tag = "1")]
@@ -7117,6 +7199,8 @@ pub struct AnalyzerOptionsProto {
     pub default_timezone: ::std::option::Option<std::string::String>,
     #[prost(bool, optional, tag = "8")]
     pub record_parse_locations: ::std::option::Option<bool>,
+    #[prost(bool, optional, tag = "20")]
+    pub create_new_column_for_each_projected_output: ::std::option::Option<bool>,
     #[prost(bool, optional, tag = "9")]
     pub prune_unused_columns: ::std::option::Option<bool>,
     #[prost(bool, optional, tag = "10")]
@@ -7131,6 +7215,8 @@ pub struct AnalyzerOptionsProto {
     pub preserve_column_aliases: ::std::option::Option<bool>,
     #[prost(message, repeated, tag = "18")]
     pub system_variables: ::std::vec::Vec<analyzer_options_proto::SystemVariableProto>,
+    #[prost(message, repeated, tag = "19")]
+    pub target_column_types: ::std::vec::Vec<TypeProto>,
 }
 pub mod analyzer_options_proto {
     #[derive(Clone, PartialEq, ::prost::Message)]
@@ -7167,6 +7253,8 @@ pub struct SimpleTableProto {
     pub is_value_table: ::std::option::Option<bool>,
     #[prost(message, repeated, tag = "4")]
     pub column: ::std::vec::Vec<SimpleColumnProto>,
+    #[prost(int32, repeated, packed = "false", tag = "9")]
+    pub primary_key_column_index: ::std::vec::Vec<i32>,
     /// Alias name of the table when it is added to the parent catalog.  This is
     /// only set when the Table is added to the Catalog using a different name
     /// than the Table's name.  This name is not part of the SimpleTable, but
@@ -7227,7 +7315,7 @@ pub mod simple_catalog_proto {
 }
 /// Serialized form of ParseLocationPoint, only to be used inside the
 /// ZetaSQL library to attach an error location in internal form to a
-/// util::Status. This should never leave the library: externally we should
+/// absl::Status. This should never leave the library: externally we should
 /// attach an ErrorLocation proto.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InternalErrorLocation {
