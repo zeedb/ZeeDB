@@ -1,11 +1,10 @@
 use fmt::Debug;
 use std::fmt;
 
-#[derive(Debug)]
-pub enum Plan {
-    Root(Operator),
-    Unary(Operator, Box<Plan>),
-    Binary(Operator, Box<Plan>, Box<Plan>),
+#[derive(Debug, Clone)]
+pub struct Plan {
+    pub op: Operator,
+    pub inputs: Vec<Plan>,
 }
 
 impl fmt::Display for Plan {
@@ -16,39 +15,23 @@ impl fmt::Display for Plan {
 
 impl Plan {
     fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        match self {
-            Plan::Root(op) => write!(f, "{}", op),
-            Plan::Unary(op, input) => {
-                write!(f, "{}", op)?;
-                write!(f, "\n")?;
-                for _ in 0..indent + 1 {
-                    write!(f, "\t")?;
-                }
-                input.print(f, indent + 1)
+        write!(f, "{}", self.op)?;
+        for input in &self.inputs {
+            write!(f, "\n")?;
+            for _ in 0..indent + 1 {
+                write!(f, "\t")?;
             }
-            Plan::Binary(op, left, right) => {
-                write!(f, "{}", op)?;
-                write!(f, "\n")?;
-                for _ in 0..indent + 1 {
-                    write!(f, "\t")?;
-                }
-                left.print(f, indent + 1)?;
-                write!(f, "\n")?;
-                for _ in 0..indent + 1 {
-                    write!(f, "\t")?;
-                }
-                right.print(f, indent + 1)?;
-                Ok(())
-            }
+            input.print(f, indent + 1)?;
         }
+        Ok(())
     }
 }
 
 // Operator plan nodes combine inputs in a Plan tree.
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Operator {
     // Leaf is a wildcard using during optimization.
-    Leaf,
+    Leaf(i64),
     // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
     LogicalSingleGet,
     // LogicalGet(table) implements the FROM clause.
@@ -57,33 +40,21 @@ pub enum Operator {
     LogicalFilter(Vec<Scalar>),
     // LogicalProject(columns) implements the SELECT clause.
     LogicalProject(Vec<(Scalar, Column)>),
-    // LogicalInnerJoin implements the default SQL join.
-    LogicalInnerJoin(Vec<Scalar>),
-    // LogicalRightJoin(predicates) is used for both left and right joins.
-    // When parsing a left join, we convert it to a right join by reversing the order of left and right.
-    // The left side is the build side of the join.
-    LogicalRightJoin(Vec<Scalar>),
-    // LogicalOuterJoin includes non-matching rows from both sides.
-    LogicalOuterJoin(Vec<Scalar>),
-    // LogicalSemiJoin(predicates) indicates a semi-join like `select 1 from customer where store_id in (select store_id from store)`.
-    // Note that the left side is the build side of the join, which is the reverse of the usual convention.
-    LogicalSemiJoin(Vec<Scalar>),
-    // LogicalAntiJoin(predicates) indicates an anti-join like `select 1 from customer where store_id not in (select store_id from store)`.
-    // Note that like Semi, the left side is the build side of the join.
-    LogicalAntiJoin(Vec<Scalar>),
-    // LogicalSingleJoin(predicates) implements "Single Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
-    // The correlated subquery is always on the left.
-    LogicalSingleJoin(Vec<Scalar>),
-    // LogicalMarkJoin(predicates, mark) implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
-    // The correlated subquery is always on the left.
-    LogicalMarkJoin(Vec<Scalar>, Column),
+    LogicalJoin {
+        join: Join,
+        predicates: Vec<Scalar>,
+        mark: Option<Column>,
+    },
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
     LogicalWith(String),
     // LogicalGetWith(table) reads the subquery that was created by With.
     LogicalGetWith(String),
     // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
-    LogicalAggregate(Vec<Column>, Vec<(Aggregate, Column)>),
+    LogicalAggregate {
+        group_by: Vec<Column>,
+        aggregate: Vec<(Aggregate, Column)>,
+    },
     // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
     LogicalLimit {
         limit: i64,
@@ -100,7 +71,7 @@ pub enum Operator {
     // LogicalInsert(table, columns) implements the INSERT operation.
     LogicalInsert(Table, Vec<Column>),
     // LogicalValues(rows, columns) implements VALUES expressions.
-    LogicalValues(Vec<Vec<Scalar>>, Vec<Column>),
+    LogicalValues(Vec<Column>, Vec<Vec<Scalar>>),
     // LogicalUpdate(sets) implements the UPDATE operation.
     // (column, None) indicates set column to default value.
     LogicalUpdate(Vec<(Column, Option<Column>)>),
@@ -138,12 +109,109 @@ pub enum Operator {
         from: Name,
         to: Name,
     },
+    PhysicalTableFreeScan,
+    PhysicalSeqScan(Table),
+    PhysicalIndexScan {
+        table: Table,
+        equals: Vec<(Column, Scalar)>,
+    },
+    PhysicalFilter(Vec<Scalar>),
+    PhysicalProject(Vec<(Scalar, Column)>),
+    PhysicalNestedLoop(Vec<Scalar>),
+    PhysicalIndexLoop {
+        join: Join,
+        table: Table,
+        equals: Vec<(Column, Scalar)>,
+        predicates: Vec<Scalar>,
+        mark: Option<Column>,
+    },
+    PhysicalHashJoin {
+        join: Join,
+        mark: Option<Column>,
+        equals: Vec<(Column, Column)>,
+        predicates: Vec<Scalar>,
+    },
+    PhysicalCreateTempTable(String),
+    PhysicalGetTempTable(String),
+    PhysicalAggregate {
+        group_by: Vec<Column>,
+        aggregate: Vec<(Aggregate, Column)>,
+    },
+    PhysicalLimit {
+        limit: i64,
+        offset: i64,
+    },
+    PhysicalSort(Vec<Sort>),
+    PhysicalUnion,
+    PhysicalIntersect,
+    PhysicalExcept,
+    PhysicalInsert(Table, Vec<Column>),
+    PhysicalValues(Vec<Column>, Vec<Vec<Scalar>>),
+    PhysicalUpdate(Vec<(Column, Option<Column>)>),
+    PhysicalDelete(Table),
+    PhysicalCreateDatabase(Name),
+    PhysicalCreateTable {
+        name: Name,
+        columns: Vec<(String, encoding::Type)>,
+        partition_by: Vec<i64>,
+        cluster_by: Vec<i64>,
+        primary_key: Vec<i64>,
+    },
+    PhysicalCreateIndex {
+        name: Name,
+        table: Name,
+        columns: Vec<String>,
+    },
+    PhysicalAlterTable {
+        name: Name,
+        actions: Vec<Alter>,
+    },
+    PhysicalDrop {
+        object: ObjectType,
+        name: Name,
+    },
+    PhysicalRename {
+        object: ObjectType,
+        from: Name,
+        to: Name,
+    },
+}
+
+impl Operator {
+    pub fn is_logical(&self) -> bool {
+        match self {
+            Operator::LogicalSingleGet { .. }
+            | Operator::LogicalGet { .. }
+            | Operator::LogicalFilter { .. }
+            | Operator::LogicalProject { .. }
+            | Operator::LogicalJoin { .. }
+            | Operator::LogicalWith { .. }
+            | Operator::LogicalGetWith { .. }
+            | Operator::LogicalAggregate { .. }
+            | Operator::LogicalLimit { .. }
+            | Operator::LogicalSort { .. }
+            | Operator::LogicalUnion { .. }
+            | Operator::LogicalIntersect { .. }
+            | Operator::LogicalExcept { .. }
+            | Operator::LogicalInsert { .. }
+            | Operator::LogicalValues { .. }
+            | Operator::LogicalUpdate { .. }
+            | Operator::LogicalDelete { .. }
+            | Operator::LogicalCreateDatabase { .. }
+            | Operator::LogicalCreateTable { .. }
+            | Operator::LogicalCreateIndex { .. }
+            | Operator::LogicalAlterTable { .. }
+            | Operator::LogicalDrop { .. }
+            | Operator::LogicalRename { .. } => true,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Operator::Leaf => write!(f, "Leaf"),
+            Operator::Leaf(gid) => write!(f, "Leaf {}", gid),
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
             Operator::LogicalFilter(predicates) => write!(f, "LogicalFilter {}", join(predicates)),
@@ -154,36 +222,58 @@ impl fmt::Display for Operator {
                 }
                 write!(f, "LogicalProject {}", strings.join(" "))
             }
-            Operator::LogicalInnerJoin(predicates) => {
-                write!(f, "LogicalInnerJoin {}", join(predicates))
-            }
-            Operator::LogicalRightJoin(predicates) => {
-                write!(f, "LogicalRightJoin {}", join(predicates))
-            }
-            Operator::LogicalOuterJoin(predicates) => {
-                write!(f, "LogicalOuterJoin {}", join(predicates))
-            }
-            Operator::LogicalSemiJoin(predicates) => {
-                write!(f, "LogicalSemiJoin {}", join(predicates))
-            }
-            Operator::LogicalAntiJoin(predicates) => {
-                write!(f, "LogicalAntiJoin {}", join(predicates))
-            }
-            Operator::LogicalSingleJoin(predicates) => {
-                write!(f, "LogicalSingleJoin {}", join(predicates))
-            }
-            Operator::LogicalMarkJoin(predicates, column) => {
-                write!(f, "LogicalMarkJoin {} {}", column, join(predicates))
-            }
+            Operator::LogicalJoin {
+                join: Join::Inner,
+                predicates,
+                ..
+            } => write!(f, "LogicalInnerJoin {}", join(predicates)),
+            Operator::LogicalJoin {
+                join: Join::Right,
+                predicates,
+                ..
+            } => write!(f, "LogicalRightJoin {}", join(predicates)),
+            Operator::LogicalJoin {
+                join: Join::Outer,
+                predicates,
+                ..
+            } => write!(f, "LogicalOuterJoin {}", join(predicates)),
+            Operator::LogicalJoin {
+                join: Join::Semi,
+                predicates,
+                ..
+            } => write!(f, "LogicalSemiJoin {}", join(predicates)),
+            Operator::LogicalJoin {
+                join: Join::Anti,
+                predicates,
+                ..
+            } => write!(f, "LogicalAntiJoin {}", join(predicates)),
+            Operator::LogicalJoin {
+                join: Join::Single,
+                predicates,
+                ..
+            } => write!(f, "LogicalSingleJoin {}", join(predicates)),
+            Operator::LogicalJoin {
+                join: Join::Mark,
+                predicates,
+                mark,
+            } => write!(
+                f,
+                "LogicalMarkJoin {} {}",
+                mark.as_ref().unwrap(),
+                join(predicates)
+            ),
             Operator::LogicalWith(name) => write!(f, "LogicalWith {}", name),
             Operator::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
-            Operator::LogicalAggregate(group_by, aggregate) => {
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+            } => {
                 write!(f, "LogicalAggregate")?;
-                for c in group_by {
-                    write!(f, " {}", c)?;
+                for column in group_by {
+                    write!(f, " {}", column)?;
                 }
-                for (x, c) in aggregate {
-                    write!(f, " {}:{}", c, x)?;
+                for (aggregate, column) in aggregate {
+                    write!(f, " {}:{}", column, aggregate)?;
                 }
                 Ok(())
             }
@@ -191,15 +281,15 @@ impl fmt::Display for Operator {
                 write!(f, "LogicalLimit {} {}", limit, offset)
             }
             Operator::LogicalSort(order_by) => {
-                let mut strings = vec![];
+                write!(f, "LogicalSort")?;
                 for sort in order_by {
                     if sort.desc {
-                        strings.push(format!("(Desc {})", sort.column))
+                        write!(f, " (Desc {})", sort.column)?;
                     } else {
-                        strings.push(format!("{}", sort.column))
+                        write!(f, " {}", sort.column)?;
                     }
                 }
-                write!(f, "LogicalSort {}", strings.join(" "))
+                Ok(())
             }
             Operator::LogicalUnion => write!(f, "LogicalUnion"),
             Operator::LogicalIntersect => write!(f, "LogicalIntersect"),
@@ -211,23 +301,25 @@ impl fmt::Display for Operator {
                 }
                 Ok(())
             }
-            Operator::LogicalValues(rows, _) => {
+            Operator::LogicalValues(columns, rows) => {
                 write!(f, "LogicalValues")?;
+                for column in columns {
+                    write!(f, " {}", column)?;
+                }
                 for row in rows {
                     write!(f, " [{}]", join(row))?;
                 }
                 Ok(())
             }
             Operator::LogicalUpdate(updates) => {
-                let mut strings = vec![];
+                write!(f, "LogicalUpdate")?;
                 for (target, value) in updates {
-                    let part = match value {
-                        Some(value) => format!("{}:{}", target, value),
-                        None => format!("{}:_", target),
-                    };
-                    strings.push(part);
+                    match value {
+                        Some(value) => write!(f, " {}:{}", target, value)?,
+                        None => write!(f, " {}:_", target)?,
+                    }
                 }
-                write!(f, "LogicalUpdate {}", strings.join(" "))
+                Ok(())
             }
             Operator::LogicalDelete(table) => write!(f, "LogicalDelete {}", table.name),
             Operator::LogicalCreateDatabase(name) => {
@@ -291,7 +383,214 @@ impl fmt::Display for Operator {
             Operator::LogicalRename { object, from, to } => {
                 write!(f, "LogicalRename {:?} {} {}", object, from, to)
             }
+            Operator::PhysicalTableFreeScan => write!(f, "TableFreeScan"),
+            Operator::PhysicalSeqScan(table) => write!(f, "SeqScan {}", table),
+            Operator::PhysicalIndexScan { table, equals } => {
+                write!(f, "IndexScan {}", table)?;
+                for (column, scalar) in equals {
+                    write!(f, "{}:{}", column, scalar)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalFilter(predicates) => {
+                write!(f, "Filter")?;
+                for scalar in predicates {
+                    write!(f, " {}", scalar)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalProject(project) => {
+                write!(f, "Project")?;
+                for (scalar, column) in project {
+                    write!(f, " {}:{}", column, scalar)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalNestedLoop(predicates) => {
+                write!(f, "NestedLoop")?;
+                for scalar in predicates {
+                    write!(f, " {}", scalar)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalIndexLoop {
+                join,
+                mark,
+                table,
+                equals,
+                predicates,
+            } => {
+                write!(f, "IndexLoop {}", join)?;
+                if let Some(mark) = mark {
+                    write!(f, " {}", mark)?;
+                }
+                write!(f, " {}", table)?;
+                for (column, scalar) in equals {
+                    write!(f, "{}:{}", column, scalar)?;
+                }
+                for scalar in predicates {
+                    write!(f, " {}", scalar)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalHashJoin {
+                join,
+                mark,
+                equals,
+                predicates,
+            } => {
+                write!(f, "HashJoin {}", join)?;
+                if let Some(mark) = mark {
+                    write!(f, " {}", mark)?;
+                }
+                for (left, right) in equals {
+                    write!(f, "{}={}", left, right)?;
+                }
+                for scalar in predicates {
+                    write!(f, " {}", scalar)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalCreateTempTable(name) => write!(f, "CreateTempTable {}", name),
+            Operator::PhysicalGetTempTable(name) => write!(f, "GetTempTable {}", name),
+            Operator::PhysicalAggregate {
+                group_by,
+                aggregate,
+            } => {
+                write!(f, "Aggregate")?;
+                for column in group_by {
+                    write!(f, " {}", column)?;
+                }
+                for (aggregate, column) in aggregate {
+                    write!(f, " {}:{}", column, aggregate)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalLimit { limit, offset } => write!(f, "Limit {} {}", limit, offset),
+            Operator::PhysicalSort(order_by) => {
+                write!(f, "Sort")?;
+                for sort in order_by {
+                    if sort.desc {
+                        write!(f, " (Desc {})", sort.column)?;
+                    } else {
+                        write!(f, " {}", sort.column)?;
+                    }
+                }
+                Ok(())
+            }
+            Operator::PhysicalUnion => write!(f, "Union"),
+            Operator::PhysicalIntersect => write!(f, "Intersect"),
+            Operator::PhysicalExcept => write!(f, "Except"),
+            Operator::PhysicalInsert(table, columns) => {
+                write!(f, "Insert {}", table)?;
+                for column in columns {
+                    write!(f, " {}", column)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalValues(columns, values) => {
+                write!(f, "Values")?;
+                for column in columns {
+                    write!(f, " {}", column)?;
+                }
+                for row in values {
+                    write!(f, " [{}]", join(row))?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalUpdate(updates) => {
+                write!(f, "Update")?;
+                for (target, value) in updates {
+                    match value {
+                        Some(value) => write!(f, " {}:{}", target, value)?,
+                        None => write!(f, " {}:_", target)?,
+                    }
+                }
+                Ok(())
+            }
+            Operator::PhysicalDelete(table) => write!(f, "Delete {}", table),
+            Operator::PhysicalCreateDatabase(name) => write!(f, "CreateDatabase {}", name),
+            Operator::PhysicalCreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+            } => {
+                write!(f, "CreateTable {}", name)?;
+                for (name, typ) in columns {
+                    write!(f, " {}:{}", name, typ)?;
+                }
+                if !partition_by.is_empty() {
+                    write!(f, " (PartitionBy")?;
+                    for p in partition_by {
+                        write!(f, " {}", p)?;
+                    }
+                    write!(f, ")")?;
+                }
+                if !cluster_by.is_empty() {
+                    write!(f, " (ClusterBy")?;
+                    for p in cluster_by {
+                        write!(f, " {}", p)?;
+                    }
+                    write!(f, ")")?;
+                }
+                if !primary_key.is_empty() {
+                    write!(f, " (PrimaryKey")?;
+                    for p in primary_key {
+                        write!(f, " {}", p)?;
+                    }
+                    write!(f, ")")?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalCreateIndex {
+                name,
+                table,
+                columns,
+            } => write!(f, "CreateIndex {} {} {}", name, table, columns.join(" ")),
+            Operator::PhysicalAlterTable { name, actions } => {
+                write!(f, "AlterTable {}", name)?;
+                for a in actions {
+                    write!(f, " {}", a)?;
+                }
+                Ok(())
+            }
+            Operator::PhysicalDrop { object, name } => write!(f, "Drop {:?} {}", object, name),
+            Operator::PhysicalRename { object, from, to } => {
+                write!(f, "Rename {:?} {} {}", object, from, to)
+            }
         }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum Join {
+    // Inner implements the default SQL join.
+    Inner,
+    // Right is used for both left and right joins.
+    // When parsing a left join, we convert it to a right join by reversing the order of left and right.
+    // The left side is the build side of the join.
+    Right,
+    // Outer includes non-matching rows from both sides.
+    Outer,
+    // Semi indicates a semi-join like `select 1 from customer where store_id in (select store_id from store)`.
+    // Note that the left side is the build side of the join, which is the reverse of the usual convention.
+    Semi,
+    // Anti indicates an anti-join like `select 1 from customer where store_id not in (select store_id from store)`.
+    // Note that like Semi, the left side is the build side of the join.
+    Anti,
+    // Single implements "Single Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
+    // The correlated subquery is always on the left.
+    Single,
+    // Mark implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
+    // The correlated subquery is always on the left.
+    Mark,
+}
+
+impl fmt::Display for Join {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }
 
@@ -303,29 +602,48 @@ fn join(xs: &Vec<Scalar>) -> String {
     strings.join(" ")
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Table {
     pub id: i64,
     pub name: String,
+    pub columns: Vec<Column>,
 }
 
 impl Table {
-    pub fn from(table: &zetasql::TableRefProto) -> Self {
+    pub fn from(table: &zetasql::ResolvedTableScanProto) -> Self {
         match table {
-            zetasql::TableRefProto {
-                serialization_id: Some(id),
-                name: Some(name),
+            zetasql::ResolvedTableScanProto {
+                parent: Some(zetasql::ResolvedScanProto { column_list, .. }),
+                table:
+                    Some(zetasql::TableRefProto {
+                        serialization_id: Some(id),
+                        name: Some(name),
+                        ..
+                    }),
                 ..
-            } => Table {
-                id: *id,
-                name: name.clone(),
-            },
+            } => {
+                let mut columns = Vec::with_capacity(column_list.len());
+                for c in column_list {
+                    columns.push(Column::from(c));
+                }
+                Table {
+                    id: *id,
+                    name: name.clone(),
+                    columns,
+                }
+            }
             other => panic!("{:?}", other),
         }
     }
 }
 
-#[derive(Debug, Clone)]
+impl fmt::Display for Table {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Column {
     pub id: i64,
     pub name: String,
@@ -357,7 +675,7 @@ impl fmt::Display for Column {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Name {
     pub path: Vec<String>,
 }
@@ -368,7 +686,7 @@ impl fmt::Display for Name {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ObjectType {
     Database,
     Table,
@@ -388,7 +706,7 @@ impl ObjectType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Sort {
     pub column: Column,
     pub desc: bool,
@@ -404,7 +722,7 @@ impl fmt::Display for Sort {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Alter {
     AddColumn { name: String, typ: encoding::Type },
     DropColumn { name: String },
@@ -419,9 +737,9 @@ impl fmt::Display for Alter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Scalar {
-    Literal(Value),
+    Literal(encoding::Value, encoding::Type),
     Column(Column),
     Call(Function, Vec<Scalar>, encoding::Type),
     Cast(Box<Scalar>, encoding::Type),
@@ -430,7 +748,7 @@ pub enum Scalar {
 impl Scalar {
     pub fn typ(&self) -> encoding::Type {
         match self {
-            Scalar::Literal(value) => value.typ(),
+            Scalar::Literal(_, typ) => typ.clone(),
             Scalar::Column(column) => column.typ.clone(),
             Scalar::Call(_, _, returns) => returns.clone(),
             Scalar::Cast(_, typ) => typ.clone(),
@@ -441,7 +759,7 @@ impl Scalar {
 impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Scalar::Literal(value) => write!(f, "{}", value),
+            Scalar::Literal(value, _) => write!(f, "{}", value),
             Scalar::Column(column) => write!(f, "{}", column),
             Scalar::Call(function, arguments, _) => {
                 if arguments.is_empty() {
@@ -455,56 +773,8 @@ impl fmt::Display for Scalar {
     }
 }
 
-#[derive(Debug)]
-pub enum Value {
-    Int64(i64),
-    Bool(bool),
-    Double(f64),
-    String(String),
-    Bytes(Vec<u8>),
-    Date(chrono::NaiveDate),
-    Timestamp(chrono::DateTime<chrono::Utc>),
-    Numeric(i128),
-    Array(Vec<Value>),
-    Struct(Vec<(String, Value)>),
-}
-
-impl Value {
-    pub fn typ(&self) -> encoding::Type {
-        match self {
-            Value::Int64(_) => encoding::Type::Int64,
-            Value::Bool(_) => encoding::Type::Bool,
-            Value::Double(_) => encoding::Type::Double,
-            Value::String(_) => encoding::Type::String,
-            Value::Bytes(_) => encoding::Type::Bytes,
-            Value::Date(_) => encoding::Type::Date,
-            Value::Timestamp(_) => encoding::Type::Timestamp,
-            Value::Numeric(_) => encoding::Type::Numeric,
-            Value::Array(_) => unimplemented!(),
-            Value::Struct(_) => unimplemented!(),
-        }
-    }
-}
-
-impl fmt::Display for Value {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Value::Int64(x) => write!(f, "{}", x),
-            Value::Bool(x) => write!(f, "{}", x),
-            Value::Double(x) => write!(f, "{}", x),
-            Value::String(x) => write!(f, "{}", x),
-            Value::Bytes(x) => write!(f, "{:?}", x),
-            Value::Date(x) => write!(f, "{}", x),
-            Value::Timestamp(x) => write!(f, "{}", x),
-            Value::Numeric(x) => write!(f, "{}", x),
-            Value::Array(x) => write!(f, "{:?}", x),
-            Value::Struct(x) => write!(f, "{:?}", x),
-        }
-    }
-}
-
 // Functions appear in scalar expressions.
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Function {
     Abs,
     Acos,
@@ -744,7 +1014,7 @@ impl Function {
 }
 
 // Aggregate functions appear in GROUP BY expressions.
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Aggregate {
     AnyValue(Column),
     ArrayAgg(Distinct, IgnoreNulls, Column),
@@ -839,8 +1109,8 @@ impl fmt::Display for Aggregate {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Distinct(bool);
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IgnoreNulls(bool);

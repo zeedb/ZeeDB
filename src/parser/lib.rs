@@ -1,4 +1,3 @@
-mod catalog;
 mod convert;
 #[cfg(test)]
 mod convert_tests;
@@ -7,5 +6,4 @@ mod parser;
 mod parser_tests;
 mod server;
 
-pub use catalog::*;
-pub use parser::*;
+pub use crate::parser::*;

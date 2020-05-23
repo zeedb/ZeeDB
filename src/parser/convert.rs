@@ -12,7 +12,6 @@ use zetasql::any_resolved_function_call_base_proto::Node::*;
 use zetasql::any_resolved_non_scalar_function_call_base_proto::Node::*;
 use zetasql::any_resolved_scan_proto::Node::*;
 use zetasql::any_resolved_statement_proto::Node::*;
-use zetasql::resolved_create_statement_enums::*;
 use zetasql::resolved_insert_stmt_enums::*;
 use zetasql::value_proto::Value::*;
 use zetasql::*;
@@ -25,16 +24,22 @@ struct Converter {
     next_column_id: i64,
 }
 
-fn root(operator: Operator) -> Plan {
-    return Root(operator);
+fn root(op: Operator) -> Plan {
+    Plan { op, inputs: vec![] }
 }
 
-fn unary(operator: Operator, input: Plan) -> Plan {
-    return Unary(operator, Box::new(input));
+fn unary(op: Operator, input: Plan) -> Plan {
+    Plan {
+        op,
+        inputs: vec![input],
+    }
 }
 
-fn binary(operator: Operator, left: Plan, right: Plan) -> Plan {
-    return Binary(operator, Box::new(left), Box::new(right));
+fn binary(op: Operator, left: Plan, right: Plan) -> Plan {
+    Plan {
+        op,
+        inputs: vec![left, right],
+    }
 }
 
 impl Converter {
@@ -79,31 +84,64 @@ impl Converter {
             other => panic!("{:?}", other),
         }
     }
-    fn single_row(&mut self, q: &ResolvedSingleRowScanProto) -> Plan {
+
+    fn single_row(&mut self, _: &ResolvedSingleRowScanProto) -> Plan {
         root(LogicalSingleGet)
     }
 
     fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Plan {
-        root(LogicalGet(Table::from(q.table.get())))
+        root(LogicalGet(Table::from(q)))
     }
 
     fn join(&mut self, q: &ResolvedJoinScanProto) -> Plan {
         let left = self.any_resolved_scan(q.left_scan.get());
         let right = self.any_resolved_scan(q.right_scan.get());
-        let mut input = Root(Leaf); // TODO this is clearly wrong
+        let mut input = root(LogicalSingleGet); // TODO this is clearly wrong
         let predicates = match &q.join_expr {
             Some(expr) => self.predicate(expr.borrow(), &mut input),
             None => vec![],
         };
         match q.join_type.get().borrow() {
             // Inner
-            0 => binary(LogicalInnerJoin(predicates), left, right),
+            0 => binary(
+                LogicalJoin {
+                    join: Join::Inner,
+                    predicates,
+                    mark: None,
+                },
+                left,
+                right,
+            ),
             // Left
-            1 => binary(LogicalRightJoin(predicates), right, left),
+            1 => binary(
+                LogicalJoin {
+                    join: Join::Right,
+                    predicates,
+                    mark: None,
+                },
+                right,
+                left,
+            ),
             // Right
-            2 => binary(LogicalRightJoin(predicates), left, right),
+            2 => binary(
+                LogicalJoin {
+                    join: Join::Right,
+                    predicates,
+                    mark: None,
+                },
+                left,
+                right,
+            ),
             // Full
-            3 => binary(LogicalOuterJoin(predicates), left, right),
+            3 => binary(
+                LogicalJoin {
+                    join: Join::Outer,
+                    predicates,
+                    mark: None,
+                },
+                left,
+                right,
+            ),
             // Invalid
             other => panic!("{:?}", other),
         }
@@ -278,7 +316,13 @@ impl Converter {
         if project.len() > 0 {
             input = unary(LogicalProject(project), input);
         }
-        unary(LogicalAggregate(group_by, aggregate), input)
+        unary(
+            LogicalAggregate {
+                group_by,
+                aggregate,
+            },
+            input,
+        )
     }
 
     fn compute(
@@ -469,7 +513,7 @@ impl Converter {
             Some(q) => self.any_resolved_scan(q),
             None => self.rows(q),
         };
-        let table = Table::from(q.table_scan.get().table.get());
+        let table = Table::from(q.table_scan.get());
         let operator = Operator::LogicalInsert(table, self.columns(&q.insert_column_list));
         unary(operator, input)
     }
@@ -480,7 +524,7 @@ impl Converter {
         for row in &q.row_list {
             rows.push(self.row(row, &mut input));
         }
-        let operator = LogicalValues(rows, self.columns(&q.insert_column_list));
+        let operator = LogicalValues(self.columns(&q.insert_column_list), rows);
         unary(operator, input)
     }
 
@@ -503,7 +547,7 @@ impl Converter {
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Plan {
         let mut input = self.table_scan(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
-        let table = Table::from(q.table_scan.get().table.get());
+        let table = Table::from(q.table_scan.get());
         unary(
             LogicalDelete(table),
             unary(LogicalFilter(predicates), input),
@@ -517,7 +561,16 @@ impl Converter {
         let mut input = self.table_scan(q.table_scan.get());
         if let Some(from) = &q.from_scan {
             let from = self.any_resolved_scan(from);
-            input = binary(LogicalInnerJoin(vec![]), input, from);
+            let predicates = vec![];
+            input = binary(
+                LogicalJoin {
+                    join: Join::Inner,
+                    predicates,
+                    mark: None,
+                },
+                input,
+                from,
+            );
         }
         if let Some(pred) = &q.where_expr {
             let pred = self.predicate(pred, &mut input);
@@ -629,7 +682,7 @@ impl Converter {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
                 let typ = x.value.get().r#type.get();
-                Scalar::Literal(literal(value, typ))
+                Scalar::Literal(literal(value, typ), Type::from(typ))
             }
             ResolvedColumnRefNode(x) => self.column(x.column.get()),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
@@ -701,9 +754,13 @@ impl Converter {
             // Scalar
             0 => {
                 *outer = binary(
-                    LogicalSingleJoin(vec![]),
+                    LogicalJoin {
+                        join: Join::Single,
+                        predicates: vec![],
+                        mark: None,
+                    },
                     corr,
-                    mem::replace(outer, Root(Leaf)),
+                    mem::replace(outer, root(LogicalSingleGet)),
                 );
                 Scalar::Column(Column::from(column))
             }
@@ -714,9 +771,13 @@ impl Converter {
                 let mark =
                     self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
                 *outer = binary(
-                    LogicalMarkJoin(vec![], mark.clone()),
+                    LogicalJoin {
+                        join: Join::Mark,
+                        predicates: vec![],
+                        mark: Some(mark.clone()),
+                    },
                     corr,
-                    mem::replace(outer, Root(Leaf)),
+                    mem::replace(outer, root(LogicalSingleGet)),
                 );
                 Scalar::Column(mark.clone())
             }
@@ -734,9 +795,13 @@ impl Converter {
                 let equals = Scalar::Call(Function::Equal, args, Type::Bool);
                 let predicates = vec![equals];
                 *outer = binary(
-                    LogicalMarkJoin(predicates, mark.clone()),
+                    LogicalJoin {
+                        join: Join::Mark,
+                        predicates,
+                        mark: Some(mark.clone()),
+                    },
                     corr,
-                    mem::replace(outer, Root(Leaf)),
+                    mem::replace(outer, root(LogicalSingleGet)),
                 );
                 Scalar::Column(mark.clone())
             }
@@ -796,7 +861,7 @@ fn literal(value: &ValueProto, typ: &TypeProto) -> Value {
     match value {
         Int64Value(x) => Value::Int64(*x),
         BoolValue(x) => Value::Bool(*x),
-        DoubleValue(x) => Value::Double(*x),
+        DoubleValue(x) => Value::Double(x.to_string()),
         StringValue(x) => Value::String(x.clone()),
         BytesValue(x) => Value::Bytes(x.clone()),
         DateValue(x) => Value::Date(date_value(*x)),
@@ -857,7 +922,7 @@ fn array_value(values: &Vec<ValueProto>, typ: &TypeProto) -> Vec<Value> {
     list
 }
 
-fn struct_value(values: &Vec<ValueProto>, types: &Vec<StructFieldProto>) -> Vec<(String, Value)> {
+fn struct_value(values: &Vec<ValueProto>, types: &Vec<StructFieldProto>) -> Vec<Value> {
     let mut list = vec![];
     for i in 0..list.len() {
         list.push(struct_field(&values[i], &types[i]));
@@ -865,17 +930,8 @@ fn struct_value(values: &Vec<ValueProto>, types: &Vec<StructFieldProto>) -> Vec<
     list
 }
 
-fn struct_field(value: &ValueProto, typ: &StructFieldProto) -> (String, Value) {
-    match typ {
-        StructFieldProto {
-            field_name: Some(name),
-            field_type: Some(typ),
-        } => {
-            let literal = literal(value, typ);
-            (name.clone(), literal)
-        }
-        other => panic!("{:?}", other),
-    }
+fn struct_field(value: &ValueProto, typ: &StructFieldProto) -> Value {
+    literal(value, typ.field_type.as_ref().unwrap())
 }
 
 trait Getter<T> {

@@ -1,4 +1,5 @@
-use crate::*;
+use crate::parser::*;
+use fixtures::*;
 use node::*;
 use zetasql::*;
 
@@ -9,7 +10,10 @@ fn test_analyze() {
         .parse(&"select 1".to_string(), 0, &catalog())
         .unwrap();
     match plan {
-        Unary(LogicalProject(_), _) => (),
+        Plan {
+            op: LogicalProject(_),
+            ..
+        } => (),
         other => panic!("{}", other),
     }
 }
