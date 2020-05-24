@@ -16,7 +16,7 @@ use zetasql::resolved_insert_stmt_enums::*;
 use zetasql::value_proto::Value::*;
 use zetasql::*;
 
-pub fn convert(q: &AnyResolvedStatementProto) -> Plan {
+pub fn convert(q: &AnyResolvedStatementProto) -> Expr {
     Converter::new().any_stmt(q)
 }
 
@@ -24,22 +24,16 @@ struct Converter {
     next_column_id: i64,
 }
 
-fn root(op: Operator) -> Plan {
-    Plan { op, inputs: vec![] }
+fn root(op: Operator) -> Expr {
+    Expr(op, vec![])
 }
 
-fn unary(op: Operator, input: Plan) -> Plan {
-    Plan {
-        op,
-        inputs: vec![input],
-    }
+fn unary(op: Operator, input: Expr) -> Expr {
+    Expr(op, vec![input])
 }
 
-fn binary(op: Operator, left: Plan, right: Plan) -> Plan {
-    Plan {
-        op,
-        inputs: vec![left, right],
-    }
+fn binary(op: Operator, left: Expr, right: Expr) -> Expr {
+    Expr(op, vec![left, right])
 }
 
 impl Converter {
@@ -47,7 +41,7 @@ impl Converter {
         Converter { next_column_id: -1 }
     }
 
-    fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Plan {
+    fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
         match q.node.get() {
             ResolvedQueryStmtNode(q) => self.query(q),
             ResolvedCreateStatementNode(q) => self.create(q),
@@ -62,11 +56,11 @@ impl Converter {
         }
     }
 
-    fn query(&mut self, q: &ResolvedQueryStmtProto) -> Plan {
+    fn query(&mut self, q: &ResolvedQueryStmtProto) -> Expr {
         self.any_resolved_scan(q.query.get())
     }
 
-    fn any_resolved_scan(&mut self, q: &AnyResolvedScanProto) -> Plan {
+    fn any_resolved_scan(&mut self, q: &AnyResolvedScanProto) -> Expr {
         match q.node.get() {
             ResolvedSingleRowScanNode(q) => self.single_row(q),
             ResolvedTableScanNode(q) => self.table_scan(q),
@@ -85,15 +79,15 @@ impl Converter {
         }
     }
 
-    fn single_row(&mut self, _: &ResolvedSingleRowScanProto) -> Plan {
+    fn single_row(&mut self, _: &ResolvedSingleRowScanProto) -> Expr {
         root(LogicalSingleGet)
     }
 
-    fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Plan {
+    fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Expr {
         root(LogicalGet(Table::from(q)))
     }
 
-    fn join(&mut self, q: &ResolvedJoinScanProto) -> Plan {
+    fn join(&mut self, q: &ResolvedJoinScanProto) -> Expr {
         let left = self.any_resolved_scan(q.left_scan.get());
         let right = self.any_resolved_scan(q.right_scan.get());
         let mut input = root(LogicalSingleGet); // TODO this is clearly wrong
@@ -147,20 +141,20 @@ impl Converter {
         }
     }
 
-    fn filter(&mut self, q: &ResolvedFilterScanProto) -> Plan {
+    fn filter(&mut self, q: &ResolvedFilterScanProto) -> Expr {
         let mut input = self.any_resolved_scan(q.input_scan.get());
         let predicates = self.predicate(q.filter_expr.get(), &mut input);
         unary(LogicalFilter(predicates), input)
     }
 
-    fn predicate(&mut self, x: &AnyResolvedExprProto, outer: &mut Plan) -> Vec<Scalar> {
+    fn predicate(&mut self, x: &AnyResolvedExprProto, outer: &mut Expr) -> Vec<Scalar> {
         match self.predicate_and(x, outer) {
             Some(ps) => ps,
             None => vec![self.expr(x, outer)],
         }
     }
 
-    fn predicate_and(&mut self, x: &AnyResolvedExprProto, outer: &mut Plan) -> Option<Vec<Scalar>> {
+    fn predicate_and(&mut self, x: &AnyResolvedExprProto, outer: &mut Expr) -> Option<Vec<Scalar>> {
         let x = match x.node.get() {
             ResolvedFunctionCallBaseNode(x) => x,
             _ => return None,
@@ -176,7 +170,7 @@ impl Converter {
         Some(self.exprs(&x.argument_list, outer))
     }
 
-    fn set_operation(&mut self, q: &ResolvedSetOperationScanProto) -> Plan {
+    fn set_operation(&mut self, q: &ResolvedSetOperationScanProto) -> Expr {
         // Note that this nests the operations backwards.
         // For example, `a U b U c` will be nested as (c (b a)).
         // This is important for `a EXCEPT b`, which needs to be nested as
@@ -211,7 +205,7 @@ impl Converter {
         }
     }
 
-    fn order_by(&mut self, q: &ResolvedOrderByScanProto) -> Plan {
+    fn order_by(&mut self, q: &ResolvedOrderByScanProto) -> Expr {
         let input = self.any_resolved_scan(q.input_scan.get().borrow());
         let mut list = vec![];
         for x in &q.order_by_item_list {
@@ -222,7 +216,7 @@ impl Converter {
         unary(LogicalSort(list), input)
     }
 
-    fn limit_offset(&mut self, q: &ResolvedLimitOffsetScanProto) -> Plan {
+    fn limit_offset(&mut self, q: &ResolvedLimitOffsetScanProto) -> Expr {
         let input = self.any_resolved_scan(q.input_scan.get().borrow());
         let limit = self.int_literal(q.limit.get().borrow());
         let offset = match &q.offset {
@@ -254,7 +248,7 @@ impl Converter {
         }
     }
 
-    fn project(&mut self, q: &ResolvedProjectScanProto) -> Plan {
+    fn project(&mut self, q: &ResolvedProjectScanProto) -> Expr {
         if q.expr_list.len() == 0 {
             self.any_resolved_scan(q.input_scan.get())
         } else {
@@ -270,14 +264,14 @@ impl Converter {
     fn computed_column(
         &mut self,
         x: &ResolvedComputedColumnProto,
-        input: &mut Plan,
+        input: &mut Expr,
     ) -> (Scalar, Column) {
         let value = self.expr(x.expr.get(), input);
         let column = Column::from(x.column.get());
         (value, column)
     }
 
-    fn with(&mut self, q: &ResolvedWithScanProto) -> Plan {
+    fn with(&mut self, q: &ResolvedWithScanProto) -> Expr {
         let mut right = self.any_resolved_scan(q.query.get().borrow());
         for i in (0..q.with_entry_list.len()).rev() {
             match &q.with_entry_list[i] {
@@ -295,11 +289,11 @@ impl Converter {
         right
     }
 
-    fn with_ref(&mut self, q: &ResolvedWithRefScanProto) -> Plan {
+    fn with_ref(&mut self, q: &ResolvedWithRefScanProto) -> Expr {
         root(LogicalGetWith(q.with_query_name.get().clone()))
     }
 
-    fn aggregate(&mut self, q: &ResolvedAggregateScanProto) -> Plan {
+    fn aggregate(&mut self, q: &ResolvedAggregateScanProto) -> Expr {
         let q = q.parent.get();
         let mut input = self.any_resolved_scan(q.input_scan.get());
         let mut project = vec![];
@@ -329,7 +323,7 @@ impl Converter {
         &mut self,
         compute: &ResolvedComputedColumnProto,
         project: &mut Vec<(Scalar, Column)>,
-        input: &mut Plan,
+        input: &mut Expr,
     ) -> Column {
         let expr = compute.expr.get();
         let column = compute.column.get();
@@ -341,7 +335,7 @@ impl Converter {
         &mut self,
         aggregate: &ResolvedComputedColumnProto,
         project: &mut Vec<(Scalar, Column)>,
-        input: &mut Plan,
+        input: &mut Expr,
     ) -> Aggregate {
         let function = match aggregate.expr.get().node.get() {
             ResolvedFunctionCallBaseNode(function) => function,
@@ -378,7 +372,7 @@ impl Converter {
         Aggregate::from(function, distinct, ignore_nulls, argument)
     }
 
-    fn create(&mut self, q: &AnyResolvedCreateStatementProto) -> Plan {
+    fn create(&mut self, q: &AnyResolvedCreateStatementProto) -> Expr {
         match q.node.get() {
             ResolvedCreateIndexStmtNode(q) => self.create_index(q),
             ResolvedCreateTableStmtBaseNode(AnyResolvedCreateTableStmtBaseProto {
@@ -391,7 +385,7 @@ impl Converter {
         }
     }
 
-    fn create_index(&mut self, q: &ResolvedCreateIndexStmtProto) -> Plan {
+    fn create_index(&mut self, q: &ResolvedCreateIndexStmtProto) -> Expr {
         let name = Name {
             path: q.parent.get().name_path.clone(),
         };
@@ -415,7 +409,7 @@ impl Converter {
         })
     }
 
-    fn create_table_as(&mut self, q: &ResolvedCreateTableAsSelectStmtProto) -> Plan {
+    fn create_table_as(&mut self, q: &ResolvedCreateTableAsSelectStmtProto) -> Expr {
         let input = self.any_resolved_scan(q.query.get());
         let mut project = vec![];
         for i in 0..q.output_column_list.len() {
@@ -426,7 +420,7 @@ impl Converter {
         unary(LogicalProject(project), input)
     }
 
-    fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Plan {
+    fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Expr {
         root(self.create_table_base(q.parent.get()))
     }
 
@@ -491,7 +485,7 @@ impl Converter {
         (c.name.get().clone(), Type::from(c.r#type.get()))
     }
 
-    fn drop(&mut self, q: &ResolvedDropStmtProto) -> Plan {
+    fn drop(&mut self, q: &ResolvedDropStmtProto) -> Expr {
         let object = ObjectType::from(q.object_type.get());
         let name = Name {
             path: q.name_path.clone(),
@@ -499,7 +493,7 @@ impl Converter {
         root(LogicalDrop { object, name })
     }
 
-    fn insert(&mut self, q: &ResolvedInsertStmtProto) -> Plan {
+    fn insert(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
         if q.insert_mode != Some(InsertMode::OrError as i32) {
             todo!("alternative insert modes")
         }
@@ -518,7 +512,7 @@ impl Converter {
         unary(operator, input)
     }
 
-    fn rows(&mut self, q: &ResolvedInsertStmtProto) -> Plan {
+    fn rows(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
         let mut input = root(LogicalSingleGet);
         let mut rows = Vec::with_capacity(q.row_list.len());
         for row in &q.row_list {
@@ -528,7 +522,7 @@ impl Converter {
         unary(operator, input)
     }
 
-    fn row(&mut self, row: &ResolvedInsertRowProto, input: &mut Plan) -> Vec<Scalar> {
+    fn row(&mut self, row: &ResolvedInsertRowProto, input: &mut Expr) -> Vec<Scalar> {
         let mut values = Vec::with_capacity(row.value_list.len());
         for value in &row.value_list {
             values.push(self.expr(value.value.get(), input));
@@ -544,7 +538,7 @@ impl Converter {
         cs
     }
 
-    fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Plan {
+    fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
         let mut input = self.table_scan(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
         let table = Table::from(q.table_scan.get());
@@ -554,7 +548,7 @@ impl Converter {
         )
     }
 
-    fn update(&mut self, q: &ResolvedUpdateStmtProto) -> Plan {
+    fn update(&mut self, q: &ResolvedUpdateStmtProto) -> Expr {
         if q.table_scan.is_none() {
             todo!("nested updates")
         }
@@ -611,7 +605,7 @@ impl Converter {
         unary(LogicalUpdate(update), unary(LogicalProject(project), input))
     }
 
-    fn rename(&mut self, q: &ResolvedRenameStmtProto) -> Plan {
+    fn rename(&mut self, q: &ResolvedRenameStmtProto) -> Expr {
         let object = ObjectType::from(q.object_type.get());
         let from = Name {
             path: q.old_name_path.clone(),
@@ -622,14 +616,14 @@ impl Converter {
         root(LogicalRename { object, from, to })
     }
 
-    fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Plan {
+    fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Expr {
         // TODO fail on unspported options
         root(LogicalCreateDatabase(Name {
             path: q.name_path.clone(),
         }))
     }
 
-    fn alter(&mut self, q: &AnyResolvedAlterObjectStmtProto) -> Plan {
+    fn alter(&mut self, q: &AnyResolvedAlterObjectStmtProto) -> Expr {
         let q = match q {
             AnyResolvedAlterObjectStmtProto { node: Some(q) } => q,
             other => panic!("{:?}", other),
@@ -640,7 +634,7 @@ impl Converter {
         }
     }
 
-    fn alter_table(&mut self, q: &ResolvedAlterTableStmtProto) -> Plan {
+    fn alter_table(&mut self, q: &ResolvedAlterTableStmtProto) -> Expr {
         let name = Name {
             path: q.parent.get().name_path.clone(),
         };
@@ -669,7 +663,7 @@ impl Converter {
         }
     }
 
-    fn exprs(&mut self, xs: &Vec<AnyResolvedExprProto>, outer: &mut Plan) -> Vec<Scalar> {
+    fn exprs(&mut self, xs: &Vec<AnyResolvedExprProto>, outer: &mut Expr) -> Vec<Scalar> {
         let mut list = vec![];
         for x in xs {
             list.push(self.expr(x, outer));
@@ -677,7 +671,7 @@ impl Converter {
         list
     }
 
-    fn expr(&mut self, x: &AnyResolvedExprProto, outer: &mut Plan) -> Scalar {
+    fn expr(&mut self, x: &AnyResolvedExprProto, outer: &mut Expr) -> Scalar {
         match x.node.get() {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
@@ -696,7 +690,7 @@ impl Converter {
         Scalar::Column(Column::from(x))
     }
 
-    fn function_call(&mut self, x: &AnyResolvedFunctionCallBaseProto, outer: &mut Plan) -> Scalar {
+    fn function_call(&mut self, x: &AnyResolvedFunctionCallBaseProto, outer: &mut Expr) -> Scalar {
         let (function, arguments, returns) = match x {
             AnyResolvedFunctionCallBaseProto {
                 node:
@@ -730,7 +724,7 @@ impl Converter {
         Scalar::Call(function, arguments, returns)
     }
 
-    fn cast(&mut self, x: &ResolvedCastProto, outer: &mut Plan) -> Scalar {
+    fn cast(&mut self, x: &ResolvedCastProto, outer: &mut Expr) -> Scalar {
         let (expr, ty) = match x {
             ResolvedCastProto {
                 parent:
@@ -745,7 +739,7 @@ impl Converter {
         Scalar::Cast(Box::new(self.expr(expr, outer)), Type::from(ty))
     }
 
-    fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Plan) -> Scalar {
+    fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
         let subquery_type = x.subquery_type.get();
         let subquery = x.subquery.get();
         let corr = self.any_resolved_scan(subquery);

@@ -2,21 +2,18 @@ use fmt::Debug;
 use std::fmt;
 
 #[derive(Debug, Clone)]
-pub struct Plan {
-    pub op: Operator,
-    pub inputs: Vec<Plan>,
-}
+pub struct Expr(pub Operator, pub Vec<Expr>);
 
-impl fmt::Display for Plan {
+impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.print(f, 0)
     }
 }
 
-impl Plan {
+impl Expr {
     fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        write!(f, "{}", self.op)?;
-        for input in &self.inputs {
+        write!(f, "{}", self.0)?;
+        for input in &self.1 {
             write!(f, "\n")?;
             for _ in 0..indent + 1 {
                 write!(f, "\t")?;

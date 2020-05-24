@@ -10,10 +10,7 @@ fn test_analyze() {
         .parse(&"select 1".to_string(), 0, &catalog())
         .unwrap();
     match plan {
-        Plan {
-            op: LogicalProject(_),
-            ..
-        } => (),
+        Expr(LogicalProject(_), _) => (),
         other => panic!("{}", other),
     }
 }

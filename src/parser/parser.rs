@@ -38,7 +38,7 @@ impl ParseProvider {
         sql: &String,
         offset: i32,
         catalog: &SimpleCatalogProto, // TODO eliminate catalog in favor of rocksdb reference
-    ) -> Result<(i32, node::Plan), String> {
+    ) -> Result<(i32, node::Expr), String> {
         match self.analyze(sql, offset, catalog) {
             Ok(response) => {
                 let response = response.into_inner();
