@@ -1,0 +1,13 @@
+[package]
+name = "planner"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+fixtures = { path = "../fixtures" }
+node = { path = "../node" }
+parser = { path = "../parser" }

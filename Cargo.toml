@@ -3,6 +3,7 @@ members = [
     "src/encoding",
     "src/node",
     "src/parser",
+    "src/planner",
     "src/scratch",
     "src/storage",
     "src/zetasql",

@@ -1,0 +1,5 @@
+select * from (select *, store_id + 1 from customer) where store_id = 1
+
+LogicalProject $subquery1.$col2:(Add customer.store_id 1)
+	LogicalFilter (Equal customer.store_id 1)
+		LogicalGet customer

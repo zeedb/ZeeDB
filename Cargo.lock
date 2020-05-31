@@ -83,6 +83,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bincode"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
+dependencies = [
+ "byteorder",
+ "serde",
+]
+
+[[package]]
 name = "bindgen"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -165,6 +175,7 @@ checksum = "80094f509cf8b5ae86a4966a39b3ff66cd7e2a3e594accec3743ff3fabeab5b2"
 dependencies = [
  "num-integer",
  "num-traits",
+ "serde",
  "time",
 ]
 
@@ -204,6 +215,9 @@ checksum = "bb1f6b1ce1c140482ea30ddd3335fc0024ac7ee112895426e0a629a6c20adfe3"
 name = "encoding"
 version = "0.1.0"
 dependencies = [
+ "bincode",
+ "chrono",
+ "serde",
  "zetasql",
 ]
 
@@ -218,6 +232,13 @@ dependencies = [
  "log",
  "regex",
  "termcolor",
+]
+
+[[package]]
+name = "fixtures"
+version = "0.1.0"
+dependencies = [
+ "zetasql",
 ]
 
 [[package]]
@@ -591,7 +612,6 @@ dependencies = [
 name = "node"
 version = "0.1.0"
 dependencies = [
- "chrono",
  "encoding",
  "zetasql",
 ]
@@ -631,6 +651,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "encoding",
+ "fixtures",
  "futures",
  "node",
  "prost-types",
@@ -683,6 +704,15 @@ name = "pin-utils"
 version = "0.1.0-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5894c618ce612a3fa23881b152b608bafb8c56cfc22f434a3ba3120b40f7b587"
+
+[[package]]
+name = "planner"
+version = "0.1.0"
+dependencies = [
+ "fixtures",
+ "node",
+ "parser",
+]
 
 [[package]]
 name = "ppv-lite86"
@@ -858,6 +888,26 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 [[package]]
 name = "scratch"
 version = "0.1.0"
+
+[[package]]
+name = "serde"
+version = "1.0.110"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "99e7b308464d16b56eba9964e4972a3eee817760ab60d88c3f86e1fecb08204c"
+dependencies = [
+ "serde_derive",
+]
+
+[[package]]
+name = "serde_derive"
+version = "1.0.110"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "818fbf6bfa9a42d3bfcaca148547aa00c7b915bec71d1757aa2d44ca68771984"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
 
 [[package]]
 name = "shlex"

@@ -1,0 +1,4 @@
+select (select 1) from customer
+
+LogicalProject $query.$col1:1 $expr_subquery.$col1:1
+	LogicalGet customer

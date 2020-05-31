@@ -1,0 +1,7 @@
+select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
+
+LogicalProject $query.$col1:1
+	LogicalMarkJoin $mark.$exists $mark.$exists (Equal customer.person_id person.person_id)
+		LogicalProject $expr_subquery.$col1:1
+			LogicalGet customer
+		LogicalGet person

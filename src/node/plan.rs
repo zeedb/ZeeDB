@@ -1,6 +1,7 @@
 use fmt::Debug;
 use std::fmt;
 
+// TODO rename plan to expr
 #[derive(Debug, Clone)]
 pub struct Expr(pub Operator, pub Vec<Expr>);
 
@@ -21,6 +22,18 @@ impl Expr {
             input.print(f, indent + 1)?;
         }
         Ok(())
+    }
+
+    pub fn correlated(&self, column: &Column) -> bool {
+        if self.0.introduces(column) {
+            return false;
+        }
+        for input in &self.1 {
+            if !input.correlated(column) {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -200,6 +213,21 @@ impl Operator {
             | Operator::LogicalAlterTable { .. }
             | Operator::LogicalDrop { .. }
             | Operator::LogicalRename { .. } => true,
+            _ => false,
+        }
+    }
+
+    fn introduces(&self, column: &Column) -> bool {
+        match self {
+            Operator::LogicalGet(table) => table.columns.contains(column),
+            Operator::LogicalProject(projects) => projects.iter().any(|(_, c)| c == column),
+            Operator::LogicalJoin {
+                mark: Some(mark), ..
+            } => mark == column,
+            Operator::LogicalGetWith { .. } => todo!(),
+            Operator::LogicalAggregate { aggregate, .. } => {
+                aggregate.iter().any(|(_, c)| c == column)
+            }
             _ => false,
         }
     }
@@ -751,6 +779,59 @@ impl Scalar {
             Scalar::Cast(_, typ) => typ.clone(),
         }
     }
+
+    pub fn correlated(&self, expr: &Expr) -> bool {
+        match self {
+            Scalar::Literal(_, _) => false,
+            Scalar::Column(column) => expr.correlated(column),
+            Scalar::Call(_, arguments, _) => arguments.iter().any(|a| a.correlated(expr)),
+            Scalar::Cast(scalar, _) => scalar.correlated(expr),
+        }
+    }
+
+    pub fn columns(&self) -> Vec<Column> {
+        fn visit(node: &Scalar, found: &mut Vec<Column>) {
+            match node {
+                Scalar::Literal(_, _) => (),
+                Scalar::Column(column) => found.push(column.clone()),
+                Scalar::Call(_, arguments, _) => {
+                    for a in arguments {
+                        visit(a, found)
+                    }
+                }
+                Scalar::Cast(scalar, _) => visit(scalar, found),
+            }
+        }
+        let mut found = vec![];
+        visit(self, &mut found);
+        found
+    }
+
+    pub fn can_inline(&self) -> bool {
+        match self {
+            Scalar::Literal(_, _) => true,
+            Scalar::Column(_) => true,
+            Scalar::Call(f, _, _) => !f.has_effects(),
+            Scalar::Cast(expr, _) => expr.can_inline(),
+        }
+    }
+
+    pub fn inline(&self, expr: &Scalar, column: &Column) -> Scalar {
+        match self {
+            Scalar::Column(c) if c == column => expr.clone(),
+            Scalar::Call(f, arguments, returns) => {
+                let mut inline_arguments = Vec::with_capacity(arguments.len());
+                for a in arguments {
+                    inline_arguments.push(a.inline(expr, column));
+                }
+                Scalar::Call(f.clone(), inline_arguments, returns.clone())
+            }
+            Scalar::Cast(uncast, typ) => {
+                Scalar::Cast(Box::new(uncast.inline(expr, column)), typ.clone())
+            }
+            _ => self.clone(),
+        }
+    }
 }
 
 impl fmt::Display for Scalar {
@@ -1007,6 +1088,10 @@ impl Function {
             "ZetaSQL:upper" => Function::Upper,
             other => panic!("{} is not supported", other),
         }
+    }
+
+    pub fn has_effects(&self) -> bool {
+        false
     }
 }
 
