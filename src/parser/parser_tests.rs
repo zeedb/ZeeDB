@@ -6,10 +6,10 @@ use zetasql::*;
 #[test]
 fn test_analyze() {
     let mut parser = ParseProvider::new();
-    let (_, plan) = parser
+    let (_, expr) = parser
         .parse(&"select 1".to_string(), 0, &catalog())
         .unwrap();
-    match plan {
+    match expr {
         Expr(LogicalProject(_), _) => (),
         other => panic!("{}", other),
     }

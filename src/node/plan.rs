@@ -1,7 +1,6 @@
 use fmt::Debug;
 use std::fmt;
 
-// TODO rename plan to expr
 #[derive(Debug, Clone)]
 pub struct Expr(pub Operator, pub Vec<Expr>);
 

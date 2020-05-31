@@ -16,7 +16,7 @@ pub enum RewriteRule {
 }
 
 impl RewriteRule {
-    pub fn call(&self, plan: &Expr) -> Option<Expr> {
+    pub fn call(&self, expr: &Expr) -> Option<Expr> {
         // TODO all the .0 / .1 are hard to follow, use pattern matching
         match self {
             RewriteRule::PullFilterThroughJoin => {
@@ -24,24 +24,24 @@ impl RewriteRule {
                     join,
                     predicates: join_predicates,
                     mark,
-                } = &plan.0
+                } = &expr.0
                 {
-                    if let LogicalFilter(left_predicates) = &plan.1[0].0 {
+                    if let LogicalFilter(left_predicates) = &expr.1[0].0 {
                         return pull_filter_through_join(
                             join,
                             join_predicates,
                             mark,
                             left_predicates,
-                            &plan.1[0].1[0],
-                            &plan.1[1],
+                            &expr.1[0].1[0],
+                            &expr.1[1],
                         );
                     }
                 }
             }
             RewriteRule::PullFilterThroughProject => {
-                if let LogicalProject(projects) = &plan.0 {
-                    if let LogicalFilter(predicates) = &plan.1[0].0 {
-                        return pull_filter_through_project(projects, predicates, &plan.1[0].1[0]);
+                if let LogicalProject(projects) = &expr.0 {
+                    if let LogicalFilter(predicates) = &expr.1[0].0 {
+                        return pull_filter_through_project(projects, predicates, &expr.1[0].1[0]);
                     }
                 }
             }
@@ -49,14 +49,14 @@ impl RewriteRule {
                 if let LogicalAggregate {
                     group_by,
                     aggregate,
-                } = &plan.0
+                } = &expr.0
                 {
-                    if let LogicalFilter(predicates) = &plan.1[0].0 {
+                    if let LogicalFilter(predicates) = &expr.1[0].0 {
                         return pull_filter_through_aggregate(
                             group_by,
                             aggregate,
                             predicates,
-                            &plan.1[0].1[0],
+                            &expr.1[0].1[0],
                         );
                     }
                 }
@@ -66,14 +66,14 @@ impl RewriteRule {
                     join: Join::Single,
                     predicates,
                     mark: None,
-                } = &plan.0
+                } = &expr.0
                 {
-                    if let LogicalProject(projects) = &plan.1[0].0 {
-                        if let LogicalSingleGet = &plan.1[0].1[0].0 {
+                    if let LogicalProject(projects) = &expr.1[0].0 {
+                        if let LogicalSingleGet = &expr.1[0].1[0].0 {
                             if predicates.is_empty() {
                                 return Some(Expr(
                                     LogicalProject(projects.clone()),
-                                    vec![plan.1[1].clone()],
+                                    vec![expr.1[1].clone()],
                                 ));
                             }
                         }
@@ -81,20 +81,20 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushExplicitFilterThroughJoin => {
-                if let LogicalFilter(filter_predicates) = &plan.0 {
+                if let LogicalFilter(filter_predicates) = &expr.0 {
                     if let LogicalJoin {
                         join,
                         predicates: join_predicates,
                         mark,
-                    } = &plan.1[0].0
+                    } = &expr.1[0].0
                     {
                         return push_explicit_filter_through_join(
                             filter_predicates,
                             join,
                             join_predicates,
                             mark,
-                            &plan.1[0].1[0],
-                            &plan.1[0].1[1],
+                            &expr.1[0].1[0],
+                            &expr.1[0].1[1],
                         );
                     }
                 }
@@ -105,37 +105,37 @@ impl RewriteRule {
                     predicates,
                     mark,
                     ..
-                } = &plan.0
+                } = &expr.0
                 {
                     if predicates.len() > 0 {
                         return push_implicit_filter_through_join(
-                            join, predicates, mark, &plan.1[0], &plan.1[1],
+                            join, predicates, mark, &expr.1[0], &expr.1[1],
                         );
                     }
                 }
             }
             RewriteRule::PushFilterThroughProject => {
-                if let LogicalFilter(predicates) = &plan.0 {
-                    if let LogicalProject(projects) = &plan.1[0].0 {
-                        return push_filter_through_project(predicates, projects, &plan.1[0].1[0]);
+                if let LogicalFilter(predicates) = &expr.0 {
+                    if let LogicalProject(projects) = &expr.1[0].0 {
+                        return push_filter_through_project(predicates, projects, &expr.1[0].1[0]);
                     }
                 }
             }
             RewriteRule::CombineConsecutiveFilters => {
-                if let LogicalFilter(predicates1) = &plan.0 {
-                    if let LogicalFilter(predicates2) = &plan.1[0].0 {
+                if let LogicalFilter(predicates1) = &expr.0 {
+                    if let LogicalFilter(predicates2) = &expr.1[0].0 {
                         return combine_consecutive_filters(
                             predicates1,
                             predicates2,
-                            &plan.1[0].1[0],
+                            &expr.1[0].1[0],
                         );
                     }
                 }
             }
             RewriteRule::CombineConsecutiveProjects => {
-                if let LogicalProject(outer) = &plan.0 {
-                    if let LogicalProject(inner) = &plan.1[0].0 {
-                        return combine_consecutive_projects(outer, inner, &plan.1[0].1[0]);
+                if let LogicalProject(outer) = &expr.0 {
+                    if let LogicalProject(inner) = &expr.1[0].0 {
+                        return combine_consecutive_projects(outer, inner, &expr.1[0].1[0]);
                     }
                 }
             }
@@ -423,39 +423,39 @@ pub fn top_down_rules() -> Vec<RewriteRule> {
     ]
 }
 
-pub fn bottom_up(plan: &Expr, rules: &Vec<RewriteRule>) -> Expr {
+pub fn bottom_up(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     // Optimize inputs first.
-    let mut inputs = Vec::with_capacity(plan.1.len());
-    for input in &plan.1 {
+    let mut inputs = Vec::with_capacity(expr.1.len());
+    for input in &expr.1 {
         inputs.push(bottom_up(input, rules));
     }
-    let plan = Expr(plan.0.clone(), inputs);
+    let expr = Expr(expr.0.clone(), inputs);
     // Optimize operator.
     for rule in rules {
-        match rule.call(&plan) {
-            // Abandon previous plan.
-            Some(plan) => return bottom_up(&plan, rules),
+        match rule.call(&expr) {
+            // Abandon previous expr.
+            Some(expr) => return bottom_up(&expr, rules),
             None => (),
         }
     }
-    plan
+    expr
 }
 
-pub fn top_down(plan: &Expr, rules: &Vec<RewriteRule>) -> Expr {
+pub fn top_down(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     // Optimize operator.
     for rule in rules {
-        match rule.call(&plan) {
-            // Abandon previous plan.
-            Some(plan) => {
-                return top_down(&plan, rules);
+        match rule.call(&expr) {
+            // Abandon previous expr.
+            Some(expr) => {
+                return top_down(&expr, rules);
             }
             None => (),
         }
     }
     // Optimize inputs.
-    let mut inputs = Vec::with_capacity(plan.1.len());
-    for input in &plan.1 {
+    let mut inputs = Vec::with_capacity(expr.1.len());
+    for input in &expr.1 {
         inputs.push(top_down(input, rules));
     }
-    Expr(plan.0.clone(), inputs)
+    Expr(expr.0.clone(), inputs)
 }

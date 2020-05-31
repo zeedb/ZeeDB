@@ -43,11 +43,11 @@ impl ParseProvider {
             Ok(response) => {
                 let response = response.into_inner();
                 let offset = response.resume_byte_position.unwrap();
-                let plan = match response.result.unwrap() {
+                let expr = match response.result.unwrap() {
                     ResolvedStatement(stmt) => convert(&stmt),
                     ResolvedExpression(_) => panic!("expected statement but found expression"),
                 };
-                Ok((offset, plan))
+                Ok((offset, expr))
             }
             Err(status) => Err(String::from(status.message())),
         }
