@@ -17,31 +17,34 @@ pub enum RewriteRule {
 
 impl RewriteRule {
     pub fn call(&self, expr: &Expr) -> Option<Expr> {
-        // TODO all the .0 / .1 are hard to follow, use pattern matching
         match self {
             RewriteRule::PullFilterThroughJoin => {
                 if let LogicalJoin {
                     join,
                     predicates: join_predicates,
                     mark,
-                } = &expr.0
+                } = &expr.operator()
                 {
-                    if let LogicalFilter(left_predicates) = &expr.1[0].0 {
+                    if let LogicalFilter(left_predicates) = &expr.input(0).operator() {
                         return pull_filter_through_join(
                             join,
                             join_predicates,
                             mark,
                             left_predicates,
-                            &expr.1[0].1[0],
-                            &expr.1[1],
+                            &expr.input(0).input(0),
+                            &expr.input(1),
                         );
                     }
                 }
             }
             RewriteRule::PullFilterThroughProject => {
-                if let LogicalProject(projects) = &expr.0 {
-                    if let LogicalFilter(predicates) = &expr.1[0].0 {
-                        return pull_filter_through_project(projects, predicates, &expr.1[0].1[0]);
+                if let LogicalProject(projects) = &expr.operator() {
+                    if let LogicalFilter(predicates) = &expr.input(0).operator() {
+                        return pull_filter_through_project(
+                            projects,
+                            predicates,
+                            &expr.input(0).input(0),
+                        );
                     }
                 }
             }
@@ -49,14 +52,14 @@ impl RewriteRule {
                 if let LogicalAggregate {
                     group_by,
                     aggregate,
-                } = &expr.0
+                } = &expr.operator()
                 {
-                    if let LogicalFilter(predicates) = &expr.1[0].0 {
+                    if let LogicalFilter(predicates) = &expr.input(0).operator() {
                         return pull_filter_through_aggregate(
                             group_by,
                             aggregate,
                             predicates,
-                            &expr.1[0].1[0],
+                            &expr.input(0).input(0),
                         );
                     }
                 }
@@ -66,14 +69,14 @@ impl RewriteRule {
                     join: Join::Single,
                     predicates,
                     mark: None,
-                } = &expr.0
+                } = &expr.operator()
                 {
-                    if let LogicalProject(projects) = &expr.1[0].0 {
-                        if let LogicalSingleGet = &expr.1[0].1[0].0 {
+                    if let LogicalProject(projects) = &expr.input(0).operator() {
+                        if let LogicalSingleGet = &expr.input(0).input(0).operator() {
                             if predicates.is_empty() {
                                 return Some(Expr(
                                     LogicalProject(projects.clone()),
-                                    vec![expr.1[1].clone()],
+                                    vec![expr.input(1).clone()],
                                 ));
                             }
                         }
@@ -81,20 +84,20 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushExplicitFilterThroughJoin => {
-                if let LogicalFilter(filter_predicates) = &expr.0 {
+                if let LogicalFilter(filter_predicates) = &expr.operator() {
                     if let LogicalJoin {
                         join,
                         predicates: join_predicates,
                         mark,
-                    } = &expr.1[0].0
+                    } = &expr.input(0).operator()
                     {
                         return push_explicit_filter_through_join(
                             filter_predicates,
                             join,
                             join_predicates,
                             mark,
-                            &expr.1[0].1[0],
-                            &expr.1[0].1[1],
+                            &expr.input(0).input(0),
+                            &expr.input(0).input(1),
                         );
                     }
                 }
@@ -105,37 +108,45 @@ impl RewriteRule {
                     predicates,
                     mark,
                     ..
-                } = &expr.0
+                } = &expr.operator()
                 {
                     if predicates.len() > 0 {
                         return push_implicit_filter_through_join(
-                            join, predicates, mark, &expr.1[0], &expr.1[1],
+                            join,
+                            predicates,
+                            mark,
+                            &expr.input(0),
+                            &expr.input(1),
                         );
                     }
                 }
             }
             RewriteRule::PushFilterThroughProject => {
-                if let LogicalFilter(predicates) = &expr.0 {
-                    if let LogicalProject(projects) = &expr.1[0].0 {
-                        return push_filter_through_project(predicates, projects, &expr.1[0].1[0]);
+                if let LogicalFilter(predicates) = &expr.operator() {
+                    if let LogicalProject(projects) = &expr.input(0).operator() {
+                        return push_filter_through_project(
+                            predicates,
+                            projects,
+                            &expr.input(0).input(0),
+                        );
                     }
                 }
             }
             RewriteRule::CombineConsecutiveFilters => {
-                if let LogicalFilter(predicates1) = &expr.0 {
-                    if let LogicalFilter(predicates2) = &expr.1[0].0 {
+                if let LogicalFilter(predicates1) = &expr.operator() {
+                    if let LogicalFilter(predicates2) = &expr.input(0).operator() {
                         return combine_consecutive_filters(
                             predicates1,
                             predicates2,
-                            &expr.1[0].1[0],
+                            &expr.input(0).input(0),
                         );
                     }
                 }
             }
             RewriteRule::CombineConsecutiveProjects => {
-                if let LogicalProject(outer) = &expr.0 {
-                    if let LogicalProject(inner) = &expr.1[0].0 {
-                        return combine_consecutive_projects(outer, inner, &expr.1[0].1[0]);
+                if let LogicalProject(outer) = &expr.operator() {
+                    if let LogicalProject(inner) = &expr.input(0).operator() {
+                        return combine_consecutive_projects(outer, inner, &expr.input(0).input(0));
                     }
                 }
             }
@@ -429,7 +440,7 @@ pub fn bottom_up(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     for input in &expr.1 {
         inputs.push(bottom_up(input, rules));
     }
-    let expr = Expr(expr.0.clone(), inputs);
+    let expr = Expr(expr.operator().clone(), inputs);
     // Optimize operator.
     for rule in rules {
         match rule.call(&expr) {
@@ -457,5 +468,5 @@ pub fn top_down(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     for input in &expr.1 {
         inputs.push(top_down(input, rules));
     }
-    Expr(expr.0.clone(), inputs)
+    Expr(expr.operator().clone(), inputs)
 }

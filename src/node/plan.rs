@@ -11,6 +11,14 @@ impl fmt::Display for Expr {
 }
 
 impl Expr {
+    pub fn operator(&self) -> &Operator {
+        &self.0
+    }
+
+    pub fn input(&self, i: usize) -> &Expr {
+        &self.1[i]
+    }
+
     fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
         write!(f, "{}", self.0)?;
         for input in &self.1 {
