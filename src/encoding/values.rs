@@ -1,4 +1,3 @@
-use serde::de::Visitor;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -15,15 +14,6 @@ pub enum Value {
     Numeric(i128),
     Array(Vec<Value>),
     Struct(Vec<Value>),
-}
-
-struct ValueVisitor;
-
-impl<'de> Visitor<'de> for ValueVisitor {
-    type Value = i32;
-    fn expecting(&self, _: &mut fmt::Formatter<'_>) -> std::result::Result<(), fmt::Error> {
-        todo!()
-    }
 }
 
 impl fmt::Display for Value {
