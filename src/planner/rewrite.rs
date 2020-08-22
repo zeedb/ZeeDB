@@ -1,7 +1,7 @@
 use node::*;
 
 #[derive(Debug)]
-pub enum RewriteRule {
+enum RewriteRule {
     // Bottom-up rewrite rules:
     PullFilterThroughJoin,
     PullFilterThroughProject,
@@ -16,7 +16,7 @@ pub enum RewriteRule {
 }
 
 impl RewriteRule {
-    pub fn call(&self, expr: &Expr) -> Option<Expr> {
+    fn call(&self, expr: &Expr) -> Option<Expr> {
         match self {
             RewriteRule::PullFilterThroughJoin => {
                 if let LogicalJoin {
@@ -415,26 +415,7 @@ fn combine_predicates(predicates1: &Vec<Scalar>, predicates2: &Vec<Scalar>) -> V
     combined
 }
 
-pub fn bottom_up_rules() -> Vec<RewriteRule> {
-    vec![
-        RewriteRule::PullFilterThroughJoin,
-        RewriteRule::PullFilterThroughProject,
-        RewriteRule::PullFilterThroughAggregate,
-        RewriteRule::RemoveSingleJoin,
-    ]
-}
-
-pub fn top_down_rules() -> Vec<RewriteRule> {
-    vec![
-        RewriteRule::PushExplicitFilterThroughJoin,
-        RewriteRule::PushImplicitFilterThroughJoin,
-        RewriteRule::PushFilterThroughProject,
-        RewriteRule::CombineConsecutiveFilters,
-        RewriteRule::CombineConsecutiveProjects,
-    ]
-}
-
-pub fn bottom_up(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
+fn bottom_up(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     // Optimize inputs first.
     let mut inputs = Vec::with_capacity(expr.1.len());
     for input in &expr.1 {
@@ -452,7 +433,7 @@ pub fn bottom_up(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     expr
 }
 
-pub fn top_down(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
+fn top_down(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
     // Optimize operator.
     for rule in rules {
         match rule.call(&expr) {
@@ -469,4 +450,23 @@ pub fn top_down(expr: &Expr, rules: &Vec<RewriteRule>) -> Expr {
         inputs.push(top_down(input, rules));
     }
     Expr(expr.operator().clone(), inputs)
+}
+
+pub fn rewrite(expr: &Expr) -> Expr {
+    let bottom_up_rules = vec![
+        RewriteRule::PullFilterThroughJoin,
+        RewriteRule::PullFilterThroughProject,
+        RewriteRule::PullFilterThroughAggregate,
+        RewriteRule::RemoveSingleJoin,
+    ];
+    let top_down_rules = vec![
+        RewriteRule::PushExplicitFilterThroughJoin,
+        RewriteRule::PushImplicitFilterThroughJoin,
+        RewriteRule::PushFilterThroughProject,
+        RewriteRule::CombineConsecutiveFilters,
+        RewriteRule::CombineConsecutiveProjects,
+    ];
+    let expr = bottom_up(&expr, &bottom_up_rules);
+    let expr = top_down(&expr, &top_down_rules);
+    expr
 }
