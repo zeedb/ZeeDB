@@ -8,6 +8,7 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
+encoding = { path = "../encoding" }
 fixtures = { path = "../fixtures" }
 node = { path = "../node" }
 parser = { path = "../parser" }

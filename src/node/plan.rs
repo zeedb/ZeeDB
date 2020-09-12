@@ -42,13 +42,32 @@ impl Expr {
         }
         true
     }
+
+    pub fn extract(self) -> Extract<Expr> {
+        Extract::new(self.0, self.1)
+    }
+}
+
+pub enum Extract<T> {
+    Leaf(Operator),
+    Unary(Operator, T),
+    Binary(Operator, T, T),
+}
+
+impl<T> Extract<T> {
+    pub fn new(op: Operator, mut inputs: Vec<T>) -> Self {
+        match inputs.len() {
+            0 => Extract::Leaf(op),
+            1 => Extract::Unary(op, inputs.remove(0)),
+            2 => Extract::Binary(op, inputs.remove(0), inputs.remove(0)),
+            n => panic!(n),
+        }
+    }
 }
 
 // Operator plan nodes combine inputs in a Plan tree.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Operator {
-    // Leaf is a wildcard using during optimization.
-    Leaf(i64),
     // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
     LogicalSingleGet,
     // LogicalGet(table) implements the FROM clause.
@@ -60,7 +79,7 @@ pub enum Operator {
     LogicalJoin {
         join: Join,
         predicates: Vec<Scalar>,
-        mark: Option<Column>,
+        mark: Option<Column>, // TODO embed this in Join::Mark, Join::Semi, Join::Anti
     },
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
@@ -74,8 +93,8 @@ pub enum Operator {
     },
     // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
     LogicalLimit {
-        limit: i64,
-        offset: i64,
+        limit: usize,
+        offset: usize,
     },
     // LogicalSort(columns) implements the ORDER BY clause.
     LogicalSort(Vec<Sort>),
@@ -134,18 +153,15 @@ pub enum Operator {
     },
     PhysicalFilter(Vec<Scalar>),
     PhysicalProject(Vec<(Scalar, Column)>),
-    PhysicalNestedLoop(Vec<Scalar>),
-    PhysicalIndexLoop {
+    PhysicalNestedLoop {
         join: Join,
-        table: Table,
-        equals: Vec<(Column, Scalar)>,
         predicates: Vec<Scalar>,
-        mark: Option<Column>,
+        mark: Option<Column>, // TODO embed this in Join::Mark, Join::Semi, Join::Anti
     },
     PhysicalHashJoin {
         join: Join,
         mark: Option<Column>,
-        equals: Vec<(Column, Column)>,
+        equals: Vec<(Scalar, Scalar)>,
         predicates: Vec<Scalar>,
     },
     PhysicalCreateTempTable(String),
@@ -195,32 +211,56 @@ pub enum Operator {
 }
 
 impl Operator {
-    pub fn is_logical(&self) -> bool {
+    pub fn reflect(&self) -> OperatorType {
         match self {
-            Operator::LogicalSingleGet { .. }
-            | Operator::LogicalGet { .. }
-            | Operator::LogicalFilter { .. }
-            | Operator::LogicalProject { .. }
-            | Operator::LogicalJoin { .. }
-            | Operator::LogicalWith { .. }
-            | Operator::LogicalGetWith { .. }
-            | Operator::LogicalAggregate { .. }
-            | Operator::LogicalLimit { .. }
-            | Operator::LogicalSort { .. }
-            | Operator::LogicalUnion { .. }
-            | Operator::LogicalIntersect { .. }
-            | Operator::LogicalExcept { .. }
-            | Operator::LogicalInsert { .. }
-            | Operator::LogicalValues { .. }
-            | Operator::LogicalUpdate { .. }
-            | Operator::LogicalDelete { .. }
-            | Operator::LogicalCreateDatabase { .. }
-            | Operator::LogicalCreateTable { .. }
-            | Operator::LogicalCreateIndex { .. }
-            | Operator::LogicalAlterTable { .. }
-            | Operator::LogicalDrop { .. }
-            | Operator::LogicalRename { .. } => true,
-            _ => false,
+            Operator::LogicalSingleGet { .. } => OperatorType::LogicalSingleGet,
+            Operator::LogicalGet { .. } => OperatorType::LogicalGet,
+            Operator::LogicalFilter { .. } => OperatorType::LogicalFilter,
+            Operator::LogicalProject { .. } => OperatorType::LogicalProject,
+            Operator::LogicalJoin { .. } => OperatorType::LogicalJoin,
+            Operator::LogicalWith { .. } => OperatorType::LogicalWith,
+            Operator::LogicalGetWith { .. } => OperatorType::LogicalGetWith,
+            Operator::LogicalAggregate { .. } => OperatorType::LogicalAggregate,
+            Operator::LogicalLimit { .. } => OperatorType::LogicalLimit,
+            Operator::LogicalSort { .. } => OperatorType::LogicalSort,
+            Operator::LogicalUnion { .. } => OperatorType::LogicalUnion,
+            Operator::LogicalIntersect { .. } => OperatorType::LogicalIntersect,
+            Operator::LogicalExcept { .. } => OperatorType::LogicalExcept,
+            Operator::LogicalInsert { .. } => OperatorType::LogicalInsert,
+            Operator::LogicalValues { .. } => OperatorType::LogicalValues,
+            Operator::LogicalUpdate { .. } => OperatorType::LogicalUpdate,
+            Operator::LogicalDelete { .. } => OperatorType::LogicalDelete,
+            Operator::LogicalCreateDatabase { .. } => OperatorType::LogicalCreateDatabase,
+            Operator::LogicalCreateTable { .. } => OperatorType::LogicalCreateTable,
+            Operator::LogicalCreateIndex { .. } => OperatorType::LogicalCreateIndex,
+            Operator::LogicalAlterTable { .. } => OperatorType::LogicalAlterTable,
+            Operator::LogicalDrop { .. } => OperatorType::LogicalDrop,
+            Operator::LogicalRename { .. } => OperatorType::LogicalRename,
+            Operator::PhysicalTableFreeScan { .. } => OperatorType::PhysicalTableFreeScan,
+            Operator::PhysicalSeqScan { .. } => OperatorType::PhysicalSeqScan,
+            Operator::PhysicalIndexScan { .. } => OperatorType::PhysicalIndexScan,
+            Operator::PhysicalFilter { .. } => OperatorType::PhysicalFilter,
+            Operator::PhysicalProject { .. } => OperatorType::PhysicalProject,
+            Operator::PhysicalNestedLoop { .. } => OperatorType::PhysicalNestedLoop,
+            Operator::PhysicalHashJoin { .. } => OperatorType::PhysicalHashJoin,
+            Operator::PhysicalCreateTempTable { .. } => OperatorType::PhysicalCreateTempTable,
+            Operator::PhysicalGetTempTable { .. } => OperatorType::PhysicalGetTempTable,
+            Operator::PhysicalAggregate { .. } => OperatorType::PhysicalAggregate,
+            Operator::PhysicalLimit { .. } => OperatorType::PhysicalLimit,
+            Operator::PhysicalSort { .. } => OperatorType::PhysicalSort,
+            Operator::PhysicalUnion { .. } => OperatorType::PhysicalUnion,
+            Operator::PhysicalIntersect { .. } => OperatorType::PhysicalIntersect,
+            Operator::PhysicalExcept { .. } => OperatorType::PhysicalExcept,
+            Operator::PhysicalInsert { .. } => OperatorType::PhysicalInsert,
+            Operator::PhysicalValues { .. } => OperatorType::PhysicalValues,
+            Operator::PhysicalUpdate { .. } => OperatorType::PhysicalUpdate,
+            Operator::PhysicalDelete { .. } => OperatorType::PhysicalDelete,
+            Operator::PhysicalCreateDatabase { .. } => OperatorType::PhysicalCreateDatabase,
+            Operator::PhysicalCreateTable { .. } => OperatorType::PhysicalCreateTable,
+            Operator::PhysicalCreateIndex { .. } => OperatorType::PhysicalCreateIndex,
+            Operator::PhysicalAlterTable { .. } => OperatorType::PhysicalAlterTable,
+            Operator::PhysicalDrop { .. } => OperatorType::PhysicalDrop,
+            Operator::PhysicalRename { .. } => OperatorType::PhysicalRename,
         }
     }
 
@@ -243,7 +283,6 @@ impl Operator {
 impl fmt::Display for Operator {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Operator::Leaf(gid) => write!(f, "Leaf {}", gid),
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
             Operator::LogicalFilter(predicates) => write!(f, "LogicalFilter {}", join(predicates)),
@@ -420,7 +459,7 @@ impl fmt::Display for Operator {
             Operator::PhysicalIndexScan { table, equals } => {
                 write!(f, "IndexScan {}", table)?;
                 for (column, scalar) in equals {
-                    write!(f, "{}:{}", column, scalar)?;
+                    write!(f, " {}:{}", column.name, scalar)?;
                 }
                 Ok(())
             }
@@ -438,33 +477,46 @@ impl fmt::Display for Operator {
                 }
                 Ok(())
             }
-            Operator::PhysicalNestedLoop(predicates) => {
-                write!(f, "NestedLoop")?;
-                for scalar in predicates {
-                    write!(f, " {}", scalar)?;
-                }
-                Ok(())
-            }
-            Operator::PhysicalIndexLoop {
-                join,
-                mark,
-                table,
-                equals,
+            Operator::PhysicalNestedLoop {
+                join: Join::Inner,
                 predicates,
-            } => {
-                write!(f, "IndexLoop {}", join)?;
-                if let Some(mark) = mark {
-                    write!(f, " {}", mark)?;
-                }
-                write!(f, " {}", table)?;
-                for (column, scalar) in equals {
-                    write!(f, "{}:{}", column, scalar)?;
-                }
-                for scalar in predicates {
-                    write!(f, " {}", scalar)?;
-                }
-                Ok(())
-            }
+                ..
+            } => write!(f, "NestedLoop InnerJoin {}", join(predicates)),
+            Operator::PhysicalNestedLoop {
+                join: Join::Right,
+                predicates,
+                ..
+            } => write!(f, "NestedLoop RightJoin {}", join(predicates)),
+            Operator::PhysicalNestedLoop {
+                join: Join::Outer,
+                predicates,
+                ..
+            } => write!(f, "NestedLoop OuterJoin {}", join(predicates)),
+            Operator::PhysicalNestedLoop {
+                join: Join::Semi,
+                predicates,
+                ..
+            } => write!(f, "NestedLoop SemiJoin {}", join(predicates)),
+            Operator::PhysicalNestedLoop {
+                join: Join::Anti,
+                predicates,
+                ..
+            } => write!(f, "NestedLoop AntiJoin {}", join(predicates)),
+            Operator::PhysicalNestedLoop {
+                join: Join::Single,
+                predicates,
+                ..
+            } => write!(f, "NestedLoop SingleJoin {}", join(predicates)),
+            Operator::PhysicalNestedLoop {
+                join: Join::Mark,
+                predicates,
+                mark,
+            } => write!(
+                f,
+                "NestedLoop MarkJoin {} {}",
+                mark.as_ref().unwrap(),
+                join(predicates)
+            ),
             Operator::PhysicalHashJoin {
                 join,
                 mark,
@@ -593,6 +645,94 @@ impl fmt::Display for Operator {
                 write!(f, "Rename {:?} {} {}", object, from, to)
             }
         }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+pub enum OperatorType {
+    LogicalSingleGet,
+    LogicalGet,
+    LogicalFilter,
+    LogicalProject,
+    LogicalJoin,
+    LogicalWith,
+    LogicalGetWith,
+    LogicalAggregate,
+    LogicalLimit,
+    LogicalSort,
+    LogicalUnion,
+    LogicalIntersect,
+    LogicalExcept,
+    LogicalValues,
+    LogicalInsert,
+    LogicalUpdate,
+    LogicalDelete,
+    LogicalCreateDatabase,
+    LogicalCreateTable,
+    LogicalCreateIndex,
+    LogicalAlterTable,
+    LogicalDrop,
+    LogicalRename,
+    PhysicalTableFreeScan,
+    PhysicalSeqScan,
+    PhysicalIndexScan,
+    PhysicalFilter,
+    PhysicalProject,
+    PhysicalNestedLoop,
+    PhysicalIndexLoop,
+    PhysicalHashJoin,
+    PhysicalCreateTempTable,
+    PhysicalGetTempTable,
+    PhysicalAggregate,
+    PhysicalLimit,
+    PhysicalSort,
+    PhysicalUnion,
+    PhysicalIntersect,
+    PhysicalExcept,
+    PhysicalValues,
+    PhysicalInsert,
+    PhysicalUpdate,
+    PhysicalDelete,
+    PhysicalCreateDatabase,
+    PhysicalCreateTable,
+    PhysicalCreateIndex,
+    PhysicalAlterTable,
+    PhysicalDrop,
+    PhysicalRename,
+}
+
+impl OperatorType {
+    pub fn is_logical(&self) -> bool {
+        match self {
+            OperatorType::LogicalSingleGet
+            | OperatorType::LogicalGet
+            | OperatorType::LogicalFilter
+            | OperatorType::LogicalProject
+            | OperatorType::LogicalJoin
+            | OperatorType::LogicalWith
+            | OperatorType::LogicalGetWith
+            | OperatorType::LogicalAggregate
+            | OperatorType::LogicalLimit
+            | OperatorType::LogicalSort
+            | OperatorType::LogicalUnion
+            | OperatorType::LogicalIntersect
+            | OperatorType::LogicalExcept
+            | OperatorType::LogicalInsert
+            | OperatorType::LogicalValues
+            | OperatorType::LogicalUpdate
+            | OperatorType::LogicalDelete
+            | OperatorType::LogicalCreateDatabase
+            | OperatorType::LogicalCreateTable
+            | OperatorType::LogicalCreateIndex
+            | OperatorType::LogicalAlterTable
+            | OperatorType::LogicalDrop
+            | OperatorType::LogicalRename => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_physical(&self) -> bool {
+        !self.is_logical()
     }
 }
 
@@ -812,6 +952,15 @@ impl Scalar {
         let mut found = vec![];
         visit(self, &mut found);
         found
+    }
+
+    pub fn has_columns(&self) -> bool {
+        match self {
+            Scalar::Literal(_, _) => false,
+            Scalar::Column(_) => true,
+            Scalar::Call(_, arguments, _) => arguments.iter().any(|a| a.has_columns()),
+            Scalar::Cast(scalar, _) => scalar.has_columns(),
+        }
     }
 
     pub fn can_inline(&self) -> bool {

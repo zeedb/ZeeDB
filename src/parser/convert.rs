@@ -218,9 +218,9 @@ impl Converter {
 
     fn limit_offset(&mut self, q: &ResolvedLimitOffsetScanProto) -> Expr {
         let input = self.any_resolved_scan(q.input_scan.get().borrow());
-        let limit = self.int_literal(q.limit.get().borrow());
+        let limit = self.int_literal(q.limit.get().borrow()) as usize;
         let offset = match &q.offset {
-            Some(offset) => self.int_literal(offset),
+            Some(offset) => self.int_literal(offset) as usize,
             None => 0,
         };
         unary(LogicalLimit { limit, offset }, input)

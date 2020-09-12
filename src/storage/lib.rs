@@ -1,7 +1,6 @@
-use rocksdb::{Options, DB};
-
 #[test]
 fn test_rocksdb() {
+    use rocksdb::{Options, DB};
     let path = ".rocksdb";
     {
         // NB: db is automatically closed at end of lifetime
