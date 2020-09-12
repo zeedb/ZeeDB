@@ -1,5 +1,5 @@
 select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id
 
-LogicalRightJoin (Equal customer.store_id store.store_id)
+LogicalJoin Right (Equal customer.store_id store.store_id)
 	LogicalGet store
 	LogicalGet customer

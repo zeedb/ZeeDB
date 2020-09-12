@@ -1,5 +1,6 @@
 select customer.customer_id, store.store_id from customer join store on customer.store_id = store.store_id
 
-LogicalInnerJoin (Equal customer.store_id store.store_id)
-	LogicalGet customer
-	LogicalGet store
+LogicalFilter (Equal customer.store_id store.store_id)
+	LogicalJoin Inner
+		LogicalGet customer
+		LogicalGet store

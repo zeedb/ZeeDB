@@ -1,6 +1,7 @@
 select 1 from person join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)
 
 LogicalProject $query.$col1:1
-	LogicalInnerJoin $mark.$in
-		LogicalGet person
-		LogicalGet store
+	LogicalFilter $mark.$in
+		LogicalJoin Inner
+			LogicalGet person
+			LogicalGet store

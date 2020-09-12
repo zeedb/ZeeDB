@@ -2,7 +2,7 @@ insert into person (person_id, first_name, last_name, modified_date) values (1, 
 
 LogicalInsert person person.person_id person.first_name person.last_name person.modified_date
 	LogicalValues person.person_id person.first_name person.last_name person.modified_date [1 Foo Bar $expr_subquery.$col1]
-		LogicalSingleJoin 
+		LogicalJoin Single 
 			LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
 				LogicalSingleGet
 			LogicalSingleGet

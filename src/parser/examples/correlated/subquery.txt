@@ -1,7 +1,7 @@
 select (select name from store where store.store_id = customer.store_id) from customer
 
 LogicalProject $query.$col1:store.name
-	LogicalSingleJoin 
+	LogicalJoin Single 
 		LogicalFilter (Equal store.store_id customer.store_id)
 			LogicalGet store
 		LogicalGet customer
