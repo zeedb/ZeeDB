@@ -1,4 +1,6 @@
 mod plan;
+#[cfg(test)]
+mod plan_tests;
 
-pub use plan::Expr::*;
+pub use plan::Operator::*;
 pub use plan::*;

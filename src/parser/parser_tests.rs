@@ -9,9 +9,9 @@ fn test_analyze() {
     let (_, expr) = parser
         .parse(&"select 1".to_string(), 0, &catalog())
         .unwrap();
-    match expr {
+    match expr.0 {
         LogicalProject(_, _) => (),
-        other => panic!("{}", other),
+        other => panic!("{}", Expr(other)),
     }
 }
 

@@ -68,30 +68,30 @@ impl Converter {
     }
 
     fn single_row(&mut self, _: &ResolvedSingleRowScanProto) -> Expr {
-        LogicalSingleGet
+        Expr(LogicalSingleGet)
     }
 
     fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Expr {
-        LogicalGet(Table::from(q))
+        Expr(LogicalGet(Table::from(q)))
     }
 
     fn join(&mut self, q: &ResolvedJoinScanProto) -> Expr {
         let left = Box::new(self.any_resolved_scan(q.left_scan.get()));
         let right = Box::new(self.any_resolved_scan(q.right_scan.get()));
-        let mut input = LogicalSingleGet; // TODO this is clearly wrong
+        let mut input = Expr(LogicalSingleGet); // TODO this is clearly wrong
         let predicates = match &q.join_expr {
             Some(expr) => self.predicate(expr.borrow(), &mut input),
             None => vec![],
         };
         match q.join_type.get().borrow() {
             // Inner
-            0 => filter(predicates, LogicalJoin(Join::Inner, left, right)),
+            0 => filter(predicates, Expr(LogicalJoin(Join::Inner, left, right))),
             // Left
-            1 => LogicalJoin(Join::Right(predicates), right, left),
+            1 => Expr(LogicalJoin(Join::Right(predicates), right, left)),
             // Right
-            2 => LogicalJoin(Join::Right(predicates), left, right),
+            2 => Expr(LogicalJoin(Join::Right(predicates), left, right)),
             // Full
-            3 => LogicalJoin(Join::Outer(predicates), left, right),
+            3 => Expr(LogicalJoin(Join::Outer(predicates), left, right)),
             // Invalid
             other => panic!("{:?}", other),
         }
@@ -100,7 +100,7 @@ impl Converter {
     fn filter(&mut self, q: &ResolvedFilterScanProto) -> Expr {
         let mut input = self.any_resolved_scan(q.input_scan.get());
         let predicates = self.predicate(q.filter_expr.get(), &mut input);
-        LogicalFilter(predicates, Box::new(input))
+        Expr(LogicalFilter(predicates, Box::new(input)))
     }
 
     fn predicate(&mut self, x: &AnyResolvedExprProto, outer: &mut Expr) -> Vec<Scalar> {
@@ -138,15 +138,15 @@ impl Converter {
             let left = Box::new(self.any_resolved_scan(input.scan.get()));
             right = match *q.op_type.get() {
                 // UnionAll
-                0 => LogicalUnion(left, Box::new(right)),
+                0 => Expr(LogicalUnion(left, Box::new(right))),
                 // UnionDistinct
                 1 => panic!("UNION DISTINCT is not supported"), // TODO
                 // IntersectAll
-                2 => LogicalIntersect(left, Box::new(right)),
+                2 => Expr(LogicalIntersect(left, Box::new(right))),
                 // IntersectDistinct
                 3 => panic!("INTERSECT DISTINCT is not supported"), // TODO
                 // ExceptAll
-                4 => LogicalExcept(left, Box::new(right)),
+                4 => Expr(LogicalExcept(left, Box::new(right))),
                 // ExceptDistinct
                 5 => panic!("EXCEPT DISTINCT is not supported"), // TODO
                 // Other
@@ -164,7 +164,7 @@ impl Converter {
             let desc = x.is_descending.unwrap_or(false);
             list.push(Sort { column, desc });
         }
-        LogicalSort(list, Box::new(input))
+        Expr(LogicalSort(list, Box::new(input)))
     }
 
     fn limit_offset(&mut self, q: &ResolvedLimitOffsetScanProto) -> Expr {
@@ -174,11 +174,11 @@ impl Converter {
             Some(offset) => self.int_literal(offset) as usize,
             None => 0,
         };
-        LogicalLimit {
+        Expr(LogicalLimit {
             limit,
             offset,
             input: Box::new(input),
-        }
+        })
     }
 
     fn int_literal(&mut self, x: &AnyResolvedExprProto) -> i64 {
@@ -212,7 +212,7 @@ impl Converter {
             for x in &q.expr_list {
                 project.push(self.computed_column(x, &mut input));
             }
-            LogicalProject(project, Box::new(input))
+            Expr(LogicalProject(project, Box::new(input)))
         }
     }
 
@@ -236,7 +236,7 @@ impl Converter {
                     ..
                 } => {
                     let left = self.any_resolved_scan(&query);
-                    right = LogicalWith(name.clone(), Box::new(left), Box::new(right));
+                    right = Expr(LogicalWith(name.clone(), Box::new(left), Box::new(right)));
                 }
                 other => panic!("{:?}", other),
             }
@@ -245,7 +245,7 @@ impl Converter {
     }
 
     fn with_ref(&mut self, q: &ResolvedWithRefScanProto) -> Expr {
-        LogicalGetWith(q.with_query_name.get().clone())
+        Expr(LogicalGetWith(q.with_query_name.get().clone()))
     }
 
     fn aggregate(&mut self, q: &ResolvedAggregateScanProto) -> Expr {
@@ -263,13 +263,13 @@ impl Converter {
             aggregate.push((expr, column));
         }
         if project.len() > 0 {
-            input = LogicalProject(project, Box::new(input));
+            input = Expr(LogicalProject(project, Box::new(input)));
         }
-        LogicalAggregate {
+        Expr(LogicalAggregate {
             group_by,
             aggregate,
             input: Box::new(input),
-        }
+        })
     }
 
     fn compute(
@@ -355,11 +355,11 @@ impl Converter {
             }
             columns.push(item.column_ref.get().column.get().name.get().clone())
         }
-        LogicalCreateIndex {
+        Expr(LogicalCreateIndex {
             name,
             table,
             columns,
-        }
+        })
     }
 
     fn create_table_as(&mut self, q: &ResolvedCreateTableAsSelectStmtProto) -> Expr {
@@ -370,7 +370,7 @@ impl Converter {
             let column = Column::from(q.parent.get().column_definition_list[i].column.get());
             project.push((value, column))
         }
-        LogicalProject(project, Box::new(input))
+        Expr(LogicalProject(project, Box::new(input)))
     }
 
     fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Expr {
@@ -414,13 +414,13 @@ impl Converter {
         for expr in &q.cluster_by_list {
             cluster_by.push(index_of(expr));
         }
-        LogicalCreateTable {
+        Expr(LogicalCreateTable {
             name,
             columns,
             partition_by,
             cluster_by,
             primary_key,
-        }
+        })
     }
 
     fn column_definitions(
@@ -443,7 +443,7 @@ impl Converter {
         let name = Name {
             path: q.name_path.clone(),
         };
-        LogicalDrop { object, name }
+        Expr(LogicalDrop { object, name })
     }
 
     fn insert(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
@@ -461,16 +461,24 @@ impl Converter {
             None => self.rows(q),
         };
         let table = Table::from(q.table_scan.get());
-        Expr::LogicalInsert(table, self.columns(&q.insert_column_list), Box::new(input))
+        Expr(LogicalInsert(
+            table,
+            self.columns(&q.insert_column_list),
+            Box::new(input),
+        ))
     }
 
     fn rows(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
-        let mut input = LogicalSingleGet;
+        let mut input = Expr(LogicalSingleGet);
         let mut rows = Vec::with_capacity(q.row_list.len());
         for row in &q.row_list {
             rows.push(self.row(row, &mut input));
         }
-        LogicalValues(self.columns(&q.insert_column_list), rows, Box::new(input))
+        Expr(LogicalValues(
+            self.columns(&q.insert_column_list),
+            rows,
+            Box::new(input),
+        ))
     }
 
     fn row(&mut self, row: &ResolvedInsertRowProto, input: &mut Expr) -> Vec<Scalar> {
@@ -493,7 +501,10 @@ impl Converter {
         let mut input = self.table_scan(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
         let table = Table::from(q.table_scan.get());
-        LogicalDelete(table, Box::new(LogicalFilter(predicates, Box::new(input))))
+        Expr(LogicalDelete(
+            table,
+            Box::new(Expr(LogicalFilter(predicates, Box::new(input)))),
+        ))
     }
 
     fn update(&mut self, q: &ResolvedUpdateStmtProto) -> Expr {
@@ -506,12 +517,12 @@ impl Converter {
             let predicates = vec![];
             input = filter(
                 predicates,
-                LogicalJoin(Join::Inner, Box::new(input), Box::new(from)),
+                Expr(LogicalJoin(Join::Inner, Box::new(input), Box::new(from))),
             );
         }
         if let Some(pred) = &q.where_expr {
             let pred = self.predicate(pred, &mut input);
-            input = LogicalFilter(pred, Box::new(input));
+            input = Expr(LogicalFilter(pred, Box::new(input)));
         }
         let mut project = vec![];
         let mut update = vec![];
@@ -543,9 +554,12 @@ impl Converter {
             update.push((target, value))
         }
         if project.is_empty() {
-            return LogicalUpdate(update, Box::new(input));
+            return Expr(LogicalUpdate(update, Box::new(input)));
         }
-        LogicalUpdate(update, Box::new(LogicalProject(project, Box::new(input))))
+        Expr(LogicalUpdate(
+            update,
+            Box::new(Expr(LogicalProject(project, Box::new(input)))),
+        ))
     }
 
     fn rename(&mut self, q: &ResolvedRenameStmtProto) -> Expr {
@@ -556,14 +570,14 @@ impl Converter {
         let to = Name {
             path: q.new_name_path.clone(),
         };
-        (LogicalRename { object, from, to })
+        Expr(LogicalRename { object, from, to })
     }
 
     fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Expr {
         // TODO fail on unsupported options
-        LogicalCreateDatabase(Name {
+        Expr(LogicalCreateDatabase(Name {
             path: q.name_path.clone(),
-        })
+        }))
     }
 
     fn alter(&mut self, q: &AnyResolvedAlterObjectStmtProto) -> Expr {
@@ -585,7 +599,7 @@ impl Converter {
         for action in &q.parent.get().alter_action_list {
             actions.push(self.alter_action(action))
         }
-        (LogicalAlterTable { name, actions })
+        Expr(LogicalAlterTable { name, actions })
     }
 
     fn alter_action(&mut self, action: &AnyResolvedAlterActionProto) -> Alter {
@@ -690,11 +704,11 @@ impl Converter {
         match subquery_type {
             // Scalar
             0 => {
-                *outer = LogicalJoin(
-                    Join::Single(vec![]),
+                *outer = Expr(LogicalJoin(
+                    Join::Single,
                     Box::new(corr),
-                    Box::new(mem::replace(outer, LogicalSingleGet)),
-                );
+                    Box::new(mem::replace(outer, Expr(LogicalSingleGet))),
+                ));
                 Scalar::Column(Column::from(column))
             }
             // Array
@@ -703,11 +717,11 @@ impl Converter {
             2 => {
                 let mark =
                     self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
-                *outer = LogicalJoin(
-                    Join::Mark(mark.clone(), vec![]),
+                *outer = Expr(LogicalJoin(
+                    Join::Mark(mark.clone()),
                     Box::new(corr),
-                    Box::new(mem::replace(outer, LogicalSingleGet)),
-                );
+                    Box::new(mem::replace(outer, Expr(LogicalSingleGet))),
+                ));
                 Scalar::Column(mark.clone())
             }
             // In
@@ -720,14 +734,13 @@ impl Converter {
                     other => panic!("{:?}", other),
                 };
                 let sel = self.column(column);
-                let args = vec![inx, sel];
-                let equals = Scalar::Call(Function::Equal, args, Type::Bool);
-                let predicates = vec![equals];
-                *outer = LogicalJoin(
-                    Join::Mark(mark.clone(), predicates),
+                let equals = Scalar::Call(Function::Equal, vec![inx, sel], Type::Bool);
+                let corr = Expr(LogicalFilter(vec![equals], Box::new(corr)));
+                *outer = Expr(LogicalJoin(
+                    Join::Mark(mark.clone()),
                     Box::new(corr),
-                    Box::new(mem::replace(outer, (LogicalSingleGet))),
-                );
+                    Box::new(mem::replace(outer, Expr(LogicalSingleGet))),
+                ));
                 Scalar::Column(mark.clone())
             }
             other => panic!("{:?}", other),
@@ -750,7 +763,7 @@ fn filter(predicates: Vec<Scalar>, input: Expr) -> Expr {
     if predicates.is_empty() {
         input
     } else {
-        LogicalFilter(predicates, Box::new(input))
+        Expr(LogicalFilter(predicates, Box::new(input)))
     }
 }
 

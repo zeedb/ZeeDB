@@ -6,7 +6,7 @@ macro_rules! ok {
         let mut parser = parser::ParseProvider::new();
         let sql = $sql.to_string();
         let (_, expr) = parser.parse(&sql, 0, &adventure_works()).unwrap();
-        let expr = rewrite(&expr);
+        let expr = rewrite(expr);
         let found = format!("{}\n\n{}", &sql, expr);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());

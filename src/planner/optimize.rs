@@ -42,10 +42,9 @@ struct Group {
 // MultiExpr specifies operator at the top of a the query.
 struct MultiExpr {
     // The top operator in this query.
-    op: Operator,
-    // The inputs to op. These inputs are represented using Group,
+    // Inputs are represented using Group,
     // so they represent a class of equivalent plans rather than a single plan.
-    inputs: Vec<Rc<Group>>,
+    op: Operator<Rc<Group>>,
     // As we try different *logical* transformation rules,
     // we will record the fact that we've already tried this rule on this multi-expression
     // so we can avoid checking it agin. It's safe to mark transformations as complete,

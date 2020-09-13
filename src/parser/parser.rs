@@ -1,5 +1,6 @@
 use crate::convert::convert;
 use crate::server::create_zetasql_server;
+use node::Expr;
 use tokio::runtime::Runtime;
 use tonic::transport::channel::Channel;
 use tonic::{Response, Status};
@@ -38,7 +39,7 @@ impl ParseProvider {
         sql: &String,
         offset: i32,
         catalog: &SimpleCatalogProto, // TODO eliminate catalog in favor of rocksdb reference
-    ) -> Result<(i32, node::Expr), String> {
+    ) -> Result<(i32, Expr), String> {
         match self.analyze(sql, offset, catalog) {
             Ok(response) => {
                 let response = response.into_inner();

@@ -1,52 +1,55 @@
 use fmt::Debug;
 use std::fmt;
 
-// Expr plan nodes combine inputs in a Plan tree.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum Expr {
+pub struct Expr(pub Operator<Box<Expr>>);
+
+// Operator plan nodes combine inputs in a Plan tree.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum Operator<T> {
     // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
     LogicalSingleGet,
     // LogicalGet(table) implements the FROM clause.
     LogicalGet(Table),
     // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
-    LogicalFilter(Vec<Scalar>, Box<Expr>),
+    LogicalFilter(Vec<Scalar>, T),
     // LogicalProject(columns) implements the SELECT clause.
-    LogicalProject(Vec<(Scalar, Column)>, Box<Expr>),
-    LogicalJoin(Join, Box<Expr>, Box<Expr>),
+    LogicalProject(Vec<(Scalar, Column)>, T),
+    LogicalJoin(Join, T, T),
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
-    LogicalWith(String, Box<Expr>, Box<Expr>),
+    LogicalWith(String, T, T),
     // LogicalGetWith(table) reads the subquery that was created by With.
     LogicalGetWith(String),
     // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
     LogicalAggregate {
         group_by: Vec<Column>,
         aggregate: Vec<(Aggregate, Column)>,
-        input: Box<Expr>,
+        input: T,
     },
     // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
     LogicalLimit {
         limit: usize,
         offset: usize,
-        input: Box<Expr>,
+        input: T,
     },
     // LogicalSort(columns) implements the ORDER BY clause.
-    LogicalSort(Vec<Sort>, Box<Expr>),
+    LogicalSort(Vec<Sort>, T),
     // LogicalUnion implements SELECT _ UNION ALL SELECT _.
-    LogicalUnion(Box<Expr>, Box<Expr>),
+    LogicalUnion(T, T),
     // LogicalIntersect implements SELECT _ INTERSECT SELECT _.
-    LogicalIntersect(Box<Expr>, Box<Expr>),
+    LogicalIntersect(T, T),
     // LogicalExcept implements SELECT _ EXCEPT SELECT _.
-    LogicalExcept(Box<Expr>, Box<Expr>),
+    LogicalExcept(T, T),
     // LogicalInsert(table, columns) implements the INSERT operation.
-    LogicalInsert(Table, Vec<Column>, Box<Expr>),
+    LogicalInsert(Table, Vec<Column>, T),
     // LogicalValues(rows, columns) implements VALUES expressions.
-    LogicalValues(Vec<Column>, Vec<Vec<Scalar>>, Box<Expr>),
+    LogicalValues(Vec<Column>, Vec<Vec<Scalar>>, T),
     // LogicalUpdate(sets) implements the UPDATE operation.
     // (column, None) indicates set column to default value.
-    LogicalUpdate(Vec<(Column, Option<Column>)>, Box<Expr>),
+    LogicalUpdate(Vec<(Column, Option<Column>)>, T),
     // LogicalDelete(table) implements the DELETE operation.
-    LogicalDelete(Table, Box<Expr>),
+    LogicalDelete(Table, T),
     // LogicalCreateDatabase(database) implements the CREATE DATABASE operation.
     LogicalCreateDatabase(Name),
     // LogicalCreateTable implements the CREATE TABLE operation.
@@ -85,30 +88,30 @@ pub enum Expr {
         table: Table,
         equals: Vec<(Column, Scalar)>,
     },
-    PhysicalFilter(Vec<Scalar>, Box<Expr>),
-    PhysicalProject(Vec<(Scalar, Column)>, Box<Expr>),
-    PhysicalNestedLoop(Join, Box<Expr>, Box<Expr>),
-    PhysicalHashJoin(Join, Vec<(Scalar, Scalar)>, Box<Expr>, Box<Expr>),
-    PhysicalCreateTempTable(String, Box<Expr>),
+    PhysicalFilter(Vec<Scalar>, T),
+    PhysicalProject(Vec<(Scalar, Column)>, T),
+    PhysicalNestedLoop(Join, T, T),
+    PhysicalHashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
+    PhysicalCreateTempTable(String, T),
     PhysicalGetTempTable(String),
     PhysicalAggregate {
         group_by: Vec<Column>,
         aggregate: Vec<(Aggregate, Column)>,
-        input: Box<Expr>,
+        input: T,
     },
     PhysicalLimit {
         limit: i64,
         offset: i64,
-        input: Box<Expr>,
+        input: T,
     },
-    PhysicalSort(Vec<Sort>, Box<Expr>),
-    PhysicalUnion(Box<Expr>, Box<Expr>),
-    PhysicalIntersect(Box<Expr>, Box<Expr>),
-    PhysicalExcept(Box<Expr>, Box<Expr>),
-    PhysicalInsert(Table, Vec<Column>, Box<Expr>),
+    PhysicalSort(Vec<Sort>, T),
+    PhysicalUnion(T, T),
+    PhysicalIntersect(T, T),
+    PhysicalExcept(T, T),
+    PhysicalInsert(Table, Vec<Column>, T),
     PhysicalValues(Vec<Column>, Vec<Vec<Scalar>>),
-    PhysicalUpdate(Vec<(Column, Option<Column>)>, Box<Expr>),
-    PhysicalDelete(Table, Box<Expr>),
+    PhysicalUpdate(Vec<(Column, Option<Column>)>, T),
+    PhysicalDelete(Table, T),
     PhysicalCreateDatabase(Name),
     PhysicalCreateTable {
         name: Name,
@@ -137,7 +140,217 @@ pub enum Expr {
     },
 }
 
+impl fmt::Display for Expr {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.print(f, 0)
+    }
+}
+
 impl Expr {
+    pub fn correlated(&self, column: &Column) -> bool {
+        for expr in self.iter() {
+            if expr.0.introduces(column) {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
+        match self.0 {
+            Operator::LogicalFilter(predicates, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalFilter(predicates, Box::new(input))))
+            }
+            Operator::LogicalProject(projects, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalProject(projects, Box::new(input))))
+            }
+            Operator::LogicalJoin(join, left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalJoin(
+                    join,
+                    Box::new(left),
+                    Box::new(right),
+                )))
+            }
+            Operator::LogicalWith(name, left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalWith(
+                    name,
+                    Box::new(left),
+                    Box::new(right),
+                )))
+            }
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+                input,
+            } => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalAggregate {
+                    group_by,
+                    aggregate,
+                    input: Box::new(input),
+                }))
+            }
+            Operator::LogicalLimit {
+                limit,
+                offset,
+                input,
+            } => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalLimit {
+                    limit,
+                    offset,
+                    input: Box::new(input),
+                }))
+            }
+            Operator::LogicalSort(sorts, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalSort(sorts, Box::new(input))))
+            }
+            Operator::LogicalUnion(left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalUnion(
+                    Box::new(left),
+                    Box::new(right),
+                )))
+            }
+            Operator::LogicalIntersect(left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalIntersect(
+                    Box::new(left),
+                    Box::new(right),
+                )))
+            }
+            Operator::LogicalExcept(left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalExcept(
+                    Box::new(left),
+                    Box::new(right),
+                )))
+            }
+            Operator::LogicalInsert(table, columns, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalInsert(
+                    table,
+                    columns,
+                    Box::new(input),
+                )))
+            }
+            Operator::LogicalValues(columns, rows, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalValues(
+                    columns,
+                    rows,
+                    Box::new(input),
+                )))
+            }
+            Operator::LogicalUpdate(updates, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalUpdate(updates, Box::new(input))))
+            }
+            Operator::LogicalDelete(table, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                visitor(Expr(Operator::LogicalDelete(table, Box::new(input))))
+            }
+            _ => visitor(self),
+        }
+    }
+
+    pub fn top_down_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
+        match visitor(self).0 {
+            Operator::LogicalFilter(predicates, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalFilter(predicates, Box::new(input)))
+            }
+            Operator::LogicalProject(projects, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalProject(projects, Box::new(input)))
+            }
+            Operator::LogicalJoin(join, left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalJoin(join, Box::new(left), Box::new(right)))
+            }
+            Operator::LogicalWith(name, left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalWith(name, Box::new(left), Box::new(right)))
+            }
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+                input,
+            } => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalAggregate {
+                    group_by,
+                    aggregate,
+                    input: Box::new(input),
+                })
+            }
+            Operator::LogicalLimit {
+                limit,
+                offset,
+                input,
+            } => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalLimit {
+                    limit,
+                    offset,
+                    input: Box::new(input),
+                })
+            }
+            Operator::LogicalSort(sorts, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalSort(sorts, Box::new(input)))
+            }
+            Operator::LogicalUnion(left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalUnion(Box::new(left), Box::new(right)))
+            }
+            Operator::LogicalIntersect(left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalIntersect(Box::new(left), Box::new(right)))
+            }
+            Operator::LogicalExcept(left, right) => {
+                let left = left.bottom_up_rewrite(visitor);
+                let right = right.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalExcept(Box::new(left), Box::new(right)))
+            }
+            Operator::LogicalInsert(table, columns, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalInsert(table, columns, Box::new(input)))
+            }
+            Operator::LogicalValues(columns, rows, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalValues(columns, rows, Box::new(input)))
+            }
+            Operator::LogicalUpdate(updates, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalUpdate(updates, Box::new(input)))
+            }
+            Operator::LogicalDelete(table, input) => {
+                let input = input.bottom_up_rewrite(visitor);
+                Expr(Operator::LogicalDelete(table, Box::new(input)))
+            }
+            other => Expr(other),
+        }
+    }
+
+    fn iter(&self) -> ExprIterator {
+        ExprIterator { stack: vec![self] }
+    }
+
     fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
         let newline = |f: &mut fmt::Formatter<'_>| -> fmt::Result {
             write!(f, "\n")?;
@@ -146,15 +359,15 @@ impl Expr {
             }
             Ok(())
         };
-        match self {
-            Expr::LogicalSingleGet => write!(f, "LogicalSingleGet"),
-            Expr::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
-            Expr::LogicalFilter(predicates, input) => {
+        match &self.0 {
+            Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
+            Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
+            Operator::LogicalFilter(predicates, input) => {
                 write!(f, "LogicalFilter {}", join(predicates))?;
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalProject(projects, input) => {
+            Operator::LogicalProject(projects, input) => {
                 let mut strings = vec![];
                 for (x, c) in projects {
                     strings.push(format!("{}:{}", c, x));
@@ -163,22 +376,22 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalJoin(join, left, right) => {
+            Operator::LogicalJoin(join, left, right) => {
                 write!(f, "LogicalJoin {}", join)?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::LogicalWith(name, left, right) => {
+            Operator::LogicalWith(name, left, right) => {
                 write!(f, "LogicalWith {}", name)?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
-            Expr::LogicalAggregate {
+            Operator::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
+            Operator::LogicalAggregate {
                 group_by,
                 aggregate,
                 input,
@@ -193,7 +406,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalLimit {
+            Operator::LogicalLimit {
                 limit,
                 offset,
                 input,
@@ -202,7 +415,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalSort(order_by, input) => {
+            Operator::LogicalSort(order_by, input) => {
                 write!(f, "LogicalSort")?;
                 for sort in order_by {
                     if sort.desc {
@@ -214,28 +427,28 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalUnion(left, right) => {
+            Operator::LogicalUnion(left, right) => {
                 write!(f, "LogicalUnion")?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::LogicalIntersect(left, right) => {
+            Operator::LogicalIntersect(left, right) => {
                 write!(f, "LogicalIntersect")?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::LogicalExcept(left, right) => {
+            Operator::LogicalExcept(left, right) => {
                 write!(f, "LogicalExcept")?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::LogicalInsert(table, columns, input) => {
+            Operator::LogicalInsert(table, columns, input) => {
                 write!(f, "LogicalInsert {}", table.name)?;
                 for c in columns {
                     write!(f, " {}", c)?;
@@ -243,7 +456,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalValues(columns, rows, input) => {
+            Operator::LogicalValues(columns, rows, input) => {
                 write!(f, "LogicalValues")?;
                 for column in columns {
                     write!(f, " {}", column)?;
@@ -254,7 +467,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalUpdate(updates, input) => {
+            Operator::LogicalUpdate(updates, input) => {
                 write!(f, "LogicalUpdate")?;
                 for (target, value) in updates {
                     match value {
@@ -265,15 +478,15 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalDelete(table, input) => {
+            Operator::LogicalDelete(table, input) => {
                 write!(f, "LogicalDelete {}", table.name)?;
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::LogicalCreateDatabase(name) => {
+            Operator::LogicalCreateDatabase(name) => {
                 write!(f, "LogicalCreateDatabase {}", name.path.join("."))
             }
-            Expr::LogicalCreateTable {
+            Operator::LogicalCreateTable {
                 name,
                 columns,
                 partition_by,
@@ -307,7 +520,7 @@ impl Expr {
                 }
                 Ok(())
             }
-            Expr::LogicalCreateIndex {
+            Operator::LogicalCreateIndex {
                 name,
                 table,
                 columns,
@@ -318,32 +531,34 @@ impl Expr {
                 table,
                 columns.join(" ")
             ),
-            Expr::LogicalAlterTable { name, actions } => {
+            Operator::LogicalAlterTable { name, actions } => {
                 write!(f, "LogicalAlterTable {}", name)?;
                 for a in actions {
                     write!(f, " {}", a)?;
                 }
                 Ok(())
             }
-            Expr::LogicalDrop { object, name } => write!(f, "LogicalDrop {:?} {}", object, name),
-            Expr::LogicalRename { object, from, to } => {
+            Operator::LogicalDrop { object, name } => {
+                write!(f, "LogicalDrop {:?} {}", object, name)
+            }
+            Operator::LogicalRename { object, from, to } => {
                 write!(f, "LogicalRename {:?} {} {}", object, from, to)
             }
-            Expr::PhysicalTableFreeScan => write!(f, "TableFreeScan"),
-            Expr::PhysicalSeqScan(table) => write!(f, "SeqScan {}", table),
-            Expr::PhysicalIndexScan { table, equals } => {
+            Operator::PhysicalTableFreeScan => write!(f, "TableFreeScan"),
+            Operator::PhysicalSeqScan(table) => write!(f, "SeqScan {}", table),
+            Operator::PhysicalIndexScan { table, equals } => {
                 write!(f, "IndexScan {}", table)?;
                 for (column, scalar) in equals {
                     write!(f, " {}:{}", column.name, scalar)?;
                 }
                 Ok(())
             }
-            Expr::PhysicalFilter(predicates, input) => {
+            Operator::PhysicalFilter(predicates, input) => {
                 write!(f, "Filter {}", join(predicates))?;
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalProject(projects, input) => {
+            Operator::PhysicalProject(projects, input) => {
                 let mut strings = vec![];
                 for (x, c) in projects {
                     strings.push(format!("{}:{}", c, x));
@@ -352,14 +567,14 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalNestedLoop(join, left, right) => {
+            Operator::PhysicalNestedLoop(join, left, right) => {
                 write!(f, "NestedLoop {}", join)?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::PhysicalHashJoin(join, equals, left, right) => {
+            Operator::PhysicalHashJoin(join, equals, left, right) => {
                 write!(f, "HashJoin {}", join)?;
                 for (left, right) in equals {
                     write!(f, " {}={}", left, right)?;
@@ -369,13 +584,13 @@ impl Expr {
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::PhysicalCreateTempTable(name, input) => {
+            Operator::PhysicalCreateTempTable(name, input) => {
                 write!(f, "CreateTempTable {}", name)?;
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalGetTempTable(name) => write!(f, "GetTempTable {}", name),
-            Expr::PhysicalAggregate {
+            Operator::PhysicalGetTempTable(name) => write!(f, "GetTempTable {}", name),
+            Operator::PhysicalAggregate {
                 group_by,
                 aggregate,
                 input,
@@ -390,7 +605,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalLimit {
+            Operator::PhysicalLimit {
                 limit,
                 offset,
                 input,
@@ -399,7 +614,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalSort(order_by, input) => {
+            Operator::PhysicalSort(order_by, input) => {
                 write!(f, "Sort")?;
                 for sort in order_by {
                     if sort.desc {
@@ -411,28 +626,28 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalUnion(left, right) => {
+            Operator::PhysicalUnion(left, right) => {
                 write!(f, "Union")?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::PhysicalIntersect(left, right) => {
+            Operator::PhysicalIntersect(left, right) => {
                 write!(f, "Intersect")?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::PhysicalExcept(left, right) => {
+            Operator::PhysicalExcept(left, right) => {
                 write!(f, "Except")?;
                 newline(f)?;
                 left.print(f, indent + 1)?;
                 newline(f)?;
                 right.print(f, indent + 1)
             }
-            Expr::PhysicalInsert(table, columns, input) => {
+            Operator::PhysicalInsert(table, columns, input) => {
                 write!(f, "Insert {}", table.name)?;
                 for c in columns {
                     write!(f, " {}", c)?;
@@ -440,7 +655,7 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalValues(columns, values) => {
+            Operator::PhysicalValues(columns, values) => {
                 write!(f, "Values")?;
                 for column in columns {
                     write!(f, " {}", column)?;
@@ -450,7 +665,7 @@ impl Expr {
                 }
                 Ok(())
             }
-            Expr::PhysicalUpdate(updates, input) => {
+            Operator::PhysicalUpdate(updates, input) => {
                 write!(f, "Update")?;
                 for (target, value) in updates {
                     match value {
@@ -461,13 +676,13 @@ impl Expr {
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalDelete(table, input) => {
+            Operator::PhysicalDelete(table, input) => {
                 write!(f, "Delete {}", table)?;
                 newline(f)?;
                 input.print(f, indent + 1)
             }
-            Expr::PhysicalCreateDatabase(name) => write!(f, "CreateDatabase {}", name),
-            Expr::PhysicalCreateTable {
+            Operator::PhysicalCreateDatabase(name) => write!(f, "CreateDatabase {}", name),
+            Operator::PhysicalCreateTable {
                 name,
                 columns,
                 partition_by,
@@ -501,56 +716,104 @@ impl Expr {
                 }
                 Ok(())
             }
-            Expr::PhysicalCreateIndex {
+            Operator::PhysicalCreateIndex {
                 name,
                 table,
                 columns,
             } => write!(f, "CreateIndex {} {} {}", name, table, columns.join(" ")),
-            Expr::PhysicalAlterTable { name, actions } => {
+            Operator::PhysicalAlterTable { name, actions } => {
                 write!(f, "AlterTable {}", name)?;
                 for a in actions {
                     write!(f, " {}", a)?;
                 }
                 Ok(())
             }
-            Expr::PhysicalDrop { object, name } => write!(f, "Drop {:?} {}", object, name),
-            Expr::PhysicalRename { object, from, to } => {
+            Operator::PhysicalDrop { object, name } => write!(f, "Drop {:?} {}", object, name),
+            Operator::PhysicalRename { object, from, to } => {
                 write!(f, "Rename {:?} {} {}", object, from, to)
             }
         }
     }
+}
 
-    pub fn correlated(&self, column: &Column) -> bool {
-        if self.introduces(column) {
-            return false;
-        }
-        for input in self.inputs() {
-            if !input.correlated(column) {
-                return false;
+pub struct ExprIterator<'it> {
+    stack: Vec<&'it Expr>,
+}
+
+impl<'it> Iterator for ExprIterator<'it> {
+    type Item = &'it Expr;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next) = self.stack.pop() {
+            match next {
+                Expr(Operator::LogicalFilter(_, input)) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalProject(_, input)) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalJoin(_, left, right)) => {
+                    self.stack.push(left);
+                    self.stack.push(right);
+                }
+                Expr(Operator::LogicalWith(_, left, right)) => {
+                    self.stack.push(left);
+                    self.stack.push(right);
+                }
+                Expr(Operator::LogicalAggregate { input, .. }) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalLimit { input, .. }) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalSort(_, input)) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalUnion(left, right)) => {
+                    self.stack.push(left);
+                    self.stack.push(right);
+                }
+                Expr(Operator::LogicalIntersect(left, right)) => {
+                    self.stack.push(left);
+                    self.stack.push(right);
+                }
+                Expr(Operator::LogicalExcept(left, right)) => {
+                    self.stack.push(left);
+                    self.stack.push(right);
+                }
+                Expr(Operator::LogicalInsert(_, _, input)) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalValues(_, _, input)) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalUpdate(_, input)) => {
+                    self.stack.push(input);
+                }
+                Expr(Operator::LogicalDelete(_, input)) => {
+                    self.stack.push(input);
+                }
+                _ => {}
             }
-        }
-        true
-    }
-
-    pub fn inputs(&self) -> Vec<Expr> {
-        todo!()
-    }
-
-    fn introduces(&self, column: &Column) -> bool {
-        match self {
-            Expr::LogicalGet(table) => table.columns.contains(column),
-            Expr::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
-            Expr::LogicalJoin(Join::Mark(mark, _), _, _) => mark == column,
-            Expr::LogicalGetWith { .. } => todo!(),
-            Expr::LogicalAggregate { aggregate, .. } => aggregate.iter().any(|(_, c)| c == column),
-            _ => false,
+            Some(next)
+        } else {
+            None
         }
     }
 }
 
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.print(f, 0)
+impl<T> Operator<T> {
+    pub fn introduces(&self, column: &Column) -> bool {
+        match self {
+            Operator::LogicalGet(table) => table.columns.contains(column),
+            Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
+            Operator::LogicalJoin(Join::Mark(mark), _, _) => mark == column,
+            Operator::LogicalGetWith { .. } => todo!(),
+            Operator::LogicalAggregate { aggregate, .. } => {
+                aggregate.iter().any(|(_, c)| c == column)
+            }
+            _ => false,
+        }
     }
 }
 
@@ -572,10 +835,10 @@ pub enum Join {
     Anti(Column),
     // Single implements "Single Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
-    Single(Vec<Scalar>),
+    Single,
     // Mark implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
-    Mark(Column, Vec<Scalar>),
+    Mark(Column),
 }
 
 impl fmt::Display for Join {
@@ -586,8 +849,8 @@ impl fmt::Display for Join {
             Join::Outer(predicates) => write!(f, "Outer {}", join(predicates)),
             Join::Semi(column) => write!(f, "Semi {}", column),
             Join::Anti(column) => write!(f, "Anti {}", column),
-            Join::Single(predicates) => write!(f, "Single {}", join(predicates)),
-            Join::Mark(column, predicates) => write!(f, "Mark {} {}", column, join(predicates)),
+            Join::Single => write!(f, "Single"),
+            Join::Mark(column) => write!(f, "Mark {}", column),
         }
     }
 }
@@ -753,40 +1016,8 @@ impl Scalar {
         }
     }
 
-    pub fn correlated(&self, expr: &Expr) -> bool {
-        match self {
-            Scalar::Literal(_, _) => false,
-            Scalar::Column(column) => expr.correlated(column),
-            Scalar::Call(_, arguments, _) => arguments.iter().any(|a| a.correlated(expr)),
-            Scalar::Cast(scalar, _) => scalar.correlated(expr),
-        }
-    }
-
-    pub fn columns(&self) -> Vec<Column> {
-        fn visit(node: &Scalar, found: &mut Vec<Column>) {
-            match node {
-                Scalar::Literal(_, _) => (),
-                Scalar::Column(column) => found.push(column.clone()),
-                Scalar::Call(_, arguments, _) => {
-                    for a in arguments {
-                        visit(a, found)
-                    }
-                }
-                Scalar::Cast(scalar, _) => visit(scalar, found),
-            }
-        }
-        let mut found = vec![];
-        visit(self, &mut found);
-        found
-    }
-
-    pub fn has_columns(&self) -> bool {
-        match self {
-            Scalar::Literal(_, _) => false,
-            Scalar::Column(_) => true,
-            Scalar::Call(_, arguments, _) => arguments.iter().any(|a| a.has_columns()),
-            Scalar::Cast(scalar, _) => scalar.has_columns(),
-        }
+    pub fn columns(&self) -> ColumnIterator {
+        ColumnIterator { stack: vec![self] }
     }
 
     pub fn can_inline(&self) -> bool {
@@ -829,6 +1060,34 @@ impl fmt::Display for Scalar {
                 }
             }
             Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
+        }
+    }
+}
+
+pub struct ColumnIterator<'it> {
+    stack: Vec<&'it Scalar>,
+}
+
+impl<'it> Iterator for ColumnIterator<'it> {
+    type Item = &'it Column;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            match self.stack.pop() {
+                None => return None,
+                Some(Scalar::Literal(_, _)) => continue,
+                Some(Scalar::Column(column)) => return Some(column),
+                Some(Scalar::Cast(scalar, _)) => {
+                    self.stack.push(scalar);
+                    continue;
+                }
+                Some(Scalar::Call(_, arguments, _)) => {
+                    for a in arguments {
+                        self.stack.push(a);
+                    }
+                    continue;
+                }
+            }
         }
     }
 }
