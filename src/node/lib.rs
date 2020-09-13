@@ -1,6 +1,11 @@
-mod plan;
+mod operator;
 #[cfg(test)]
-mod plan_tests;
+mod operator_tests;
 
-pub use plan::Operator::*;
-pub use plan::*;
+mod expr;
+#[cfg(test)]
+mod expr_tests;
+
+pub use expr::*;
+pub use operator::Operator::*;
+pub use operator::*;
