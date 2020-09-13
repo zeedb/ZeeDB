@@ -2,6 +2,7 @@ select 1 from person where person_id not in (select person_id from customer)
 
 LogicalProject $query.$col1:1
 	LogicalFilter (Not $mark.$in)
-		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id)
-			LogicalGet customer
+		LogicalJoin Mark $mark.$in
+			LogicalFilter (Equal person.person_id customer.person_id)
+				LogicalGet customer
 			LogicalGet person

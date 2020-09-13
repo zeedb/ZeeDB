@@ -2,9 +2,10 @@ select 1 from person, store where person.person_id in (select person_id from cus
 
 LogicalProject $query.$col1:1
 	LogicalFilter $mark.$in
-		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id)
-			LogicalFilter (Equal customer.store_id store.store_id)
-				LogicalGet customer
+		LogicalJoin Mark $mark.$in
+			LogicalFilter (Equal person.person_id customer.person_id)
+				LogicalFilter (Equal customer.store_id store.store_id)
+					LogicalGet customer
 			LogicalJoin Inner
 				LogicalGet person
 				LogicalGet store

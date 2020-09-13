@@ -2,7 +2,7 @@ update person set first_name = (select last_name) where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
 	LogicalProject $update.$expr:$expr_subquery.last_name
-		LogicalJoin Single 
+		LogicalJoin Single
 			LogicalProject $expr_subquery.last_name:person.last_name
 				LogicalSingleGet
 			LogicalFilter (Equal person.person_id 1)
