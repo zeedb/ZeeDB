@@ -157,194 +157,18 @@ impl Expr {
     }
 
     pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
-        match self.0 {
-            Operator::LogicalFilter(predicates, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalFilter(predicates, Box::new(input))))
-            }
-            Operator::LogicalProject(projects, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalProject(projects, Box::new(input))))
-            }
-            Operator::LogicalJoin(join, left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalJoin(
-                    join,
-                    Box::new(left),
-                    Box::new(right),
-                )))
-            }
-            Operator::LogicalWith(name, left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalWith(
-                    name,
-                    Box::new(left),
-                    Box::new(right),
-                )))
-            }
-            Operator::LogicalAggregate {
-                group_by,
-                aggregate,
-                input,
-            } => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalAggregate {
-                    group_by,
-                    aggregate,
-                    input: Box::new(input),
-                }))
-            }
-            Operator::LogicalLimit {
-                limit,
-                offset,
-                input,
-            } => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalLimit {
-                    limit,
-                    offset,
-                    input: Box::new(input),
-                }))
-            }
-            Operator::LogicalSort(sorts, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalSort(sorts, Box::new(input))))
-            }
-            Operator::LogicalUnion(left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalUnion(
-                    Box::new(left),
-                    Box::new(right),
-                )))
-            }
-            Operator::LogicalIntersect(left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalIntersect(
-                    Box::new(left),
-                    Box::new(right),
-                )))
-            }
-            Operator::LogicalExcept(left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalExcept(
-                    Box::new(left),
-                    Box::new(right),
-                )))
-            }
-            Operator::LogicalInsert(table, columns, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalInsert(
-                    table,
-                    columns,
-                    Box::new(input),
-                )))
-            }
-            Operator::LogicalValues(columns, rows, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalValues(
-                    columns,
-                    rows,
-                    Box::new(input),
-                )))
-            }
-            Operator::LogicalUpdate(updates, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalUpdate(updates, Box::new(input))))
-            }
-            Operator::LogicalDelete(table, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                visitor(Expr(Operator::LogicalDelete(table, Box::new(input))))
-            }
-            _ => visitor(self),
-        }
+        let operator = self
+            .0
+            .map(|child| Box::new(child.bottom_up_rewrite(visitor)));
+        visitor(Expr(operator))
     }
 
     pub fn top_down_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
-        match visitor(self).0 {
-            Operator::LogicalFilter(predicates, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalFilter(predicates, Box::new(input)))
-            }
-            Operator::LogicalProject(projects, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalProject(projects, Box::new(input)))
-            }
-            Operator::LogicalJoin(join, left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalJoin(join, Box::new(left), Box::new(right)))
-            }
-            Operator::LogicalWith(name, left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalWith(name, Box::new(left), Box::new(right)))
-            }
-            Operator::LogicalAggregate {
-                group_by,
-                aggregate,
-                input,
-            } => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalAggregate {
-                    group_by,
-                    aggregate,
-                    input: Box::new(input),
-                })
-            }
-            Operator::LogicalLimit {
-                limit,
-                offset,
-                input,
-            } => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalLimit {
-                    limit,
-                    offset,
-                    input: Box::new(input),
-                })
-            }
-            Operator::LogicalSort(sorts, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalSort(sorts, Box::new(input)))
-            }
-            Operator::LogicalUnion(left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalUnion(Box::new(left), Box::new(right)))
-            }
-            Operator::LogicalIntersect(left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalIntersect(Box::new(left), Box::new(right)))
-            }
-            Operator::LogicalExcept(left, right) => {
-                let left = left.bottom_up_rewrite(visitor);
-                let right = right.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalExcept(Box::new(left), Box::new(right)))
-            }
-            Operator::LogicalInsert(table, columns, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalInsert(table, columns, Box::new(input)))
-            }
-            Operator::LogicalValues(columns, rows, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalValues(columns, rows, Box::new(input)))
-            }
-            Operator::LogicalUpdate(updates, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalUpdate(updates, Box::new(input)))
-            }
-            Operator::LogicalDelete(table, input) => {
-                let input = input.bottom_up_rewrite(visitor);
-                Expr(Operator::LogicalDelete(table, Box::new(input)))
-            }
-            other => Expr(other),
-        }
+        let expr = visitor(self);
+        let operator = expr
+            .0
+            .map(|child| Box::new(child.top_down_rewrite(visitor)));
+        Expr(operator)
     }
 
     fn iter(&self) -> ExprIterator {
@@ -803,6 +627,10 @@ impl<'it> Iterator for ExprIterator<'it> {
 }
 
 impl<T> Operator<T> {
+    pub fn is_logical(&self) -> bool {
+        todo!()
+    }
+
     pub fn introduces(&self, column: &Column) -> bool {
         match self {
             Operator::LogicalGet(table) => table.columns.contains(column),
@@ -813,6 +641,122 @@ impl<T> Operator<T> {
                 aggregate.iter().any(|(_, c)| c == column)
             }
             _ => false,
+        }
+    }
+
+    pub fn map<U>(self, visitor: impl Fn(T) -> U) -> Operator<U> {
+        match self {
+            Operator::LogicalFilter(predicates, input) => {
+                let input = visitor(input);
+                Operator::LogicalFilter(predicates, input)
+            }
+            Operator::LogicalProject(projects, input) => {
+                let input = visitor(input);
+                Operator::LogicalProject(projects, input)
+            }
+            Operator::LogicalJoin(join, left, right) => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalJoin(join, left, right)
+            }
+            Operator::LogicalWith(name, left, right) => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalWith(name, left, right)
+            }
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+                input,
+            } => {
+                let input = visitor(input);
+                Operator::LogicalAggregate {
+                    group_by,
+                    aggregate,
+                    input,
+                }
+            }
+            Operator::LogicalLimit {
+                limit,
+                offset,
+                input,
+            } => {
+                let input = visitor(input);
+                Operator::LogicalLimit {
+                    limit,
+                    offset,
+                    input,
+                }
+            }
+            Operator::LogicalSort(sorts, input) => {
+                let input = visitor(input);
+                Operator::LogicalSort(sorts, input)
+            }
+            Operator::LogicalUnion(left, right) => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalUnion(left, right)
+            }
+            Operator::LogicalIntersect(left, right) => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalIntersect(left, right)
+            }
+            Operator::LogicalExcept(left, right) => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalExcept(left, right)
+            }
+            Operator::LogicalInsert(table, columns, input) => {
+                let input = visitor(input);
+                Operator::LogicalInsert(table, columns, input)
+            }
+            Operator::LogicalValues(columns, rows, input) => {
+                let input = visitor(input);
+                Operator::LogicalValues(columns, rows, input)
+            }
+            Operator::LogicalUpdate(updates, input) => {
+                let input = visitor(input);
+                Operator::LogicalUpdate(updates, input)
+            }
+            Operator::LogicalDelete(table, input) => {
+                let input = visitor(input);
+                Operator::LogicalDelete(table, input)
+            }
+            Operator::LogicalSingleGet => Operator::LogicalSingleGet,
+            Operator::LogicalGet(table) => Operator::LogicalGet(table),
+            Operator::LogicalGetWith(name) => Operator::LogicalGetWith(name),
+            Operator::LogicalCreateDatabase(name) => Operator::LogicalCreateDatabase(name),
+            Operator::LogicalCreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+            } => Operator::LogicalCreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+            },
+            Operator::LogicalCreateIndex {
+                name,
+                table,
+                columns,
+            } => Operator::LogicalCreateIndex {
+                name,
+                table,
+                columns,
+            },
+            Operator::LogicalAlterTable { name, actions } => {
+                Operator::LogicalAlterTable { name, actions }
+            }
+            Operator::LogicalDrop { object, name } => Operator::LogicalDrop { object, name },
+            Operator::LogicalRename { object, from, to } => {
+                Operator::LogicalRename { object, from, to }
+            }
+            other => panic!(),
         }
     }
 }
