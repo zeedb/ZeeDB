@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops;
 
 // Operator plan nodes combine inputs in a Plan tree.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -10,6 +11,7 @@ pub enum Operator<T> {
     // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
     LogicalFilter(Vec<Scalar>, T),
     // LogicalProject(columns) implements the SELECT clause.
+    // TODO I think this is a misunderstanding of what project represents.
     LogicalProject(Vec<(Scalar, Column)>, T),
     LogicalJoin(Join, T, T),
     // LogicalWith(table) implements with subquery as  _.
@@ -135,21 +137,112 @@ pub enum Operator<T> {
         to: Name,
     },
 }
+
 impl<T> Operator<T> {
     pub fn is_logical(&self) -> bool {
-        todo!()
+        match self {
+            Operator::LogicalJoin(_, _, _)
+            | Operator::LogicalWith(_, _, _)
+            | Operator::LogicalUnion(_, _)
+            | Operator::LogicalIntersect(_, _)
+            | Operator::LogicalExcept(_, _)
+            | Operator::LogicalFilter(_, _)
+            | Operator::LogicalProject(_, _)
+            | Operator::LogicalAggregate { .. }
+            | Operator::LogicalLimit { .. }
+            | Operator::LogicalSort(_, _)
+            | Operator::LogicalInsert(_, _, _)
+            | Operator::LogicalValues(_, _, _)
+            | Operator::LogicalUpdate(_, _)
+            | Operator::LogicalDelete(_, _)
+            | Operator::LogicalSingleGet
+            | Operator::LogicalGet(_)
+            | Operator::LogicalGetWith(_)
+            | Operator::LogicalCreateDatabase(_)
+            | Operator::LogicalCreateTable { .. }
+            | Operator::LogicalCreateIndex { .. }
+            | Operator::LogicalAlterTable { .. }
+            | Operator::LogicalDrop { .. }
+            | Operator::LogicalRename { .. } => true,
+            _ => false,
+        }
     }
 
     pub fn introduces(&self, column: &Column) -> bool {
+        fn contains(predicates: &Vec<Scalar>, column: &Column) -> bool {
+            predicates
+                .iter()
+                .any(|scalar| scalar.columns().any(|c| c == column))
+        }
         match self {
             Operator::LogicalGet(table) => table.columns.contains(column),
             Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
-            Operator::LogicalJoin(Join::Mark(mark), _, _) => mark == column,
-            Operator::LogicalGetWith { .. } => todo!(),
+            Operator::LogicalJoin(Join::Mark(mark, predicates), _, _) => {
+                mark == column || contains(predicates, column)
+            }
+            Operator::LogicalJoin(Join::Inner(predicates), _, _)
+            | Operator::LogicalJoin(Join::Right(predicates), _, _)
+            | Operator::LogicalJoin(Join::Outer(predicates), _, _)
+            | Operator::LogicalJoin(Join::Semi(predicates), _, _)
+            | Operator::LogicalJoin(Join::Single(predicates), _, _) => contains(predicates, column),
+            Operator::LogicalGetWith { .. } => todo!("get_with"),
             Operator::LogicalAggregate { aggregate, .. } => {
                 aggregate.iter().any(|(_, c)| c == column)
             }
             _ => false,
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            Operator::LogicalJoin(_, _, _)
+            | Operator::LogicalWith(_, _, _)
+            | Operator::LogicalUnion(_, _)
+            | Operator::LogicalIntersect(_, _)
+            | Operator::LogicalExcept(_, _)
+            | Operator::PhysicalNestedLoop { .. }
+            | Operator::PhysicalHashJoin { .. }
+            | Operator::PhysicalUnion { .. }
+            | Operator::PhysicalIntersect { .. }
+            | Operator::PhysicalExcept { .. } => 2,
+            Operator::LogicalFilter(_, _)
+            | Operator::LogicalProject(_, _)
+            | Operator::LogicalAggregate { .. }
+            | Operator::LogicalLimit { .. }
+            | Operator::LogicalSort(_, _)
+            | Operator::LogicalInsert(_, _, _)
+            | Operator::LogicalValues(_, _, _)
+            | Operator::LogicalUpdate(_, _)
+            | Operator::LogicalDelete(_, _)
+            | Operator::PhysicalFilter { .. }
+            | Operator::PhysicalProject { .. }
+            | Operator::PhysicalCreateTempTable { .. }
+            | Operator::PhysicalAggregate { .. }
+            | Operator::PhysicalLimit { .. }
+            | Operator::PhysicalSort { .. }
+            | Operator::PhysicalInsert { .. }
+            | Operator::PhysicalUpdate { .. }
+            | Operator::PhysicalDelete { .. } => 1,
+            Operator::LogicalSingleGet
+            | Operator::LogicalGet(_)
+            | Operator::LogicalGetWith(_)
+            | Operator::LogicalCreateDatabase(_)
+            | Operator::LogicalCreateTable { .. }
+            | Operator::LogicalCreateIndex { .. }
+            | Operator::LogicalAlterTable { .. }
+            | Operator::LogicalDrop { .. }
+            | Operator::LogicalRename { .. }
+            | Operator::PhysicalTableFreeScan
+            | Operator::PhysicalSeqScan { .. }
+            | Operator::PhysicalIndexScan { .. }
+            | Operator::PhysicalGetTempTable { .. }
+            | Operator::PhysicalValues { .. }
+            | Operator::PhysicalCreateDatabase { .. }
+            | Operator::PhysicalCreateTable { .. }
+            | Operator::PhysicalCreateIndex { .. }
+            | Operator::PhysicalAlterTable { .. }
+            | Operator::PhysicalDrop { .. }
+            | Operator::PhysicalRename { .. } => 0,
         }
     }
 
@@ -265,7 +358,142 @@ impl<T> Operator<T> {
             Operator::LogicalRename { object, from, to } => {
                 Operator::LogicalRename { object, from, to }
             }
-            other => panic!(),
+            Operator::PhysicalTableFreeScan => Operator::PhysicalTableFreeScan,
+            Operator::PhysicalSeqScan(table) => Operator::PhysicalSeqScan(table),
+            Operator::PhysicalIndexScan { table, equals } => {
+                Operator::PhysicalIndexScan { table, equals }
+            }
+            Operator::PhysicalFilter(predicates, input) => {
+                Operator::PhysicalFilter(predicates, visitor(input))
+            }
+            Operator::PhysicalProject(projects, input) => {
+                Operator::PhysicalProject(projects, visitor(input))
+            }
+            Operator::PhysicalNestedLoop(join, left, right) => {
+                Operator::PhysicalNestedLoop(join, visitor(left), visitor(right))
+            }
+            Operator::PhysicalHashJoin(join, equals, left, right) => {
+                Operator::PhysicalHashJoin(join, equals, visitor(left), visitor(right))
+            }
+            Operator::PhysicalCreateTempTable(name, input) => {
+                Operator::PhysicalCreateTempTable(name, visitor(input))
+            }
+            Operator::PhysicalGetTempTable(name) => Operator::PhysicalGetTempTable(name),
+            Operator::PhysicalAggregate {
+                group_by,
+                aggregate,
+                input,
+            } => Operator::PhysicalAggregate {
+                group_by,
+                aggregate,
+                input: visitor(input),
+            },
+            Operator::PhysicalLimit {
+                limit,
+                offset,
+                input,
+            } => Operator::PhysicalLimit {
+                limit,
+                offset,
+                input: visitor(input),
+            },
+            Operator::PhysicalSort(order_by, input) => {
+                Operator::PhysicalSort(order_by, visitor(input))
+            }
+            Operator::PhysicalUnion(left, right) => {
+                Operator::PhysicalUnion(visitor(left), visitor(right))
+            }
+            Operator::PhysicalIntersect(left, right) => {
+                Operator::PhysicalIntersect(visitor(left), visitor(right))
+            }
+            Operator::PhysicalExcept(left, right) => {
+                Operator::PhysicalExcept(visitor(left), visitor(right))
+            }
+            Operator::PhysicalInsert(table, columns, input) => {
+                Operator::PhysicalInsert(table, columns, visitor(input))
+            }
+            Operator::PhysicalValues(columns, rows) => Operator::PhysicalValues(columns, rows),
+            Operator::PhysicalUpdate(updates, input) => {
+                Operator::PhysicalUpdate(updates, visitor(input))
+            }
+            Operator::PhysicalDelete(table, input) => {
+                Operator::PhysicalDelete(table, visitor(input))
+            }
+            Operator::PhysicalCreateDatabase(name) => Operator::PhysicalCreateDatabase(name),
+            Operator::PhysicalCreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+            } => Operator::PhysicalCreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+            },
+            Operator::PhysicalCreateIndex {
+                name,
+                table,
+                columns,
+            } => Operator::PhysicalCreateIndex {
+                name,
+                table,
+                columns,
+            },
+            Operator::PhysicalAlterTable { name, actions } => {
+                Operator::PhysicalAlterTable { name, actions }
+            }
+            Operator::PhysicalDrop { object, name } => Operator::PhysicalDrop { object, name },
+            Operator::PhysicalRename { object, from, to } => {
+                Operator::PhysicalRename { object, from, to }
+            }
+        }
+    }
+}
+
+impl<T> ops::Index<usize> for Operator<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            Operator::LogicalJoin(_, left, right)
+            | Operator::LogicalWith(_, left, right)
+            | Operator::LogicalUnion(left, right)
+            | Operator::LogicalIntersect(left, right)
+            | Operator::LogicalExcept(left, right)
+            | Operator::PhysicalNestedLoop(_, left, right)
+            | Operator::PhysicalHashJoin(_, _, left, right)
+            | Operator::PhysicalUnion(left, right)
+            | Operator::PhysicalIntersect(left, right)
+            | Operator::PhysicalExcept(left, right) => match index {
+                0 => left,
+                1 => right,
+                _ => panic!("{} is out of bounds [0,2)", index),
+            },
+            Operator::LogicalFilter(_, input)
+            | Operator::LogicalProject(_, input)
+            | Operator::LogicalAggregate { input, .. }
+            | Operator::LogicalLimit { input, .. }
+            | Operator::LogicalSort(_, input)
+            | Operator::LogicalInsert(_, _, input)
+            | Operator::LogicalValues(_, _, input)
+            | Operator::LogicalUpdate(_, input)
+            | Operator::LogicalDelete(_, input)
+            | Operator::PhysicalFilter(_, input)
+            | Operator::PhysicalProject(_, input)
+            | Operator::PhysicalCreateTempTable(_, input)
+            | Operator::PhysicalAggregate { input, .. }
+            | Operator::PhysicalLimit { input, .. }
+            | Operator::PhysicalSort(_, input)
+            | Operator::PhysicalInsert(_, _, input)
+            | Operator::PhysicalUpdate(_, input)
+            | Operator::PhysicalDelete(_, input) => match index {
+                0 => input,
+                _ => panic!("{} is out of bounds [0,1)", index),
+            },
+            _ => panic!("{} is out of bounds ()", index),
         }
     }
 }
@@ -273,7 +501,7 @@ impl<T> Operator<T> {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Join {
     // Inner implements the default SQL join.
-    Inner,
+    Inner(Vec<Scalar>),
     // Right is used for both left and right joins.
     // When parsing a left join, we convert it to a right join by reversing the order of left and right.
     // The left side is the build side of the join.
@@ -282,28 +510,28 @@ pub enum Join {
     Outer(Vec<Scalar>),
     // Semi indicates a semi-join like `select 1 from customer where store_id in (select store_id from store)`.
     // Note that the left side is the build side of the join, which is the reverse of the usual convention.
-    Semi(Column),
+    Semi(Vec<Scalar>),
     // Anti indicates an anti-join like `select 1 from customer where store_id not in (select store_id from store)`.
     // Note that like Semi, the left side is the build side of the join.
-    Anti(Column),
+    Anti(Vec<Scalar>),
     // Single implements "Single Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
-    Single,
+    Single(Vec<Scalar>),
     // Mark implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
-    Mark(Column),
+    Mark(Column, Vec<Scalar>),
 }
 
 impl fmt::Display for Join {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Join::Inner => write!(f, "Inner"),
+            Join::Inner(predicates) => write!(f, "Inner {}", join(predicates)),
             Join::Right(predicates) => write!(f, "Right {}", join(predicates)),
             Join::Outer(predicates) => write!(f, "Outer {}", join(predicates)),
-            Join::Semi(column) => write!(f, "Semi {}", column),
-            Join::Anti(column) => write!(f, "Anti {}", column),
-            Join::Single => write!(f, "Single"),
-            Join::Mark(column) => write!(f, "Mark {}", column),
+            Join::Semi(predicates) => write!(f, "Semi {}", join(predicates)),
+            Join::Anti(predicates) => write!(f, "Anti {}", join(predicates)),
+            Join::Single(predicates) => write!(f, "Single {}", join(predicates)),
+            Join::Mark(column, predicates) => write!(f, "Mark {} {}", column, join(predicates)),
         }
     }
 }
@@ -455,6 +683,7 @@ impl fmt::Display for Alter {
 pub enum Scalar {
     Literal(encoding::Value, encoding::Type),
     Column(Column),
+    // TODO eliminate Vec in favor of Function being a tree
     Call(Function, Vec<Scalar>, encoding::Type),
     Cast(Box<Scalar>, encoding::Type),
 }

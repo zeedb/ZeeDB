@@ -1,8 +1,9 @@
 use crate::operator::*;
 use std::fmt;
+use std::ops;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Expr(pub Operator<Box<Expr>>);
+pub struct Expr(pub Box<Operator<Expr>>);
 
 impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -11,6 +12,10 @@ impl fmt::Display for Expr {
 }
 
 impl Expr {
+    pub fn new(op: Operator<Expr>) -> Self {
+        Expr(Box::new(op))
+    }
+
     pub fn correlated(&self, column: &Column) -> bool {
         for expr in self.iter() {
             if expr.0.introduces(column) {
@@ -21,18 +26,14 @@ impl Expr {
     }
 
     pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
-        let operator = self
-            .0
-            .map(|child| Box::new(child.bottom_up_rewrite(visitor)));
-        visitor(Expr(operator))
+        let operator = self.0.map(|child| child.bottom_up_rewrite(visitor));
+        visitor(Expr::new(operator))
     }
 
     pub fn top_down_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
         let expr = visitor(self);
-        let operator = expr
-            .0
-            .map(|child| Box::new(child.top_down_rewrite(visitor)));
-        Expr(operator)
+        let operator = expr.0.map(|child| child.top_down_rewrite(visitor));
+        Expr::new(operator)
     }
 
     fn iter(&self) -> ExprIterator {
@@ -47,7 +48,7 @@ impl Expr {
             }
             Ok(())
         };
-        match &self.0 {
+        match self.0.as_ref() {
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
             Operator::LogicalFilter(predicates, input) => {
@@ -433,52 +434,52 @@ impl<'it> Iterator for ExprIterator<'it> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next) = self.stack.pop() {
-            match next {
-                Expr(Operator::LogicalFilter(_, input)) => {
+            match next.0.as_ref() {
+                Operator::LogicalFilter(_, input) => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalProject(_, input)) => {
+                Operator::LogicalProject(_, input) => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalJoin(_, left, right)) => {
+                Operator::LogicalJoin(_, left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
-                Expr(Operator::LogicalWith(_, left, right)) => {
+                Operator::LogicalWith(_, left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
-                Expr(Operator::LogicalAggregate { input, .. }) => {
+                Operator::LogicalAggregate { input, .. } => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalLimit { input, .. }) => {
+                Operator::LogicalLimit { input, .. } => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalSort(_, input)) => {
+                Operator::LogicalSort(_, input) => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalUnion(left, right)) => {
+                Operator::LogicalUnion(left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
-                Expr(Operator::LogicalIntersect(left, right)) => {
+                Operator::LogicalIntersect(left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
-                Expr(Operator::LogicalExcept(left, right)) => {
+                Operator::LogicalExcept(left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
-                Expr(Operator::LogicalInsert(_, _, input)) => {
+                Operator::LogicalInsert(_, _, input) => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalValues(_, _, input)) => {
+                Operator::LogicalValues(_, _, input) => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalUpdate(_, input)) => {
+                Operator::LogicalUpdate(_, input) => {
                     self.stack.push(input);
                 }
-                Expr(Operator::LogicalDelete(_, input)) => {
+                Operator::LogicalDelete(_, input) => {
                     self.stack.push(input);
                 }
                 _ => {}
