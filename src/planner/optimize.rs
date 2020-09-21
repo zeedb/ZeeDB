@@ -1,11 +1,10 @@
-use crate::rewrite::rewrite;
 use encoding::*;
 use node::*;
 use std::cell::{Cell, RefCell};
-use std::cmp;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::fmt;
 use std::hash;
+use std::ops;
 use std::ptr;
 use std::rc::Rc;
 
@@ -40,26 +39,92 @@ struct Group {
 // MultiExpr represents a part of a Group.
 // Unlike Group, which represents *all* equivalent query plans,
 // MultiExpr specifies operator at the top of a the query.
+#[derive(Eq, PartialEq, Hash)]
 struct MultiExpr {
     // The top operator in this query.
     // Inputs are represented using Group,
     // so they represent a class of equivalent plans rather than a single plan.
-    op: Operator<Rc<Group>>,
+    op: Operator<GroupRef>,
     // As we try different *logical* transformation rules,
     // we will record the fact that we've already tried this rule on this multi-expression
     // so we can avoid checking it agin. It's safe to mark transformations as complete,
     // because we explore the inputs to each multiExpr before we start
     // applying transformation rules to the group.
-    fired: RefCell<HashSet<Rule>>,
+    fired: Fired,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
+struct GroupRef(Rc<Group>);
+
+impl GroupRef {
+    fn new(group: Group) -> Self {
+        GroupRef(Rc::new(group))
+    }
+}
+
+impl hash::Hash for GroupRef {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        ptr::hash(self.0.as_ref(), state)
+    }
+}
+
+impl PartialEq for GroupRef {
+    fn eq(&self, other: &Self) -> bool {
+        ptr::eq(self.0.as_ref(), other.0.as_ref())
+    }
+}
+
+impl Eq for GroupRef {}
+
+impl fmt::Debug for GroupRef {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:p}", self.0.as_ref())
+    }
+}
+
+impl ops::Deref for GroupRef {
+    type Target = Group;
+
+    fn deref(&self) -> &Self::Target {
+        self.0.as_ref()
+    }
+}
+
+struct Fired(RefCell<HashSet<Rule>>);
+
+impl Fired {
+    fn new() -> Self {
+        Fired(RefCell::new(HashSet::new()))
+    }
+}
+
+impl hash::Hash for Fired {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        // Nothing to do
+    }
+}
+
+impl PartialEq for Fired {
+    fn eq(&self, other: &Self) -> bool {
+        true // Ignore Fired for equality
+    }
+}
+
+impl Eq for Fired {}
+
+impl ops::Deref for Fired {
+    type Target = RefCell<HashSet<Rule>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 struct Winner {
     plan: Expr,
     cost: Cost,
 }
 
-#[derive(Debug)]
 struct LogicalProps {
     // cardinality contains the estimated number of rows in the query.
     cardinality: usize,
@@ -68,8 +133,7 @@ struct LogicalProps {
 }
 
 impl Group {
-    fn new(expr: PartialExpr) -> Self {
-        let mexpr = MultiExpr::new(expr);
+    fn new(mexpr: MultiExpr) -> Self {
         let props = compute_logical_props(&mexpr);
         let lower_bound = compute_lower_bound(&props.column_unique_cardinality);
         let mut logical = HashSet::new();
@@ -85,77 +149,43 @@ impl Group {
         }
     }
 
-    fn contains(&self, mexpr: &MultiExpr) -> bool {
-        if mexpr.op.reflect().is_logical() {
-            self.logical.borrow().contains(mexpr)
+    fn add(&self, bind: Operator<Bind>) -> Option<&MultiExpr> {
+        let mexpr = MultiExpr::unbind(bind);
+        if mexpr.op.is_logical() {
+            if self.logical.borrow_mut().insert(mexpr) {
+                return todo!();
+            }
         } else {
-            self.physical.borrow().contains(mexpr)
+            if self.physical.borrow_mut().insert(mexpr) {
+                return todo!();
+            }
         }
+        None
     }
 
-    fn add(&self, mexpr: MultiExpr) {
-        if mexpr.op.reflect().is_logical() {
-            self.logical.borrow_mut().insert(mexpr);
-        } else {
-            self.physical.borrow_mut().insert(mexpr);
-        }
+    fn correlated(&self, column: &Column) -> bool {
+        todo!()
     }
-
-    // fn intern(&self, mexpr: MultiExpr) -> &MultiExpr {
-    //     if mexpr.op.reflect().is_logical() {
-    //         self.logical.get_or_insert(mexpr)
-    //     } else {
-    //         self.physical.get_or_insert(mexpr)
-    //     }
-    // }
 }
 
 impl MultiExpr {
-    fn new(expr: PartialExpr) -> Self {
-        let mut inputs = Vec::with_capacity(expr.1.len());
-        for e in expr.1 {
-            match e {
-                PartialExprOption::Leaf(group) => inputs.push(group.clone()),
-                PartialExprOption::Expr(expr) => {
-                    inputs.push(Rc::new(Group::new(expr)));
-                }
-            }
-        }
-        MultiExpr {
-            op: expr.0,
-            inputs,
-            fired: RefCell::new(HashSet::new()),
-        }
+    fn new(expr: Expr) -> Self {
+        let op = expr
+            .0
+            .map(|child| GroupRef::new(Group::new(MultiExpr::new(child))));
+        let fired = Fired::new();
+        MultiExpr { op, fired }
+    }
+
+    fn unbind(bind: Operator<Bind>) -> Self {
+        let op = bind.map(|child| match child {
+            Bind::Group(group) => group,
+            Bind::Operator(bind) => GroupRef::new(Group::new(MultiExpr::unbind(*bind))),
+        });
+        let fired = Fired::new();
+        MultiExpr { op, fired }
     }
 }
-
-impl hash::Hash for MultiExpr {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        self.op.hash(state);
-        for i in &self.inputs {
-            ptr::hash(i, state);
-        }
-    }
-}
-
-impl cmp::PartialEq for MultiExpr {
-    fn eq(&self, other: &Self) -> bool {
-        if self.op != other.op {
-            return false;
-        }
-        if self.inputs.len() != other.inputs.len() {
-            return false;
-        }
-        for i in 0..self.inputs.len() {
-            if !Rc::ptr_eq(&self.inputs[i], &other.inputs[i]) {
-                return false;
-            }
-        }
-        true
-    }
-}
-
-impl cmp::Eq for MultiExpr {}
 
 fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
     let mut cardinality = 0 as usize;
@@ -168,44 +198,39 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), cardinality);
             }
         }
-        LogicalFilter(predicates) => {
-            let scope = &mexpr.inputs[0].props.column_unique_cardinality;
+        LogicalFilter(predicates, input) => {
+            let scope = &input.props.column_unique_cardinality;
             let selectivity = total_selectivity(predicates, scope);
-            cardinality = apply_selectivity(mexpr.inputs[0].props.cardinality, selectivity);
-            for (c, n) in &mexpr.inputs[0].props.column_unique_cardinality {
+            cardinality = apply_selectivity(input.props.cardinality, selectivity);
+            for (c, n) in &input.props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
             }
         }
-        LogicalProject(projects) => {
-            cardinality = mexpr.inputs[0].props.cardinality;
+        LogicalProject(projects, input) => {
+            cardinality = input.props.cardinality;
             for (x, c) in projects {
-                let n =
-                    scalar_unique_cardinality(&x, &mexpr.inputs[0].props.column_unique_cardinality);
+                let n = scalar_unique_cardinality(&x, &input.props.column_unique_cardinality);
                 column_unique_cardinality.insert(c.clone(), n);
             }
         }
-        LogicalJoin {
-            join, predicates, ..
-        } => {
+        LogicalJoin(join, left, right) => {
             let mut scope = HashMap::new();
-            for (c, n) in &mexpr.inputs[0].props.column_unique_cardinality {
+            for (c, n) in &left.props.column_unique_cardinality {
                 scope.insert(c.clone(), *n);
             }
-            for (c, n) in &mexpr.inputs[1].props.column_unique_cardinality {
+            for (c, n) in &right.props.column_unique_cardinality {
                 scope.insert(c.clone(), *n);
             }
-            let selectivity = total_selectivity(predicates, &scope);
-            let product = mexpr.inputs[0].props.cardinality * mexpr.inputs[1].props.cardinality;
-            cardinality = apply_selectivity(product, selectivity);
-            for (c, n) in &mexpr.inputs[0].props.column_unique_cardinality {
-                column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
+            let product = left.props.cardinality * right.props.cardinality;
+            for (c, n) in &left.props.column_unique_cardinality {
+                column_unique_cardinality.insert(c.clone(), *n);
             }
-            for (c, n) in &mexpr.inputs[1].props.column_unique_cardinality {
-                column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
+            for (c, n) in &right.props.column_unique_cardinality {
+                column_unique_cardinality.insert(c.clone(), *n);
             }
             // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
             match join {
-                Join::Semi | Join::Anti => {
+                Join::Semi(_) | Join::Anti(_) => {
                     cardinality = apply_selectivity(cardinality, 0.5);
                     for (_, n) in column_unique_cardinality.iter_mut() {
                         *n = apply_selectivity(*n, 0.5);
@@ -214,15 +239,16 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
                 _ => {}
             }
         }
-        LogicalWith(name) => todo!(),
-        LogicalGetWith(name) => todo!(),
+        LogicalWith(name, _, _) => todo!("with"),
+        LogicalGetWith(name) => todo!("get_with"),
         LogicalAggregate {
             group_by,
             aggregate,
+            input,
         } => {
             cardinality = 1;
             for c in group_by {
-                let n = mexpr.inputs[0].props.column_unique_cardinality[&c];
+                let n = input.props.column_unique_cardinality[&c];
                 column_unique_cardinality.insert(c.clone(), n);
                 cardinality *= n;
             }
@@ -230,9 +256,13 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), cardinality);
             }
         }
-        LogicalLimit { limit, .. } => {
+        LogicalLimit {
+            limit,
+            offset,
+            input,
+        } => {
             cardinality = *limit;
-            for (c, n) in &mexpr.inputs[0].props.column_unique_cardinality {
+            for (c, n) in &input.props.column_unique_cardinality {
                 if *limit < *n {
                     column_unique_cardinality.insert(c.clone(), *limit);
                 } else {
@@ -240,35 +270,33 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
                 }
             }
         }
-        LogicalSort(_) => {
-            cardinality = mexpr.inputs[0].props.cardinality;
-            column_unique_cardinality = mexpr.inputs[0].props.column_unique_cardinality.clone();
+        LogicalSort(_, input) => {
+            cardinality = input.props.cardinality;
+            column_unique_cardinality = input.props.column_unique_cardinality.clone();
         }
-        LogicalUnion => {
-            let left = &mexpr.inputs[0];
-            let right = &mexpr.inputs[1];
+        LogicalUnion(left, right) => {
             cardinality = left.props.cardinality + right.props.cardinality;
             column_unique_cardinality = max_cuc(
                 &left.props.column_unique_cardinality,
                 &right.props.column_unique_cardinality,
             );
         }
-        LogicalIntersect => todo!(),
-        LogicalExcept => {
-            cardinality = mexpr.inputs[0].props.cardinality;
-            column_unique_cardinality = mexpr.inputs[0].props.column_unique_cardinality.clone();
+        LogicalIntersect(left, right) => todo!("intersect"),
+        LogicalExcept(left, right) => {
+            cardinality = left.props.cardinality;
+            column_unique_cardinality = left.props.column_unique_cardinality.clone();
         }
-        LogicalInsert(_, _)
-        | LogicalValues(_, _)
-        | LogicalUpdate(_)
-        | LogicalDelete(_)
+        LogicalInsert(_, _, _)
+        | LogicalValues(_, _, _)
+        | LogicalUpdate(_, _)
+        | LogicalDelete(_, _)
         | LogicalCreateDatabase(_)
         | LogicalCreateTable { .. }
         | LogicalCreateIndex { .. }
         | LogicalAlterTable { .. }
         | LogicalDrop { .. }
         | LogicalRename { .. } => {}
-        _ => panic!("{}", &mexpr.op),
+        _ => panic!(),
     };
     LogicalProps {
         cardinality,
@@ -295,7 +323,7 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             let right = scalar_unique_cardinality(&args[1], scope) as f64;
             1.0 / left.max(right).max(1.0)
         }
-        Scalar::Call(_, _, _) => todo!(),
+        Scalar::Call(_, _, _) => todo!("call"),
         Scalar::Cast(_, _) => 0.5,
     }
 }
@@ -311,7 +339,7 @@ fn max_cuc(
     left: &HashMap<Column, usize>,
     right: &HashMap<Column, usize>,
 ) -> HashMap<Column, usize> {
-    todo!()
+    todo!("max_cuc")
 }
 
 fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> usize {
@@ -371,8 +399,6 @@ fn table_max_cu_cards(
 #[derive(Debug, Eq, PartialEq, Hash)]
 enum Rule {
     // Rewrite rules
-    PushImplicitFilterThroughNestedLoop,
-    MarkJoinToSemiJoin,
     LogicalInnerJoinCommutivity,
     LogicalInnerJoinAssociativity,
     // Implementation rules
@@ -435,329 +461,317 @@ impl Rule {
         }
     }
 
-    fn pattern(&self) -> Pattern {
-        match self {
-            Rule::PushImplicitFilterThroughNestedLoop => Pattern(
-                OperatorType::LogicalJoin,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::MarkJoinToSemiJoin => Pattern(
-                OperatorType::LogicalJoin,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalInnerJoinCommutivity => Pattern(
-                OperatorType::LogicalJoin,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalInnerJoinAssociativity => Pattern(
-                OperatorType::LogicalJoin,
-                vec![
-                    PatternOption::Pattern(Pattern(
-                        OperatorType::LogicalJoin,
-                        vec![PatternOption::Leaf, PatternOption::Leaf],
-                    )),
-                    PatternOption::Leaf,
-                ],
-            ),
-            Rule::LogicalGetToTableFreeScan => Pattern(OperatorType::LogicalSingleGet, vec![]),
-            Rule::LogicalGetToSeqScan => Pattern(OperatorType::LogicalGet, vec![]),
-            Rule::LogicalGetToIndexScan => Pattern(
-                OperatorType::LogicalFilter,
-                vec![PatternOption::Pattern(Pattern(
-                    OperatorType::LogicalGet,
-                    vec![],
-                ))],
-            ),
-            Rule::LogicalFilterToFilter => {
-                Pattern(OperatorType::LogicalFilter, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalProjectToProject => {
-                Pattern(OperatorType::LogicalProject, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalJoinToNestedLoop => Pattern(
-                OperatorType::LogicalJoin,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalJoinToHashJoin => Pattern(
-                OperatorType::LogicalJoin,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalAggregateToAggregate => {
-                Pattern(OperatorType::LogicalAggregate, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalLimitToLimit => {
-                Pattern(OperatorType::LogicalLimit, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalSortToSort => {
-                Pattern(OperatorType::LogicalSort, vec![PatternOption::Leaf])
-            }
-            Rule::LogicallUnionToUnion => Pattern(
-                OperatorType::LogicalUnion,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalIntersectToIntersect => Pattern(
-                OperatorType::LogicalIntersect,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalExceptToExcept => Pattern(
-                OperatorType::LogicalExcept,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalWithToCreateTempTable => Pattern(
-                OperatorType::LogicalWith,
-                vec![PatternOption::Leaf, PatternOption::Leaf],
-            ),
-            Rule::LogicalGetWithToGetTempTable => Pattern(OperatorType::LogicalGetWith, vec![]),
-            Rule::LogicalInsertToInsert => {
-                Pattern(OperatorType::LogicalInsert, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalValuesToValues => {
-                Pattern(OperatorType::LogicalValues, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalInsertToInsert => {
-                Pattern(OperatorType::LogicalInsert, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalUpdateToUpdate => {
-                Pattern(OperatorType::LogicalUpdate, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalDeleteToDelete => {
-                Pattern(OperatorType::LogicalDelete, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalCreateDatabaseToCreateDatabase => Pattern(
-                OperatorType::LogicalCreateDatabase,
-                vec![PatternOption::Leaf],
-            ),
-            Rule::LogicalCreateTableToCreateTable => {
-                Pattern(OperatorType::LogicalCreateTable, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalCreateIndexToCreateIndex => {
-                Pattern(OperatorType::LogicalCreateIndex, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalAlterTableToAlterTable => {
-                Pattern(OperatorType::LogicalAlterTable, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalDropToDrop => {
-                Pattern(OperatorType::LogicalDrop, vec![PatternOption::Leaf])
-            }
-            Rule::LogicalRenameToRename => {
-                Pattern(OperatorType::LogicalRename, vec![PatternOption::Leaf])
-            }
+    fn promise(&self) -> isize {
+        todo!("promise")
+    }
+
+    // Quickly check if rule matches expression *without* exploring the inputs to the expression.
+    fn matches_fast(&self, mexpr: &MultiExpr) -> bool {
+        match (self, &mexpr.op) {
+            (Rule::LogicalInnerJoinCommutivity, LogicalJoin(Join::Inner(_), _, _))
+            | (Rule::LogicalInnerJoinAssociativity, LogicalJoin(Join::Inner(_), _, _))
+            | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
+            | (Rule::LogicalGetToSeqScan, LogicalGet(_))
+            | (Rule::LogicalGetToIndexScan, LogicalFilter(_, _))
+            | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
+            | (Rule::LogicalProjectToProject, LogicalProject(_, _))
+            | (Rule::LogicalJoinToNestedLoop, LogicalJoin(_, _, _))
+            | (Rule::LogicalJoinToHashJoin, LogicalJoin(_, _, _))
+            | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
+            | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
+            | (Rule::LogicalSortToSort, LogicalSort(_, _))
+            | (Rule::LogicallUnionToUnion, LogicalUnion(_, _))
+            | (Rule::LogicalIntersectToIntersect, LogicalIntersect(_, _))
+            | (Rule::LogicalExceptToExcept, LogicalExcept(_, _))
+            | (Rule::LogicalWithToCreateTempTable, LogicalWith(_, _, _))
+            | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith(_))
+            | (Rule::LogicalInsertToInsert, LogicalInsert(_, _, _))
+            | (Rule::LogicalValuesToValues, LogicalValues(_, _, _))
+            | (Rule::LogicalUpdateToUpdate, LogicalUpdate(_, _))
+            | (Rule::LogicalDeleteToDelete, LogicalDelete(_, _))
+            | (Rule::LogicalCreateDatabaseToCreateDatabase, LogicalCreateDatabase(_))
+            | (Rule::LogicalCreateTableToCreateTable, LogicalCreateTable { .. })
+            | (Rule::LogicalCreateIndexToCreateIndex, LogicalCreateIndex { .. })
+            | (Rule::LogicalAlterTableToAlterTable, LogicalAlterTable { .. })
+            | (Rule::LogicalDropToDrop, LogicalDrop { .. })
+            | (Rule::LogicalRenameToRename, LogicalRename { .. }) => true,
+            _ => false,
         }
     }
 
-    fn promise(&self) -> isize {
-        todo!()
+    fn has_inputs(&self, i: usize) -> bool {
+        match (self, i) {
+            (Rule::LogicalGetToIndexScan, 0) => true,
+            _ => false,
+        }
     }
 
-    fn substitute(&self, before: PartialExpr) -> Vec<PartialExpr> {
+    fn bind(&self, mexpr: &MultiExpr) -> Vec<Operator<Bind>> {
+        let mut binds = vec![];
         match self {
-            Rule::PushImplicitFilterThroughNestedLoop => {
-                if let Extract::Binary(
-                    LogicalJoin {
-                        join,
-                        predicates,
-                        mark,
-                    },
-                    left,
-                    right,
-                ) = before.extract()
-                {
-                    return push_implicit_filter_through_nested_loop(
-                        join, predicates, mark, left, right,
-                    );
-                }
-            }
-            Rule::MarkJoinToSemiJoin => {
-                if let Extract::Binary(
-                    LogicalJoin {
-                        join: Join::Mark,
-                        predicates,
-                        mark: Some(mark),
-                    },
-                    left,
-                    right,
-                ) = before.extract()
-                {
-                    fn remove(predicates: Vec<Scalar>, remove: Scalar) -> Vec<Scalar> {
-                        let mut acc = Vec::with_capacity(predicates.len() - 1);
-                        for p in predicates {
-                            if p != remove {
-                                acc.push(p);
-                            }
+            Rule::LogicalInnerJoinAssociativity => {
+                if let LogicalJoin(Join::Inner(parent_predicates), left, right) = &mexpr.op {
+                    for left in left.logical.borrow().iter() {
+                        if let LogicalJoin(Join::Inner(left_predicates), left_left, left_middle) =
+                            &left.op
+                        {
+                            binds.push(LogicalJoin(
+                                Join::Inner(parent_predicates.clone()),
+                                Bind::Operator(Box::new(LogicalJoin(
+                                    Join::Inner(left_predicates.clone()),
+                                    Bind::Group(left_left.clone()),
+                                    Bind::Group(left_middle.clone()),
+                                ))),
+                                Bind::Group(right.clone()),
+                            ))
                         }
-                        acc
-                    };
-                    let semi = Scalar::Column(mark.clone());
-                    if predicates.contains(&semi) {
-                        return vec![PartialExpr(
-                            LogicalJoin {
-                                join: Join::Semi,
-                                predicates: remove(predicates, semi),
-                                mark: Some(mark),
-                            },
-                            vec![left, right],
-                        )];
                     }
-                    let anti = Scalar::Call(
-                        Function::Not,
-                        vec![Scalar::Column(mark.clone())],
-                        Type::Bool,
-                    );
-                    if predicates.contains(&anti) {
-                        return vec![PartialExpr(
-                            LogicalJoin {
-                                join: Join::Semi,
-                                predicates: remove(predicates, anti),
-                                mark: Some(mark),
-                            },
-                            vec![left, right],
-                        )];
-                    }
-                    return vec![];
-                }
-            }
-            Rule::LogicalInnerJoinCommutivity => {
-                if let Extract::Binary(
-                    LogicalJoin {
-                        join: Join::Inner,
-                        predicates,
-                        mark,
-                    },
-                    left,
-                    right,
-                ) = before.extract()
-                {
-                    return vec![PartialExpr(
-                        LogicalJoin {
-                            join: Join::Inner,
-                            predicates,
-                            mark,
-                        },
-                        vec![right, left],
-                    )];
-                }
-            }
-            Rule::LogicalInnerJoinAssociativity => todo!(),
-            Rule::LogicalGetToTableFreeScan => todo!(),
-            Rule::LogicalGetToSeqScan => {
-                if let Extract::Leaf(LogicalGet(table)) = before.extract() {
-                    return vec![PartialExpr(PhysicalSeqScan(table), vec![])];
                 }
             }
             Rule::LogicalGetToIndexScan => {
-                if let Extract::Unary(
-                    LogicalFilter(predicates),
-                    PartialExprOption::Expr(PartialExpr(LogicalGet(table), _)),
-                ) = before.extract()
+                if let LogicalFilter(predicates, input) = &mexpr.op {
+                    for input in input.logical.borrow().iter() {
+                        if let LogicalGet(table) = &input.op {
+                            if can_index_scan(predicates, table) {
+                                binds.push(LogicalFilter(
+                                    predicates.clone(),
+                                    Bind::Operator(Box::new(LogicalGet(table.clone()))),
+                                ))
+                            }
+                        }
+                    }
+                }
+            }
+            _ => binds.push(mexpr.op.clone().map(|group| Bind::Group(group))),
+        }
+        binds
+    }
+
+    fn apply(&self, bind: Operator<Bind>) -> Option<Operator<Bind>> {
+        match self {
+            Rule::LogicalInnerJoinCommutivity => {
+                if let LogicalJoin(Join::Inner(join_predicates), left, right) = bind {
+                    return Some(LogicalJoin(
+                        Join::Inner(join_predicates.clone()),
+                        right,
+                        left,
+                    ));
+                }
+            }
+            // Rearrange left-deep join into right-deep join.
+            //
+            //             +---+ parent +---+
+            //             |                |
+            //             +                +
+            //      +--+leftJoin+---+     right
+            //      |               |
+            //      +               +
+            //   leftLeft      leftMiddle
+            Rule::LogicalInnerJoinAssociativity => {
+                if let LogicalJoin(Join::Inner(parent_predicates), Bind::Operator(left), right) =
+                    bind
                 {
-                    return index_scan(predicates, table);
+                    if let LogicalJoin(Join::Inner(left_predicates), left_left, left_middle) = *left
+                    {
+                        let mut new_parent_predicates = vec![];
+                        let mut new_right_predicates = vec![];
+                        todo!("redistribute predicates");
+                        return Some(LogicalJoin(
+                            Join::Inner(new_parent_predicates),
+                            left_left,
+                            Bind::Operator(Box::new(LogicalJoin(
+                                Join::Inner(new_right_predicates),
+                                left_middle,
+                                right,
+                            ))),
+                        ));
+                    }
+                }
+            }
+            Rule::LogicalGetToTableFreeScan => {
+                if let LogicalSingleGet = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalGetToSeqScan => {
+                if let LogicalGet(table) = bind {
+                    return Some(PhysicalSeqScan(table));
+                }
+            }
+            Rule::LogicalGetToIndexScan => {
+                if let LogicalFilter(predicates, Bind::Operator(input)) = bind {
+                    if let LogicalGet(table) = *input {
+                        return index_scan(predicates, table);
+                    }
                 }
             }
             Rule::LogicalFilterToFilter => {
-                if let Extract::Unary(LogicalFilter(predicates), input) = before.extract() {
-                    return vec![PartialExpr(PhysicalFilter(predicates), vec![input])];
+                if let LogicalFilter(predicates, input) = bind {
+                    return Some(PhysicalFilter(predicates, input));
                 }
             }
-            Rule::LogicalProjectToProject => todo!(),
+            Rule::LogicalProjectToProject => {
+                if let LogicalProject(_, _) = bind {
+                    todo!()
+                }
+            }
             Rule::LogicalJoinToNestedLoop => {
-                if let Extract::Binary(
-                    LogicalJoin {
-                        join,
-                        predicates,
-                        mark,
-                    },
-                    left,
-                    right,
-                ) = before.extract()
-                {
-                    return vec![PartialExpr(
-                        PhysicalNestedLoop {
-                            join,
-                            predicates,
-                            mark,
-                        },
-                        vec![left, right],
-                    )];
+                if let LogicalJoin(join, left, right) = bind {
+                    return Some(PhysicalNestedLoop(join, left, right));
                 }
             }
             Rule::LogicalJoinToHashJoin => {
-                if let Extract::Binary(
-                    LogicalJoin {
-                        join,
-                        predicates,
-                        mark,
-                    },
-                    left,
-                    right,
-                ) = before.extract()
-                {
-                    let mut equals = vec![];
-                    let mut remaining = vec![];
-                    fn unpack(mut arguments: Vec<Scalar>) -> (Scalar, Scalar) {
-                        (arguments.remove(0), arguments.remove(0))
-                    }
-                    fn is_equi_predicate(
-                        left: &PartialExprOption,
-                        right: &PartialExprOption,
-                        equals: &Vec<Scalar>,
-                    ) -> bool {
-                        todo!()
-                    }
-                    for p in predicates {
-                        match p {
-                            Scalar::Call(Function::Equal, arguments, _)
-                                if is_equi_predicate(&left, &right, &arguments) =>
-                            {
-                                equals.push(unpack(arguments));
-                            }
-                            Scalar::Call(Function::Equal, arguments, _)
-                                if is_equi_predicate(&right, &left, &arguments) =>
-                            {
-                                let (left, right) = unpack(arguments);
-                                equals.push((right, left));
-                            }
-                            p => remaining.push(p),
+                if let LogicalJoin(join, Bind::Group(left), Bind::Group(right)) = bind {
+                    let (hash_predicates, join) = match join {
+                        Join::Inner(join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Inner(remaining_predicates);
+                            (hash_predicates, join)
                         }
-                    }
-                    if !equals.is_empty() {
-                        return vec![PartialExpr(
-                            PhysicalHashJoin {
-                                join,
-                                mark,
-                                equals,
-                                predicates: remaining,
-                            },
-                            vec![left, right],
-                        )];
+                        Join::Right(join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Right(remaining_predicates);
+                            (hash_predicates, join)
+                        }
+                        Join::Outer(join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Outer(remaining_predicates);
+                            (hash_predicates, join)
+                        }
+                        Join::Semi(join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Semi(remaining_predicates);
+                            (hash_predicates, join)
+                        }
+                        Join::Anti(join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Anti(remaining_predicates);
+                            (hash_predicates, join)
+                        }
+                        Join::Single(join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Single(remaining_predicates);
+                            (hash_predicates, join)
+                        }
+                        Join::Mark(column, join_predicates) => {
+                            let (hash_predicates, remaining_predicates) =
+                                hash_join(join_predicates, &left, &right);
+                            let join = Join::Mark(column, remaining_predicates);
+                            (hash_predicates, join)
+                        }
+                    };
+                    if !hash_predicates.is_empty() {
+                        return Some(PhysicalHashJoin(
+                            join,
+                            hash_predicates,
+                            Bind::Group(left),
+                            Bind::Group(right),
+                        ));
                     }
                 }
             }
-            Rule::LogicalAggregateToAggregate => todo!(),
-            Rule::LogicalLimitToLimit => todo!(),
-            Rule::LogicalSortToSort => todo!(),
-            Rule::LogicallUnionToUnion => todo!(),
-            Rule::LogicalIntersectToIntersect => todo!(),
-            Rule::LogicalExceptToExcept => todo!(),
-            Rule::LogicalWithToCreateTempTable => todo!(),
-            Rule::LogicalGetWithToGetTempTable => todo!(),
-            Rule::LogicalInsertToInsert => todo!(),
-            Rule::LogicalValuesToValues => todo!(),
-            Rule::LogicalUpdateToUpdate => todo!(),
-            Rule::LogicalDeleteToDelete => todo!(),
-            Rule::LogicalCreateDatabaseToCreateDatabase => todo!(),
-            Rule::LogicalCreateTableToCreateTable => todo!(),
-            Rule::LogicalCreateIndexToCreateIndex => todo!(),
-            Rule::LogicalAlterTableToAlterTable => todo!(),
-            Rule::LogicalDropToDrop => todo!(),
-            Rule::LogicalRenameToRename => todo!(),
+            Rule::LogicalAggregateToAggregate => {
+                if let LogicalAggregate { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalLimitToLimit => {
+                if let LogicalLimit { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalSortToSort => {
+                if let LogicalSort(_, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicallUnionToUnion => {
+                if let LogicalUnion(_, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalIntersectToIntersect => {
+                if let LogicalIntersect(_, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalExceptToExcept => {
+                if let LogicalExcept(_, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalWithToCreateTempTable => {
+                if let LogicalWith(_, _, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalGetWithToGetTempTable => {
+                if let LogicalGetWith(_) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalInsertToInsert => {
+                if let LogicalInsert(_, _, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalValuesToValues => {
+                if let LogicalValues(_, _, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalUpdateToUpdate => {
+                if let LogicalUpdate(_, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalDeleteToDelete => {
+                if let LogicalDelete(_, _) = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalCreateDatabaseToCreateDatabase => {
+                if let LogicalCreateDatabase { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalCreateTableToCreateTable => {
+                if let LogicalCreateTable { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalCreateIndexToCreateIndex => {
+                if let LogicalCreateIndex { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalAlterTableToAlterTable => {
+                if let LogicalAlterTable { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalDropToDrop => {
+                if let LogicalDrop { .. } = bind {
+                    todo!()
+                }
+            }
+            Rule::LogicalRenameToRename => {
+                if let LogicalRename { .. } = bind {
+                    todo!()
+                }
+            }
         }
-        return vec![];
+        None
     }
 
     fn all() -> Vec<Rule> {
         vec![
-            Rule::PushImplicitFilterThroughNestedLoop,
-            Rule::MarkJoinToSemiJoin,
             Rule::LogicalInnerJoinCommutivity,
             Rule::LogicalInnerJoinAssociativity,
             Rule::LogicalGetToTableFreeScan,
@@ -779,234 +793,87 @@ impl Rule {
             Rule::LogicalValuesToValues,
             Rule::LogicalUpdateToUpdate,
             Rule::LogicalDeleteToDelete,
+            Rule::LogicalCreateDatabaseToCreateDatabase,
+            Rule::LogicalCreateTableToCreateTable,
+            Rule::LogicalCreateIndexToCreateIndex,
+            Rule::LogicalAlterTableToAlterTable,
+            Rule::LogicalDropToDrop,
+            Rule::LogicalRenameToRename,
         ]
     }
 }
 
-fn push_implicit_filter_through_nested_loop(
-    join: Join,
-    predicates: Vec<Scalar>,
-    mark: Option<Column>,
-    left: PartialExprOption,
-    right: PartialExprOption,
-) -> Vec<PartialExpr> {
-    let mut push_predicates = vec![];
-    let mut join_predicates = vec![];
-    for p in predicates {
-        if left.contains_any(&p) && right.contains_any(&p) {
-            push_predicates.push(p);
-        } else {
-            join_predicates.push(p);
-        }
-    }
-    if push_predicates.is_empty() {
-        return vec![];
-    }
-    let left = PartialExprOption::Expr(PartialExpr(LogicalFilter(push_predicates), vec![left]));
-    vec![PartialExpr(
-        LogicalJoin {
-            join,
-            predicates: join_predicates,
-            mark,
-        },
-        vec![left, right],
-    )]
+#[derive(Debug)]
+enum Bind {
+    Group(GroupRef),
+    Operator(Box<Operator<Bind>>),
 }
 
-fn index_scan(predicates: Vec<Scalar>, table: Table) -> Vec<PartialExpr> {
+fn can_index_scan(predicates: &Vec<Scalar>, table: &Table) -> bool {
+    index_scan(predicates.clone(), table.clone()).is_some()
+}
+
+fn index_scan(predicates: Vec<Scalar>, table: Table) -> Option<Operator<Bind>> {
     // TODO real implementation
-    if let Some((column, equals)) = match_indexed_lookup(&predicates) {
-        vec![PartialExpr(
-            PhysicalIndexScan {
-                table: table,
-                equals: vec![(column, equals)],
-            },
-            vec![],
-        )]
-    } else {
-        vec![]
-    }
-}
-
-fn match_indexed_lookup(predicates: &Vec<Scalar>) -> Option<(Column, Scalar)> {
-    if let [Scalar::Call(Function::Equal, arguments, _)] = predicates.as_slice() {
-        match arguments.as_slice() {
-            [Scalar::Column(column), equals] if column.name.ends_with("_id") => {
-                Some((column.clone(), equals.clone()))
-            }
-            [equals, Scalar::Column(column)] if column.name.ends_with("_id") => {
-                Some((column.clone(), equals.clone()))
-            }
-            _ => None,
+    if let Some((column, scalar)) = match_indexed_lookup(predicates) {
+        if column.table.clone() == Some(table.name.clone()) {
+            return Some(PhysicalIndexScan {
+                table,
+                equals: vec![(column, scalar)],
+            });
         }
-    } else {
-        None
     }
+    None
 }
 
-#[derive(Debug)]
-struct Pattern(OperatorType, Vec<PatternOption>);
-
-#[derive(Debug)]
-enum PatternOption {
-    Pattern(Pattern),
-    Leaf,
-}
-
-#[derive(Clone)]
-struct PartialExpr(Operator, Vec<PartialExprOption>);
-
-#[derive(Clone)]
-enum PartialExprOption {
-    Expr(PartialExpr),
-    Leaf(Rc<Group>),
-}
-
-impl Pattern {
-    fn bind(&self, mexpr: &MultiExpr) -> Vec<PartialExpr> {
-        match self {
-            Pattern(op, inputs) => {
-                if *op != mexpr.op.reflect() || inputs.len() != mexpr.inputs.len() {
-                    return vec![];
+fn match_indexed_lookup(mut predicates: Vec<Scalar>) -> Option<(Column, Scalar)> {
+    if predicates.len() == 0 {
+        if let Scalar::Call(Function::Equal, mut arguments, _) = predicates.pop().unwrap() {
+            match (arguments.pop().unwrap(), arguments.pop().unwrap()) {
+                (Scalar::Column(column), equals) | (equals, Scalar::Column(column))
+                    if column.name.ends_with("_id") =>
+                {
+                    return Some((column, equals))
                 }
-                let mut binds = vec![];
-                match inputs.as_slice() {
-                    [] => binds.push(PartialExpr(mexpr.op.clone(), vec![])),
-                    [input] => {
-                        for input in input.bind(mexpr.inputs[0].clone()) {
-                            binds.push(PartialExpr(mexpr.op.clone(), vec![input]));
-                        }
-                    }
-                    [left, right] => {
-                        for left in left.bind(mexpr.inputs[0].clone()) {
-                            for right in right.bind(mexpr.inputs[1].clone()) {
-                                binds.push(PartialExpr(
-                                    mexpr.op.clone(),
-                                    vec![left.clone(), right.clone()],
-                                ));
-                            }
-                        }
-                    }
-                    _ => panic!("{} inputs", inputs.len()),
-                }
-                binds
+                _ => {}
             }
-            _ => vec![],
         }
     }
+    None
 }
 
-impl PatternOption {
-    fn bind(&self, group: Rc<Group>) -> Vec<PartialExprOption> {
-        match self {
-            // Leaf binds the entire group:
-            PatternOption::Leaf => vec![PartialExprOption::Leaf(group)],
-            // Expr binds each logical member of the group:
-            PatternOption::Pattern(pattern) => group
-                .logical
-                .borrow()
-                .iter()
-                .flat_map(|mexpr| pattern.bind(mexpr))
-                .map(|pexpr| PartialExprOption::Expr(pexpr))
-                .collect(),
+fn hash_join(
+    mut join_predicates: Vec<Scalar>,
+    left: &Group,
+    right: &Group,
+) -> (Vec<(Scalar, Scalar)>, Vec<Scalar>) {
+    let mut hash_predicates = vec![];
+    let mut remaining_predicates = vec![];
+    for predicate in join_predicates.drain(0..) {
+        if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
+            let right_side = arguments.pop().unwrap();
+            let left_side = arguments.pop().unwrap();
+            if left_side.columns().all(|c| !left.correlated(c))
+                && right_side.columns().all(|c| !right.correlated(c))
+            {
+                hash_predicates.push((left_side, right_side))
+            } else if right_side.columns().all(|c| !left.correlated(c))
+                && left_side.columns().all(|c| !right.correlated(c))
+            {
+                hash_predicates.push((right_side, left_side))
+            } else {
+                remaining_predicates.push(Scalar::Call(
+                    Function::Equal,
+                    vec![left_side, right_side],
+                    Type::Bool,
+                ));
+            }
+        } else {
+            remaining_predicates.push(predicate);
         }
     }
-
-    fn has_inputs(&self) -> bool {
-        match self {
-            PatternOption::Pattern(pattern) => !pattern.1.is_empty(),
-            PatternOption::Leaf => false,
-        }
-    }
+    (hash_predicates, remaining_predicates)
 }
-
-impl PartialExpr {
-    fn new(expr: Expr) -> Self {
-        let mut inputs = Vec::with_capacity(expr.1.len());
-        for input in expr.1 {
-            inputs.push(PartialExprOption::Expr(PartialExpr::new(input)));
-        }
-        PartialExpr(expr.0, inputs)
-    }
-
-    pub fn extract(self) -> Extract<PartialExprOption> {
-        Extract::new(self.0, self.1)
-    }
-}
-
-impl PartialExprOption {
-    fn contains_any(&self, expr: &Scalar) -> bool {
-        todo!()
-    }
-
-    fn contains_all(&self, expr: &Scalar) -> bool {
-        todo!()
-    }
-}
-
-// #[test]
-// fn test_bind() {
-//     let pattern = Pattern(
-//         OperatorType::LogicalSingleGet,
-//         vec![
-//             Pattern(OperatorType::LogicalGetWith, vec![]),
-//             Pattern(OperatorType::LogicalGetWith, vec![]),
-//         ],
-//     );
-//     let a = MultiExpr::new(Operator::LogicalGetWith("a".to_string()), vec![]);
-//     let b = MultiExpr::new(Operator::LogicalGetWith("b".to_string()), vec![]);
-//     let c = MultiExpr::new(Operator::LogicalGetWith("c".to_string()), vec![]);
-//     let d = MultiExpr::new(Operator::LogicalGetWith("d".to_string()), vec![]);
-//     let mut left = Group {
-//         logical: HashSet::new(),
-//         physical: HashSet::new(),
-//         props: LogicalProps {
-//             cardinality: 0,
-//             column_unique_cardinality: HashMap::new(),
-//         },
-//         lower_bound: 0.0,
-//         upper_bound: Cell::new(f64::MAX),
-//         winner: None,
-//         explored: Cell::new(false),
-//     };
-//     let mut right = Group {
-//         logical: HashSet::new(),
-//         physical: HashSet::new(),
-//         props: LogicalProps {
-//             cardinality: 0,
-//             column_unique_cardinality: HashMap::new(),
-//         },
-//         lower_bound: 0.0,
-//         upper_bound: Cell::new(f64::MAX),
-//         winner: None,
-//         explored: Cell::new(false),
-//     };
-//     left.logical.insert(a);
-//     left.logical.insert(b);
-//     right.logical.insert(c);
-//     right.logical.insert(d);
-//     let mexpr = MultiExpr::new(
-//         Operator::LogicalSingleGet,
-//         vec![Rc::new(left), Rc::new(right)],
-//     );
-//     let mut group = Group {
-//         logical: HashSet::new(),
-//         physical: HashSet::new(),
-//         props: LogicalProps {
-//             cardinality: 0,
-//             column_unique_cardinality: HashMap::new(),
-//         },
-//         lower_bound: 0.0,
-//         upper_bound: Cell::new(f64::MAX),
-//         winner: None,
-//         explored: Cell::new(false),
-//     };
-//     group.logical.insert(mexpr);
-//     for mexpr in &group.logical {
-//         let choices = pattern.bind(&mexpr);
-//         dbg!(choices);
-//     }
-// }
 
 // Our implementation of tasks differs from Columbia/Cascades:
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
@@ -1035,12 +902,11 @@ fn optimize_expr(group: &Group, mexpr: &MultiExpr, explore: bool) {
             continue;
         }
         // Does the pattern match the multi-expression?
-        let pattern = rule.pattern();
-        if pattern.0 == mexpr.op.reflect() && pattern.1.len() == mexpr.inputs.len() {
+        if rule.matches_fast(mexpr) {
             // Explore inputs recursively:
-            for i in 0..pattern.1.len() {
-                if pattern.1[i].has_inputs() {
-                    explore_group(&mexpr.inputs[i]);
+            for i in 0..mexpr.op.len() {
+                if rule.has_inputs(i) {
+                    explore_group(&mexpr.op[i])
                 }
             }
             // Apply the rule, potentially adding another MultiExpr to the Group:
@@ -1051,25 +917,23 @@ fn optimize_expr(group: &Group, mexpr: &MultiExpr, explore: bool) {
 }
 
 fn apply_rule(rule: &Rule, group: &Group, mexpr: &MultiExpr, explore: bool) {
-    for before in rule.pattern().bind(mexpr) {
-        for after in rule.substitute(before) {
-            let mexpr = MultiExpr::new(after);
-            // Do we already know about this substitution?
-            if group.contains(&mexpr) {
-                continue;
+    for bind in rule.bind(mexpr) {
+        if let Some(bind) = rule.apply(bind) {
+            // Add mexpr if it isn't already present in the group:
+            if let Some(mexpr) = group.add(bind) {
+                if !mexpr.op.is_logical() {
+                    // If rule produced a physical implementation, cost the implementation:
+                    optimize_inputs(group, &mexpr);
+                } else {
+                    // If rule produced a new new logical expression, optimize it:
+                    optimize_expr(group, &mexpr, explore)
+                }
             }
-            if mexpr.op.reflect().is_physical() {
-                // If rule produced a physical implementation, cost the implementation:
-                optimize_inputs(group, &mexpr);
-            } else {
-                // If rule produced a new new logical expression, optimize it:
-                optimize_expr(group, &mexpr, explore)
-            }
-            group.add(mexpr);
         }
     }
 }
 
+// explore_group ensures that optimize_expr is called on every group at least once.
 fn explore_group(group: &Group) {
     if !group.explored.get() {
         for mexpr in group.logical.borrow().iter() {
@@ -1086,7 +950,7 @@ fn optimize_inputs(group: &Group, mexpr: &MultiExpr) {
     // Thus, physicalCost + sum(inputCosts) = a lower-bound for the total cost of the best strategy for this group.
     let physical_cost = physical_cost(group, mexpr);
     let mut input_costs = init_costs_using_lower_bound(mexpr);
-    for i in 0..mexpr.inputs.len() {
+    for i in 0..mexpr.op.len() {
         // If we can prove the cost of this MultiExpr exceeds the upper_bound of the Group, give up:
         if stop_early(group, physical_cost, &input_costs) {
             return;
@@ -1095,14 +959,14 @@ fn optimize_inputs(group: &Group, mexpr: &MultiExpr) {
         // using the best available estimate of the cost of the other inputs:
         let total_cost = cost_so_far(physical_cost, &input_costs);
         let input_upper_bound = group.upper_bound.get() - (total_cost - input_costs[i]);
-        mexpr.inputs[i].upper_bound.set(input_upper_bound);
+        mexpr.op[i].upper_bound.set(input_upper_bound);
         // Optimize input group:
-        optimize_group(&mexpr.inputs[i]);
+        optimize_group(&mexpr.op[i]);
         // If we failed to declare a winner, give up:
-        if mexpr.inputs[i].winner.borrow().is_none() {
+        if mexpr.op[i].winner.borrow().is_none() {
             return;
         }
-        input_costs[i] = mexpr.inputs[i].winner.borrow().as_ref().unwrap().cost
+        input_costs[i] = mexpr.op[i].winner.borrow().as_ref().unwrap().cost
     }
     // Now that we have a winning strategy for each input and an associated cost,
     // try to declare the current MultiExpr as the winner of its Group:
@@ -1124,36 +988,35 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
             let blocks = group.props.cardinality as f64;
             blocks * COST_READ_BLOCK
         }
-        PhysicalFilter(predicates) => {
-            let input = mexpr.inputs[0].props.cardinality as f64;
+        PhysicalFilter(predicates, input) => {
+            let input = input.props.cardinality as f64;
             let columns = predicates.len() as f64;
             input * columns * COST_CPU_PRED
         }
-        PhysicalProject(compute) => {
-            let output = mexpr.inputs[0].props.cardinality as f64;
+        PhysicalProject(compute, input) => {
+            let output = input.props.cardinality as f64;
             let columns = compute.len() as f64;
             output * columns * COST_CPU_EVAL
         }
-        PhysicalNestedLoop { predicates, .. } => {
-            let build = mexpr.inputs[0].props.cardinality as f64;
-            let probe = mexpr.inputs[1].props.cardinality as f64;
+        PhysicalNestedLoop(join, left, right) => {
+            let build = left.props.cardinality as f64;
+            let probe = right.props.cardinality as f64;
             let iterations = build * probe;
-            let filter = iterations * predicates.len() as f64;
-            build * COST_ARRAY_BUILD + iterations * COST_ARRAY_PROBE + filter * COST_CPU_PRED
+            build * COST_ARRAY_BUILD + iterations * COST_ARRAY_PROBE
         }
-        PhysicalHashJoin { predicates, .. } => {
-            let build = mexpr.inputs[0].props.cardinality as f64;
-            let probe = mexpr.inputs[1].props.cardinality as f64;
-            let filter = build.max(probe) * predicates.len() as f64;
-            build * COST_HASH_BUILD + probe * COST_HASH_PROBE + filter * COST_CPU_PRED
+        PhysicalHashJoin(join, equals, left, right) => {
+            let build = left.props.cardinality as f64;
+            let probe = right.props.cardinality as f64;
+            build * COST_HASH_BUILD + probe * COST_HASH_PROBE
         }
-        PhysicalCreateTempTable { .. } => todo!(),
-        PhysicalGetTempTable { .. } => todo!(),
+        PhysicalCreateTempTable { .. } => todo!("PhysicalCreateTempTable"),
+        PhysicalGetTempTable { .. } => todo!("PhysicalGetTempTable"),
         PhysicalAggregate {
             group_by,
             aggregate,
+            input,
         } => {
-            let n = mexpr.inputs[0].props.cardinality as f64;
+            let n = input.props.cardinality as f64;
             let n_group_by = n * group_by.len() as f64;
             let n_aggregate = n * aggregate.len() as f64;
             n_group_by * COST_HASH_BUILD + n_aggregate * COST_CPU_APPLY
@@ -1164,10 +1027,10 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
             let log = 2.0 * card * f64::log2(card);
             log * COST_CPU_COMP_MOVE
         }
-        PhysicalUnion { .. } | PhysicalIntersect { .. } | PhysicalExcept { .. } => 0.0,
-        PhysicalValues { .. } => 0.0,
-        PhysicalInsert { .. } | PhysicalUpdate { .. } | PhysicalDelete { .. } => {
-            let length = mexpr.inputs[0].props.cardinality as f64;
+        PhysicalUnion(_, _) | PhysicalIntersect(_, _) | PhysicalExcept(_, _) => 0.0,
+        PhysicalValues(_, _) => 0.0,
+        PhysicalInsert(_, _, input) | PhysicalUpdate(_, input) | PhysicalDelete(_, input) => {
+            let length = input.props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
@@ -1177,19 +1040,20 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
         | PhysicalAlterTable { .. }
         | PhysicalDrop { .. }
         | PhysicalRename { .. } => 0.0,
-        _ => panic!("{}", mexpr.op),
+        _ => panic!(),
     }
 }
 
 fn init_costs_using_lower_bound(mexpr: &MultiExpr) -> Vec<Cost> {
-    mexpr
-        .inputs
-        .iter()
-        .map(|group| match group.winner.borrow().as_ref() {
+    let mut costs = Vec::with_capacity(mexpr.op.len());
+    for i in 0..mexpr.op.len() {
+        let cost = match mexpr.op[i].winner.borrow().as_ref() {
             Some(winner) => winner.cost,
-            None => group.lower_bound,
-        })
-        .collect()
+            None => mexpr.op[i].lower_bound,
+        };
+        costs.push(cost);
+    }
+    costs
 }
 
 fn cost_so_far(physical_cost: Cost, input_costs: &Vec<Cost>) -> Cost {
@@ -1214,34 +1078,33 @@ fn stop_early(group: &Group, physical_cost: Cost, input_costs: &Vec<Cost>) -> bo
 
 fn try_to_declare_winner(group: &Group, mexpr: &MultiExpr, physical_cost: Cost) {
     let mut total_cost = physical_cost;
-    let mut inputs = Vec::with_capacity(mexpr.inputs.len());
-    for input in &mexpr.inputs {
-        match input.winner.borrow().as_ref() {
+    for i in 0..mexpr.op.len() {
+        match mexpr.op[i].winner.borrow().as_ref() {
             Some(winner) => {
                 total_cost += winner.cost;
-                inputs.push(winner.plan.clone());
             }
             None => {
                 return;
             }
         }
     }
+    let take_plan = |group: GroupRef| group.winner.replace(None).unwrap().plan;
+    let expr = Expr::new(mexpr.op.clone().map(take_plan));
     if group.winner.borrow().is_none() || total_cost < group.winner.borrow().as_ref().unwrap().cost
     {
         group.winner.replace(Some(Winner {
-            plan: Expr(mexpr.op.clone(), inputs),
+            plan: expr,
             cost: total_cost,
         }));
     }
 }
 
-pub fn optimize(expr: &Expr) -> (Expr, Cost) {
-    let expr = rewrite(expr);
-    let group = Group::new(PartialExpr::new(expr));
+pub fn optimize(expr: Expr) -> (Expr, Cost) {
+    let expr = crate::rewrite::rewrite(expr);
+    let group = Group::new(MultiExpr::new(expr));
     optimize_group(&group);
-    if group.winner.borrow().is_none() {
-        panic!("No winner")
+    match group.winner.replace(None) {
+        None => panic!("No winner"),
+        Some(winner) => (winner.plan, winner.cost),
     }
-    let winner = group.winner.borrow().as_ref().unwrap().clone();
-    (winner.plan.clone(), winner.cost)
 }

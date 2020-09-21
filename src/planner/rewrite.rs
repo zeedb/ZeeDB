@@ -3,12 +3,10 @@ use node::*;
 #[derive(Debug)]
 enum RewriteRule {
     // Bottom-up rewrite rules:
-    PullFilterThroughJoin,
-    PullFilterThroughProject,
-    PullFilterThroughAggregate,
     RemoveSingleJoin,
     // Top-down rewrite rules:
-    PushFilterThroughJoin,
+    PushExplicitFilterThroughJoin,
+    PushImplicitFilterThroughJoin,
     PushFilterThroughProject,
     CombineConsecutiveFilters,
     CombineConsecutiveProjects,
@@ -17,67 +15,52 @@ enum RewriteRule {
 impl RewriteRule {
     fn call(&self, expr: &Expr) -> Option<Expr> {
         match self {
-            RewriteRule::PullFilterThroughJoin => {
-                if let Expr(LogicalJoin(join, left, right)) = expr {
-                    if let Expr(LogicalFilter(left_predicates, left)) = left.as_ref() {
-                        return pull_filter_through_join(join, left_predicates, left, right);
-                    }
-                }
-            }
-            RewriteRule::PullFilterThroughProject => {
-                if let Expr(LogicalProject(projects, input)) = expr {
-                    if let Expr(LogicalFilter(predicates, input)) = input.as_ref() {
-                        return pull_filter_through_project(projects, predicates, input);
-                    }
-                }
-            }
-            RewriteRule::PullFilterThroughAggregate => {
-                if let Expr(LogicalAggregate {
-                    group_by,
-                    aggregate,
-                    input,
-                }) = expr
-                {
-                    if let Expr(LogicalFilter(predicates, input)) = input.as_ref() {
-                        return pull_filter_through_aggregate(
-                            group_by, aggregate, predicates, input,
-                        );
-                    }
-                }
-            }
             RewriteRule::RemoveSingleJoin => {
-                if let Expr(LogicalJoin(Join::Single, left, right)) = expr {
-                    if let Expr(LogicalProject(projects, left)) = left.as_ref() {
-                        if let Expr(LogicalSingleGet) = left.as_ref() {
-                            return Some(Expr(LogicalProject(projects.clone(), right.clone())));
+                if let LogicalJoin(Join::Single(_), left, right) = expr.as_ref() {
+                    if let LogicalProject(projects, left) = left.as_ref() {
+                        if let LogicalSingleGet = left.as_ref() {
+                            return Some(Expr::new(LogicalProject(
+                                projects.clone(),
+                                right.clone(),
+                            )));
                         }
                     }
                 }
             }
-            RewriteRule::PushFilterThroughJoin => {
-                if let Expr(LogicalFilter(filter_predicates, input)) = expr {
-                    if let Expr(LogicalJoin(join, left, right)) = input.as_ref() {
-                        return push_filter_through_join(filter_predicates, join, left, right);
+            RewriteRule::PushExplicitFilterThroughJoin => {
+                if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
+                    if let LogicalJoin(Join::Inner(join_predicates), left, right) = input.as_ref() {
+                        return push_explicit_filter_through_join(
+                            filter_predicates,
+                            join_predicates,
+                            left,
+                            right,
+                        );
                     }
                 }
             }
+            RewriteRule::PushImplicitFilterThroughJoin => {
+                if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
+                    return push_implicit_filter_through_join(join_predicates, left, right);
+                }
+            }
             RewriteRule::PushFilterThroughProject => {
-                if let Expr(LogicalFilter(predicates, input)) = expr {
-                    if let Expr(LogicalProject(projects, input)) = input.as_ref() {
+                if let LogicalFilter(predicates, input) = expr.as_ref() {
+                    if let LogicalProject(projects, input) = input.as_ref() {
                         return push_filter_through_project(predicates, projects, input);
                     }
                 }
             }
             RewriteRule::CombineConsecutiveFilters => {
-                if let Expr(LogicalFilter(outer, input)) = expr {
-                    if let Expr(LogicalFilter(inner, input)) = input.as_ref() {
+                if let LogicalFilter(outer, input) = expr.as_ref() {
+                    if let LogicalFilter(inner, input) = input.as_ref() {
                         return combine_consecutive_filters(outer, inner, input);
                     }
                 }
             }
             RewriteRule::CombineConsecutiveProjects => {
-                if let Expr(LogicalProject(outer, input)) = expr {
-                    if let Expr(LogicalProject(inner, input)) = input.as_ref() {
+                if let LogicalProject(outer, input) = expr.as_ref() {
+                    if let LogicalProject(inner, input) = input.as_ref() {
                         return combine_consecutive_projects(outer, inner, input);
                     }
                 }
@@ -100,22 +83,18 @@ fn pull_filter_through_join(
         return None;
     }
     if uncorr.is_empty() {
-        return Some(Expr(LogicalFilter(
+        return Some(Expr::new(LogicalFilter(
             corr,
-            Box::new(Expr(LogicalJoin(
-                join.clone(),
-                Box::new(left.clone()),
-                Box::new(right.clone()),
-            ))),
+            Expr::new(LogicalJoin(join.clone(), left.clone(), right.clone())),
         )));
     }
-    Some(Expr(LogicalFilter(
+    Some(Expr::new(LogicalFilter(
         corr,
-        Box::new(Expr(LogicalJoin(
+        Expr::new(LogicalJoin(
             join.clone(),
-            Box::new(Expr(LogicalFilter(uncorr, Box::new(left.clone())))),
-            Box::new(right.clone()),
-        ))),
+            Expr::new(LogicalFilter(uncorr, left.clone())),
+            right.clone(),
+        )),
     )))
 }
 
@@ -131,20 +110,17 @@ fn pull_filter_through_project(
         return None;
     }
     if uncorr.is_empty() {
-        return Some(Expr(LogicalFilter(
+        return Some(Expr::new(LogicalFilter(
             corr,
-            Box::new(Expr(LogicalProject(
-                projects.clone(),
-                Box::new(input.clone()),
-            ))),
+            Expr::new(LogicalProject(projects.clone(), input.clone())),
         )));
     }
-    Some(Expr(LogicalFilter(
+    Some(Expr::new(LogicalFilter(
         corr,
-        Box::new(Expr(LogicalProject(
+        Expr::new(LogicalProject(
             projects.clone(),
-            Box::new(Expr(LogicalFilter(uncorr, Box::new(input.clone())))),
-        ))),
+            Expr::new(LogicalFilter(uncorr, input.clone())),
+        )),
     )))
 }
 
@@ -172,42 +148,42 @@ fn pull_filter_through_aggregate(
     }
     // If there are no uncorrelated predicates, remove the inner filter.
     if uncorr.is_empty() {
-        return Some(Expr(LogicalFilter(
+        return Some(Expr::new(LogicalFilter(
             corr,
-            Box::new(Expr(LogicalAggregate {
+            Expr::new(LogicalAggregate {
                 group_by,
                 aggregate,
-                input: Box::new(input.clone()),
-            })),
+                input: input.clone(),
+            }),
         )));
     }
     // If there are correlated predicates, return both inner and outer filters.
-    Some(Expr(LogicalFilter(
+    Some(Expr::new(LogicalFilter(
         corr,
-        Box::new(Expr(LogicalAggregate {
+        Expr::new(LogicalAggregate {
             group_by,
             aggregate,
-            input: Box::new(Expr(LogicalFilter(uncorr, Box::new(input.clone())))),
-        })),
+            input: (Expr::new(LogicalFilter(uncorr, input.clone()))),
+        }),
     )))
 }
 
-fn push_filter_through_join(
-    predicates: &Vec<Scalar>,
-    join: &Join,
+fn push_explicit_filter_through_join(
+    filter_predicates: &Vec<Scalar>,
+    join_predicates: &Vec<Scalar>,
     left: &Expr,
     right: &Expr,
 ) -> Option<Expr> {
     let mut left_predicates = vec![];
     let mut right_predicates = vec![];
-    let mut remaining_predicates = predicates.clone();
-    for p in predicates {
+    let mut remaining_predicates = vec![];
+    for p in filter_predicates.clone() {
         if !p.columns().any(|c| left.correlated(c)) {
-            left_predicates.push(p.clone());
+            left_predicates.push(p);
         } else if !p.columns().any(|c| right.correlated(c)) {
-            right_predicates.push(p.clone());
+            right_predicates.push(p);
         } else {
-            remaining_predicates.push(p.clone());
+            remaining_predicates.push(p);
         }
     }
     if left_predicates.is_empty() && right_predicates.is_empty() {
@@ -215,17 +191,56 @@ fn push_filter_through_join(
     }
     let mut left = left.clone();
     if !left_predicates.is_empty() {
-        left = Expr(LogicalFilter(left_predicates, Box::new(left)));
+        left = Expr::new(LogicalFilter(left_predicates, left));
     }
     let mut right = right.clone();
     if !right_predicates.is_empty() {
-        right = Expr(LogicalFilter(right_predicates, Box::new(right)));
+        right = Expr::new(LogicalFilter(right_predicates, right));
     }
-    let mut top = Expr(LogicalJoin(join.clone(), Box::new(left), Box::new(right)));
+    let mut top = Expr::new(LogicalJoin(
+        Join::Inner(join_predicates.clone()),
+        left,
+        right,
+    ));
     if !remaining_predicates.is_empty() {
-        top = Expr(LogicalFilter(remaining_predicates, Box::new(top)));
+        top = Expr::new(LogicalFilter(remaining_predicates, top));
     }
     Some(top)
+}
+
+fn push_implicit_filter_through_join(
+    join_predicates: &Vec<Scalar>,
+    left: &Expr,
+    right: &Expr,
+) -> Option<Expr> {
+    let mut left_predicates = vec![];
+    let mut right_predicates = vec![];
+    let mut remaining_predicates = vec![];
+    for p in join_predicates.clone() {
+        if !p.columns().any(|c| left.correlated(c)) {
+            left_predicates.push(p);
+        } else if !p.columns().any(|c| right.correlated(c)) {
+            right_predicates.push(p);
+        } else {
+            remaining_predicates.push(p);
+        }
+    }
+    if left_predicates.is_empty() && right_predicates.is_empty() {
+        return None;
+    }
+    let mut left = left.clone();
+    if !left_predicates.is_empty() {
+        left = Expr::new(LogicalFilter(left_predicates, left));
+    }
+    let mut right = right.clone();
+    if !right_predicates.is_empty() {
+        right = Expr::new(LogicalFilter(right_predicates, right));
+    }
+    Some(Expr::new(LogicalJoin(
+        Join::Inner(remaining_predicates.clone()),
+        left,
+        right,
+    )))
 }
 
 fn push_filter_through_project(
@@ -245,17 +260,17 @@ fn push_filter_through_project(
     if inner.is_empty() {
         None
     } else if outer.is_empty() {
-        Some(Expr(LogicalProject(
+        Some(Expr::new(LogicalProject(
             projects.clone(),
-            Box::new(Expr(LogicalFilter(inner, Box::new(input.clone())))),
+            Expr::new(LogicalFilter(inner, input.clone())),
         )))
     } else {
-        Some(Expr(LogicalFilter(
+        Some(Expr::new(LogicalFilter(
             outer,
-            Box::new(Expr(LogicalProject(
+            Expr::new(LogicalProject(
                 projects.clone(),
-                Box::new(Expr(LogicalFilter(inner, Box::new(input.clone())))),
-            ))),
+                Expr::new(LogicalFilter(inner, input.clone())),
+            )),
         )))
     }
 }
@@ -272,7 +287,7 @@ fn combine_consecutive_filters(
     for p in inner {
         combined.push(p.clone());
     }
-    Some(Expr(LogicalFilter(combined, Box::new(input.clone()))))
+    Some(Expr::new(LogicalFilter(combined, input.clone())))
 }
 
 fn combine_consecutive_projects(
@@ -294,7 +309,7 @@ fn combine_consecutive_projects(
     for (inner_expr, inner_column) in inner {
         combined.push((inner_expr.clone(), inner_column.clone()));
     }
-    Some(Expr(LogicalProject(combined, Box::new(input.clone()))))
+    Some(Expr::new(LogicalProject(combined, input.clone())))
 }
 
 fn split_correlated_predicates(
@@ -325,14 +340,10 @@ fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {
 }
 
 pub fn rewrite(expr: Expr) -> Expr {
-    let bottom_up_rules = vec![
-        RewriteRule::PullFilterThroughJoin,
-        RewriteRule::PullFilterThroughProject,
-        RewriteRule::PullFilterThroughAggregate,
-        RewriteRule::RemoveSingleJoin,
-    ];
+    let bottom_up_rules = vec![RewriteRule::RemoveSingleJoin];
     let top_down_rules = vec![
-        RewriteRule::PushFilterThroughJoin,
+        RewriteRule::PushExplicitFilterThroughJoin,
+        RewriteRule::PushImplicitFilterThroughJoin,
         RewriteRule::PushFilterThroughProject,
         RewriteRule::CombineConsecutiveFilters,
         RewriteRule::CombineConsecutiveProjects,
