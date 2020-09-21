@@ -1,5 +1,5 @@
 select customer.customer_id, store.store_id from customer, store
 
-LogicalJoin Inner
+LogicalJoin Inner 
 	LogicalGet customer
 	LogicalGet store

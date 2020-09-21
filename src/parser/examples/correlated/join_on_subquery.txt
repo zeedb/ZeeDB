@@ -1,7 +1,6 @@
 select 1 from person join customer on (select person.person_id = customer.person_id)
 
 LogicalProject $query.$col1:1
-	LogicalFilter $expr_subquery.$col1
-		LogicalJoin Inner
-			LogicalGet person
-			LogicalGet customer
+	LogicalJoin Inner $expr_subquery.$col1
+		LogicalGet person
+		LogicalGet customer

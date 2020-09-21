@@ -7,7 +7,7 @@ fn test_bottom_up_rewrite() {
         vec![],
         Expr::new(Operator::LogicalGetWith("x".to_string())),
     ));
-    let visitor = |expr: Expr| match expr.0.as_ref() {
+    let visitor = |expr: Expr| match expr.as_ref() {
         Operator::LogicalGetWith(_) => Expr::new(Operator::LogicalGetWith("y".to_string())),
         _ => expr,
     };

@@ -2,10 +2,10 @@ insert into person (person_id, modified_date) values (1, (select current_timesta
 
 LogicalInsert person person.person_id person.modified_date
 	LogicalValues person.person_id person.modified_date [1 $expr_subquery.$col1] [2 $expr_subquery.$col1]
-		LogicalJoin Single
+		LogicalJoin Single 
 			LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
 				LogicalSingleGet
-			LogicalJoin Single
+			LogicalJoin Single 
 				LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
 					LogicalSingleGet
 				LogicalSingleGet

@@ -9,7 +9,7 @@ fn test_analyze() {
     let (_, expr) = parser
         .parse(&"select 1".to_string(), 0, &catalog())
         .unwrap();
-    match expr.0.as_ref() {
+    match expr.as_ref() {
         LogicalProject(_, _) => (),
         other => panic!("{:?}", other),
     }

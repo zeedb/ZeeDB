@@ -3,8 +3,7 @@ update customer set account_number = 0 where person_id in (select person_id from
 LogicalUpdate customer.account_number:$update.$expr
 	LogicalProject $update.$expr:0
 		LogicalFilter $mark.$in
-			LogicalJoin Mark $mark.$in
-				LogicalFilter (Equal customer.person_id person.person_id)
-					LogicalFilter (Equal person.first_name Joe)
-						LogicalGet person
+			LogicalJoin Mark $mark.$in (Equal customer.person_id person.person_id)
+				LogicalFilter (Equal person.first_name Joe)
+					LogicalGet person
 				LogicalGet customer

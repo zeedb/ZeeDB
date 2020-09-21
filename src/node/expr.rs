@@ -1,6 +1,5 @@
 use crate::operator::*;
 use std::fmt;
-use std::ops;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Expr(pub Box<Operator<Expr>>);
@@ -14,6 +13,10 @@ impl fmt::Display for Expr {
 impl Expr {
     pub fn new(op: Operator<Expr>) -> Self {
         Expr(Box::new(op))
+    }
+
+    pub fn as_ref(&self) -> &Operator<Expr> {
+        self.0.as_ref()
     }
 
     pub fn correlated(&self, column: &Column) -> bool {
@@ -48,7 +51,7 @@ impl Expr {
             }
             Ok(())
         };
-        match self.0.as_ref() {
+        match self.as_ref() {
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
             Operator::LogicalFilter(predicates, input) => {
@@ -434,7 +437,7 @@ impl<'it> Iterator for ExprIterator<'it> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next) = self.stack.pop() {
-            match next.0.as_ref() {
+            match next.as_ref() {
                 Operator::LogicalFilter(_, input) => {
                     self.stack.push(input);
                 }
