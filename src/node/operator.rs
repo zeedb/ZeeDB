@@ -453,6 +453,12 @@ impl<T> Operator<T> {
     }
 }
 
+impl<T> ops::IndexMut<usize> for Operator<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        todo!()
+    }
+}
+
 impl<T> ops::Index<usize> for Operator<T> {
     type Output = T;
 

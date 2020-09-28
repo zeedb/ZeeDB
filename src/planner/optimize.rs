@@ -12,9 +12,9 @@ use std::rc::Rc;
 // specific logical and physical query plans.
 struct Group {
     // logical holds a set of equivalent logical query plans.
-    logical: RefCell<HashSet<MultiExpr>>,
+    logical: HashSet<MultiExpr>,
     // physical holds a set of physical implementations of the query plans in logical.
-    physical: RefCell<HashSet<MultiExpr>>,
+    physical: HashSet<MultiExpr>,
     // props holds the logical characteristics of the output of this part of the query plan.
     // No matter how we implement this group using physical operators,
     // these logical characteristics will not change.
@@ -28,97 +28,43 @@ struct Group {
     // upper_bound is calculated by taking a winning plan and propagating a goal downwards.
     // We need to find a plan that is better than upper_bound, or it will be ignored
     // because it's worse than a plan we already know about.
-    upper_bound: Cell<Cost>,
+    upper_bound: Cost,
     // winner holds the best physical plan discovered so far.
-    winner: RefCell<Option<Winner>>,
+    winner: Option<Winner>,
     // explored is marked true on the first invocation of optimizeGroup,
     // whose job is to make sure optimizeExpr is called on every group at least once.
-    explored: Cell<bool>,
+    explored: bool,
 }
 
 // MultiExpr represents a part of a Group.
 // Unlike Group, which represents *all* equivalent query plans,
 // MultiExpr specifies operator at the top of a the query.
-#[derive(Eq, PartialEq, Hash)]
 struct MultiExpr {
     // The top operator in this query.
     // Inputs are represented using Group,
     // so they represent a class of equivalent plans rather than a single plan.
-    op: Operator<GroupRef>,
+    op: Operator<Rc<RefCell<Group>>>,
     // As we try different *logical* transformation rules,
     // we will record the fact that we've already tried this rule on this multi-expression
     // so we can avoid checking it agin. It's safe to mark transformations as complete,
     // because we explore the inputs to each multiExpr before we start
     // applying transformation rules to the group.
-    fired: Fired,
+    fired: HashSet<Rule>,
 }
 
-#[derive(Clone)]
-struct GroupRef(Rc<Group>);
-
-impl GroupRef {
-    fn new(group: Group) -> Self {
-        GroupRef(Rc::new(group))
-    }
-}
-
-impl hash::Hash for GroupRef {
+impl hash::Hash for MultiExpr {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        ptr::hash(self.0.as_ref(), state)
+        todo!()
     }
 }
 
-impl PartialEq for GroupRef {
+impl PartialEq for MultiExpr {
     fn eq(&self, other: &Self) -> bool {
-        ptr::eq(self.0.as_ref(), other.0.as_ref())
+        todo!()
     }
 }
 
-impl Eq for GroupRef {}
-
-impl fmt::Debug for GroupRef {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:p}", self.0.as_ref())
-    }
-}
-
-impl ops::Deref for GroupRef {
-    type Target = Group;
-
-    fn deref(&self) -> &Self::Target {
-        self.0.as_ref()
-    }
-}
-
-struct Fired(RefCell<HashSet<Rule>>);
-
-impl Fired {
-    fn new() -> Self {
-        Fired(RefCell::new(HashSet::new()))
-    }
-}
-
-impl hash::Hash for Fired {
-    fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        // Nothing to do
-    }
-}
-
-impl PartialEq for Fired {
-    fn eq(&self, other: &Self) -> bool {
-        true // Ignore Fired for equality
-    }
-}
-
-impl Eq for Fired {}
-
-impl ops::Deref for Fired {
-    type Target = RefCell<HashSet<Rule>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+impl Eq for MultiExpr {}
 
 struct Winner {
     plan: Expr,
@@ -139,24 +85,24 @@ impl Group {
         let mut logical = HashSet::new();
         logical.insert(mexpr);
         Group {
-            logical: RefCell::new(logical),
-            physical: RefCell::new(HashSet::new()),
+            logical: logical,
+            physical: HashSet::new(),
             props,
             lower_bound,
-            upper_bound: Cell::new(f64::MAX),
-            winner: RefCell::new(None),
-            explored: Cell::new(false),
+            upper_bound: f64::MAX,
+            winner: None,
+            explored: false,
         }
     }
 
-    fn add(&self, bind: Operator<Bind>) -> Option<&MultiExpr> {
+    fn add(&mut self, bind: Operator<Bind>) -> Option<&mut MultiExpr> {
         let mexpr = MultiExpr::unbind(bind);
         if mexpr.op.is_logical() {
-            if self.logical.borrow_mut().insert(mexpr) {
+            if self.logical.insert(mexpr) {
                 return todo!();
             }
         } else {
-            if self.physical.borrow_mut().insert(mexpr) {
+            if self.physical.insert(mexpr) {
                 return todo!();
             }
         }
@@ -172,17 +118,17 @@ impl MultiExpr {
     fn new(expr: Expr) -> Self {
         let op = expr
             .0
-            .map(|child| GroupRef::new(Group::new(MultiExpr::new(child))));
-        let fired = Fired::new();
+            .map(|child| Rc::new(RefCell::new(Group::new(MultiExpr::new(child)))));
+        let fired = HashSet::new();
         MultiExpr { op, fired }
     }
 
     fn unbind(bind: Operator<Bind>) -> Self {
         let op = bind.map(|child| match child {
             Bind::Group(group) => group,
-            Bind::Operator(bind) => GroupRef::new(Group::new(MultiExpr::unbind(*bind))),
+            Bind::Operator(bind) => Rc::new(RefCell::new(Group::new(MultiExpr::unbind(*bind)))),
         });
-        let fired = Fired::new();
+        let fired = HashSet::new();
         MultiExpr { op, fired }
     }
 }
@@ -199,33 +145,34 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
             }
         }
         LogicalFilter(predicates, input) => {
-            let scope = &input.props.column_unique_cardinality;
+            let scope = &input.borrow().props.column_unique_cardinality;
             let selectivity = total_selectivity(predicates, scope);
-            cardinality = apply_selectivity(input.props.cardinality, selectivity);
-            for (c, n) in &input.props.column_unique_cardinality {
+            cardinality = apply_selectivity(input.borrow().props.cardinality, selectivity);
+            for (c, n) in &input.borrow().props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
             }
         }
         LogicalProject(projects, input) => {
-            cardinality = input.props.cardinality;
+            cardinality = input.borrow().props.cardinality;
             for (x, c) in projects {
-                let n = scalar_unique_cardinality(&x, &input.props.column_unique_cardinality);
+                let n =
+                    scalar_unique_cardinality(&x, &input.borrow().props.column_unique_cardinality);
                 column_unique_cardinality.insert(c.clone(), n);
             }
         }
         LogicalJoin(join, left, right) => {
             let mut scope = HashMap::new();
-            for (c, n) in &left.props.column_unique_cardinality {
+            for (c, n) in &left.borrow().props.column_unique_cardinality {
                 scope.insert(c.clone(), *n);
             }
-            for (c, n) in &right.props.column_unique_cardinality {
+            for (c, n) in &right.borrow().props.column_unique_cardinality {
                 scope.insert(c.clone(), *n);
             }
-            let product = left.props.cardinality * right.props.cardinality;
-            for (c, n) in &left.props.column_unique_cardinality {
+            let product = left.borrow().props.cardinality * right.borrow().props.cardinality;
+            for (c, n) in &left.borrow().props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
-            for (c, n) in &right.props.column_unique_cardinality {
+            for (c, n) in &right.borrow().props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
             // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
@@ -248,7 +195,7 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
         } => {
             cardinality = 1;
             for c in group_by {
-                let n = input.props.column_unique_cardinality[&c];
+                let n = input.borrow().props.column_unique_cardinality[&c];
                 column_unique_cardinality.insert(c.clone(), n);
                 cardinality *= n;
             }
@@ -262,7 +209,7 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
             input,
         } => {
             cardinality = *limit;
-            for (c, n) in &input.props.column_unique_cardinality {
+            for (c, n) in &input.borrow().props.column_unique_cardinality {
                 if *limit < *n {
                     column_unique_cardinality.insert(c.clone(), *limit);
                 } else {
@@ -271,20 +218,20 @@ fn compute_logical_props(mexpr: &MultiExpr) -> LogicalProps {
             }
         }
         LogicalSort(_, input) => {
-            cardinality = input.props.cardinality;
-            column_unique_cardinality = input.props.column_unique_cardinality.clone();
+            cardinality = input.borrow().props.cardinality;
+            column_unique_cardinality = input.borrow().props.column_unique_cardinality.clone();
         }
         LogicalUnion(left, right) => {
-            cardinality = left.props.cardinality + right.props.cardinality;
+            cardinality = left.borrow().props.cardinality + right.borrow().props.cardinality;
             column_unique_cardinality = max_cuc(
-                &left.props.column_unique_cardinality,
-                &right.props.column_unique_cardinality,
+                &left.borrow().props.column_unique_cardinality,
+                &right.borrow().props.column_unique_cardinality,
             );
         }
         LogicalIntersect(left, right) => todo!("intersect"),
         LogicalExcept(left, right) => {
-            cardinality = left.props.cardinality;
-            column_unique_cardinality = left.props.column_unique_cardinality.clone();
+            cardinality = left.borrow().props.cardinality;
+            column_unique_cardinality = left.borrow().props.column_unique_cardinality.clone();
         }
         LogicalInsert(_, _, _)
         | LogicalValues(_, _, _)
@@ -511,7 +458,7 @@ impl Rule {
         match self {
             Rule::LogicalInnerJoinAssociativity => {
                 if let LogicalJoin(Join::Inner(parent_predicates), left, right) = &mexpr.op {
-                    for left in left.logical.borrow().iter() {
+                    for left in &left.borrow().logical {
                         if let LogicalJoin(Join::Inner(left_predicates), left_left, left_middle) =
                             &left.op
                         {
@@ -530,7 +477,7 @@ impl Rule {
             }
             Rule::LogicalGetToIndexScan => {
                 if let LogicalFilter(predicates, input) = &mexpr.op {
-                    for input in input.logical.borrow().iter() {
+                    for input in &input.borrow().logical {
                         if let LogicalGet(table) = &input.op {
                             if can_index_scan(predicates, table) {
                                 binds.push(LogicalFilter(
@@ -625,43 +572,43 @@ impl Rule {
                     let (hash_predicates, join) = match join {
                         Join::Inner(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Inner(remaining_predicates);
                             (hash_predicates, join)
                         }
                         Join::Right(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Right(remaining_predicates);
                             (hash_predicates, join)
                         }
                         Join::Outer(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Outer(remaining_predicates);
                             (hash_predicates, join)
                         }
                         Join::Semi(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Semi(remaining_predicates);
                             (hash_predicates, join)
                         }
                         Join::Anti(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Anti(remaining_predicates);
                             (hash_predicates, join)
                         }
                         Join::Single(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Single(remaining_predicates);
                             (hash_predicates, join)
                         }
                         Join::Mark(column, join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
-                                hash_join(join_predicates, &left, &right);
+                                hash_join(join_predicates, &left.borrow(), &right.borrow());
                             let join = Join::Mark(column, remaining_predicates);
                             (hash_predicates, join)
                         }
@@ -803,9 +750,8 @@ impl Rule {
     }
 }
 
-#[derive(Debug)]
 enum Bind {
-    Group(GroupRef),
+    Group(Rc<RefCell<Group>>),
     Operator(Box<Operator<Bind>>),
 }
 
@@ -879,22 +825,23 @@ fn hash_join(
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
 // However, the logic and the order of invocation should be exactly the same.
 
-fn optimize_group(group: &Group) {
-    if group.lower_bound >= group.upper_bound.get() || group.winner.borrow().is_some() {
+fn optimize_group(group: &mut Group) {
+    if group.lower_bound >= group.upper_bound || group.winner.is_some() {
         return;
     }
-    for e in group.physical.borrow().iter() {
-        optimize_inputs(group, e);
+    for mut e in &group.physical {
+        optimize_inputs(group, &mut e);
     }
-    for e in group.logical.borrow().iter() {
-        optimize_expr(group, e, false);
+    for mut e in &group.logical {
+        optimize_expr(group, &mut e, false);
     }
 }
 
-fn optimize_expr(group: &Group, mexpr: &MultiExpr, explore: bool) {
+// optimize_expr ensures that every matching rule has been applied to mexpr.
+fn optimize_expr(group: &mut Group, mexpr: &mut MultiExpr, explore: bool) {
     for rule in Rule::all() {
         // Have we already applied this rule to this multi-expression?
-        if mexpr.fired.borrow().contains(&rule) {
+        if mexpr.fired.contains(&rule) {
             continue;
         }
         // If we are exploring, rather than optimizing, skip physical expressions:
@@ -906,27 +853,30 @@ fn optimize_expr(group: &Group, mexpr: &MultiExpr, explore: bool) {
             // Explore inputs recursively:
             for i in 0..mexpr.op.len() {
                 if rule.has_inputs(i) {
-                    explore_group(&mexpr.op[i])
+                    explore_group(&mut mexpr.op[i].borrow_mut())
                 }
             }
             // Apply the rule, potentially adding another MultiExpr to the Group:
             apply_rule(&rule, group, mexpr, explore);
-            mexpr.fired.borrow_mut().insert(rule);
+            mexpr.fired.insert(rule);
         }
     }
 }
 
-fn apply_rule(rule: &Rule, group: &Group, mexpr: &MultiExpr, explore: bool) {
+// apply_rule applies rule to mexpr.
+// If the result is a logical expr, optimize it recursively.
+// If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
+fn apply_rule(rule: &Rule, group: &mut Group, mexpr: &MultiExpr, explore: bool) {
     for bind in rule.bind(mexpr) {
         if let Some(bind) = rule.apply(bind) {
             // Add mexpr if it isn't already present in the group:
-            if let Some(mexpr) = group.add(bind) {
+            if let Some(mut mexpr) = group.add(bind) {
                 if !mexpr.op.is_logical() {
                     // If rule produced a physical implementation, cost the implementation:
-                    optimize_inputs(group, &mexpr);
+                    optimize_inputs(group, mexpr);
                 } else {
                     // If rule produced a new new logical expression, optimize it:
-                    optimize_expr(group, &mexpr, explore)
+                    optimize_expr(group, mexpr, explore)
                 }
             }
         }
@@ -934,16 +884,18 @@ fn apply_rule(rule: &Rule, group: &Group, mexpr: &MultiExpr, explore: bool) {
 }
 
 // explore_group ensures that optimize_expr is called on every group at least once.
-fn explore_group(group: &Group) {
-    if !group.explored.get() {
-        for mexpr in group.logical.borrow().iter() {
-            optimize_expr(group, mexpr, true)
+fn explore_group(group: &mut Group) {
+    if !group.explored {
+        for mut mexpr in &group.logical {
+            optimize_expr(group, &mut mexpr, true)
         }
-        group.explored.set(true);
+        group.explored = true;
     }
 }
 
-fn optimize_inputs(group: &Group, mexpr: &MultiExpr) {
+// optimize_inputs takes a physical expr, recursively optimizes all of its inputs,
+// estimates its cost, and potentially declares it the winning physical expr of the group.
+fn optimize_inputs(group: &mut Group, mexpr: &mut MultiExpr) {
     // Initially, physicalCost is the actual physical cost of the operator at the head of the multi-expression,
     // and inputCosts are the total physical cost of the winning strategy for each input group.
     // If we don't yet have a winner for an inputGroup, we use the lower bound.
@@ -958,15 +910,15 @@ fn optimize_inputs(group: &Group, mexpr: &MultiExpr) {
         // Propagate the cost upper_bound downwards to the input group,
         // using the best available estimate of the cost of the other inputs:
         let total_cost = cost_so_far(physical_cost, &input_costs);
-        let input_upper_bound = group.upper_bound.get() - (total_cost - input_costs[i]);
-        mexpr.op[i].upper_bound.set(input_upper_bound);
+        let input_upper_bound = group.upper_bound - (total_cost - input_costs[i]);
+        mexpr.op[i].borrow_mut().upper_bound = input_upper_bound;
         // Optimize input group:
-        optimize_group(&mexpr.op[i]);
+        optimize_group(&mut mexpr.op[i].borrow_mut());
         // If we failed to declare a winner, give up:
-        if mexpr.op[i].winner.borrow().is_none() {
+        if mexpr.op[i].borrow().winner.is_none() {
             return;
         }
-        input_costs[i] = mexpr.op[i].winner.borrow().as_ref().unwrap().cost
+        input_costs[i] = mexpr.op[i].borrow().winner.as_ref().unwrap().cost
     }
     // Now that we have a winning strategy for each input and an associated cost,
     // try to declare the current MultiExpr as the winner of its Group:
@@ -989,24 +941,24 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
             blocks * COST_READ_BLOCK
         }
         PhysicalFilter(predicates, input) => {
-            let input = input.props.cardinality as f64;
+            let input = input.borrow().props.cardinality as f64;
             let columns = predicates.len() as f64;
             input * columns * COST_CPU_PRED
         }
         PhysicalProject(compute, input) => {
-            let output = input.props.cardinality as f64;
+            let output = input.borrow().props.cardinality as f64;
             let columns = compute.len() as f64;
             output * columns * COST_CPU_EVAL
         }
         PhysicalNestedLoop(join, left, right) => {
-            let build = left.props.cardinality as f64;
-            let probe = right.props.cardinality as f64;
+            let build = left.borrow().props.cardinality as f64;
+            let probe = right.borrow().props.cardinality as f64;
             let iterations = build * probe;
             build * COST_ARRAY_BUILD + iterations * COST_ARRAY_PROBE
         }
         PhysicalHashJoin(join, equals, left, right) => {
-            let build = left.props.cardinality as f64;
-            let probe = right.props.cardinality as f64;
+            let build = left.borrow().props.cardinality as f64;
+            let probe = right.borrow().props.cardinality as f64;
             build * COST_HASH_BUILD + probe * COST_HASH_PROBE
         }
         PhysicalCreateTempTable { .. } => todo!("PhysicalCreateTempTable"),
@@ -1016,7 +968,7 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
             aggregate,
             input,
         } => {
-            let n = input.props.cardinality as f64;
+            let n = input.borrow().props.cardinality as f64;
             let n_group_by = n * group_by.len() as f64;
             let n_aggregate = n * aggregate.len() as f64;
             n_group_by * COST_HASH_BUILD + n_aggregate * COST_CPU_APPLY
@@ -1030,7 +982,7 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
         PhysicalUnion(_, _) | PhysicalIntersect(_, _) | PhysicalExcept(_, _) => 0.0,
         PhysicalValues(_, _) => 0.0,
         PhysicalInsert(_, _, input) | PhysicalUpdate(_, input) | PhysicalDelete(_, input) => {
-            let length = input.props.cardinality as f64;
+            let length = input.borrow().props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
@@ -1047,9 +999,9 @@ fn physical_cost(group: &Group, mexpr: &MultiExpr) -> Cost {
 fn init_costs_using_lower_bound(mexpr: &MultiExpr) -> Vec<Cost> {
     let mut costs = Vec::with_capacity(mexpr.op.len());
     for i in 0..mexpr.op.len() {
-        let cost = match mexpr.op[i].winner.borrow().as_ref() {
+        let cost = match mexpr.op[i].borrow().winner.as_ref() {
             Some(winner) => winner.cost,
-            None => mexpr.op[i].lower_bound,
+            None => mexpr.op[i].borrow().lower_bound,
         };
         costs.push(cost);
     }
@@ -1072,14 +1024,14 @@ fn cost_so_far(physical_cost: Cost, input_costs: &Vec<Cost>) -> Cost {
 
 fn stop_early(group: &Group, physical_cost: Cost, input_costs: &Vec<Cost>) -> bool {
     let lower_bound = cost_so_far(physical_cost, input_costs);
-    let upper_bound = group.upper_bound.get();
+    let upper_bound = group.upper_bound;
     lower_bound >= upper_bound
 }
 
-fn try_to_declare_winner(group: &Group, mexpr: &MultiExpr, physical_cost: Cost) {
+fn try_to_declare_winner(group: &mut Group, mexpr: &MultiExpr, physical_cost: Cost) {
     let mut total_cost = physical_cost;
     for i in 0..mexpr.op.len() {
-        match mexpr.op[i].winner.borrow().as_ref() {
+        match mexpr.op[i].borrow().winner.as_ref() {
             Some(winner) => {
                 total_cost += winner.cost;
             }
@@ -1088,22 +1040,17 @@ fn try_to_declare_winner(group: &Group, mexpr: &MultiExpr, physical_cost: Cost) 
             }
         }
     }
-    let take_plan = |group: GroupRef| group.winner.replace(None).unwrap().plan;
-    let expr = Expr::new(mexpr.op.clone().map(take_plan));
-    if group.winner.borrow().is_none() || total_cost < group.winner.borrow().as_ref().unwrap().cost
-    {
-        group.winner.replace(Some(Winner {
-            plan: expr,
-            cost: total_cost,
-        }));
+    let current_cost = group.winner.as_ref().map(|w| w.cost).unwrap_or(f64::MAX);
+    if total_cost < current_cost {
+        todo!()
     }
 }
 
 pub fn optimize(expr: Expr) -> (Expr, Cost) {
     let expr = crate::rewrite::rewrite(expr);
-    let group = Group::new(MultiExpr::new(expr));
-    optimize_group(&group);
-    match group.winner.replace(None) {
+    let mut group = Group::new(MultiExpr::new(expr));
+    optimize_group(&mut group);
+    match group.winner {
         None => panic!("No winner"),
         Some(winner) => (winner.plan, winner.cost),
     }
