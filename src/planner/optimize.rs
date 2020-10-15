@@ -116,7 +116,6 @@ impl SearchSpace {
         for mid in self[gid].logical.clone() {
             self.optimize_expr(mid, false);
         }
-        dbg!(self);
     }
 
     // optimize_expr ensures that every matching rule has been applied to mexpr.
@@ -437,40 +436,40 @@ impl SearchSpace {
     fn physical_cost(&self, mid: MultiExprID) -> Cost {
         let parent = self[mid].parent;
         match &self[mid].op {
-            PhysicalTableFreeScan { .. } => 0.0,
-            PhysicalSeqScan { .. } => {
+            TableFreeScan { .. } => 0.0,
+            SeqScan { .. } => {
                 let output = self[parent].props.cardinality as f64;
                 let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
                 blocks * COST_READ_BLOCK
             }
-            PhysicalIndexScan { .. } => {
+            IndexScan { .. } => {
                 let blocks = self[parent].props.cardinality as f64;
                 blocks * COST_READ_BLOCK
             }
-            PhysicalFilter(predicates, input) => {
+            Filter(predicates, input) => {
                 let input = self[*input].props.cardinality as f64;
                 let columns = predicates.len() as f64;
                 input * columns * COST_CPU_PRED
             }
-            PhysicalProject(compute, input) => {
+            Project(compute, input) => {
                 let output = self[*input].props.cardinality as f64;
                 let columns = compute.len() as f64;
                 output * columns * COST_CPU_EVAL
             }
-            PhysicalNestedLoop(join, left, right) => {
+            NestedLoop(join, left, right) => {
                 let build = self[*left].props.cardinality as f64;
                 let probe = self[*right].props.cardinality as f64;
                 let iterations = build * probe;
                 build * COST_ARRAY_BUILD + iterations * COST_ARRAY_PROBE
             }
-            PhysicalHashJoin(join, equals, left, right) => {
+            HashJoin(join, equals, left, right) => {
                 let build = self[*left].props.cardinality as f64;
                 let probe = self[*right].props.cardinality as f64;
                 build * COST_HASH_BUILD + probe * COST_HASH_PROBE
             }
-            PhysicalCreateTempTable { .. } => todo!("PhysicalCreateTempTable"),
-            PhysicalGetTempTable { .. } => todo!("PhysicalGetTempTable"),
-            PhysicalAggregate {
+            CreateTempTable { .. } => todo!("CreateTempTable"),
+            GetTempTable { .. } => todo!("GetTempTable"),
+            Aggregate {
                 group_by,
                 aggregate,
                 input,
@@ -480,25 +479,25 @@ impl SearchSpace {
                 let n_aggregate = n * aggregate.len() as f64;
                 n_group_by * COST_HASH_BUILD + n_aggregate * COST_CPU_APPLY
             }
-            PhysicalLimit { .. } => 0.0,
-            PhysicalSort { .. } => {
+            Limit { .. } => 0.0,
+            Sort { .. } => {
                 let card = self[parent].props.cardinality.max(1) as f64;
                 let log = 2.0 * card * f64::log2(card);
                 log * COST_CPU_COMP_MOVE
             }
-            PhysicalUnion(_, _) | PhysicalIntersect(_, _) | PhysicalExcept(_, _) => 0.0,
-            PhysicalValues(_, _) => 0.0,
-            PhysicalInsert(_, _, input) | PhysicalUpdate(_, input) | PhysicalDelete(_, input) => {
+            Union(_, _) | Intersect(_, _) | Except(_, _) => 0.0,
+            Values(_, _) => 0.0,
+            Insert(_, _, input) | Update(_, input) | Delete(_, input) => {
                 let length = self[*input].props.cardinality as f64;
                 let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
                 blocks * COST_WRITE_BLOCK
             }
-            PhysicalCreateDatabase { .. }
-            | PhysicalCreateTable { .. }
-            | PhysicalCreateIndex { .. }
-            | PhysicalAlterTable { .. }
-            | PhysicalDrop { .. }
-            | PhysicalRename { .. } => 0.0,
+            CreateDatabase { .. }
+            | CreateTable { .. }
+            | CreateIndex { .. }
+            | AlterTable { .. }
+            | Drop { .. }
+            | Rename { .. } => 0.0,
             _ => panic!(),
         }
     }
@@ -884,7 +883,7 @@ impl Rule {
             }
             Rule::LogicalGetToSeqScan => {
                 if let LogicalGet(table) = bind {
-                    return Some(PhysicalSeqScan(table));
+                    return Some(SeqScan(table));
                 }
             }
             Rule::LogicalGetToIndexScan => {
@@ -896,7 +895,7 @@ impl Rule {
             }
             Rule::LogicalFilterToFilter => {
                 if let LogicalFilter(predicates, input) = bind {
-                    return Some(PhysicalFilter(predicates, input));
+                    return Some(Filter(predicates, input));
                 }
             }
             Rule::LogicalProjectToProject => {
@@ -906,7 +905,7 @@ impl Rule {
             }
             Rule::LogicalJoinToNestedLoop => {
                 if let LogicalJoin(join, left, right) = bind {
-                    return Some(PhysicalNestedLoop(join, left, right));
+                    return Some(NestedLoop(join, left, right));
                 }
             }
             Rule::LogicalJoinToHashJoin => {
@@ -956,7 +955,7 @@ impl Rule {
                         }
                     };
                     if !hash_predicates.is_empty() {
-                        return Some(PhysicalHashJoin(
+                        return Some(HashJoin(
                             join,
                             hash_predicates,
                             Bind::Group(left),
@@ -1105,7 +1104,7 @@ fn index_scan(predicates: Vec<Scalar>, table: Table) -> Option<Operator<Bind>> {
     // TODO real implementation
     if let Some((column, scalar)) = match_indexed_lookup(predicates) {
         if column.table.clone() == Some(table.name.clone()) {
-            return Some(PhysicalIndexScan {
+            return Some(IndexScan {
                 table,
                 equals: vec![(column, scalar)],
             });

@@ -162,7 +162,7 @@ impl Converter {
         for x in &q.order_by_item_list {
             let column = Column::from(&x.column_ref.get().column.get());
             let desc = x.is_descending.unwrap_or(false);
-            list.push(Sort { column, desc });
+            list.push(OrderBy { column, desc });
         }
         Expr::new(LogicalSort(list, input))
     }
@@ -289,7 +289,7 @@ impl Converter {
         aggregate: &ResolvedComputedColumnProto,
         project: &mut Vec<(Scalar, Column)>,
         input: &mut Expr,
-    ) -> Aggregate {
+    ) -> AggregateFn {
         let function = match aggregate.expr.get().node.get() {
             ResolvedFunctionCallBaseNode(function) => function,
             other => panic!("{:?}", other),
@@ -322,7 +322,7 @@ impl Converter {
         } else {
             panic!("expected 1 or 0 arguments but found {:?}", arguments.len());
         };
-        Aggregate::from(function, distinct, ignore_nulls, argument)
+        AggregateFn::from(function, distinct, ignore_nulls, argument)
     }
 
     fn create(&mut self, q: &AnyResolvedCreateStatementProto) -> Expr {

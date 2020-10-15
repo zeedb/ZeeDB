@@ -18,7 +18,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
             Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
             Operator::LogicalFilter(predicates, input) => {
-                write!(f, "LogicalFilter {}", join(predicates))?;
+                write!(f, "{} {}", self.name(), join(predicates))?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
@@ -27,19 +27,19 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 for (x, c) in projects {
                     strings.push(format!("{}:{}", c, x));
                 }
-                write!(f, "LogicalProject {}", strings.join(" "))?;
+                write!(f, "{} {}", self.name(), strings.join(" "))?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalJoin(join, left, right) => {
-                write!(f, "LogicalJoin {}", join)?;
+                write!(f, "{} {}", self.name(), join)?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::LogicalWith(name, left, right) => {
-                write!(f, "LogicalWith {}", name)?;
+                write!(f, "{} {}", self.name(), name)?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
@@ -51,7 +51,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 aggregate,
                 input,
             } => {
-                write!(f, "LogicalAggregate")?;
+                write!(f, "{}", self.name())?;
                 for column in group_by {
                     write!(f, " {}", column)?;
                 }
@@ -66,12 +66,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 offset,
                 input,
             } => {
-                write!(f, "LogicalLimit {} {}", limit, offset)?;
+                write!(f, "{} {} {}", self.name(), limit, offset)?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalSort(order_by, input) => {
-                write!(f, "LogicalSort")?;
+                write!(f, "{}", self.name())?;
                 for sort in order_by {
                     if sort.desc {
                         write!(f, " (Desc {})", sort.column)?;
@@ -83,28 +83,28 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalUnion(left, right) => {
-                write!(f, "LogicalUnion")?;
+                write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::LogicalIntersect(left, right) => {
-                write!(f, "LogicalIntersect")?;
+                write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::LogicalExcept(left, right) => {
-                write!(f, "LogicalExcept")?;
+                write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::LogicalInsert(table, columns, input) => {
-                write!(f, "LogicalInsert {}", table.name)?;
+                write!(f, "{} {}", self.name(), table.name)?;
                 for c in columns {
                     write!(f, " {}", c)?;
                 }
@@ -112,7 +112,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalValues(columns, rows, input) => {
-                write!(f, "LogicalValues")?;
+                write!(f, "{}", self.name())?;
                 for column in columns {
                     write!(f, " {}", column)?;
                 }
@@ -123,7 +123,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalUpdate(updates, input) => {
-                write!(f, "LogicalUpdate")?;
+                write!(f, "{}", self.name())?;
                 for (target, value) in updates {
                     match value {
                         Some(value) => write!(f, " {}:{}", target, value)?,
@@ -134,12 +134,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalDelete(table, input) => {
-                write!(f, "LogicalDelete {}", table.name)?;
+                write!(f, "{} {}", self.name(), table.name)?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalCreateDatabase(name) => {
-                write!(f, "LogicalCreateDatabase {}", name.path.join("."))
+                write!(f, "{} {}", self.name(), name.path.join("."))
             }
             Operator::LogicalCreateTable {
                 name,
@@ -148,7 +148,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 cluster_by,
                 primary_key,
             } => {
-                write!(f, "LogicalCreateTable {}", name)?;
+                write!(f, "{} {}", self.name(), name)?;
                 for (name, typ) in columns {
                     write!(f, " {}:{}", name, typ)?;
                 }
@@ -187,50 +187,50 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 columns.join(" ")
             ),
             Operator::LogicalAlterTable { name, actions } => {
-                write!(f, "LogicalAlterTable {}", name)?;
+                write!(f, "{} {}", self.name(), name)?;
                 for a in actions {
                     write!(f, " {}", a)?;
                 }
                 Ok(())
             }
             Operator::LogicalDrop { object, name } => {
-                write!(f, "LogicalDrop {:?} {}", object, name)
+                write!(f, "{} {:?} {}", self.name(), object, name)
             }
             Operator::LogicalRename { object, from, to } => {
-                write!(f, "LogicalRename {:?} {} {}", object, from, to)
+                write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
-            Operator::PhysicalTableFreeScan => write!(f, "TableFreeScan"),
-            Operator::PhysicalSeqScan(table) => write!(f, "SeqScan {}", table),
-            Operator::PhysicalIndexScan { table, equals } => {
-                write!(f, "IndexScan {}", table)?;
+            Operator::TableFreeScan => write!(f, "TableFreeScan"),
+            Operator::SeqScan(table) => write!(f, "SeqScan {}", table),
+            Operator::IndexScan { table, equals } => {
+                write!(f, "{} {}", self.name(), table)?;
                 for (column, scalar) in equals {
                     write!(f, " {}:{}", column.name, scalar)?;
                 }
                 Ok(())
             }
-            Operator::PhysicalFilter(predicates, input) => {
-                write!(f, "Filter {}", join(predicates))?;
+            Operator::Filter(predicates, input) => {
+                write!(f, "{} {}", self.name(), join(predicates))?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalProject(projects, input) => {
+            Operator::Project(projects, input) => {
                 let mut strings = vec![];
                 for (x, c) in projects {
                     strings.push(format!("{}:{}", c, x));
                 }
-                write!(f, "Project {}", strings.join(" "))?;
+                write!(f, "{} {}", self.name(), strings.join(" "))?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalNestedLoop(join, left, right) => {
-                write!(f, "NestedLoop {}", join)?;
+            Operator::NestedLoop(join, left, right) => {
+                write!(f, "{} {}", self.name(), join)?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::PhysicalHashJoin(join, equals, left, right) => {
-                write!(f, "HashJoin {}", join)?;
+            Operator::HashJoin(join, equals, left, right) => {
+                write!(f, "{} {}", self.name(), join)?;
                 for (left, right) in equals {
                     write!(f, " {}={}", left, right)?;
                 }
@@ -239,18 +239,18 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::PhysicalCreateTempTable(name, input) => {
-                write!(f, "CreateTempTable {}", name)?;
+            Operator::CreateTempTable(name, input) => {
+                write!(f, "{} {}", self.name(), name)?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalGetTempTable(name) => write!(f, "GetTempTable {}", name),
-            Operator::PhysicalAggregate {
+            Operator::GetTempTable(name) => write!(f, "GetTempTable {}", name),
+            Operator::Aggregate {
                 group_by,
                 aggregate,
                 input,
             } => {
-                write!(f, "Aggregate")?;
+                write!(f, "{}", self.name())?;
                 for column in group_by {
                     write!(f, " {}", column)?;
                 }
@@ -260,17 +260,17 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalLimit {
+            Operator::Limit {
                 limit,
                 offset,
                 input,
             } => {
-                write!(f, "Limit {} {}", limit, offset)?;
+                write!(f, "{} {} {}", self.name(), limit, offset)?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalSort(order_by, input) => {
-                write!(f, "Sort")?;
+            Operator::Sort(order_by, input) => {
+                write!(f, "{}", self.name())?;
                 for sort in order_by {
                     if sort.desc {
                         write!(f, " (Desc {})", sort.column)?;
@@ -281,37 +281,37 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalUnion(left, right) => {
-                write!(f, "Union")?;
+            Operator::Union(left, right) => {
+                write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::PhysicalIntersect(left, right) => {
-                write!(f, "Intersect")?;
+            Operator::Intersect(left, right) => {
+                write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::PhysicalExcept(left, right) => {
-                write!(f, "Except")?;
+            Operator::Except(left, right) => {
+                write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::PhysicalInsert(table, columns, input) => {
-                write!(f, "Insert {}", table.name)?;
+            Operator::Insert(table, columns, input) => {
+                write!(f, "{} {}", self.name(), table.name)?;
                 for c in columns {
                     write!(f, " {}", c)?;
                 }
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalValues(columns, values) => {
-                write!(f, "Values")?;
+            Operator::Values(columns, values) => {
+                write!(f, "{}", self.name())?;
                 for column in columns {
                     write!(f, " {}", column)?;
                 }
@@ -320,8 +320,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 }
                 Ok(())
             }
-            Operator::PhysicalUpdate(updates, input) => {
-                write!(f, "Update")?;
+            Operator::Update(updates, input) => {
+                write!(f, "{}", self.name())?;
                 for (target, value) in updates {
                     match value {
                         Some(value) => write!(f, " {}:{}", target, value)?,
@@ -331,20 +331,20 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalDelete(table, input) => {
-                write!(f, "Delete {}", table)?;
+            Operator::Delete(table, input) => {
+                write!(f, "{} {}", self.name(), table)?;
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::PhysicalCreateDatabase(name) => write!(f, "CreateDatabase {}", name),
-            Operator::PhysicalCreateTable {
+            Operator::CreateDatabase(name) => write!(f, "CreateDatabase {}", name),
+            Operator::CreateTable {
                 name,
                 columns,
                 partition_by,
                 cluster_by,
                 primary_key,
             } => {
-                write!(f, "CreateTable {}", name)?;
+                write!(f, "{} {}", self.name(), name)?;
                 for (name, typ) in columns {
                     write!(f, " {}:{}", name, typ)?;
                 }
@@ -371,21 +371,21 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 }
                 Ok(())
             }
-            Operator::PhysicalCreateIndex {
+            Operator::CreateIndex {
                 name,
                 table,
                 columns,
             } => write!(f, "CreateIndex {} {} {}", name, table, columns.join(" ")),
-            Operator::PhysicalAlterTable { name, actions } => {
-                write!(f, "AlterTable {}", name)?;
+            Operator::AlterTable { name, actions } => {
+                write!(f, "{} {}", self.name(), name)?;
                 for a in actions {
                     write!(f, " {}", a)?;
                 }
                 Ok(())
             }
-            Operator::PhysicalDrop { object, name } => write!(f, "Drop {:?} {}", object, name),
-            Operator::PhysicalRename { object, from, to } => {
-                write!(f, "Rename {:?} {} {}", object, from, to)
+            Operator::Drop { object, name } => write!(f, "Drop {:?} {}", object, name),
+            Operator::Rename { object, from, to } => {
+                write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
         }
     }
@@ -417,31 +417,62 @@ impl<T> Operator<T> {
             Operator::LogicalAlterTable { .. } => "LogicalAlterTable".to_string(),
             Operator::LogicalDrop { .. } => "LogicalDrop".to_string(),
             Operator::LogicalRename { .. } => "LogicalRename".to_string(),
-            Operator::PhysicalTableFreeScan { .. } => "PhysicalTableFreeScan".to_string(),
-            Operator::PhysicalSeqScan { .. } => "PhysicalSeqScan".to_string(),
-            Operator::PhysicalIndexScan { .. } => "PhysicalIndexScan".to_string(),
-            Operator::PhysicalFilter { .. } => "PhysicalFilter".to_string(),
-            Operator::PhysicalProject { .. } => "PhysicalProject".to_string(),
-            Operator::PhysicalNestedLoop { .. } => "PhysicalNestedLoop".to_string(),
-            Operator::PhysicalHashJoin { .. } => "PhysicalHashJoin".to_string(),
-            Operator::PhysicalCreateTempTable { .. } => "PhysicalCreateTempTable".to_string(),
-            Operator::PhysicalGetTempTable { .. } => "PhysicalGetTempTable".to_string(),
-            Operator::PhysicalAggregate { .. } => "PhysicalAggregate".to_string(),
-            Operator::PhysicalLimit { .. } => "PhysicalLimit".to_string(),
-            Operator::PhysicalSort { .. } => "PhysicalSort".to_string(),
-            Operator::PhysicalUnion { .. } => "PhysicalUnion".to_string(),
-            Operator::PhysicalIntersect { .. } => "PhysicalIntersect".to_string(),
-            Operator::PhysicalExcept { .. } => "PhysicalExcept".to_string(),
-            Operator::PhysicalInsert { .. } => "PhysicalInsert".to_string(),
-            Operator::PhysicalValues { .. } => "PhysicalValues".to_string(),
-            Operator::PhysicalUpdate { .. } => "PhysicalUpdate".to_string(),
-            Operator::PhysicalDelete { .. } => "PhysicalDelete".to_string(),
-            Operator::PhysicalCreateDatabase { .. } => "PhysicalCreateDatabase".to_string(),
-            Operator::PhysicalCreateTable { .. } => "PhysicalCreateTable".to_string(),
-            Operator::PhysicalCreateIndex { .. } => "PhysicalCreateIndex".to_string(),
-            Operator::PhysicalAlterTable { .. } => "PhysicalAlterTable".to_string(),
-            Operator::PhysicalDrop { .. } => "PhysicalDrop".to_string(),
-            Operator::PhysicalRename { .. } => "PhysicalRename".to_string(),
+            Operator::TableFreeScan { .. } => "TableFreeScan".to_string(),
+            Operator::SeqScan { .. } => "SeqScan".to_string(),
+            Operator::IndexScan { .. } => "IndexScan".to_string(),
+            Operator::Filter { .. } => "Filter".to_string(),
+            Operator::Project { .. } => "Project".to_string(),
+            Operator::NestedLoop { .. } => "NestedLoop".to_string(),
+            Operator::HashJoin { .. } => "HashJoin".to_string(),
+            Operator::CreateTempTable { .. } => "CreateTempTable".to_string(),
+            Operator::GetTempTable { .. } => "GetTempTable".to_string(),
+            Operator::Aggregate { .. } => "Aggregate".to_string(),
+            Operator::Limit { .. } => "Limit".to_string(),
+            Operator::Sort { .. } => "Sort".to_string(),
+            Operator::Union { .. } => "Union".to_string(),
+            Operator::Intersect { .. } => "Intersect".to_string(),
+            Operator::Except { .. } => "Except".to_string(),
+            Operator::Insert { .. } => "Insert".to_string(),
+            Operator::Values { .. } => "Values".to_string(),
+            Operator::Update { .. } => "Update".to_string(),
+            Operator::Delete { .. } => "Delete".to_string(),
+            Operator::CreateDatabase { .. } => "CreateDatabase".to_string(),
+            Operator::CreateTable { .. } => "CreateTable".to_string(),
+            Operator::CreateIndex { .. } => "CreateIndex".to_string(),
+            Operator::AlterTable { .. } => "AlterTable".to_string(),
+            Operator::Drop { .. } => "Drop".to_string(),
+            Operator::Rename { .. } => "Rename".to_string(),
+        }
+    }
+}
+
+impl fmt::Display for Join {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Join::Inner(predicates) => write!(f, "Inner {}", join(predicates)),
+            Join::Right(predicates) => write!(f, "Right {}", join(predicates)),
+            Join::Outer(predicates) => write!(f, "Outer {}", join(predicates)),
+            Join::Semi(predicates) => write!(f, "Semi {}", join(predicates)),
+            Join::Anti(predicates) => write!(f, "Anti {}", join(predicates)),
+            Join::Single(predicates) => write!(f, "Single {}", join(predicates)),
+            Join::Mark(column, predicates) => write!(f, "Mark {} {}", column, join(predicates)),
+        }
+    }
+}
+
+impl fmt::Display for Scalar {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Scalar::Literal(value, _) => write!(f, "{}", value),
+            Scalar::Column(column) => write!(f, "{}", column),
+            Scalar::Call(function, arguments, _) => {
+                if arguments.is_empty() {
+                    write!(f, "({:?})", function)
+                } else {
+                    write!(f, "({:?} {})", function, join(arguments))
+                }
+            }
+            Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
         }
     }
 }

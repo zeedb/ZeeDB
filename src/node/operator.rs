@@ -22,7 +22,7 @@ pub enum Operator<T> {
     // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
     LogicalAggregate {
         group_by: Vec<Column>,
-        aggregate: Vec<(Aggregate, Column)>,
+        aggregate: Vec<(AggregateFn, Column)>,
         input: T,
     },
     // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
@@ -32,7 +32,7 @@ pub enum Operator<T> {
         input: T,
     },
     // LogicalSort(columns) implements the ORDER BY clause.
-    LogicalSort(Vec<Sort>, T),
+    LogicalSort(Vec<OrderBy>, T),
     // LogicalUnion implements SELECT _ UNION ALL SELECT _.
     LogicalUnion(T, T),
     // LogicalIntersect implements SELECT _ INTERSECT SELECT _.
@@ -80,58 +80,58 @@ pub enum Operator<T> {
         from: Name,
         to: Name,
     },
-    PhysicalTableFreeScan,
-    PhysicalSeqScan(Table),
-    PhysicalIndexScan {
+    TableFreeScan,
+    SeqScan(Table),
+    IndexScan {
         table: Table,
         equals: Vec<(Column, Scalar)>,
     },
-    PhysicalFilter(Vec<Scalar>, T),
-    PhysicalProject(Vec<(Scalar, Column)>, T),
-    PhysicalNestedLoop(Join, T, T),
-    PhysicalHashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
-    PhysicalCreateTempTable(String, T),
-    PhysicalGetTempTable(String),
-    PhysicalAggregate {
+    Filter(Vec<Scalar>, T),
+    Project(Vec<(Scalar, Column)>, T),
+    NestedLoop(Join, T, T),
+    HashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
+    CreateTempTable(String, T),
+    GetTempTable(String),
+    Aggregate {
         group_by: Vec<Column>,
-        aggregate: Vec<(Aggregate, Column)>,
+        aggregate: Vec<(AggregateFn, Column)>,
         input: T,
     },
-    PhysicalLimit {
+    Limit {
         limit: i64,
         offset: i64,
         input: T,
     },
-    PhysicalSort(Vec<Sort>, T),
-    PhysicalUnion(T, T),
-    PhysicalIntersect(T, T),
-    PhysicalExcept(T, T),
-    PhysicalInsert(Table, Vec<Column>, T),
-    PhysicalValues(Vec<Column>, Vec<Vec<Scalar>>),
-    PhysicalUpdate(Vec<(Column, Option<Column>)>, T),
-    PhysicalDelete(Table, T),
-    PhysicalCreateDatabase(Name),
-    PhysicalCreateTable {
+    Sort(Vec<OrderBy>, T),
+    Union(T, T),
+    Intersect(T, T),
+    Except(T, T),
+    Insert(Table, Vec<Column>, T),
+    Values(Vec<Column>, Vec<Vec<Scalar>>),
+    Update(Vec<(Column, Option<Column>)>, T),
+    Delete(Table, T),
+    CreateDatabase(Name),
+    CreateTable {
         name: Name,
         columns: Vec<(String, encoding::Type)>,
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
     },
-    PhysicalCreateIndex {
+    CreateIndex {
         name: Name,
         table: Name,
         columns: Vec<String>,
     },
-    PhysicalAlterTable {
+    AlterTable {
         name: Name,
         actions: Vec<Alter>,
     },
-    PhysicalDrop {
+    Drop {
         object: ObjectType,
         name: Name,
     },
-    PhysicalRename {
+    Rename {
         object: ObjectType,
         from: Name,
         to: Name,
@@ -200,11 +200,11 @@ impl<T> Operator<T> {
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
             | Operator::LogicalExcept(_, _)
-            | Operator::PhysicalNestedLoop { .. }
-            | Operator::PhysicalHashJoin { .. }
-            | Operator::PhysicalUnion { .. }
-            | Operator::PhysicalIntersect { .. }
-            | Operator::PhysicalExcept { .. } => 2,
+            | Operator::NestedLoop { .. }
+            | Operator::HashJoin { .. }
+            | Operator::Union { .. }
+            | Operator::Intersect { .. }
+            | Operator::Except { .. } => 2,
             Operator::LogicalFilter(_, _)
             | Operator::LogicalProject(_, _)
             | Operator::LogicalAggregate { .. }
@@ -214,15 +214,15 @@ impl<T> Operator<T> {
             | Operator::LogicalValues(_, _, _)
             | Operator::LogicalUpdate(_, _)
             | Operator::LogicalDelete(_, _)
-            | Operator::PhysicalFilter { .. }
-            | Operator::PhysicalProject { .. }
-            | Operator::PhysicalCreateTempTable { .. }
-            | Operator::PhysicalAggregate { .. }
-            | Operator::PhysicalLimit { .. }
-            | Operator::PhysicalSort { .. }
-            | Operator::PhysicalInsert { .. }
-            | Operator::PhysicalUpdate { .. }
-            | Operator::PhysicalDelete { .. } => 1,
+            | Operator::Filter { .. }
+            | Operator::Project { .. }
+            | Operator::CreateTempTable { .. }
+            | Operator::Aggregate { .. }
+            | Operator::Limit { .. }
+            | Operator::Sort { .. }
+            | Operator::Insert { .. }
+            | Operator::Update { .. }
+            | Operator::Delete { .. } => 1,
             Operator::LogicalSingleGet
             | Operator::LogicalGet(_)
             | Operator::LogicalGetWith(_)
@@ -232,17 +232,17 @@ impl<T> Operator<T> {
             | Operator::LogicalAlterTable { .. }
             | Operator::LogicalDrop { .. }
             | Operator::LogicalRename { .. }
-            | Operator::PhysicalTableFreeScan
-            | Operator::PhysicalSeqScan { .. }
-            | Operator::PhysicalIndexScan { .. }
-            | Operator::PhysicalGetTempTable { .. }
-            | Operator::PhysicalValues { .. }
-            | Operator::PhysicalCreateDatabase { .. }
-            | Operator::PhysicalCreateTable { .. }
-            | Operator::PhysicalCreateIndex { .. }
-            | Operator::PhysicalAlterTable { .. }
-            | Operator::PhysicalDrop { .. }
-            | Operator::PhysicalRename { .. } => 0,
+            | Operator::TableFreeScan
+            | Operator::SeqScan { .. }
+            | Operator::IndexScan { .. }
+            | Operator::GetTempTable { .. }
+            | Operator::Values { .. }
+            | Operator::CreateDatabase { .. }
+            | Operator::CreateTable { .. }
+            | Operator::CreateIndex { .. }
+            | Operator::AlterTable { .. }
+            | Operator::Drop { .. }
+            | Operator::Rename { .. } => 0,
         }
     }
 
@@ -358,97 +358,75 @@ impl<T> Operator<T> {
             Operator::LogicalRename { object, from, to } => {
                 Operator::LogicalRename { object, from, to }
             }
-            Operator::PhysicalTableFreeScan => Operator::PhysicalTableFreeScan,
-            Operator::PhysicalSeqScan(table) => Operator::PhysicalSeqScan(table),
-            Operator::PhysicalIndexScan { table, equals } => {
-                Operator::PhysicalIndexScan { table, equals }
+            Operator::TableFreeScan => Operator::TableFreeScan,
+            Operator::SeqScan(table) => Operator::SeqScan(table),
+            Operator::IndexScan { table, equals } => Operator::IndexScan { table, equals },
+            Operator::Filter(predicates, input) => Operator::Filter(predicates, visitor(input)),
+            Operator::Project(projects, input) => Operator::Project(projects, visitor(input)),
+            Operator::NestedLoop(join, left, right) => {
+                Operator::NestedLoop(join, visitor(left), visitor(right))
             }
-            Operator::PhysicalFilter(predicates, input) => {
-                Operator::PhysicalFilter(predicates, visitor(input))
+            Operator::HashJoin(join, equals, left, right) => {
+                Operator::HashJoin(join, equals, visitor(left), visitor(right))
             }
-            Operator::PhysicalProject(projects, input) => {
-                Operator::PhysicalProject(projects, visitor(input))
+            Operator::CreateTempTable(name, input) => {
+                Operator::CreateTempTable(name, visitor(input))
             }
-            Operator::PhysicalNestedLoop(join, left, right) => {
-                Operator::PhysicalNestedLoop(join, visitor(left), visitor(right))
-            }
-            Operator::PhysicalHashJoin(join, equals, left, right) => {
-                Operator::PhysicalHashJoin(join, equals, visitor(left), visitor(right))
-            }
-            Operator::PhysicalCreateTempTable(name, input) => {
-                Operator::PhysicalCreateTempTable(name, visitor(input))
-            }
-            Operator::PhysicalGetTempTable(name) => Operator::PhysicalGetTempTable(name),
-            Operator::PhysicalAggregate {
+            Operator::GetTempTable(name) => Operator::GetTempTable(name),
+            Operator::Aggregate {
                 group_by,
                 aggregate,
                 input,
-            } => Operator::PhysicalAggregate {
+            } => Operator::Aggregate {
                 group_by,
                 aggregate,
                 input: visitor(input),
             },
-            Operator::PhysicalLimit {
+            Operator::Limit {
                 limit,
                 offset,
                 input,
-            } => Operator::PhysicalLimit {
+            } => Operator::Limit {
                 limit,
                 offset,
                 input: visitor(input),
             },
-            Operator::PhysicalSort(order_by, input) => {
-                Operator::PhysicalSort(order_by, visitor(input))
+            Operator::Sort(order_by, input) => Operator::Sort(order_by, visitor(input)),
+            Operator::Union(left, right) => Operator::Union(visitor(left), visitor(right)),
+            Operator::Intersect(left, right) => Operator::Intersect(visitor(left), visitor(right)),
+            Operator::Except(left, right) => Operator::Except(visitor(left), visitor(right)),
+            Operator::Insert(table, columns, input) => {
+                Operator::Insert(table, columns, visitor(input))
             }
-            Operator::PhysicalUnion(left, right) => {
-                Operator::PhysicalUnion(visitor(left), visitor(right))
-            }
-            Operator::PhysicalIntersect(left, right) => {
-                Operator::PhysicalIntersect(visitor(left), visitor(right))
-            }
-            Operator::PhysicalExcept(left, right) => {
-                Operator::PhysicalExcept(visitor(left), visitor(right))
-            }
-            Operator::PhysicalInsert(table, columns, input) => {
-                Operator::PhysicalInsert(table, columns, visitor(input))
-            }
-            Operator::PhysicalValues(columns, rows) => Operator::PhysicalValues(columns, rows),
-            Operator::PhysicalUpdate(updates, input) => {
-                Operator::PhysicalUpdate(updates, visitor(input))
-            }
-            Operator::PhysicalDelete(table, input) => {
-                Operator::PhysicalDelete(table, visitor(input))
-            }
-            Operator::PhysicalCreateDatabase(name) => Operator::PhysicalCreateDatabase(name),
-            Operator::PhysicalCreateTable {
+            Operator::Values(columns, rows) => Operator::Values(columns, rows),
+            Operator::Update(updates, input) => Operator::Update(updates, visitor(input)),
+            Operator::Delete(table, input) => Operator::Delete(table, visitor(input)),
+            Operator::CreateDatabase(name) => Operator::CreateDatabase(name),
+            Operator::CreateTable {
                 name,
                 columns,
                 partition_by,
                 cluster_by,
                 primary_key,
-            } => Operator::PhysicalCreateTable {
+            } => Operator::CreateTable {
                 name,
                 columns,
                 partition_by,
                 cluster_by,
                 primary_key,
             },
-            Operator::PhysicalCreateIndex {
+            Operator::CreateIndex {
                 name,
                 table,
                 columns,
-            } => Operator::PhysicalCreateIndex {
+            } => Operator::CreateIndex {
                 name,
                 table,
                 columns,
             },
-            Operator::PhysicalAlterTable { name, actions } => {
-                Operator::PhysicalAlterTable { name, actions }
-            }
-            Operator::PhysicalDrop { object, name } => Operator::PhysicalDrop { object, name },
-            Operator::PhysicalRename { object, from, to } => {
-                Operator::PhysicalRename { object, from, to }
-            }
+            Operator::AlterTable { name, actions } => Operator::AlterTable { name, actions },
+            Operator::Drop { object, name } => Operator::Drop { object, name },
+            Operator::Rename { object, from, to } => Operator::Rename { object, from, to },
         }
     }
 }
@@ -463,11 +441,11 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::LogicalUnion(left, right)
             | Operator::LogicalIntersect(left, right)
             | Operator::LogicalExcept(left, right)
-            | Operator::PhysicalNestedLoop(_, left, right)
-            | Operator::PhysicalHashJoin(_, _, left, right)
-            | Operator::PhysicalUnion(left, right)
-            | Operator::PhysicalIntersect(left, right)
-            | Operator::PhysicalExcept(left, right) => match index {
+            | Operator::NestedLoop(_, left, right)
+            | Operator::HashJoin(_, _, left, right)
+            | Operator::Union(left, right)
+            | Operator::Intersect(left, right)
+            | Operator::Except(left, right) => match index {
                 0 => left,
                 1 => right,
                 _ => panic!("{} is out of bounds [0,2)", index),
@@ -481,15 +459,15 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::LogicalValues(_, _, input)
             | Operator::LogicalUpdate(_, input)
             | Operator::LogicalDelete(_, input)
-            | Operator::PhysicalFilter(_, input)
-            | Operator::PhysicalProject(_, input)
-            | Operator::PhysicalCreateTempTable(_, input)
-            | Operator::PhysicalAggregate { input, .. }
-            | Operator::PhysicalLimit { input, .. }
-            | Operator::PhysicalSort(_, input)
-            | Operator::PhysicalInsert(_, _, input)
-            | Operator::PhysicalUpdate(_, input)
-            | Operator::PhysicalDelete(_, input) => match index {
+            | Operator::Filter(_, input)
+            | Operator::Project(_, input)
+            | Operator::CreateTempTable(_, input)
+            | Operator::Aggregate { input, .. }
+            | Operator::Limit { input, .. }
+            | Operator::Sort(_, input)
+            | Operator::Insert(_, _, input)
+            | Operator::Update(_, input)
+            | Operator::Delete(_, input) => match index {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },
@@ -520,28 +498,6 @@ pub enum Join {
     // Mark implements "Mark Join" from http://btw2017.informatik.uni-stuttgart.de/slidesandpapers/F1-10-37/paper_web.pdf
     // The correlated subquery is always on the left.
     Mark(Column, Vec<Scalar>),
-}
-
-impl fmt::Display for Join {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Join::Inner(predicates) => write!(f, "Inner {}", join(predicates)),
-            Join::Right(predicates) => write!(f, "Right {}", join(predicates)),
-            Join::Outer(predicates) => write!(f, "Outer {}", join(predicates)),
-            Join::Semi(predicates) => write!(f, "Semi {}", join(predicates)),
-            Join::Anti(predicates) => write!(f, "Anti {}", join(predicates)),
-            Join::Single(predicates) => write!(f, "Single {}", join(predicates)),
-            Join::Mark(column, predicates) => write!(f, "Mark {} {}", column, join(predicates)),
-        }
-    }
-}
-
-fn join(xs: &Vec<Scalar>) -> String {
-    let mut strings = vec![];
-    for x in xs {
-        strings.push(format!("{}", x));
-    }
-    strings.join(" ")
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -649,12 +605,12 @@ impl ObjectType {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Sort {
+pub struct OrderBy {
     pub column: Column,
     pub desc: bool,
 }
 
-impl fmt::Display for Sort {
+impl fmt::Display for OrderBy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if self.desc {
             write!(f, "-{}", self.column)
@@ -725,23 +681,6 @@ impl Scalar {
                 Scalar::Cast(Box::new(uncast.inline(expr, column)), typ.clone())
             }
             _ => self.clone(),
-        }
-    }
-}
-
-impl fmt::Display for Scalar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Scalar::Literal(value, _) => write!(f, "{}", value),
-            Scalar::Column(column) => write!(f, "{}", column),
-            Scalar::Call(function, arguments, _) => {
-                if arguments.is_empty() {
-                    write!(f, "({:?})", function)
-                } else {
-                    write!(f, "({:?} {})", function, join(arguments))
-                }
-            }
-            Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
         }
     }
 }
@@ -1020,7 +959,7 @@ impl Function {
 
 // Aggregate functions appear in GROUP BY expressions.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum Aggregate {
+pub enum AggregateFn {
     AnyValue(Column),
     ArrayAgg(Distinct, IgnoreNulls, Column),
     ArrayConcatAgg(Column),
@@ -1038,7 +977,7 @@ pub enum Aggregate {
     Sum(Distinct, Column), // TODO what happens to string_agg(_, ', ')
 }
 
-impl Aggregate {
+impl AggregateFn {
     pub fn from(
         name: String,
         distinct: bool,
@@ -1048,68 +987,72 @@ impl Aggregate {
         let distinct = Distinct(distinct);
         let ignore_nulls = IgnoreNulls(ignore_nulls);
         match name.as_str() {
-            "ZetaSQL:any_value" => Aggregate::AnyValue(argument.unwrap()),
-            "ZetaSQL:array_agg" => Aggregate::ArrayAgg(distinct, ignore_nulls, argument.unwrap()),
-            "ZetaSQL:array_concat_agg" => Aggregate::ArrayConcatAgg(argument.unwrap()),
-            "ZetaSQL:avg" => Aggregate::Avg(distinct, argument.unwrap()),
-            "ZetaSQL:bit_and" => Aggregate::BitAnd(distinct, argument.unwrap()),
-            "ZetaSQL:bit_or" => Aggregate::BitOr(distinct, argument.unwrap()),
-            "ZetaSQL:bit_xor" => Aggregate::BitXor(distinct, argument.unwrap()),
-            "ZetaSQL:count" => Aggregate::Count(distinct, argument.unwrap()),
-            "ZetaSQL:$count_star" => Aggregate::CountStar,
-            "ZetaSQL:logical_and" => Aggregate::LogicalAnd(argument.unwrap()),
-            "ZetaSQL:logical_or" => Aggregate::LogicalOr(argument.unwrap()),
-            "ZetaSQL:max" => Aggregate::Max(argument.unwrap()),
-            "ZetaSQL:min" => Aggregate::Min(argument.unwrap()),
-            "ZetaSQL:string_agg" => Aggregate::StringAgg(distinct, argument.unwrap()),
-            "ZetaSQL:sum" => Aggregate::Sum(distinct, argument.unwrap()),
+            "ZetaSQL:any_value" => AggregateFn::AnyValue(argument.unwrap()),
+            "ZetaSQL:array_agg" => AggregateFn::ArrayAgg(distinct, ignore_nulls, argument.unwrap()),
+            "ZetaSQL:array_concat_agg" => AggregateFn::ArrayConcatAgg(argument.unwrap()),
+            "ZetaSQL:avg" => AggregateFn::Avg(distinct, argument.unwrap()),
+            "ZetaSQL:bit_and" => AggregateFn::BitAnd(distinct, argument.unwrap()),
+            "ZetaSQL:bit_or" => AggregateFn::BitOr(distinct, argument.unwrap()),
+            "ZetaSQL:bit_xor" => AggregateFn::BitXor(distinct, argument.unwrap()),
+            "ZetaSQL:count" => AggregateFn::Count(distinct, argument.unwrap()),
+            "ZetaSQL:$count_star" => AggregateFn::CountStar,
+            "ZetaSQL:logical_and" => AggregateFn::LogicalAnd(argument.unwrap()),
+            "ZetaSQL:logical_or" => AggregateFn::LogicalOr(argument.unwrap()),
+            "ZetaSQL:max" => AggregateFn::Max(argument.unwrap()),
+            "ZetaSQL:min" => AggregateFn::Min(argument.unwrap()),
+            "ZetaSQL:string_agg" => AggregateFn::StringAgg(distinct, argument.unwrap()),
+            "ZetaSQL:sum" => AggregateFn::Sum(distinct, argument.unwrap()),
             _ => panic!("{} is not supported", name),
         }
     }
 }
 
-impl fmt::Display for Aggregate {
+impl fmt::Display for AggregateFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Aggregate::AnyValue(column) => write!(f, "(AnyValue {})", column),
-            Aggregate::ArrayAgg(Distinct(true), IgnoreNulls(true), column) => {
+            AggregateFn::AnyValue(column) => write!(f, "(AnyValue {})", column),
+            AggregateFn::ArrayAgg(Distinct(true), IgnoreNulls(true), column) => {
                 write!(f, "(ArrayAgg (Distinct {}))", column)
             }
-            Aggregate::ArrayAgg(Distinct(true), IgnoreNulls(false), column) => {
+            AggregateFn::ArrayAgg(Distinct(true), IgnoreNulls(false), column) => {
                 write!(f, "(ArrayAgg (Distinct (IgnoreNulls {})))", column)
             }
-            Aggregate::ArrayAgg(Distinct(false), IgnoreNulls(true), column) => {
+            AggregateFn::ArrayAgg(Distinct(false), IgnoreNulls(true), column) => {
                 write!(f, "(ArrayAgg IgnoreNulls({}))", column)
             }
-            Aggregate::ArrayAgg(Distinct(false), IgnoreNulls(false), column) => {
+            AggregateFn::ArrayAgg(Distinct(false), IgnoreNulls(false), column) => {
                 write!(f, "(ArrayAgg (IgnoreNulls {}))", column)
             }
-            Aggregate::ArrayConcatAgg(column) => write!(f, "(ArrayConcatAgg {})", column),
-            Aggregate::Avg(Distinct(true), column) => write!(f, "(Avg (Distinct {}))", column),
-            Aggregate::Avg(Distinct(false), column) => write!(f, "(Avg {})", column),
-            Aggregate::BitAnd(Distinct(true), column) => {
+            AggregateFn::ArrayConcatAgg(column) => write!(f, "(ArrayConcatAgg {})", column),
+            AggregateFn::Avg(Distinct(true), column) => write!(f, "(Avg (Distinct {}))", column),
+            AggregateFn::Avg(Distinct(false), column) => write!(f, "(Avg {})", column),
+            AggregateFn::BitAnd(Distinct(true), column) => {
                 write!(f, "(BitAnd (Distinct {}))", column)
             }
-            Aggregate::BitAnd(Distinct(false), column) => write!(f, "(BitAnd {})", column),
-            Aggregate::BitOr(Distinct(true), column) => write!(f, "(BitOr (Distinct {}))", column),
-            Aggregate::BitOr(Distinct(false), column) => write!(f, "(BitOr {})", column),
-            Aggregate::BitXor(Distinct(true), column) => {
+            AggregateFn::BitAnd(Distinct(false), column) => write!(f, "(BitAnd {})", column),
+            AggregateFn::BitOr(Distinct(true), column) => {
+                write!(f, "(BitOr (Distinct {}))", column)
+            }
+            AggregateFn::BitOr(Distinct(false), column) => write!(f, "(BitOr {})", column),
+            AggregateFn::BitXor(Distinct(true), column) => {
                 write!(f, "(BitXor (Distinct {}))", column)
             }
-            Aggregate::BitXor(Distinct(false), column) => write!(f, "(Avg {})", column),
-            Aggregate::Count(Distinct(true), column) => write!(f, "(Count (Distinct {}))", column),
-            Aggregate::Count(Distinct(false), column) => write!(f, "(Count {})", column),
-            Aggregate::CountStar => write!(f, "(CountStar)"),
-            Aggregate::LogicalAnd(column) => write!(f, "(LogicalAnd {})", column),
-            Aggregate::LogicalOr(column) => write!(f, "(LogicalOr {})", column),
-            Aggregate::Max(column) => write!(f, "(Max {})", column),
-            Aggregate::Min(column) => write!(f, "(Min {})", column),
-            Aggregate::StringAgg(Distinct(true), column) => {
+            AggregateFn::BitXor(Distinct(false), column) => write!(f, "(Avg {})", column),
+            AggregateFn::Count(Distinct(true), column) => {
+                write!(f, "(Count (Distinct {}))", column)
+            }
+            AggregateFn::Count(Distinct(false), column) => write!(f, "(Count {})", column),
+            AggregateFn::CountStar => write!(f, "(CountStar)"),
+            AggregateFn::LogicalAnd(column) => write!(f, "(LogicalAnd {})", column),
+            AggregateFn::LogicalOr(column) => write!(f, "(LogicalOr {})", column),
+            AggregateFn::Max(column) => write!(f, "(Max {})", column),
+            AggregateFn::Min(column) => write!(f, "(Min {})", column),
+            AggregateFn::StringAgg(Distinct(true), column) => {
                 write!(f, "(StringAgg (Distinct {}))", column)
             }
-            Aggregate::StringAgg(Distinct(false), column) => write!(f, "(Avg {})", column),
-            Aggregate::Sum(Distinct(true), column) => write!(f, "(Sum (Distinct {}))", column),
-            Aggregate::Sum(Distinct(false), column) => write!(f, "(Sum {})", column),
+            AggregateFn::StringAgg(Distinct(false), column) => write!(f, "(Avg {})", column),
+            AggregateFn::Sum(Distinct(true), column) => write!(f, "(Sum (Distinct {}))", column),
+            AggregateFn::Sum(Distinct(false), column) => write!(f, "(Sum {})", column),
         }
     }
 }

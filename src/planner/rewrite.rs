@@ -126,7 +126,7 @@ fn pull_filter_through_project(
 
 fn pull_filter_through_aggregate(
     group_by: &Vec<Column>,
-    aggregate: &Vec<(Aggregate, Column)>,
+    aggregate: &Vec<(AggregateFn, Column)>,
     predicates: &Vec<Scalar>,
     input: &Expr,
 ) -> Option<Expr> {
