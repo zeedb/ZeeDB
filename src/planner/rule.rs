@@ -2,7 +2,7 @@ use crate::search_space::*;
 use encoding::*;
 use node::*;
 
-#[derive(Debug, Eq, PartialEq, Hash)]
+#[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Rule {
     // Rewrite rules
     LogicalInnerJoinCommutivity,

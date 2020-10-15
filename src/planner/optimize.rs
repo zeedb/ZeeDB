@@ -49,7 +49,7 @@ fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool) {
                 }
             }
             // Apply the rule, potentially adding another MultiExpr to the Group:
-            apply_rule(ss, &rule, mid, explore);
+            apply_rule(ss, rule, mid, explore);
             ss[mid].fired.insert(rule);
         }
     }
@@ -58,7 +58,7 @@ fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool) {
 // apply_rule applies rule to mexpr.
 // If the result is a logical expr, optimize it recursively.
 // If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
-fn apply_rule(ss: &mut SearchSpace, rule: &Rule, mid: MultiExprID, explore: bool) {
+fn apply_rule(ss: &mut SearchSpace, rule: Rule, mid: MultiExprID, explore: bool) {
     for bind in rule.bind(ss, mid) {
         if let Some(bind) = rule.apply(ss, bind) {
             // Add mexpr if it isn't already present in the group:
