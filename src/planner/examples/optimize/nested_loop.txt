@@ -1,0 +1,5 @@
+select customer.customer_id, store.store_id from customer, store
+
+NestedLoop Inner 
+	SeqScan store
+	SeqScan customer

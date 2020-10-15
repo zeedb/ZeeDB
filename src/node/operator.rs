@@ -246,7 +246,7 @@ impl<T> Operator<T> {
         }
     }
 
-    pub fn map<U>(self, visitor: impl Fn(T) -> U) -> Operator<U> {
+    pub fn map<U>(self, mut visitor: impl FnMut(T) -> U) -> Operator<U> {
         match self {
             Operator::LogicalFilter(predicates, input) => {
                 let input = visitor(input);
@@ -453,12 +453,6 @@ impl<T> Operator<T> {
     }
 }
 
-impl<T> ops::IndexMut<usize> for Operator<T> {
-    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
-        todo!()
-    }
-}
-
 impl<T> ops::Index<usize> for Operator<T> {
     type Output = T;
 
@@ -499,7 +493,7 @@ impl<T> ops::Index<usize> for Operator<T> {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },
-            _ => panic!("{} is out of bounds ()", index),
+            _ => panic!(),
         }
     }
 }
