@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+mod cost;
 mod optimize;
 #[cfg(test)]
 mod optimize_tests;

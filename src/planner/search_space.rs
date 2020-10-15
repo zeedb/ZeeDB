@@ -1,9 +1,11 @@
+use crate::cost::*;
 use crate::rule::*;
 use node::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops;
 
+// SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
 pub struct SearchSpace {
     pub groups: Vec<Group>,
     pub mexprs: Vec<MultiExpr>,
@@ -76,8 +78,6 @@ pub struct LogicalProps {
     // column_unique_cardinality contains the number of distinct values in each column.
     pub column_unique_cardinality: HashMap<Column, usize>,
 }
-
-pub type Cost = f64;
 
 impl SearchSpace {
     pub fn new() -> Self {
