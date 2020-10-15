@@ -1114,7 +1114,7 @@ fn index_scan(predicates: Vec<Scalar>, table: Table) -> Option<Operator<Bind>> {
 }
 
 fn match_indexed_lookup(mut predicates: Vec<Scalar>) -> Option<(Column, Scalar)> {
-    if predicates.len() == 0 {
+    if predicates.len() == 1 {
         if let Scalar::Call(Function::Equal, mut arguments, _) = predicates.pop().unwrap() {
             match (arguments.pop().unwrap(), arguments.pop().unwrap()) {
                 (Scalar::Column(column), equals) | (equals, Scalar::Column(column))

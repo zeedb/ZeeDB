@@ -1,4 +1,3 @@
 select customer_id from customer where store_id = 1
 
-Filter (Equal customer.store_id 1)
-	SeqScan customer
+IndexScan customer store_id:1
