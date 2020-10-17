@@ -379,7 +379,12 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             let right = scalar_unique_cardinality(&args[1], scope) as f64;
             1.0 / left.max(right).max(1.0)
         }
-        Scalar::Call(_, _, _) => todo!("call"),
+        Scalar::Call(Function::Or, args, _) => {
+            let left = predicate_selectivity(&args[0], scope);
+            let right = predicate_selectivity(&args[1], scope);
+            1.0 - (1.0 - left) * (1.0 - right)
+        }
+        Scalar::Call(_, _, _) => todo!("{}", predicate),
         Scalar::Cast(_, _) => 0.5,
     }
 }
