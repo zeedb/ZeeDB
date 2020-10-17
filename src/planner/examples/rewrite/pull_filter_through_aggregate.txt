@@ -1,7 +1,7 @@
 select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
 
 LogicalProject $query.$col2:$aggregate.$agg1
-	LogicalJoin Single 
+	LogicalJoin Single
 		LogicalAggregate $aggregate.$agg1:(CountStar)
 			LogicalFilter (Equal customer.store_id store.store_id)
 				LogicalGet customer

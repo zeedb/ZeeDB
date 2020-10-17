@@ -1,13 +1,15 @@
 use crate::optimize::*;
 use fixtures::*;
+use regex::Regex;
 
 macro_rules! ok {
     ($path:expr, $sql:expr, $errors:expr) => {
         let mut parser = parser::ParseProvider::new();
-        let sql = $sql.to_string();
+        let trim = Regex::new(r"(?m)^\s+").unwrap();
+        let sql = trim.replace_all($sql, "").to_string();
         let (_, expr) = parser.parse(&sql, 0, &adventure_works()).unwrap();
         let expr = optimize(expr);
-        let found = format!("{}\n\n{}", &sql, expr);
+        let found = format!("{}\n\n{}", sql, expr);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
         }
@@ -18,9 +20,17 @@ macro_rules! ok {
 #[rustfmt::skip]
 fn test_optimize() {
     let mut errors = vec![];
-    ok!("examples/optimize/index_scan.txt", r#"select customer_id from customer where store_id = 1"#, errors);
-    ok!("examples/optimize/nested_loop.txt", r#"select customer.customer_id, store.store_id from customer, store"#, errors);
-    ok!("examples/optimize/equi_join.txt", r#"select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id"#, errors);
+    ok!("examples/optimize/index_scan.txt", r#"
+        select customer_id 
+        from customer 
+        where store_id = 1"#, errors);
+    ok!("examples/optimize/nested_loop.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer, store"#, errors);
+    ok!("examples/optimize/equi_join.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer, store 
+        where customer.store_id = store.store_id"#, errors);
     // ok!("examples/optimize/equi_full_outer_join.txt", r#"select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id"#, errors);
     // ok!("examples/optimize/limit_offset.txt", r#"select customer_id from customer limit 100 offset 10"#, errors);
     // ok!("examples/optimize/order_by.txt", r#"select customer_id from customer order by modified_date"#, errors);

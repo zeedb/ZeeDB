@@ -2,7 +2,7 @@ select 1 from person where exists (select 1 from customer where customer.person_
 
 LogicalProject $query.$col1:1
 	LogicalFilter $mark.$exists
-		LogicalJoin Mark $mark.$exists 
+		LogicalJoin Mark $mark.$exists
 			LogicalProject $expr_subquery.$col1:1
 				LogicalFilter (Equal customer.person_id person.person_id)
 					LogicalGet customer

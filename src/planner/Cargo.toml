@@ -12,3 +12,4 @@ encoding = { path = "../encoding" }
 fixtures = { path = "../fixtures" }
 node = { path = "../node" }
 parser = { path = "../parser" }
+regex = "1"
