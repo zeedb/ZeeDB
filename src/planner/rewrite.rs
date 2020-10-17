@@ -30,12 +30,12 @@ impl RewriteRule {
             RewriteRule::PushExplicitFilterThroughJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
                     if let LogicalJoin(Join::Inner(join_predicates), left, right) = input.as_ref() {
-                        return push_explicit_filter_through_join(
+                        return Some(push_explicit_filter_through_join(
                             filter_predicates,
                             join_predicates,
                             left,
                             right,
-                        );
+                        ));
                     }
                 }
             }
@@ -173,11 +173,11 @@ fn push_explicit_filter_through_join(
     join_predicates: &Vec<Scalar>,
     left: &Expr,
     right: &Expr,
-) -> Option<Expr> {
+) -> Expr {
     let mut left_predicates = vec![];
     let mut right_predicates = vec![];
     let mut remaining_predicates = vec![];
-    for p in filter_predicates.clone() {
+    let mut distribute_predicate = |p: Scalar| {
         if !p.columns().any(|c| left.correlated(c)) {
             left_predicates.push(p);
         } else if !p.columns().any(|c| right.correlated(c)) {
@@ -185,9 +185,12 @@ fn push_explicit_filter_through_join(
         } else {
             remaining_predicates.push(p);
         }
+    };
+    for p in filter_predicates.clone() {
+        distribute_predicate(p);
     }
-    if left_predicates.is_empty() && right_predicates.is_empty() {
-        return None;
+    for p in join_predicates.clone() {
+        distribute_predicate(p);
     }
     let mut left = left.clone();
     if !left_predicates.is_empty() {
@@ -197,15 +200,9 @@ fn push_explicit_filter_through_join(
     if !right_predicates.is_empty() {
         right = Expr::new(LogicalFilter(right_predicates, right));
     }
-    let mut top = Expr::new(LogicalJoin(
-        Join::Inner(join_predicates.clone()),
-        left,
-        right,
-    ));
-    if !remaining_predicates.is_empty() {
-        top = Expr::new(LogicalFilter(remaining_predicates, top));
-    }
-    Some(top)
+
+    let mut top = Expr::new(LogicalJoin(Join::Inner(remaining_predicates), left, right));
+    top
 }
 
 fn push_implicit_filter_through_join(
