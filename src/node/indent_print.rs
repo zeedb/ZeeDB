@@ -15,8 +15,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             Ok(())
         };
         match self {
-            Operator::LogicalSingleGet => write!(f, "LogicalSingleGet"),
-            Operator::LogicalGet(table) => write!(f, "LogicalGet {}", table.name),
+            Operator::LogicalSingleGet => write!(f, "{}", self.name()),
+            Operator::LogicalGet(table) => write!(f, "{} {}", self.name(), table.name),
             Operator::LogicalFilter(predicates, input) => {
                 write!(f, "{} {}", self.name(), join(predicates))?;
                 newline(f)?;
@@ -45,7 +45,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalGetWith(name) => write!(f, "LogicalGetWith {}", name),
+            Operator::LogicalGetWith(name) => write!(f, "{} {}", self.name(), name),
             Operator::LogicalAggregate {
                 group_by,
                 aggregate,
@@ -181,7 +181,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 columns,
             } => write!(
                 f,
-                "LogicalCreateIndex {} {} {}",
+                "{} {} {} {}",
+                self.name(),
                 name,
                 table,
                 columns.join(" ")
@@ -199,8 +200,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             Operator::LogicalRename { object, from, to } => {
                 write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
-            Operator::TableFreeScan => write!(f, "TableFreeScan"),
-            Operator::SeqScan(table) => write!(f, "SeqScan {}", table),
+            Operator::TableFreeScan => write!(f, "{}", self.name()),
+            Operator::SeqScan(table) => write!(f, "{} {}", self.name(), table),
             Operator::IndexScan { table, equals } => {
                 write!(f, "{} {}", self.name(), table)?;
                 for (column, scalar) in equals {
@@ -244,7 +245,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::GetTempTable(name) => write!(f, "GetTempTable {}", name),
+            Operator::GetTempTable(name) => write!(f, "{} {}", self.name(), name),
             Operator::Aggregate {
                 group_by,
                 aggregate,
@@ -336,7 +337,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::CreateDatabase(name) => write!(f, "CreateDatabase {}", name),
+            Operator::CreateDatabase(name) => write!(f, "{} {}", self.name(), name),
             Operator::CreateTable {
                 name,
                 columns,
@@ -375,7 +376,14 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 name,
                 table,
                 columns,
-            } => write!(f, "CreateIndex {} {} {}", name, table, columns.join(" ")),
+            } => write!(
+                f,
+                "{} {} {} {}",
+                self.name(),
+                name,
+                table,
+                columns.join(" ")
+            ),
             Operator::AlterTable { name, actions } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for a in actions {
@@ -448,14 +456,21 @@ impl<T> Operator<T> {
 
 impl fmt::Display for Join {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fn suffix(xs: &Vec<Scalar>) -> String {
+            if xs.is_empty() {
+                "".to_string()
+            } else {
+                format!(" {}", join(xs))
+            }
+        }
         match self {
-            Join::Inner(predicates) => write!(f, "Inner {}", join(predicates)),
-            Join::Right(predicates) => write!(f, "Right {}", join(predicates)),
-            Join::Outer(predicates) => write!(f, "Outer {}", join(predicates)),
-            Join::Semi(predicates) => write!(f, "Semi {}", join(predicates)),
-            Join::Anti(predicates) => write!(f, "Anti {}", join(predicates)),
-            Join::Single(predicates) => write!(f, "Single {}", join(predicates)),
-            Join::Mark(column, predicates) => write!(f, "Mark {} {}", column, join(predicates)),
+            Join::Inner(predicates) => write!(f, "Inner{}", suffix(predicates)),
+            Join::Right(predicates) => write!(f, "Right{}", suffix(predicates)),
+            Join::Outer(predicates) => write!(f, "Outer{}", suffix(predicates)),
+            Join::Semi(predicates) => write!(f, "Semi{}", suffix(predicates)),
+            Join::Anti(predicates) => write!(f, "Anti{}", suffix(predicates)),
+            Join::Single(predicates) => write!(f, "Single{}", suffix(predicates)),
+            Join::Mark(column, predicates) => write!(f, "Mark {}{}", column, suffix(predicates)),
         }
     }
 }

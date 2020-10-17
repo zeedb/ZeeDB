@@ -3,6 +3,6 @@ update customer set account_number = account_number + 1 from person where custom
 LogicalUpdate customer.account_number:$update.$expr
 	LogicalProject $update.$expr:(Add customer.account_number 1)
 		LogicalFilter (Equal customer.person_id person.person_id)
-			LogicalJoin Inner 
+			LogicalJoin Inner
 				LogicalGet customer
 				LogicalGet person
