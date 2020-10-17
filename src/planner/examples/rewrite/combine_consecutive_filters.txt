@@ -1,6 +1,5 @@
 select 1 from (select * from person where first_name like "A%") where last_name like "A%"
 
 LogicalProject $query.$col1:1
-	LogicalProject person.person_id person.first_name person.last_name person.modified_date
-		LogicalFilter (Like person.last_name A%) (Like person.first_name A%)
-			LogicalGet person
+	LogicalFilter (Like person.last_name A%) (Like person.first_name A%)
+		LogicalGet person

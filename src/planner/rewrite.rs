@@ -418,15 +418,15 @@ fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {
 
 pub fn rewrite(expr: Expr) -> Expr {
     let bottom_up_rules = vec![RewriteRule::RemoveSingleJoin];
-    let top_down_rules = vec![
+    let predicate_push_down = vec![
         RewriteRule::PushExplicitFilterThroughInnerJoin,
         RewriteRule::PushImplicitFilterThroughInnerJoin,
         RewriteRule::PushExplicitFilterThroughRightJoin,
         RewriteRule::PushImplicitFilterThroughRightJoin,
         RewriteRule::PushFilterThroughProject,
         RewriteRule::CombineConsecutiveFilters,
-        RewriteRule::CombineConsecutiveProjects,
     ];
+    let simplify = vec![RewriteRule::CombineConsecutiveProjects];
     fn rewrite_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
         for rule in rules {
             match rule.call(&expr) {
@@ -440,6 +440,7 @@ pub fn rewrite(expr: Expr) -> Expr {
         expr
     }
     let expr = expr.bottom_up_rewrite(&|expr| rewrite_all(expr, &bottom_up_rules));
-    let expr = expr.top_down_rewrite(&|expr| rewrite_all(expr, &top_down_rules));
+    let expr = expr.top_down_rewrite(&|expr| rewrite_all(expr, &predicate_push_down));
+    let expr = expr.top_down_rewrite(&|expr| rewrite_all(expr, &simplify));
     expr
 }

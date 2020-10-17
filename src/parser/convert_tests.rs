@@ -81,6 +81,7 @@ fn test_convert() {
     ok!("examples/sort/unordered_limit_offset.txt", "select customer_id from customer limit 100 offset 10", errors);
     ok!("examples/subquery/from_select.txt", "select customer_id from (select customer_id from customer) as foo", errors);
     ok!("examples/subquery/with.txt", "with foo as (select customer_id from customer) select customer_id from foo", errors);   
+    ok!("examples/subquery/project_then_filter_twice.txt", "select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100", errors);   
     if !errors.is_empty() {
         panic!("{:#?}", errors);
     }

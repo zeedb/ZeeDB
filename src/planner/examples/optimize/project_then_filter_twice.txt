@@ -1,0 +1,8 @@
+select * 
+from (select * from (select customer_id / 2 as id from customer) where id > 10) 
+where id < 100
+
+Project $subquery2.id
+	Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
+		Project $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
+			SeqScan customer
