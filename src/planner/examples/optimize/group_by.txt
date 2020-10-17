@@ -1,0 +1,7 @@
+select store_id 
+from customer 
+group by 1
+
+Aggregate $groupby.store_id
+	Project $groupby.store_id:customer.store_id
+		SeqScan customer

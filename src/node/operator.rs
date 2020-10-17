@@ -98,8 +98,8 @@ pub enum Operator<T> {
         input: T,
     },
     Limit {
-        limit: i64,
-        offset: i64,
+        limit: usize,
+        offset: usize,
         input: T,
     },
     Sort(Vec<OrderBy>, T),

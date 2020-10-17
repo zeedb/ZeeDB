@@ -231,7 +231,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
     match &mexpr.op {
         LogicalSingleGet => cardinality = 1,
         LogicalGet(table) => {
-            cardinality = 1000; // TODO get from LogicalGet or Tabl
+            cardinality = 1000; // TODO get from LogicalGet or Table
             for c in &table.columns {
                 column_unique_cardinality.insert(c.clone(), cardinality);
             }

@@ -1,0 +1,7 @@
+select customer_id 
+from customer 
+limit 100 
+offset 10
+
+Limit 100 10
+	SeqScan customer

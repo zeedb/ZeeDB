@@ -217,8 +217,8 @@ impl Rule {
                 }
             }
             Rule::LogicalProjectToProject => {
-                if let LogicalProject(_, _) = bind {
-                    todo!()
+                if let LogicalProject(projects, input) = bind {
+                    return Some(Project(projects, input));
                 }
             }
             Rule::LogicalJoinToNestedLoop => {
@@ -283,18 +283,36 @@ impl Rule {
                 }
             }
             Rule::LogicalAggregateToAggregate => {
-                if let LogicalAggregate { .. } = bind {
-                    todo!()
+                if let LogicalAggregate {
+                    group_by,
+                    aggregate,
+                    input,
+                } = bind
+                {
+                    return Some(Aggregate {
+                        group_by,
+                        aggregate,
+                        input,
+                    });
                 }
             }
             Rule::LogicalLimitToLimit => {
-                if let LogicalLimit { .. } = bind {
-                    todo!()
+                if let LogicalLimit {
+                    limit,
+                    offset,
+                    input,
+                } = bind
+                {
+                    return Some(Limit {
+                        limit,
+                        offset,
+                        input,
+                    });
                 }
             }
             Rule::LogicalSortToSort => {
-                if let LogicalSort(_, _) = bind {
-                    todo!()
+                if let LogicalSort(order_by, input) = bind {
+                    return Some(Sort(order_by, input));
                 }
             }
             Rule::LogicallUnionToUnion => {

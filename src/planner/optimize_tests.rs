@@ -31,11 +31,26 @@ fn test_optimize() {
         select customer.customer_id, store.store_id 
         from customer, store 
         where customer.store_id = store.store_id"#, errors);
-    // ok!("examples/optimize/equi_full_outer_join.txt", r#"select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id"#, errors);
-    // ok!("examples/optimize/limit_offset.txt", r#"select customer_id from customer limit 100 offset 10"#, errors);
-    // ok!("examples/optimize/order_by.txt", r#"select customer_id from customer order by modified_date"#, errors);
-    // ok!("examples/optimize/group_by.txt", r#"select store_id from customer group by 1"#, errors);
-    // ok!("examples/optimize/correlated_single_equi_join.txt", r#"select (select name from store where store.store_id = customer.store_id) from customer"#, errors);
+    ok!("examples/optimize/equi_full_outer_join.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer 
+        full outer join store on customer.store_id = store.store_id"#, errors);
+    ok!("examples/optimize/limit_offset.txt", r#"
+        select customer_id 
+        from customer 
+        limit 100 
+        offset 10"#, errors);
+    ok!("examples/optimize/order_by.txt", r#"
+        select customer_id 
+        from customer 
+        order by modified_date"#, errors);
+    ok!("examples/optimize/group_by.txt", r#"
+        select store_id 
+        from customer 
+        group by 1"#, errors);
+    // ok!("examples/optimize/correlated_single_equi_join.txt", r#"
+    //     select (select name from store where store.store_id = customer.store_id)
+    //     from customer"#, errors);
     // ok!("examples/optimize/redundant_table_free_single_join.txt", r#"select (select 1)"#, errors);
     // ok!("examples/optimize/semi_join.txt", r#"select first_name from person where person_id in (select person_id from customer)"#, errors);
     // ok!("examples/optimize/semi_join_or.txt", r#"select first_name from person where person_id in (select person_id from customer) or person_id = 1"#, errors);
