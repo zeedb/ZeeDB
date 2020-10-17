@@ -1,3 +1,5 @@
 select customer_id from (select customer_id from customer) as foo
 
-LogicalGet customer
+LogicalProject customer.customer_id
+	LogicalProject customer.customer_id
+		LogicalGet customer

@@ -1,4 +1,5 @@
 select customer_id from customer where store_id = 1
 
-LogicalFilter (Equal customer.store_id 1)
-	LogicalGet customer
+LogicalProject customer.customer_id
+	LogicalFilter (Equal customer.store_id 1)
+		LogicalGet customer

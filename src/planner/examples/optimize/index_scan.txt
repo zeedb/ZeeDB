@@ -2,4 +2,5 @@ select customer_id
 from customer 
 where store_id = 1
 
-IndexScan customer store_id:1
+Project customer.customer_id
+	IndexScan customer store_id:1

@@ -1,5 +1,6 @@
 select sum(1) from person
 
-LogicalAggregate $aggregate.$agg1:(Sum $proj.$sum)
-	LogicalProject $proj.$sum:1
-		LogicalGet person
+LogicalProject $aggregate.$agg1
+	LogicalAggregate $aggregate.$agg1:(Sum $proj.$sum)
+		LogicalProject $proj.$sum:1
+			LogicalGet person

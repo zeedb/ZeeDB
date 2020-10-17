@@ -2,9 +2,11 @@ select (select name from store where store.store_id = customer.customer_id and s
 
 LogicalProject $query.$col1:store.name $query.$col2:person.first_name
 	LogicalJoin Single
-		LogicalFilter (Equal person.person_id customer.person_id)
-			LogicalGet person
+		LogicalProject person.first_name
+			LogicalFilter (Equal person.person_id customer.person_id)
+				LogicalGet person
 		LogicalJoin Single
-			LogicalFilter (Equal store.store_id customer.customer_id) (Like store.name A%)
-				LogicalGet store
+			LogicalProject store.name
+				LogicalFilter (Equal store.store_id customer.customer_id) (Like store.name A%)
+					LogicalGet store
 			LogicalGet customer

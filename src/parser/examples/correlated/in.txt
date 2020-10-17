@@ -2,6 +2,7 @@ select 1 in (select store_id from store where store.store_id = customer.store_id
 
 LogicalProject $query.ok:$mark.$in
 	LogicalJoin Mark $mark.$in (Equal 1 store.store_id)
-		LogicalFilter (Equal store.store_id customer.store_id)
-			LogicalGet store
+		LogicalProject store.store_id
+			LogicalFilter (Equal store.store_id customer.store_id)
+				LogicalGet store
 		LogicalGet customer

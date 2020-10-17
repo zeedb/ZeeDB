@@ -1,4 +1,5 @@
 select customer_id from customer limit 100 offset 10
 
 LogicalLimit 100 10
-	LogicalGet customer
+	LogicalProject customer.customer_id
+		LogicalGet customer

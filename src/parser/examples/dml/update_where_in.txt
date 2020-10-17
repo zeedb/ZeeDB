@@ -4,6 +4,7 @@ LogicalUpdate customer.account_number:$update.$expr
 	LogicalProject $update.$expr:0
 		LogicalFilter $mark.$in
 			LogicalJoin Mark $mark.$in (Equal customer.person_id person.person_id)
-				LogicalFilter (Equal person.first_name Joe)
-					LogicalGet person
+				LogicalProject person.person_id
+					LogicalFilter (Equal person.first_name Joe)
+						LogicalGet person
 				LogicalGet customer

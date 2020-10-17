@@ -2,6 +2,7 @@ select customer.customer_id, store.store_id
 from customer 
 full outer join store on customer.store_id = store.store_id
 
-HashJoin Outer customer.store_id=store.store_id
-	SeqScan customer
-	SeqScan store
+Project customer.customer_id store.store_id
+	HashJoin Outer customer.store_id=store.store_id
+		SeqScan customer
+		SeqScan store

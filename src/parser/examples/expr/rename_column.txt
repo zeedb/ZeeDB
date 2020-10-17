@@ -1,4 +1,5 @@
 select a + 1 from (select customer_id as a from customer)
 
 LogicalProject $query.$col1:(Add customer.customer_id 1)
-	LogicalGet customer
+	LogicalProject customer.customer_id
+		LogicalGet customer

@@ -1,5 +1,7 @@
 with foo as (select customer_id from customer) select customer_id from foo
 
 LogicalWith foo
-	LogicalGet customer
-	LogicalGetWith foo
+	LogicalProject customer.customer_id
+		LogicalGet customer
+	LogicalProject foo.customer_id
+		LogicalGetWith foo
