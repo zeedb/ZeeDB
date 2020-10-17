@@ -62,10 +62,24 @@ fn test_optimize() {
         where person_id in (select person_id from customer) 
         or person_id = 1"#, errors);
     // ok!("examples/optimize/correlated_single_equi_join_group_by.txt", r#"select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store"#, errors);
-    // ok!("examples/optimize/join_left_index_scan.txt", r#"select customer.customer_id, store.store_id from customer, store where customer.customer_id = 1"#, errors);
-    // ok!("examples/optimize/join_right_index_scan.txt", r#"select customer.customer_id, store.store_id from customer, store where store.store_id = 1"#, errors);
-    // ok!("examples/optimize/equi_join_left_index_scan.txt", r#"select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and customer.customer_id = 1"#, errors);
-    // ok!("examples/optimize/equi_join_right_index_scan.txt", r#"select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and store.store_id = 1"#, errors);
+    ok!("examples/optimize/join_left_index_scan.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer, store 
+        where customer.customer_id = 1"#, errors);
+    ok!("examples/optimize/join_right_index_scan.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer, store 
+        where store.store_id = 1"#, errors);
+    ok!("examples/optimize/equi_join_left_index_scan.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer, store 
+        where customer.store_id = store.store_id 
+        and customer.customer_id = 1"#, errors);
+    ok!("examples/optimize/equi_join_right_index_scan.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer, store 
+        where customer.store_id = store.store_id 
+        and store.store_id = 1"#, errors);
     // ok!("examples/optimize/left_equi_join_right_index_scan.txt", r#"select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id where store.store_id = 1"#, errors);
     // ok!("examples/optimize/right_equi_join_right_index_scan.txt", r#"select customer.customer_id, store.store_id from customer right join store on customer.store_id = store.store_id where store.store_id = 1"#, errors);
     // ok!("examples/optimize/union_all.txt", r#"select 1 as a union all select 2 as a"#, errors);

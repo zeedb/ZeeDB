@@ -1,0 +1,8 @@
+select customer.customer_id, store.store_id 
+from customer, store 
+where customer.customer_id = 1
+
+Project customer.customer_id store.store_id
+	NestedLoop Inner
+		IndexScan customer customer_id:1
+		SeqScan store
