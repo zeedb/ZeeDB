@@ -384,6 +384,11 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             let right = predicate_selectivity(&args[1], scope);
             1.0 - (1.0 - left) * (1.0 - right)
         }
+        Scalar::Call(Function::NotEqual, _, _)
+        | Scalar::Call(Function::Less, _, _)
+        | Scalar::Call(Function::LessOrEqual, _, _)
+        | Scalar::Call(Function::Greater, _, _)
+        | Scalar::Call(Function::GreaterOrEqual, _, _) => 1.0,
         Scalar::Call(_, _, _) => todo!("{}", predicate),
         Scalar::Cast(_, _) => 0.5,
     }

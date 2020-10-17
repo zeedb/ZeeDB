@@ -91,7 +91,11 @@ fn test_optimize() {
         right join store on customer.store_id = store.store_id 
         where store.store_id = 1"#, errors);
     ok!("examples/optimize/union_all.txt", r#"select 1 as a union all select 2 as a"#, errors);
-    // ok!("examples/optimize/project_then_filter.txt", r#"select 1 from (select *, rand() as random from customer) where customer_id < random and customer_id <> 0"#, errors);
+    ok!("examples/optimize/project_then_filter.txt", r#"
+        select 1 
+        from (select *, rand() as random from customer) 
+        where customer_id < random 
+        and customer_id <> 0"#, errors);
     // ok!("examples/optimize/project_then_filter_twice.txt", r#"select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100"#, errors);
     // ok!("examples/optimize/correlated_semi_join.txt", r#"select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)"#, errors);
     // ok!("examples/optimize/equi_join_semi_join.txt", r#"select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)"#, errors);
