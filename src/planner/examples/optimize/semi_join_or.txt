@@ -3,6 +3,13 @@ from person
 where person_id in (select person_id from customer) 
 or person_id = 1
 
+LogicalProject person.first_name
+	LogicalFilter (Or $mark.$in (Equal person.person_id 1))
+		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id)
+			LogicalProject customer.person_id
+				LogicalGet customer
+			LogicalGet person
+
 Project person.first_name
 	Filter (Or $mark.$in (Equal person.person_id 1))
 		HashJoin Mark $mark.$in customer.person_id=person.person_id

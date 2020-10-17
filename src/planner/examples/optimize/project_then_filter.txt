@@ -3,6 +3,12 @@ from (select *, rand() as random from customer)
 where customer_id < random 
 and customer_id <> 0
 
+LogicalProject $query.$col1:1
+	LogicalFilter (Less (Cast customer.customer_id DOUBLE) $subquery1.random)
+		LogicalProject $subquery1.random:(Rand) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+			LogicalFilter (NotEqual customer.customer_id 0)
+				LogicalGet customer
+
 Project $query.$col1:1
 	Filter (Less (Cast customer.customer_id DOUBLE) $subquery1.random)
 		Project $subquery1.random:(Rand) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date

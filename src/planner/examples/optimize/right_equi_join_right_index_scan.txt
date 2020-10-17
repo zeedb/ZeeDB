@@ -3,6 +3,12 @@ from customer
 right join store on customer.store_id = store.store_id 
 where store.store_id = 1
 
+LogicalProject customer.customer_id store.store_id
+	LogicalJoin Right (Equal customer.store_id store.store_id)
+		LogicalGet customer
+		LogicalFilter (Equal store.store_id 1)
+			LogicalGet store
+
 Project customer.customer_id store.store_id
 	NestedLoop Right (Equal customer.store_id store.store_id)
 		SeqScan customer

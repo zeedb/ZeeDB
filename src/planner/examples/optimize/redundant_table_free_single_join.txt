@@ -1,4 +1,7 @@
 select (select 1)
 
+LogicalProject $query.$col1:1
+	LogicalSingleGet
+
 Project $query.$col1:1
 	TableFreeScan

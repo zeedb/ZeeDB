@@ -2,5 +2,8 @@ select customer_id
 from customer 
 order by modified_date
 
+LogicalSort customer.modified_date
+	LogicalGet customer
+
 Sort customer.modified_date
 	SeqScan customer

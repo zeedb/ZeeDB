@@ -1,5 +1,11 @@
 select 1 as a union all select 2 as a
 
+LogicalUnion
+	LogicalProject $union_all.a:2
+		LogicalSingleGet
+	LogicalProject $union_all.a:1
+		LogicalSingleGet
+
 Union
 	Project $union_all.a:2
 		TableFreeScan

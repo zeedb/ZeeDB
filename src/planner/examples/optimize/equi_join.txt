@@ -2,6 +2,11 @@ select customer.customer_id, store.store_id
 from customer, store 
 where customer.store_id = store.store_id
 
+LogicalProject customer.customer_id store.store_id
+	LogicalJoin Inner (Equal customer.store_id store.store_id)
+		LogicalGet customer
+		LogicalGet store
+
 Project customer.customer_id store.store_id
 	HashJoin Inner store.store_id=customer.store_id
 		SeqScan store
