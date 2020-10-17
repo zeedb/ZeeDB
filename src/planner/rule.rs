@@ -7,6 +7,7 @@ pub enum Rule {
     // Rewrite rules
     LogicalInnerJoinCommutivity,
     LogicalInnerJoinAssociativity,
+    MarkJoinToSemiJoin,
     // Implementation rules
     LogicalGetToTableFreeScan,
     LogicalGetToSeqScan,
@@ -76,6 +77,7 @@ impl Rule {
         match (self, &mexpr.op) {
             (Rule::LogicalInnerJoinCommutivity, LogicalJoin(Join::Inner(_), _, _))
             | (Rule::LogicalInnerJoinAssociativity, LogicalJoin(Join::Inner(_), _, _))
+            | (Rule::MarkJoinToSemiJoin, LogicalFilter(_, _))
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet(_))
             | (Rule::LogicalGetToIndexScan, LogicalFilter(_, _))
@@ -129,6 +131,24 @@ impl Rule {
                                     Bind::Group(*left_middle),
                                 ))),
                                 Bind::Group(*right),
+                            ))
+                        }
+                    }
+                }
+            }
+            Rule::MarkJoinToSemiJoin => {
+                if let LogicalFilter(filter_predicates, input) = &ss[mid].op {
+                    for input in &ss[*input].logical {
+                        if let LogicalJoin(Join::Mark(mark, join_predicates), left, right) =
+                            &ss[*input].op
+                        {
+                            binds.push(LogicalFilter(
+                                filter_predicates.clone(),
+                                Bind::Operator(Box::new(LogicalJoin(
+                                    Join::Mark(mark.clone(), join_predicates.clone()),
+                                    Bind::Group(*left),
+                                    Bind::Group(*right),
+                                ))),
                             ))
                         }
                     }
@@ -191,6 +211,39 @@ impl Rule {
                                 right,
                             ))),
                         ));
+                    }
+                }
+            }
+            Rule::MarkJoinToSemiJoin => {
+                if let LogicalFilter(mut filter_predicates, Bind::Operator(input)) = bind {
+                    if let LogicalJoin(Join::Mark(mark, join_predicates), left, right) = *input {
+                        let semi = Scalar::Column(mark.clone());
+                        let anti = Scalar::Call(Function::Not, vec![semi.clone()], Type::Bool);
+                        fn filter(
+                            filter_predicates: Vec<Scalar>,
+                            input: Operator<Bind>,
+                        ) -> Operator<Bind> {
+                            if filter_predicates.is_empty() {
+                                input
+                            } else {
+                                LogicalFilter(filter_predicates, Bind::Operator(Box::new(input)))
+                            }
+                        }
+                        for i in 0..filter_predicates.len() {
+                            if filter_predicates[i] == semi {
+                                filter_predicates.remove(i);
+                                return Some(filter(
+                                    filter_predicates,
+                                    LogicalJoin(Join::Semi(join_predicates), left, right),
+                                ));
+                            } else if filter_predicates[i] == anti {
+                                filter_predicates.remove(i);
+                                return Some(filter(
+                                    filter_predicates,
+                                    LogicalJoin(Join::Anti(join_predicates), left, right),
+                                ));
+                            }
+                        }
                     }
                 }
             }
@@ -398,6 +451,7 @@ impl Rule {
         vec![
             Rule::LogicalInnerJoinCommutivity,
             Rule::LogicalInnerJoinAssociativity,
+            Rule::MarkJoinToSemiJoin,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,

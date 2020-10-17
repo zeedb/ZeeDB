@@ -1,0 +1,9 @@
+select first_name 
+from person 
+where person_id in (select person_id from customer)
+
+Project person.first_name
+	HashJoin Semi customer.person_id=person.person_id
+		Project customer.person_id
+			SeqScan customer
+		SeqScan person
