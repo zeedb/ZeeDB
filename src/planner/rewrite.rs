@@ -303,9 +303,6 @@ fn combine_consecutive_projects(
         }
         combined.push((outer_expr, outer_column.clone()));
     }
-    for (inner_expr, inner_column) in inner {
-        combined.push((inner_expr.clone(), inner_column.clone()));
-    }
     Some(Expr::new(LogicalProject(combined, input.clone())))
 }
 

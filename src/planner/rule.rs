@@ -196,7 +196,7 @@ impl Rule {
             }
             Rule::LogicalGetToTableFreeScan => {
                 if let LogicalSingleGet = bind {
-                    todo!()
+                    return Some(TableFreeScan);
                 }
             }
             Rule::LogicalGetToSeqScan => {

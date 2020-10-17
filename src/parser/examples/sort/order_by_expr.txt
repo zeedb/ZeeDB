@@ -1,5 +1,5 @@
 select customer_id from customer order by customer_id + 1
 
 LogicalSort $orderby.$orderbycol1
-	LogicalProject $orderby.$orderbycol1:(Add customer.customer_id 1)
+	LogicalProject $orderby.$orderbycol1:(Add customer.customer_id 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 		LogicalGet customer

@@ -204,6 +204,7 @@ impl Converter {
     }
 
     fn project(&mut self, q: &ResolvedProjectScanProto) -> Expr {
+        // TODO this can still limit columns
         if q.expr_list.len() == 0 {
             self.any_resolved_scan(q.input_scan.get())
         } else {
@@ -211,6 +212,16 @@ impl Converter {
             let mut project = vec![];
             for x in &q.expr_list {
                 project.push(self.computed_column(x, &mut input));
+            }
+            for c in &q.parent.get().column_list {
+                if q.expr_list
+                    .iter()
+                    .any(|x| x.column.get().column_id.unwrap() == c.column_id.unwrap())
+                {
+                    continue;
+                }
+                let column = Column::from(&c);
+                project.push((Scalar::Column(column.clone()), column))
             }
             Expr::new(LogicalProject(project, input))
         }

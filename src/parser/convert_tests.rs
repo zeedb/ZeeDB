@@ -56,6 +56,7 @@ fn test_convert() {
     ok!("examples/expr/numeric_neg.txt", "select cast(-1 as numeric)", errors); // TODO this is wrong
     ok!("examples/expr/numeric_one.txt", "select cast(1 as numeric)", errors); // TODO this is wrong
     ok!("examples/expr/numeric_zero.txt", "select cast(0 as numeric)", errors); // TODO this is wrong
+    ok!("examples/expr/rename_column.txt", "select a + 1 from (select customer_id as a from customer)", errors); // TODO this is wrong
     ok!("examples/expr/select_as.txt", "select \"foo\" as a", errors);
     ok!("examples/expr/select_from.txt", "select customer_id as a from customer", errors);
     ok!("examples/expr/select_literal.txt", "select customer_id as a, \"foo\" as b from customer", errors);

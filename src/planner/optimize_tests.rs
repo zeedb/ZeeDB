@@ -51,7 +51,7 @@ fn test_optimize() {
     // ok!("examples/optimize/correlated_single_equi_join.txt", r#"
     //     select (select name from store where store.store_id = customer.store_id)
     //     from customer"#, errors);
-    // ok!("examples/optimize/redundant_table_free_single_join.txt", r#"select (select 1)"#, errors);
+    ok!("examples/optimize/redundant_table_free_single_join.txt", r#"select (select 1)"#, errors);
     // ok!("examples/optimize/semi_join.txt", r#"select first_name from person where person_id in (select person_id from customer)"#, errors);
     // ok!("examples/optimize/semi_join_or.txt", r#"select first_name from person where person_id in (select person_id from customer) or person_id = 1"#, errors);
     // ok!("examples/optimize/correlated_single_equi_join_group_by.txt", r#"select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store"#, errors);

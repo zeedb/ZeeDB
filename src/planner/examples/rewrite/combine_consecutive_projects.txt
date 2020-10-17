@@ -1,4 +1,4 @@
 select a + 1 as b from (select 1 as a)
 
-LogicalProject $query.b:(Add 1 1) $subquery1.a:1
+LogicalProject $query.b:(Add 1 1)
 	LogicalSingleGet

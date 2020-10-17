@@ -25,7 +25,11 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             Operator::LogicalProject(projects, input) => {
                 let mut strings = vec![];
                 for (x, c) in projects {
-                    strings.push(format!("{}:{}", c, x));
+                    if x == &Scalar::Column(c.clone()) {
+                        strings.push(format!("{}", c));
+                    } else {
+                        strings.push(format!("{}:{}", c, x));
+                    }
                 }
                 write!(f, "{} {}", self.name(), strings.join(" "))?;
                 newline(f)?;

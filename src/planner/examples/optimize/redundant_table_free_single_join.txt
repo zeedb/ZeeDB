@@ -1,0 +1,4 @@
+select (select 1)
+
+Project $query.$col1:1
+	TableFreeScan
