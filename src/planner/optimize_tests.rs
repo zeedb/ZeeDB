@@ -80,8 +80,16 @@ fn test_optimize() {
         from customer, store 
         where customer.store_id = store.store_id 
         and store.store_id = 1"#, errors);
-    // ok!("examples/optimize/left_equi_join_right_index_scan.txt", r#"select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id where store.store_id = 1"#, errors);
-    // ok!("examples/optimize/right_equi_join_right_index_scan.txt", r#"select customer.customer_id, store.store_id from customer right join store on customer.store_id = store.store_id where store.store_id = 1"#, errors);
+    ok!("examples/optimize/left_equi_join_right_index_scan.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer 
+        left join store on customer.store_id = store.store_id 
+        where store.store_id = 1"#, errors);
+    ok!("examples/optimize/right_equi_join_right_index_scan.txt", r#"
+        select customer.customer_id, store.store_id 
+        from customer 
+        right join store on customer.store_id = store.store_id 
+        where store.store_id = 1"#, errors);
     // ok!("examples/optimize/union_all.txt", r#"select 1 as a union all select 2 as a"#, errors);
     // ok!("examples/optimize/project_then_filter.txt", r#"select 1 from (select *, rand() as random from customer) where customer_id < random and customer_id <> 0"#, errors);
     // ok!("examples/optimize/project_then_filter_twice.txt", r#"select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100"#, errors);

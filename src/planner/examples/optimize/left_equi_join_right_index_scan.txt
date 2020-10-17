@@ -1,0 +1,10 @@
+select customer.customer_id, store.store_id 
+from customer 
+left join store on customer.store_id = store.store_id 
+where store.store_id = 1
+
+Project customer.customer_id store.store_id
+	Filter (Equal store.store_id 1)
+		HashJoin Right store.store_id=customer.store_id
+			SeqScan store
+			SeqScan customer
