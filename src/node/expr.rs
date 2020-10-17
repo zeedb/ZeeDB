@@ -61,51 +61,37 @@ impl<'it> Iterator for ExprIterator<'it> {
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next) = self.stack.pop() {
             match next.as_ref() {
-                Operator::LogicalFilter(_, input) => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalProject(_, input) => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalJoin(_, left, right) => {
+                Operator::LogicalUnion(left, right)
+                | Operator::LogicalIntersect(left, right)
+                | Operator::LogicalExcept(left, right)
+                | Operator::Union(left, right)
+                | Operator::Intersect(left, right)
+                | Operator::Except(left, right)
+                | Operator::LogicalJoin(_, left, right)
+                | Operator::LogicalWith(_, left, right)
+                | Operator::NestedLoop(_, left, right)
+                | Operator::HashJoin(_, _, left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
-                Operator::LogicalWith(_, left, right) => {
-                    self.stack.push(left);
-                    self.stack.push(right);
-                }
-                Operator::LogicalAggregate { input, .. } => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalLimit { input, .. } => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalSort(_, input) => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalUnion(left, right) => {
-                    self.stack.push(left);
-                    self.stack.push(right);
-                }
-                Operator::LogicalIntersect(left, right) => {
-                    self.stack.push(left);
-                    self.stack.push(right);
-                }
-                Operator::LogicalExcept(left, right) => {
-                    self.stack.push(left);
-                    self.stack.push(right);
-                }
-                Operator::LogicalInsert(_, _, input) => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalValues(_, _, input) => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalUpdate(_, input) => {
-                    self.stack.push(input);
-                }
-                Operator::LogicalDelete(_, input) => {
+                Operator::LogicalFilter(_, input)
+                | Operator::LogicalProject(_, input)
+                | Operator::LogicalAggregate { input, .. }
+                | Operator::LogicalLimit { input, .. }
+                | Operator::LogicalSort(_, input)
+                | Operator::LogicalInsert(_, _, input)
+                | Operator::LogicalValues(_, _, input)
+                | Operator::LogicalUpdate(_, input)
+                | Operator::LogicalDelete(_, input)
+                | Operator::Filter(_, input)
+                | Operator::Project(_, input)
+                | Operator::CreateTempTable(_, input)
+                | Operator::Aggregate { input, .. }
+                | Operator::Limit { input, .. }
+                | Operator::Sort(_, input)
+                | Operator::Insert(_, _, input)
+                | Operator::Update(_, input)
+                | Operator::Delete(_, input) => {
                     self.stack.push(input);
                 }
                 _ => {}

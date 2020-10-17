@@ -86,26 +86,18 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalUnion(left, right) => {
+            Operator::LogicalUnion(left, right)
+            | Operator::LogicalIntersect(left, right)
+            | Operator::LogicalExcept(left, right)
+            | Operator::Union(left, right)
+            | Operator::Intersect(left, right)
+            | Operator::Except(left, right) => {
                 write!(f, "{}", self.name())?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f)?;
-                right.indent_print(f, indent + 1)
-            }
-            Operator::LogicalIntersect(left, right) => {
-                write!(f, "{}", self.name())?;
-                newline(f)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f)?;
-                right.indent_print(f, indent + 1)
-            }
-            Operator::LogicalExcept(left, right) => {
-                write!(f, "{}", self.name())?;
-                newline(f)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f)?;
-                right.indent_print(f, indent + 1)
+                right.indent_print(f, indent + 1)?;
+                Ok(())
             }
             Operator::LogicalInsert(table, columns, input) => {
                 write!(f, "{} {}", self.name(), table.name)?;
@@ -289,27 +281,6 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 }
                 newline(f)?;
                 input.indent_print(f, indent + 1)
-            }
-            Operator::Union(left, right) => {
-                write!(f, "{}", self.name())?;
-                newline(f)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f)?;
-                right.indent_print(f, indent + 1)
-            }
-            Operator::Intersect(left, right) => {
-                write!(f, "{}", self.name())?;
-                newline(f)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f)?;
-                right.indent_print(f, indent + 1)
-            }
-            Operator::Except(left, right) => {
-                write!(f, "{}", self.name())?;
-                newline(f)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f)?;
-                right.indent_print(f, indent + 1)
             }
             Operator::Insert(table, columns, input) => {
                 write!(f, "{} {}", self.name(), table.name)?;

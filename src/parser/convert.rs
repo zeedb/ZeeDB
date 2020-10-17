@@ -134,8 +134,11 @@ impl Converter {
         let head = &q.input_item_list[0];
         let tail = &q.input_item_list[1..];
         let mut right = self.any_resolved_scan(head.scan.get());
+        right = self.project_set_item(&q.parent.get().column_list, &head.output_column_list, right);
         for input in tail {
-            let left = self.any_resolved_scan(input.scan.get());
+            let mut left = self.any_resolved_scan(input.scan.get());
+            left =
+                self.project_set_item(&q.parent.get().column_list, &input.output_column_list, left);
             right = match *q.op_type.get() {
                 // UnionAll
                 0 => Expr::new(LogicalUnion(left, right)),
@@ -154,6 +157,21 @@ impl Converter {
             };
         }
         right
+    }
+
+    fn project_set_item(
+        &mut self,
+        outputs: &Vec<ResolvedColumnProto>,
+        inputs: &Vec<ResolvedColumnProto>,
+        item: Expr,
+    ) -> Expr {
+        let mut projects = vec![];
+        for i in 0..outputs.len() {
+            let input = Scalar::Column(Column::from(&inputs[i]));
+            let output = Column::from(&outputs[i]);
+            projects.push((input, output))
+        }
+        Expr::new(LogicalProject(projects, item))
     }
 
     fn order_by(&mut self, q: &ResolvedOrderByScanProto) -> Expr {

@@ -400,7 +400,13 @@ fn max_cuc(
     left: &HashMap<Column, usize>,
     right: &HashMap<Column, usize>,
 ) -> HashMap<Column, usize> {
-    todo!("max_cuc")
+    let mut max = left.clone();
+    for (k, v) in right {
+        if v > &left[k] {
+            max.insert(k.clone(), *v);
+        }
+    }
+    max
 }
 
 fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> usize {

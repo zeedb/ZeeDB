@@ -1,0 +1,7 @@
+select 1 as a union all select 2 as a
+
+Union
+	Project $union_all.a:2
+		TableFreeScan
+	Project $union_all.a:1
+		TableFreeScan

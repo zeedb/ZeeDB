@@ -369,18 +369,18 @@ impl Rule {
                 }
             }
             Rule::LogicallUnionToUnion => {
-                if let LogicalUnion(_, _) = bind {
-                    todo!()
+                if let LogicalUnion(outputs, inputs) = bind {
+                    return Some(Union(outputs, inputs));
                 }
             }
             Rule::LogicalIntersectToIntersect => {
-                if let LogicalIntersect(_, _) = bind {
-                    todo!()
+                if let LogicalIntersect(outputs, inputs) = bind {
+                    return Some(Intersect(outputs, inputs));
                 }
             }
             Rule::LogicalExceptToExcept => {
-                if let LogicalExcept(_, _) = bind {
-                    todo!()
+                if let LogicalExcept(outputs, inputs) = bind {
+                    return Some(Except(outputs, inputs));
                 }
             }
             Rule::LogicalWithToCreateTempTable => {
