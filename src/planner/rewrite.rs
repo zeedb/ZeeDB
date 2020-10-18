@@ -7,6 +7,7 @@ enum RewriteRule {
     MarkJoinToSemiJoin,
     SingleJoinToInnerJoin,
     RemoveInnerJoin,
+    InlineWith,
     // Top-down predicate pushdown:
     PushExplicitFilterThroughInnerJoin,
     PushImplicitFilterThroughInnerJoin,
@@ -90,6 +91,13 @@ impl RewriteRule {
                     }
                 }
             }
+            RewriteRule::InlineWith => {
+                if let LogicalWith(name, columns, left, right) = expr.as_ref() {
+                    if count_get_with(name, right) == 1 {
+                        return Some(inline_with(name, columns, left, right.clone()));
+                    }
+                }
+            }
             RewriteRule::PushExplicitFilterThroughInnerJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
                     if let LogicalJoin(Join::Inner(join_predicates), left, right) = input.as_ref() {
@@ -156,6 +164,31 @@ fn prove_singleton(expr: &Expr) -> bool {
         LogicalSingleGet => true,
         LogicalAggregate { group_by, .. } => group_by.is_empty(),
         _ => false,
+    }
+}
+
+fn count_get_with(name: &String, expr: &Expr) -> usize {
+    let mut count = 0;
+    for e in expr.iter() {
+        if let LogicalGetWith(get_name, _) = e.as_ref() {
+            if name == get_name {
+                count += 1
+            }
+        }
+    }
+    count
+}
+
+fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -> Expr {
+    match *right.0 {
+        LogicalGetWith(get_name, get_columns) if name == &get_name => {
+            let mut projects = vec![];
+            for i in 0..columns.len() {
+                projects.push((Scalar::Column(columns[i].clone()), get_columns[i].clone()))
+            }
+            Expr::new(LogicalProject(projects, left.clone()))
+        }
+        expr => Expr::new(expr.map(|child| inline_with(name, columns, left, child))),
     }
 }
 
@@ -491,6 +524,7 @@ pub fn rewrite(expr: Expr) -> Expr {
         RewriteRule::MarkJoinToSemiJoin,
         RewriteRule::SingleJoinToInnerJoin,
         RewriteRule::RemoveInnerJoin,
+        RewriteRule::InlineWith,
     ];
     let predicate_push_down = vec![
         RewriteRule::PushExplicitFilterThroughInnerJoin,

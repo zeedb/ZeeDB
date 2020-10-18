@@ -25,6 +25,7 @@ fn test_rewrite() {
     ok!("examples/rewrite/combine_consecutive_projects_star.txt", r#"select *, a + 1 as b from (select 1 as a)"#, errors);
     ok!("examples/rewrite/pull_filter_through_aggregate.txt", r#"select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store"#, errors);
     ok!("examples/rewrite/remove_single_join.txt", r#"select (select 1) from customer"#, errors);
+    ok!("examples/rewrite/remove_with.txt", r#"with foo as (select * from customer) select * from foo"#, errors);
     ok!("examples/rewrite/push_filter_through_project.txt", r#"select * from (select *, store_id + 1 from customer) where store_id = 1"#, errors);
     if !errors.is_empty() {
         panic!("{:#?}", errors);

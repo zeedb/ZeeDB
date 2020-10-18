@@ -1,0 +1,9 @@
+with foo as (select customer_id, current_date() as r from customer) 
+select customer_id, r 
+from foo
+
+LogicalProject foo.customer_id:customer.customer_id foo.r:(CurrentDate)
+	LogicalGet customer
+
+Project foo.customer_id:customer.customer_id foo.r:(CurrentDate)
+	SeqScan customer

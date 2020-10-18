@@ -89,7 +89,7 @@ impl Rule {
             | (Rule::LogicallUnionToUnion, LogicalUnion(_, _))
             | (Rule::LogicalIntersectToIntersect, LogicalIntersect(_, _))
             | (Rule::LogicalExceptToExcept, LogicalExcept(_, _))
-            | (Rule::LogicalWithToCreateTempTable, LogicalWith(_, _, _))
+            | (Rule::LogicalWithToCreateTempTable, LogicalWith(_, _, _, _))
             | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith(_, _))
             | (Rule::LogicalInsertToInsert, LogicalInsert(_, _, _))
             | (Rule::LogicalValuesToValues, LogicalValues(_, _, _))
@@ -333,13 +333,13 @@ impl Rule {
                 }
             }
             Rule::LogicalWithToCreateTempTable => {
-                if let LogicalWith(name, left, right) = bind {
-                    return Some(CreateTempTable(name, left, right));
+                if let LogicalWith(name, columns, left, right) = bind {
+                    return Some(CreateTempTable(name, columns, left, right));
                 }
             }
             Rule::LogicalGetWithToGetTempTable => {
-                if let LogicalGetWith(name, _) = bind {
-                    return Some(GetTempTable(name));
+                if let LogicalGetWith(name, columns) = bind {
+                    return Some(GetTempTable(name, columns));
                 }
             }
             Rule::LogicalInsertToInsert => {

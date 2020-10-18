@@ -54,12 +54,12 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let probe = ss[*right].props.cardinality as f64;
             build * COST_HASH_BUILD + probe * COST_HASH_PROBE
         }
-        CreateTempTable(_, left, _) => {
+        CreateTempTable(_, _, left, _) => {
             let output = ss[*left].props.cardinality as f64;
             let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
-        GetTempTable(_) => {
+        GetTempTable(_, _) => {
             let output = ss[parent].props.cardinality as f64;
             let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_READ_BLOCK

@@ -260,7 +260,8 @@ impl Converter {
                     ..
                 } => {
                     let left = self.any_resolved_scan(&query);
-                    right = Expr::new(LogicalWith(name.clone(), left, right));
+                    let columns = self.columns(column_list(&query));
+                    right = Expr::new(LogicalWith(name.clone(), columns, left, right));
                 }
                 other => panic!("{:?}", other),
             }
@@ -781,7 +782,7 @@ impl Converter {
     }
 }
 
-fn single_column(q: &AnyResolvedScanProto) -> &ResolvedColumnProto {
+fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
     let q = match q.node.get() {
         ResolvedSingleRowScanNode(q) => q.parent.get(),
         ResolvedTableScanNode(q) => q.parent.get(),
@@ -800,7 +801,11 @@ fn single_column(q: &AnyResolvedScanProto) -> &ResolvedColumnProto {
         ResolvedRelationArgumentScanNode(q) => q.parent.get(),
         ResolvedAggregateScanBaseNode(q) => single_column_aggregate(q),
     };
-    &q.column_list[0]
+    &q.column_list
+}
+
+fn single_column(q: &AnyResolvedScanProto) -> &ResolvedColumnProto {
+    &column_list(q)[0]
 }
 
 fn single_column_aggregate(q: &AnyResolvedAggregateScanBaseProto) -> &ResolvedScanProto {

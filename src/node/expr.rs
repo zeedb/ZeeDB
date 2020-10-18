@@ -46,7 +46,7 @@ impl Expr {
         Expr::new(operator)
     }
 
-    fn iter(&self) -> ExprIterator {
+    pub fn iter(&self) -> ExprIterator {
         ExprIterator { stack: vec![self] }
     }
 }
@@ -68,10 +68,10 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::Intersect(left, right)
                 | Operator::Except(left, right)
                 | Operator::LogicalJoin(_, left, right)
-                | Operator::LogicalWith(_, left, right)
+                | Operator::LogicalWith(_, _, left, right)
                 | Operator::NestedLoop(_, left, right)
                 | Operator::HashJoin(_, _, left, right)
-                | Operator::CreateTempTable(_, left, right) => {
+                | Operator::CreateTempTable(_, _, left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }

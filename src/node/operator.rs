@@ -16,7 +16,7 @@ pub enum Operator<T> {
     LogicalJoin(Join, T, T),
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
-    LogicalWith(String, T, T),
+    LogicalWith(String, Vec<Column>, T, T),
     // LogicalGetWith(table) reads the subquery that was created by With.
     LogicalGetWith(String, Vec<Column>),
     // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
@@ -90,8 +90,8 @@ pub enum Operator<T> {
     Project(Vec<(Scalar, Column)>, T),
     NestedLoop(Join, T, T),
     HashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
-    CreateTempTable(String, T, T),
-    GetTempTable(String),
+    CreateTempTable(String, Vec<Column>, T, T),
+    GetTempTable(String, Vec<Column>),
     Aggregate {
         group_by: Vec<Column>,
         aggregate: Vec<(AggregateFn, Column)>,
@@ -142,7 +142,7 @@ impl<T> Operator<T> {
     pub fn is_logical(&self) -> bool {
         match self {
             Operator::LogicalJoin(_, _, _)
-            | Operator::LogicalWith(_, _, _)
+            | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
             | Operator::LogicalExcept(_, _)
@@ -196,7 +196,7 @@ impl<T> Operator<T> {
     pub fn len(&self) -> usize {
         match self {
             Operator::LogicalJoin(_, _, _)
-            | Operator::LogicalWith(_, _, _)
+            | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
             | Operator::LogicalExcept(_, _)
@@ -261,10 +261,10 @@ impl<T> Operator<T> {
                 let right = visitor(right);
                 Operator::LogicalJoin(join, left, right)
             }
-            Operator::LogicalWith(name, left, right) => {
+            Operator::LogicalWith(name, columns, left, right) => {
                 let left = visitor(left);
                 let right = visitor(right);
-                Operator::LogicalWith(name, left, right)
+                Operator::LogicalWith(name, columns, left, right)
             }
             Operator::LogicalAggregate {
                 group_by,
@@ -369,10 +369,10 @@ impl<T> Operator<T> {
             Operator::HashJoin(join, equals, left, right) => {
                 Operator::HashJoin(join, equals, visitor(left), visitor(right))
             }
-            Operator::CreateTempTable(name, left, right) => {
-                Operator::CreateTempTable(name, visitor(left), visitor(right))
+            Operator::CreateTempTable(name, columns, left, right) => {
+                Operator::CreateTempTable(name, columns, visitor(left), visitor(right))
             }
-            Operator::GetTempTable(name) => Operator::GetTempTable(name),
+            Operator::GetTempTable(name, columns) => Operator::GetTempTable(name, columns),
             Operator::Aggregate {
                 group_by,
                 aggregate,
@@ -437,13 +437,13 @@ impl<T> ops::Index<usize> for Operator<T> {
     fn index(&self, index: usize) -> &Self::Output {
         match self {
             Operator::LogicalJoin(_, left, right)
-            | Operator::LogicalWith(_, left, right)
+            | Operator::LogicalWith(_, _, left, right)
             | Operator::LogicalUnion(left, right)
             | Operator::LogicalIntersect(left, right)
             | Operator::LogicalExcept(left, right)
             | Operator::NestedLoop(_, left, right)
             | Operator::HashJoin(_, _, left, right)
-            | Operator::CreateTempTable(_, left, right)
+            | Operator::CreateTempTable(_, _, left, right)
             | Operator::Union(left, right)
             | Operator::Intersect(left, right)
             | Operator::Except(left, right) => match index {

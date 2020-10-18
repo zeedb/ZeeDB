@@ -279,7 +279,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 _ => {}
             }
         }
-        LogicalWith(name, _, right) => {
+        LogicalWith(name, _, _, right) => {
             cardinality = ss[*right].props.cardinality;
             column_unique_cardinality = ss[*right].props.column_unique_cardinality.clone();
         }
@@ -430,7 +430,9 @@ fn max_cuc(
 fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> usize {
     match expr {
         Scalar::Literal(_, _) => 1,
-        Scalar::Column(column) => scope[column],
+        Scalar::Column(column) => *scope
+            .get(column)
+            .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),
         Scalar::Call(_, _, _) => 1, // TODO
         Scalar::Cast(value, _) => scalar_unique_cardinality(value, scope),
     }
