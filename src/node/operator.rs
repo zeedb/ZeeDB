@@ -574,6 +574,20 @@ pub enum Join {
     Mark(Column, Vec<Scalar>),
 }
 
+impl Join {
+    pub fn predicates(&self) -> &Vec<Scalar> {
+        match self {
+            Join::Inner(predicates)
+            | Join::Right(predicates)
+            | Join::Outer(predicates)
+            | Join::Semi(predicates)
+            | Join::Anti(predicates)
+            | Join::Single(predicates)
+            | Join::Mark(_, predicates) => predicates,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Table {
     pub id: i64,

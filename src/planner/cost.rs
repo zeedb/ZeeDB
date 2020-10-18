@@ -12,10 +12,10 @@ const COST_CPU_PRED: Cost = 0.0001;
 const COST_CPU_EVAL: Cost = COST_CPU_PRED;
 const COST_CPU_APPLY: Cost = COST_CPU_PRED * 2.0;
 const COST_CPU_COMP_MOVE: Cost = COST_CPU_PRED * 3.0;
-const COST_HASH_BUILD: Cost = COST_CPU_PRED * 2.0;
-const COST_HASH_PROBE: Cost = COST_CPU_PRED;
-const COST_ARRAY_BUILD: Cost = COST_CPU_PRED;
 const COST_ARRAY_PROBE: Cost = COST_CPU_PRED;
+const COST_ARRAY_BUILD: Cost = COST_ARRAY_PROBE * 2.0;
+const COST_HASH_PROBE: Cost = COST_ARRAY_PROBE + COST_CPU_PRED;
+const COST_HASH_BUILD: Cost = COST_HASH_PROBE * 2.0;
 
 // physicalCost computes the local cost of the physical operator at the head of a multi-expression tree.
 // To compute the total physical cost of an expression, you need to choose a single physical expression
@@ -65,12 +65,18 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let build = ss[*left].props.cardinality as f64;
             let probe = ss[*right].props.cardinality as f64;
             let iterations = build * probe;
-            build * COST_ARRAY_BUILD + iterations * COST_ARRAY_PROBE
+            let count_predicates = join.predicates().len() as f64;
+            build * COST_ARRAY_BUILD
+                + iterations * COST_ARRAY_PROBE
+                + iterations * count_predicates * COST_CPU_PRED
         }
-        HashJoin(join, equals, left, right) => {
+        HashJoin(join, _, left, right) => {
             let build = ss[*left].props.cardinality as f64;
             let probe = ss[*right].props.cardinality as f64;
-            build * COST_HASH_BUILD + probe * COST_HASH_PROBE
+            let count_predicates = join.predicates().len() as f64 + 1.0;
+            build * COST_HASH_BUILD
+                + probe * COST_HASH_PROBE
+                + probe * count_predicates * COST_CPU_PRED
         }
         CreateTempTable(_, _, left, _) => {
             let output = ss[*left].props.cardinality as f64;
