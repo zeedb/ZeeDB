@@ -235,7 +235,11 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         LogicalGet(table) => {
             cardinality = 1000; // TODO get from LogicalGet or Table
             for c in &table.columns {
-                column_unique_cardinality.insert(c.clone(), cardinality);
+                if c.name.ends_with("id") {
+                    column_unique_cardinality.insert(c.clone(), 1000);
+                } else {
+                    column_unique_cardinality.insert(c.clone(), 100);
+                }
             }
         }
         LogicalFilter(predicates, input) => {
@@ -366,15 +370,12 @@ fn init_costs_using_lower_bound(ss: &SearchSpace, mid: MultiExprID) -> Vec<Cost>
 }
 
 fn winner(ss: &SearchSpace, gid: GroupID) -> Expr {
-    if ss[gid].winner.is_none() {
-        dbg!(ss);
-    }
     let mid = ss[gid].winner.unwrap().plan;
     Expr(Box::new(ss[mid].op.clone().map(|gid| winner(ss, gid))))
 }
 
 fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -> f64 {
-    let mut selectivity = 0.0;
+    let mut selectivity = 1.0;
     for p in predicates {
         selectivity *= predicate_selectivity(p, scope);
     }

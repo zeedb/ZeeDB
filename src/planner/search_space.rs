@@ -135,26 +135,16 @@ impl ops::IndexMut<MultiExprID> for SearchSpace {
 
 impl fmt::Debug for SearchSpace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "")?;
         for i in 0..self.groups.len() {
-            write!(f, "\t{}:\t", i)?;
+            write!(f, "\n\t{} #{}:\t", i, self.groups[i].props.cardinality)?;
             for j in 0..self.groups[i].logical.len() {
-                write!(f, "{:?}", self[self.groups[i].logical[j]])?;
-                if j + 1 < self.groups[i].logical.len() + self.groups[i].physical.len() {
-                    write!(f, "\n\t\t")?;
-                }
+                write!(f, "\n\t\t{:?}", self[self.groups[i].logical[j]])?;
             }
             for j in 0..self.groups[i].physical.len() {
-                write!(f, "{:?}", self[self.groups[i].physical[j]])?;
+                write!(f, "\n\t\t{:?}", self[self.groups[i].physical[j]])?;
                 if self.groups[i].winner.map(|w| w.plan) == Some(self.groups[i].physical[j]) {
                     write!(f, " *")?;
                 }
-                if j + 1 < self.groups[i].physical.len() {
-                    write!(f, "\n\t\t")?;
-                }
-            }
-            if i + 1 < self.groups.len() {
-                write!(f, "\n")?;
             }
         }
         Ok(())

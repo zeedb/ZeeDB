@@ -1,0 +1,13 @@
+update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
+
+LogicalUpdate customer.account_number:$update.$expr
+	LogicalProject $update.$expr:(Add customer.account_number 1)
+		LogicalJoin Inner (Equal customer.person_id person.person_id)
+			LogicalGet customer
+			LogicalGet person
+
+Update customer.account_number:$update.$expr
+	Project $update.$expr:(Add customer.account_number 1)
+		HashJoin Inner person.person_id=customer.person_id
+			SeqScan person
+			SeqScan customer

@@ -151,12 +151,12 @@ fn test_optimize() {
     ok!("examples/optimize/insert_values.txt", r#"insert into person (person_id, first_name, last_name, modified_date) values (1, "Foo", "Bar", current_timestamp())"#, errors);
     ok!("examples/optimize/insert_table_free_single_join.txt", r#"insert into person (person_id, first_name, last_name, modified_date) values (1, "Foo", "Bar", (select current_timestamp()))"#, errors);
     ok!("examples/optimize/insert_two_table_free_single_joins.txt", r#"insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))"#, errors);
-    // ok!("examples/optimize/update_where.txt", r#"update person set first_name = "Foo" where person_id = 1"#, errors);
+    ok!("examples/optimize/update_where.txt", r#"update person set first_name = "Foo" where person_id = 1"#, errors);
     // ok!("examples/optimize/update_set_table_free_single_join.txt", r#"update person set first_name = (select last_name) where person_id = 1"#, errors);
-    // ok!("examples/optimize/update_equi_join.txt", r#"update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id"#, errors);
+    ok!("examples/optimize/update_equi_join.txt", r#"update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id"#, errors);
     // ok!("examples/optimize/update_set_redundant_single_join.txt", r#"update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id"#, errors);
-    // ok!("examples/optimize/update_semi_join.txt", r#"update customer set account_number = 0 where person_id in (select person_id from person where first_name = "Joe")"#, errors);
-    // ok!("examples/optimize/update_set_default.txt", r#"update customer set account_number = default where person_id = 1"#, errors);
+    ok!("examples/optimize/update_semi_join.txt", r#"update customer set account_number = 0 where person_id in (select person_id from person where first_name = "Joe")"#, errors);
+    ok!("examples/optimize/update_set_default.txt", r#"update customer set account_number = default where person_id = 1"#, errors);
     // ok!("examples/optimize/delete.txt", r#"delete customer where person_id = 1"#, errors);
     // ok!("examples/optimize/delete_semi_join.txt", r#"delete person where person_id in (select person_id from customer)"#, errors);
     // ok!("examples/optimize/delete_semi_join_with_condition.txt", r#"delete customer where person_id in (select person_id from customer where account_number = 0)"#, errors);
