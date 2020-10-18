@@ -114,7 +114,10 @@ fn test_optimize() {
     // "#, errors);
     // ok!("examples/optimize/correlated_single_join_twice.txt", r#"select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer"#, errors);
     // ok!("examples/optimize/correlated_single_join_twice_plus_condition.txt", r#"select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) from customer"#, errors);
-    ok!("examples/optimize/single_join_in_where_clause.txt", r#"select person_id from person where modified_date = (select max(modified_date) from person)"#, errors);
+    ok!("examples/optimize/single_join_in_where_clause.txt", r#"
+        select person_id 
+        from person 
+        where modified_date = (select max(modified_date) from person)"#, errors);
     // ok!("examples/optimize/correlated_semi_join_to_group_by.txt", r#"select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)"#, errors);
     // ok!("examples/optimize/correlated_semi_join_to_group_by_correlated_column.txt", r#"select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)"#, errors);
     // ok!("examples/optimize/correlated_semi_equi_join.txt", r#"select 1 from person where person_id in (select person_id from customer where person.modified_date = customer.modified_date)"#, errors);
@@ -127,8 +130,14 @@ fn test_optimize() {
     // "#, errors);
     // ok!("examples/optimize/correlated_semi_self_join.txt", r#"select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)"#, errors);
     // ok!("examples/optimize/correlated_semi_join_then_order_by.txt", r#"select first_name from person where person_id in (select person_id from customer) order by modified_date limit 10"#, errors);
-    // ok!("examples/optimize/count_and_sum_distinct.txt", r#"select count(distinct account_number), sum(distinct account_number) from customer"#, errors);
-    // ok!("examples/optimize/use_with_clause_twice.txt", r#"with foo as (select customer_id, store_id from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id"#, errors);
+    ok!("examples/optimize/count_and_sum_distinct.txt", r#"
+        select count(distinct account_number), sum(distinct account_number) 
+        from customer"#, errors); // TODO this needs to be split into simpler aggregates
+    // ok!("examples/optimize/use_with_clause_twice.txt", r#"
+    //     with foo as (select customer_id, store_id from customer) 
+    //     select f1.customer_id, f2.customer_id 
+    //     from foo f1, foo f2 
+    //     where f1.store_id = f2.store_id"#, errors);
     // ok!("examples/optimize/redundant_with_clause.txt", r#"with foo as (select * from customer) select customer_id from foo"#, errors);
     // ok!("examples/optimize/redundant_with_clause_with_projection.txt", r#"with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo"#, errors);
     // ok!("examples/optimize/use_with_select_star_twice.txt", r#"with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id"#, errors);

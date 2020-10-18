@@ -1,0 +1,12 @@
+select count(distinct account_number), sum(distinct account_number) 
+from customer
+
+LogicalProject $aggregate.$agg1 $aggregate.$agg2
+	LogicalAggregate $aggregate.$agg1:(Count (Distinct $proj.$count)) $aggregate.$agg2:(Sum (Distinct $proj.$sum))
+		LogicalProject $proj.$count:customer.account_number $proj.$sum:customer.account_number
+			LogicalGet customer
+
+Project $aggregate.$agg1 $aggregate.$agg2
+	Aggregate $aggregate.$agg1:(Count (Distinct $proj.$count)) $aggregate.$agg2:(Sum (Distinct $proj.$sum))
+		Project $proj.$count:customer.account_number $proj.$sum:customer.account_number
+			SeqScan customer

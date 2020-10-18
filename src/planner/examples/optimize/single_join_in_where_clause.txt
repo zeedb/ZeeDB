@@ -1,4 +1,6 @@
-select person_id from person where modified_date = (select max(modified_date) from person)
+select person_id 
+from person 
+where modified_date = (select max(modified_date) from person)
 
 LogicalProject person.person_id
 	LogicalJoin Inner (Equal person.modified_date $aggregate.$agg1)
