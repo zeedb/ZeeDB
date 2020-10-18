@@ -3,4 +3,5 @@ update person set first_name = "Foo" where person_id = 1
 LogicalUpdate person.first_name:$update.$expr
 	LogicalProject $update.$expr:Foo
 		LogicalFilter (Equal person.person_id 1)
-			LogicalGet person
+			Project* person.person_id person.first_name
+				LogicalGet person

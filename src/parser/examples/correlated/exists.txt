@@ -4,5 +4,7 @@ LogicalProject $query.ok:$mark.$exists
 	LogicalJoin Mark $mark.$exists
 		LogicalProject store.store_id
 			LogicalFilter (Equal store.store_id customer.store_id)
-				LogicalGet store
-		LogicalGet customer
+				Project* store.store_id
+					LogicalGet store
+		Project* customer.store_id
+			LogicalGet customer

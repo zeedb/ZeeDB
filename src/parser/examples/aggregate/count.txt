@@ -2,4 +2,5 @@ select count(*) from person
 
 LogicalProject $aggregate.$agg1
 	LogicalAggregate $aggregate.$agg1:(CountStar)
-		LogicalGet person
+		Project* 
+			LogicalGet person

@@ -3,8 +3,10 @@ set account_number = default
 where person_id = 1
 
 LogicalUpdate customer.account_number:_
-	LogicalFilter (Equal customer.person_id 1)
-		LogicalGet customer
+	Project* customer.person_id customer.account_number
+		Filter* (Equal customer.person_id 1)
+			LogicalGet customer
 
 Update customer.account_number:_
-	IndexScan customer person_id:1
+	Project* customer.person_id customer.account_number
+		IndexScan customer(1:customer.person_id)

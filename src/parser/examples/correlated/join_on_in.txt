@@ -2,5 +2,7 @@ select 1 from person join store on person.person_id in (select person_id from cu
 
 LogicalProject $query.$col1:1
 	LogicalJoin Inner $mark.$in
-		LogicalGet person
-		LogicalGet store
+		Project* person.person_id
+			LogicalGet person
+		Project* store.store_id
+			LogicalGet store

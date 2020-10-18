@@ -15,8 +15,10 @@ enum RewriteRule {
     PushImplicitFilterThroughRightJoin,
     PushFilterThroughProject,
     CombineConsecutiveFilters,
-    // Top-down simplification:
+    EmbedFilterIntoGet,
+    // Top-down projection simplification:
     CombineConsecutiveProjects,
+    EmbedProjectIntoGet,
 }
 
 impl RewriteRule {
@@ -148,10 +150,51 @@ impl RewriteRule {
                     }
                 }
             }
+            RewriteRule::EmbedFilterIntoGet => {
+                if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
+                    if let LogicalGet {
+                        projects,
+                        predicates,
+                        table,
+                    } = input.as_ref()
+                    {
+                        // Check that LogicalGet isn't introducing any scalar expressions that might be used in filter_predicates.
+                        debug_assert!(projects.iter().all(|(x, c)| x.is_just(c)));
+                        let mut filter_predicates = filter_predicates.clone();
+                        let mut predicates = predicates.clone();
+                        let projects = projects.clone();
+                        let table = table.clone();
+                        predicates.append(&mut filter_predicates);
+                        return Some(Expr::new(LogicalGet {
+                            projects,
+                            predicates,
+                            table,
+                        }));
+                    }
+                }
+            }
             RewriteRule::CombineConsecutiveProjects => {
                 if let LogicalProject(outer, input) = expr.as_ref() {
                     if let LogicalProject(inner, input) = input.as_ref() {
-                        return combine_consecutive_projects(outer, inner, input);
+                        let combined = inline_all(outer, inner);
+                        return Some(Expr::new(LogicalProject(combined, input.clone())));
+                    }
+                }
+            }
+            RewriteRule::EmbedProjectIntoGet => {
+                if let LogicalProject(outer, input) = expr.as_ref() {
+                    if let LogicalGet {
+                        projects: inner,
+                        predicates,
+                        table,
+                    } = input.as_ref()
+                    {
+                        let combined = inline_all(outer, inner);
+                        return Some(Expr::new(LogicalGet {
+                            projects: combined,
+                            predicates: predicates.clone(),
+                            table: table.clone(),
+                        }));
                     }
                 }
             }
@@ -479,14 +522,10 @@ fn combine_consecutive_filters(
     Some(Expr::new(LogicalFilter(combined, input.clone())))
 }
 
-fn combine_consecutive_projects(
+fn inline_all(
     outer: &Vec<(Scalar, Column)>,
     inner: &Vec<(Scalar, Column)>,
-    input: &Expr,
-) -> Option<Expr> {
-    if !inner.iter().all(|(x, _)| x.can_inline()) {
-        return None;
-    }
+) -> Vec<(Scalar, Column)> {
     let mut combined = vec![];
     for (outer_expr, outer_column) in outer {
         let mut outer_expr = outer_expr.clone();
@@ -495,7 +534,7 @@ fn combine_consecutive_projects(
         }
         combined.push((outer_expr, outer_column.clone()));
     }
-    Some(Expr::new(LogicalProject(combined, input.clone())))
+    combined
 }
 
 fn split_correlated_predicates(
@@ -539,8 +578,12 @@ pub fn rewrite(expr: Expr) -> Expr {
         RewriteRule::PushImplicitFilterThroughRightJoin,
         RewriteRule::PushFilterThroughProject,
         RewriteRule::CombineConsecutiveFilters,
+        RewriteRule::EmbedFilterIntoGet,
     ];
-    let projection_push_down = vec![RewriteRule::CombineConsecutiveProjects];
+    let projection_push_down = vec![
+        RewriteRule::CombineConsecutiveProjects,
+        RewriteRule::EmbedProjectIntoGet,
+    ];
     fn rewrite_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
         for rule in rules {
             match rule.apply(&expr) {

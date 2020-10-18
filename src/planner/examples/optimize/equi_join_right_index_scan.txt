@@ -5,11 +5,15 @@ and store.store_id = 1
 
 LogicalProject customer.customer_id store.store_id
 	LogicalJoin Inner (Equal customer.store_id store.store_id)
-		LogicalGet customer
-		LogicalFilter (Equal store.store_id 1)
-			LogicalGet store
+		Project* customer.customer_id customer.store_id
+			LogicalGet customer
+		Project* store.store_id
+			Filter* (Equal store.store_id 1)
+				LogicalGet store
 
 Project customer.customer_id store.store_id
 	NestedLoop Inner (Equal customer.store_id store.store_id)
-		IndexScan store store_id:1
-		SeqScan customer
+		Project* store.store_id
+			IndexScan store(1:store.store_id)
+		Project* customer.customer_id customer.store_id
+			SeqScan customer

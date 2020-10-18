@@ -232,7 +232,12 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
     let mut column_unique_cardinality: HashMap<Column, usize> = HashMap::new();
     match &mexpr.op {
         LogicalSingleGet => cardinality = 1,
-        LogicalGet(table) => {
+        LogicalGet {
+            projects,
+            predicates,
+            table,
+        } => {
+            // Scan
             cardinality = 1000; // TODO get from LogicalGet or Table
             for c in &table.columns {
                 if c.name.ends_with("id") {
@@ -240,6 +245,17 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 } else {
                     column_unique_cardinality.insert(c.clone(), 100);
                 }
+            }
+            // Filter
+            let selectivity = total_selectivity(predicates, &column_unique_cardinality);
+            cardinality = apply_selectivity(cardinality, selectivity);
+            for (_, n) in column_unique_cardinality.iter_mut() {
+                *n = apply_selectivity(*n, selectivity);
+            }
+            // Project
+            for (x, c) in projects {
+                let n = scalar_unique_cardinality(&x, &column_unique_cardinality);
+                column_unique_cardinality.insert(c.clone(), n);
             }
         }
         LogicalFilter(predicates, input) => {

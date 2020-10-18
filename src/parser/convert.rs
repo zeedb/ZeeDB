@@ -72,7 +72,18 @@ impl Converter {
     }
 
     fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Expr {
-        Expr::new(LogicalGet(Table::from(q)))
+        let projects = q
+            .parent
+            .get()
+            .column_list
+            .iter()
+            .map(|c| (Scalar::Column(Column::from(c)), Column::from(c)))
+            .collect();
+        Expr::new(LogicalGet {
+            projects,
+            predicates: vec![],
+            table: Table::from(q),
+        })
     }
 
     fn join(&mut self, q: &ResolvedJoinScanProto) -> Expr {

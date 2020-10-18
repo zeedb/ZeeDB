@@ -6,11 +6,15 @@ where store.store_id = 1
 LogicalProject customer.customer_id store.store_id
 	LogicalFilter (Equal store.store_id 1)
 		LogicalJoin Right (Equal customer.store_id store.store_id)
-			LogicalGet store
-			LogicalGet customer
+			Project* store.store_id
+				LogicalGet store
+			Project* customer.customer_id customer.store_id
+				LogicalGet customer
 
 Project customer.customer_id store.store_id
 	Filter (Equal store.store_id 1)
 		HashJoin Right store.store_id=customer.store_id
-			SeqScan store
-			SeqScan customer
+			Project* store.store_id
+				SeqScan store
+			Project* customer.customer_id customer.store_id
+				SeqScan customer

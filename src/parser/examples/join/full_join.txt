@@ -2,5 +2,7 @@ select customer.customer_id, store.store_id from customer full outer join store 
 
 LogicalProject customer.customer_id store.store_id
 	LogicalJoin Outer (Equal customer.store_id store.store_id)
-		LogicalGet customer
-		LogicalGet store
+		Project* customer.customer_id customer.store_id
+			LogicalGet customer
+		Project* store.store_id
+			LogicalGet store

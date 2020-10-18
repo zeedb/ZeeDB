@@ -4,11 +4,15 @@ where customer.customer_id = 1
 
 LogicalProject customer.customer_id store.store_id
 	LogicalJoin Inner
-		LogicalFilter (Equal customer.customer_id 1)
-			LogicalGet customer
-		LogicalGet store
+		Project* customer.customer_id
+			Filter* (Equal customer.customer_id 1)
+				LogicalGet customer
+		Project* store.store_id
+			LogicalGet store
 
 Project customer.customer_id store.store_id
 	NestedLoop Inner
-		IndexScan customer customer_id:1
-		SeqScan store
+		Project* customer.customer_id
+			IndexScan customer(1:customer.customer_id)
+		Project* store.store_id
+			SeqScan store

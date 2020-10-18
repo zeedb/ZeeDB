@@ -4,4 +4,5 @@ LogicalProject $query.$col1:$expr_subquery.$col1
 	LogicalJoin Inner
 		LogicalProject $expr_subquery.$col1:1
 			LogicalSingleGet
-		LogicalGet customer
+		Project* 
+			LogicalGet customer

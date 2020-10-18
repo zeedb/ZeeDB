@@ -68,6 +68,7 @@ impl ParseProvider {
                     enabled_language_features: all_features(),
                     ..Default::default()
                 }),
+                prune_unused_columns: Some(true),
                 ..Default::default()
             }),
             target: Some(analyze_request::Target::ParseResumeLocation(

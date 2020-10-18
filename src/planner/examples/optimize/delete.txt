@@ -2,8 +2,10 @@ delete customer
 where person_id = 1
 
 LogicalDelete customer
-	LogicalFilter (Equal customer.person_id 1)
-		LogicalGet customer
+	Project* customer.person_id
+		Filter* (Equal customer.person_id 1)
+			LogicalGet customer
 
 Delete customer
-	IndexScan customer person_id:1
+	Project* customer.person_id
+		IndexScan customer(1:customer.person_id)

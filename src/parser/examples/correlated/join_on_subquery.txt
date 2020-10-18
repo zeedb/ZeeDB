@@ -2,5 +2,7 @@ select 1 from person join customer on (select person.person_id = customer.person
 
 LogicalProject $query.$col1:1
 	LogicalJoin Inner $expr_subquery.$col1
-		LogicalGet person
-		LogicalGet customer
+		Project* person.person_id
+			LogicalGet person
+		Project* customer.person_id
+			LogicalGet customer

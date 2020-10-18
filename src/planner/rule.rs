@@ -77,8 +77,8 @@ impl Rule {
             (Rule::LogicalInnerJoinCommutivity, LogicalJoin(Join::Inner(_), _, _))
             | (Rule::LogicalInnerJoinAssociativity, LogicalJoin(Join::Inner(_), _, _))
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
-            | (Rule::LogicalGetToSeqScan, LogicalGet(_))
-            | (Rule::LogicalGetToIndexScan, LogicalFilter(_, _))
+            | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
+            | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
             | (Rule::LogicalProjectToProject, LogicalProject(_, _))
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin(_, _, _))
@@ -108,8 +108,6 @@ impl Rule {
     pub fn non_leaf(&self, child: usize) -> bool {
         match (self, child) {
             (Rule::LogicalInnerJoinAssociativity, 0) => true,
-            // TODO once we add predicate pushdown into LogicalGet, we won't need this anymore
-            (Rule::LogicalGetToIndexScan, 0) => true,
             _ => false,
         }
     }
@@ -137,16 +135,18 @@ impl Rule {
                 }
             }
             Rule::LogicalGetToIndexScan => {
-                if let LogicalFilter(predicates, input) = &ss[mid].op {
-                    for input in &ss[*input].logical {
-                        if let LogicalGet(table) = &ss[*input].op {
-                            if can_index_scan(predicates, table) {
-                                binds.push(LogicalFilter(
-                                    predicates.clone(),
-                                    Bind::Operator(Box::new(LogicalGet(table.clone()))),
-                                ))
-                            }
-                        }
+                if let LogicalGet {
+                    projects,
+                    predicates,
+                    table,
+                } = &ss[mid].op
+                {
+                    if find_index_scan(predicates, table).is_some() {
+                        binds.push(LogicalGet {
+                            projects: projects.clone(),
+                            predicates: predicates.clone(),
+                            table: table.clone(),
+                        })
                     }
                 }
             }
@@ -202,15 +202,35 @@ impl Rule {
                 }
             }
             Rule::LogicalGetToSeqScan => {
-                if let LogicalGet(table) = bind {
-                    return Some(SeqScan(table));
+                if let LogicalGet {
+                    projects,
+                    predicates,
+                    table,
+                } = bind
+                {
+                    return Some(SeqScan {
+                        projects,
+                        predicates,
+                        table,
+                    });
                 }
             }
             Rule::LogicalGetToIndexScan => {
-                if let LogicalFilter(predicates, Bind::Operator(input)) = bind {
-                    if let LogicalGet(table) = *input {
-                        return index_scan(predicates, table);
-                    }
+                if let LogicalGet {
+                    projects,
+                    predicates,
+                    table,
+                } = bind
+                {
+                    let mut predicates = predicates;
+                    let i = find_index_scan(&predicates, &table).unwrap();
+                    let (c, x) = unpack_index_lookup(predicates.remove(i), &table).unwrap();
+                    return Some(IndexScan {
+                        projects,
+                        predicates,
+                        table,
+                        equals: vec![(c, x)],
+                    });
                 }
             }
             Rule::LogicalFilterToFilter => {
@@ -449,34 +469,24 @@ pub enum Bind {
     Operator(Box<Operator<Bind>>),
 }
 
-fn can_index_scan(predicates: &Vec<Scalar>, table: &Table) -> bool {
-    index_scan(predicates.clone(), table.clone()).is_some()
-}
-
-fn index_scan(predicates: Vec<Scalar>, table: Table) -> Option<Operator<Bind>> {
-    // TODO real implementation
-    if let Some((column, scalar)) = match_indexed_lookup(predicates) {
-        if column.table.clone() == Some(table.name.clone()) {
-            return Some(IndexScan {
-                table,
-                equals: vec![(column, scalar)],
-            });
+fn find_index_scan(predicates: &Vec<Scalar>, table: &Table) -> Option<usize> {
+    for i in 0..predicates.len() {
+        if unpack_index_lookup(predicates[i].clone(), table).is_some() {
+            return Some(i);
         }
     }
     None
 }
 
-fn match_indexed_lookup(mut predicates: Vec<Scalar>) -> Option<(Column, Scalar)> {
-    if predicates.len() == 1 {
-        if let Scalar::Call(Function::Equal, mut arguments, _) = predicates.pop().unwrap() {
-            match (arguments.pop().unwrap(), arguments.pop().unwrap()) {
-                (Scalar::Column(column), equals) | (equals, Scalar::Column(column))
-                    if column.name.ends_with("_id") =>
-                {
-                    return Some((column, equals))
-                }
-                _ => {}
+fn unpack_index_lookup(predicate: Scalar, table: &Table) -> Option<(Column, Scalar)> {
+    if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
+        match (arguments.pop().unwrap(), arguments.pop().unwrap()) {
+            (Scalar::Column(column), equals) | (equals, Scalar::Column(column))
+                if column.name.ends_with("_id") && column.table.as_ref() == Some(&table.name) =>
+            {
+                return Some((column, equals))
             }
+            _ => {}
         }
     }
     None

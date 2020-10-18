@@ -4,13 +4,15 @@ where person_id in (select person_id from customer)
 LogicalDelete person
 	LogicalProject $mark.$in:true
 		LogicalJoin Semi (Equal person.person_id customer.person_id)
-			LogicalProject customer.person_id
+			Project* customer.person_id
 				LogicalGet customer
-			LogicalGet person
+			Project* person.person_id
+				LogicalGet person
 
 Delete person
 	Project $mark.$in:true
 		HashJoin Semi customer.person_id=person.person_id
-			Project customer.person_id
+			Project* customer.person_id
 				SeqScan customer
-			SeqScan person
+			Project* person.person_id
+				SeqScan person

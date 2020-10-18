@@ -24,24 +24,42 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].op {
         TableFreeScan { .. } => 0.0,
-        SeqScan { .. } => {
-            let output = ss[parent].props.cardinality as f64;
-            let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
-            blocks * COST_READ_BLOCK
+        SeqScan {
+            projects,
+            predicates,
+            ..
+        } => {
+            let output_cardinality = ss[parent].props.cardinality as f64;
+            let table_cardinality = 1000 as f64; // TODO table cardinality
+            let read_blocks = f64::max(1.0, table_cardinality * TUPLE_SIZE / BLOCK_SIZE);
+            let count_predicates = predicates.len() as f64;
+            let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
+            read_blocks * COST_READ_BLOCK
+                + count_predicates * table_cardinality * COST_CPU_PRED
+                + count_exprs * output_cardinality * COST_CPU_EVAL
         }
-        IndexScan { .. } => {
-            let blocks = ss[parent].props.cardinality as f64;
-            blocks * COST_READ_BLOCK
+        IndexScan {
+            projects,
+            predicates,
+            ..
+        } => {
+            let output_cardinality = ss[parent].props.cardinality as f64;
+            let index_cardinality = 1 as f64; // TODO real index cardinality
+            let count_predicates = predicates.len() as f64;
+            let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
+            index_cardinality * COST_READ_BLOCK
+                + count_predicates * index_cardinality * COST_CPU_PRED
+                + count_exprs * output_cardinality * COST_CPU_EVAL
         }
         Filter(predicates, input) => {
             let input = ss[*input].props.cardinality as f64;
             let columns = predicates.len() as f64;
             input * columns * COST_CPU_PRED
         }
-        Project(compute, input) => {
-            let output = ss[*input].props.cardinality as f64;
-            let columns = compute.len() as f64;
-            output * columns * COST_CPU_EVAL
+        Project(projects, input) => {
+            let output_cardinality = ss[parent].props.cardinality as f64;
+            let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
+            count_exprs * output_cardinality * COST_CPU_EVAL
         }
         NestedLoop(join, left, right) => {
             let build = ss[*left].props.cardinality as f64;

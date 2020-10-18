@@ -4,7 +4,10 @@ LogicalProject $query.$col1:1
 	LogicalFilter (Equal person.person_id customer.person_id) $mark.$in
 		LogicalJoin Mark $mark.$in (Equal customer.store_id store.store_id)
 			LogicalProject store.store_id
-				LogicalGet store
+				Project* store.store_id
+					LogicalGet store
 			LogicalJoin Inner
-				LogicalGet person
-				LogicalGet customer
+				Project* person.person_id
+					LogicalGet person
+				Project* customer.person_id customer.store_id
+					LogicalGet customer

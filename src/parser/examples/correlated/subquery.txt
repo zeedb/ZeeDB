@@ -4,5 +4,7 @@ LogicalProject $query.$col1:store.name
 	LogicalJoin Single
 		LogicalProject store.name
 			LogicalFilter (Equal store.store_id customer.store_id)
-				LogicalGet store
-		LogicalGet customer
+				Project* store.store_id store.name
+					LogicalGet store
+		Project* customer.store_id
+			LogicalGet customer

@@ -6,8 +6,8 @@ pub trait IndentPrint {
 }
 
 impl<T: IndentPrint> IndentPrint for Operator<T> {
-    fn indent_print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        let newline = |f: &mut fmt::Formatter<'_>| -> fmt::Result {
+    fn indent_print(&self, f: &mut fmt::Formatter<'_>, mut indent: usize) -> fmt::Result {
+        let newline = |f: &mut fmt::Formatter<'_>, indent: usize| -> fmt::Result {
             write!(f, "\n")?;
             for _ in 0..indent + 1 {
                 write!(f, "\t")?;
@@ -16,37 +16,49 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
         };
         match self {
             Operator::LogicalSingleGet => write!(f, "{}", self.name()),
-            Operator::LogicalGet(table) => write!(f, "{} {}", self.name(), table.name),
+            Operator::LogicalGet {
+                projects,
+                predicates,
+                table,
+            }
+            | Operator::SeqScan {
+                projects,
+                predicates,
+                table,
+            } => {
+                write!(f, "Project* {}", join_projects(projects))?;
+                newline(f, indent)?;
+                indent += 1;
+                if !predicates.is_empty() {
+                    write!(f, "Filter* {}", join_scalars(predicates))?;
+                    newline(f, indent)?;
+                    indent += 1;
+                }
+                write!(f, "{} {}", self.name(), table.name)?;
+                Ok(())
+            }
             Operator::LogicalFilter(predicates, input) => {
-                write!(f, "{} {}", self.name(), join(predicates))?;
-                newline(f)?;
+                write!(f, "{} {}", self.name(), join_scalars(predicates))?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalProject(projects, input) => {
-                let mut strings = vec![];
-                for (x, c) in projects {
-                    if x == &Scalar::Column(c.clone()) {
-                        strings.push(format!("{}", c));
-                    } else {
-                        strings.push(format!("{}:{}", c, x));
-                    }
-                }
-                write!(f, "{} {}", self.name(), strings.join(" "))?;
-                newline(f)?;
+                write!(f, "{} {}", self.name(), join_projects(projects))?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalJoin(join, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
-                newline(f)?;
+                newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
-                newline(f)?;
+                newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::LogicalWith(name, _, left, right) => {
                 write!(f, "{} {}", self.name(), name)?;
-                newline(f)?;
+                newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
-                newline(f)?;
+                newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::LogicalGetWith(name, _) => write!(f, "{} {}", self.name(), name),
@@ -62,7 +74,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 for (aggregate, column) in aggregate {
                     write!(f, " {}:{}", column, aggregate)?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalLimit {
@@ -71,7 +83,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input,
             } => {
                 write!(f, "{} {} {}", self.name(), limit, offset)?;
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalSort(order_by, input) => {
@@ -83,7 +95,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                         write!(f, " {}", sort.column)?;
                     }
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalUnion(left, right)
@@ -93,9 +105,9 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             | Operator::Intersect(left, right)
             | Operator::Except(left, right) => {
                 write!(f, "{}", self.name())?;
-                newline(f)?;
+                newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
-                newline(f)?;
+                newline(f, indent)?;
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
@@ -104,7 +116,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 for c in columns {
                     write!(f, " {}", c)?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalValues(columns, rows, input) => {
@@ -113,9 +125,9 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     write!(f, " {}", column)?;
                 }
                 for row in rows {
-                    write!(f, " [{}]", join(row))?;
+                    write!(f, " [{}]", join_scalars(row))?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalUpdate(updates, input) => {
@@ -126,12 +138,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                         None => write!(f, " {}:_", target)?,
                     }
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalDelete(table, input) => {
                 write!(f, "{} {}", self.name(), table.name)?;
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::LogicalCreateDatabase(name) => {
@@ -171,7 +183,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     write!(f, ")")?;
                 }
                 if let Some(input) = input {
-                    newline(f)?;
+                    newline(f, indent)?;
                     input.indent_print(f, indent + 1)?;
                 }
                 Ok(())
@@ -202,37 +214,44 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
             Operator::TableFreeScan => write!(f, "{}", self.name()),
-            Operator::SeqScan(table) => write!(f, "{} {}", self.name(), table),
-            Operator::IndexScan { table, equals } => {
-                write!(f, "{} {}", self.name(), table)?;
-                for (column, scalar) in equals {
-                    write!(f, " {}:{}", column.name, scalar)?;
+            Operator::IndexScan {
+                projects,
+                predicates,
+                table,
+                equals,
+            } => {
+                write!(f, "Project* {}", join_projects(projects))?;
+                newline(f, indent)?;
+                indent += 1;
+                if !predicates.is_empty() {
+                    write!(f, "Filter* {}", join_scalars(predicates))?;
+                    newline(f, indent)?;
+                    indent += 1;
                 }
+                write!(
+                    f,
+                    "{} {}({})",
+                    self.name(),
+                    table.name,
+                    join_index_lookups(equals)
+                )?;
                 Ok(())
             }
             Operator::Filter(predicates, input) => {
-                write!(f, "{} {}", self.name(), join(predicates))?;
-                newline(f)?;
+                write!(f, "{} {}", self.name(), join_scalars(predicates))?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Project(projects, input) => {
-                let mut strings = vec![];
-                for (x, c) in projects {
-                    if x == &Scalar::Column(c.clone()) {
-                        strings.push(format!("{}", c));
-                    } else {
-                        strings.push(format!("{}:{}", c, x));
-                    }
-                }
-                write!(f, "{} {}", self.name(), strings.join(" "))?;
-                newline(f)?;
+                write!(f, "{} {}", self.name(), join_projects(projects))?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::NestedLoop(join, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
-                newline(f)?;
+                newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
-                newline(f)?;
+                newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::HashJoin(join, equals, left, right) => {
@@ -240,16 +259,16 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 for (left, right) in equals {
                     write!(f, " {}={}", left, right)?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
-                newline(f)?;
+                newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
             Operator::CreateTempTable(name, _, left, right) => {
                 write!(f, "{} {}", self.name(), name)?;
-                newline(f)?;
+                newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
-                newline(f)?;
+                newline(f, indent)?;
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
@@ -266,7 +285,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 for (aggregate, column) in aggregate {
                     write!(f, " {}:{}", column, aggregate)?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Limit {
@@ -275,7 +294,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input,
             } => {
                 write!(f, "{} {} {}", self.name(), limit, offset)?;
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Sort(order_by, input) => {
@@ -287,7 +306,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                         write!(f, " {}", sort.column)?;
                     }
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Insert(table, columns, input) => {
@@ -295,7 +314,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 for c in columns {
                     write!(f, " {}", c)?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Values(columns, rows, input) => {
@@ -304,9 +323,9 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     write!(f, " {}", column)?;
                 }
                 for row in rows {
-                    write!(f, " [{}]", join(row))?;
+                    write!(f, " [{}]", join_scalars(row))?;
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Update(updates, input) => {
@@ -317,12 +336,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                         None => write!(f, " {}:_", target)?,
                     }
                 }
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Delete(table, input) => {
                 write!(f, "{} {}", self.name(), table)?;
-                newline(f)?;
+                newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::CreateDatabase(name) => write!(f, "{} {}", self.name(), name),
@@ -360,7 +379,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     write!(f, ")")?;
                 }
                 if let Some(input) = input {
-                    newline(f)?;
+                    newline(f, indent)?;
                     input.indent_print(f, indent + 1)?;
                 }
                 Ok(())
@@ -453,7 +472,7 @@ impl fmt::Display for Join {
             if xs.is_empty() {
                 "".to_string()
             } else {
-                format!(" {}", join(xs))
+                format!(" {}", join_scalars(xs))
             }
         }
         match self {
@@ -477,7 +496,7 @@ impl fmt::Display for Scalar {
                 if arguments.is_empty() {
                     write!(f, "({:?})", function)
                 } else {
-                    write!(f, "({:?} {})", function, join(arguments))
+                    write!(f, "({:?} {})", function, join_scalars(arguments))
                 }
             }
             Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
@@ -485,10 +504,30 @@ impl fmt::Display for Scalar {
     }
 }
 
-fn join(xs: &Vec<Scalar>) -> String {
+fn join_projects(projects: &Vec<(Scalar, Column)>) -> String {
+    let mut strings = vec![];
+    for (x, c) in projects {
+        if x == &Scalar::Column(c.clone()) {
+            strings.push(format!("{}", c));
+        } else {
+            strings.push(format!("{}:{}", c, x));
+        }
+    }
+    strings.join(" ")
+}
+
+fn join_scalars(xs: &Vec<Scalar>) -> String {
     let mut strings = vec![];
     for x in xs {
         strings.push(format!("{}", x));
+    }
+    strings.join(" ")
+}
+
+fn join_index_lookups(equals: &Vec<(Column, Scalar)>) -> String {
+    let mut strings = vec![];
+    for (x, c) in equals {
+        strings.push(format!("{}:{}", c, x));
     }
     strings.join(" ")
 }

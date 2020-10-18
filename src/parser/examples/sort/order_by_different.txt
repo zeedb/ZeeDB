@@ -1,4 +1,5 @@
 select customer_id from customer order by modified_date
 
 LogicalSort customer.modified_date
-	LogicalGet customer
+	Project* customer.customer_id customer.modified_date
+		LogicalGet customer

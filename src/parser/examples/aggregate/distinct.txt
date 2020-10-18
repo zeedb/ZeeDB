@@ -2,4 +2,5 @@ select distinct store_id from customer
 
 LogicalAggregate $distinct.store_id
 	LogicalProject $distinct.store_id:customer.store_id
-		LogicalGet customer
+		Project* customer.store_id
+			LogicalGet customer

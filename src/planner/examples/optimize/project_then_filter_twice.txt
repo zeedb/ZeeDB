@@ -4,10 +4,10 @@ where id < 100
 
 LogicalProject $subquery2.id
 	LogicalFilter (Less $subquery2.id 100) (Greater $subquery2.id 10)
-		LogicalProject $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
+		Project* $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
 			LogicalGet customer
 
 Project $subquery2.id
 	Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
-		Project $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
+		Project* $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
 			SeqScan customer

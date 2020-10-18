@@ -7,7 +7,11 @@ pub enum Operator<T> {
     // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
     LogicalSingleGet,
     // LogicalGet(table) implements the FROM clause.
-    LogicalGet(Table),
+    LogicalGet {
+        projects: Vec<(Scalar, Column)>,
+        predicates: Vec<Scalar>,
+        table: Table,
+    },
     // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
     LogicalFilter(Vec<Scalar>, T),
     // LogicalProject(columns) implements the SELECT clause.
@@ -82,8 +86,14 @@ pub enum Operator<T> {
         to: Name,
     },
     TableFreeScan,
-    SeqScan(Table),
+    SeqScan {
+        projects: Vec<(Scalar, Column)>,
+        predicates: Vec<Scalar>,
+        table: Table,
+    },
     IndexScan {
+        projects: Vec<(Scalar, Column)>,
+        predicates: Vec<Scalar>,
         table: Table,
         equals: Vec<(Column, Scalar)>,
     },
@@ -158,7 +168,7 @@ impl<T> Operator<T> {
             | Operator::LogicalUpdate(_, _)
             | Operator::LogicalDelete(_, _)
             | Operator::LogicalSingleGet
-            | Operator::LogicalGet(_)
+            | Operator::LogicalGet { .. }
             | Operator::LogicalGetWith(_, _)
             | Operator::LogicalCreateDatabase(_)
             | Operator::LogicalCreateTable { .. }
@@ -196,7 +206,9 @@ impl<T> Operator<T> {
                 .any(|scalar| scalar.columns().any(|c| c == column))
         }
         match self {
-            Operator::LogicalGet(table) => table.columns.contains(column),
+            Operator::LogicalGet {
+                projects, table, ..
+            } => projects.iter().any(|(_, c)| c == column) || table.columns.contains(column),
             Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
             Operator::LogicalJoin(Join::Mark(mark, predicates), _, _) => {
                 mark == column || contains(predicates, column)
@@ -248,7 +260,7 @@ impl<T> Operator<T> {
             | Operator::Delete { .. }
             | Operator::CreateTable { input: Some(_), .. } => 1,
             Operator::LogicalSingleGet
-            | Operator::LogicalGet(_)
+            | Operator::LogicalGet { .. }
             | Operator::LogicalGetWith(_, _)
             | Operator::LogicalCreateDatabase(_)
             | Operator::LogicalCreateTable { input: None, .. }
@@ -349,7 +361,15 @@ impl<T> Operator<T> {
                 Operator::LogicalDelete(table, input)
             }
             Operator::LogicalSingleGet => Operator::LogicalSingleGet,
-            Operator::LogicalGet(table) => Operator::LogicalGet(table),
+            Operator::LogicalGet {
+                projects,
+                predicates,
+                table,
+            } => Operator::LogicalGet {
+                projects,
+                predicates,
+                table,
+            },
             Operator::LogicalGetWith(name, columns) => Operator::LogicalGetWith(name, columns),
             Operator::LogicalCreateDatabase(name) => Operator::LogicalCreateDatabase(name),
             Operator::LogicalCreateTable {
@@ -384,8 +404,26 @@ impl<T> Operator<T> {
                 Operator::LogicalRename { object, from, to }
             }
             Operator::TableFreeScan => Operator::TableFreeScan,
-            Operator::SeqScan(table) => Operator::SeqScan(table),
-            Operator::IndexScan { table, equals } => Operator::IndexScan { table, equals },
+            Operator::SeqScan {
+                projects,
+                predicates,
+                table,
+            } => Operator::SeqScan {
+                projects,
+                predicates,
+                table,
+            },
+            Operator::IndexScan {
+                projects,
+                predicates,
+                table,
+                equals,
+            } => Operator::IndexScan {
+                projects,
+                predicates,
+                table,
+                equals,
+            },
             Operator::Filter(predicates, input) => Operator::Filter(predicates, visitor(input)),
             Operator::Project(projects, input) => Operator::Project(projects, visitor(input)),
             Operator::NestedLoop(join, left, right) => {
@@ -694,15 +732,6 @@ impl Scalar {
         ColumnIterator { stack: vec![self] }
     }
 
-    pub fn can_inline(&self) -> bool {
-        match self {
-            Scalar::Literal(_, _) => true,
-            Scalar::Column(_) => true,
-            Scalar::Call(f, _, _) => !f.has_effects(),
-            Scalar::Cast(expr, _) => expr.can_inline(),
-        }
-    }
-
     pub fn inline(&self, expr: &Scalar, column: &Column) -> Scalar {
         match self {
             Scalar::Column(c) if c == column => expr.clone(),
@@ -717,6 +746,13 @@ impl Scalar {
                 Scalar::Cast(Box::new(uncast.inline(expr, column)), typ.clone())
             }
             _ => self.clone(),
+        }
+    }
+
+    pub fn is_just(&self, column: &Column) -> bool {
+        match self {
+            Scalar::Column(c) => c == column,
+            _ => false,
         }
     }
 }
@@ -986,10 +1022,6 @@ impl Function {
             "ZetaSQL:upper" => Function::Upper,
             other => panic!("{} is not supported", other),
         }
-    }
-
-    pub fn has_effects(&self) -> bool {
-        false
     }
 }
 
