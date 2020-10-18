@@ -83,12 +83,19 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!("examples/optimize/correlated_single_equi_join.txt", r#"
-    //     select (select name from store where store.store_id = customer.store_id)
-    //     from customer"#, errors);
+    // ok!(
+    //     "examples/optimize/correlated_single_equi_join.txt",
+    //     r#"
+    //         select (select name from store where store.store_id = customer.store_id)
+    //         from customer
+    //     "#,
+    //     errors
+    // );
     ok!(
         "examples/optimize/redundant_table_free_single_join.txt",
-        r#"select (select 1)"#,
+        r#"
+            select (select 1)
+        "#,
         errors
     );
     ok!(
@@ -111,7 +118,14 @@ fn test_optimize() {
         errors
     );
 
-    // ok!("examples/optimize/correlated_single_equi_join_group_by.txt", r#"select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store"#, errors);
+    // ok!(
+    //     "examples/optimize/correlated_single_equi_join_group_by.txt",
+    //     r#"
+    //         select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers
+    //         from store
+    //     "#,
+    //     errors
+    // );
     ok!(
         "examples/optimize/join_left_index_scan.txt",
         r#"
@@ -172,7 +186,11 @@ fn test_optimize() {
     );
     ok!(
         "examples/optimize/union_all.txt",
-        r#"select 1 as a union all select 2 as a"#,
+        r#"
+            select 1 as a 
+            union all 
+            select 2 as a
+        "#,
         errors
     );
 
@@ -195,7 +213,15 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!("examples/optimize/correlated_semi_join.txt", r#"select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)"#, errors);
+    // ok!(
+    //     "examples/optimize/correlated_semi_join.txt",
+    //     r#"
+    //         select 1
+    //         from person, store
+    //         where person.person_id in (select person_id from customer where customer.store_id = store.store_id)
+    //     "#,
+    //     errors
+    // );
     ok!(
         "examples/optimize/equi_join_semi_join.txt",
         r#"
@@ -206,13 +232,31 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!("examples/optimize/correlated_semi_join_anti_join.txt", r#"
-    // select 1 from customer
-    // where exists (select 1 from person where person.person_id = customer.person_id)
-    // and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
-    // "#, errors);
-    // ok!("examples/optimize/correlated_single_join_twice.txt", r#"select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer"#, errors);
-    // ok!("examples/optimize/correlated_single_join_twice_plus_condition.txt", r#"select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) from customer"#, errors);
+    // ok!(
+    //     "examples/optimize/correlated_semi_join_anti_join.txt",
+    //     r#"
+    //         select 1 from customer
+    //         where exists (select 1 from person where person.person_id = customer.person_id)
+    //         and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_single_join_twice.txt",
+    //     r#"
+    //         select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id)
+    //         from customer
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_single_join_twice_plus_condition.txt",
+    //     r#"
+    //         select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id)
+    //         from customer
+    //     "#,
+    //     errors
+    // );
 
     ok!(
         "examples/optimize/single_join_in_where_clause.txt",
@@ -223,18 +267,78 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!("examples/optimize/correlated_semi_join_to_group_by.txt", r#"select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)"#, errors);
-    // ok!("examples/optimize/correlated_semi_join_to_group_by_correlated_column.txt", r#"select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)"#, errors);
-    // ok!("examples/optimize/correlated_semi_equi_join.txt", r#"select 1 from person where person_id in (select person_id from customer where person.modified_date = customer.modified_date)"#, errors);
-    // ok!("examples/optimize/correlated_single_join_with_condition.txt", r#"select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like "A%") from store"#, errors);
-    // ok!("examples/optimize/correlated_single_join_with_condition_and_group_by.txt", r#"select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100) from store"#, errors);
-    // ok!("examples/optimize/correlated_semi_join_in_where_clause.txt", r#"
-    // select customer_id
-    // from customer c1, store where c1.store_id = store.store_id
-    // and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
-    // "#, errors);
-    // ok!("examples/optimize/correlated_semi_self_join.txt", r#"select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)"#, errors);
-    // ok!("examples/optimize/correlated_semi_join_then_order_by.txt", r#"select first_name from person where person_id in (select person_id from customer) order by modified_date limit 10"#, errors);
+    // ok!(
+    //     "examples/optimize/correlated_semi_join_to_group_by.txt",
+    //     r#"
+    //         select 1
+    //         from customer c1
+    //         where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_semi_join_to_group_by_correlated_column.txt",
+    //     r#"
+    //         select 1
+    //         from customer c1
+    //         where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_semi_equi_join.txt",
+    //     r#"
+    //         select 1
+    //         from person
+    //         where person_id in (select person_id from customer where person.modified_date = customer.modified_date)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_single_join_with_condition.txt",
+    //     r#"
+    //         select (select max(modified_date)
+    //         from customer
+    //         where customer.store_id = store.store_id
+    //         and store.name like "A%") from store
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_single_join_with_condition_and_group_by.txt",
+    //     r#"
+    //         select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100)
+    //         from store
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_semi_join_in_where_clause.txt",
+    //     r#"
+    //         select customer_id
+    //         from customer c1, store where c1.store_id = store.store_id
+    //         and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_semi_self_join.txt",
+    //     r#"
+    //         select customer_id
+    //         from (select *, account_number - 1 as prev_account_number from customer) c1
+    //         where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated_semi_join_then_order_by.txt",
+    //     r#"
+    //         select first_name
+    //         from person
+    //         where person_id in (select person_id from customer) order by modified_date limit 10
+    //     "#,
+    //     errors
+    // );
 
     ok!(
         "examples/optimize/count_and_sum_distinct.txt",
@@ -325,7 +429,15 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!("examples/optimize/update_set_table_free_single_join.txt", r#"update person set first_name = (select last_name) where person_id = 1"#, errors);
+    // ok!(
+    //     "examples/optimize/update_set_table_free_single_join.txt",
+    //     r#"
+    //         update person
+    //         set first_name = (select last_name)
+    //         where person_id = 1
+    //     "#,
+    //     errors
+    // );
     ok!(
         "examples/optimize/update_equi_join.txt",
         r#"
@@ -336,7 +448,15 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!("examples/optimize/update_set_redundant_single_join.txt", r#"update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id"#, errors);
+    // ok!(
+    //     "examples/optimize/update_set_redundant_single_join.txt",
+    //     r#"
+    //         update customer
+    //         set account_number = (select person.person_id)
+    //         from person
+    //         where customer.person_id = person.person_id"#,
+    //     errors
+    // );
     ok!(
         "examples/optimize/update_semi_join.txt",
         r#"
