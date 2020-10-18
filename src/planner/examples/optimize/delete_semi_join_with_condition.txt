@@ -1,4 +1,5 @@
-delete customer where person_id in (select person_id from customer where account_number = 0)
+delete customer 
+where person_id in (select person_id from customer where account_number = 0)
 
 LogicalDelete customer
 	LogicalProject $mark.$in:true

@@ -1,4 +1,6 @@
-update customer set account_number = 0 where person_id in (select person_id from person where first_name = "Joe")
+update customer 
+set account_number = 0 
+where person_id in (select person_id from person where first_name = "Joe")
 
 LogicalUpdate customer.account_number:$update.$expr
 	LogicalProject $update.$expr:0
