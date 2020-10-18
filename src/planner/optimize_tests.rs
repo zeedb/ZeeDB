@@ -114,7 +114,7 @@ fn test_optimize() {
     // "#, errors);
     // ok!("examples/optimize/correlated_single_join_twice.txt", r#"select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer"#, errors);
     // ok!("examples/optimize/correlated_single_join_twice_plus_condition.txt", r#"select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) from customer"#, errors);
-    // ok!("examples/optimize/single_join_in_where_clause.txt", r#"select person_id from person where modified_date = (select max(modified_date) from person)"#, errors);
+    ok!("examples/optimize/single_join_in_where_clause.txt", r#"select person_id from person where modified_date = (select max(modified_date) from person)"#, errors);
     // ok!("examples/optimize/correlated_semi_join_to_group_by.txt", r#"select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)"#, errors);
     // ok!("examples/optimize/correlated_semi_join_to_group_by_correlated_column.txt", r#"select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)"#, errors);
     // ok!("examples/optimize/correlated_semi_equi_join.txt", r#"select 1 from person where person_id in (select person_id from customer where person.modified_date = customer.modified_date)"#, errors);

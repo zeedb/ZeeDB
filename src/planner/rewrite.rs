@@ -4,8 +4,9 @@ use node::*;
 #[derive(Debug)]
 enum RewriteRule {
     // Bottom-up unnest:
-    RemoveSingleJoin,
     MarkJoinToSemiJoin,
+    SingleJoinToInnerJoin,
+    RemoveInnerJoin,
     // Top-down predicate pushdown:
     PushExplicitFilterThroughInnerJoin,
     PushImplicitFilterThroughInnerJoin,
@@ -18,20 +19,8 @@ enum RewriteRule {
 }
 
 impl RewriteRule {
-    fn call(&self, expr: &Expr) -> Option<Expr> {
+    fn apply(&self, expr: &Expr) -> Option<Expr> {
         match self {
-            RewriteRule::RemoveSingleJoin => {
-                if let LogicalJoin(Join::Single(_), left, right) = expr.as_ref() {
-                    if let LogicalProject(projects, left) = left.as_ref() {
-                        if let LogicalSingleGet = left.as_ref() {
-                            return Some(Expr::new(LogicalProject(
-                                projects.clone(),
-                                right.clone(),
-                            )));
-                        }
-                    }
-                }
-            }
             RewriteRule::MarkJoinToSemiJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
                     if let LogicalJoin(Join::Mark(mark, join_predicates), left, right) =
@@ -74,6 +63,29 @@ impl RewriteRule {
                                     )),
                                 ));
                             }
+                        }
+                    }
+                }
+            }
+            RewriteRule::SingleJoinToInnerJoin => {
+                if let LogicalJoin(Join::Single(join_predicates), left, right) = expr.as_ref() {
+                    if join_predicates.is_empty() && prove_singleton(left) {
+                        return Some(Expr::new(LogicalJoin(
+                            Join::Inner(vec![]),
+                            left.clone(),
+                            right.clone(),
+                        )));
+                    }
+                }
+            }
+            RewriteRule::RemoveInnerJoin => {
+                if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
+                    if join_predicates.is_empty() {
+                        if let LogicalSingleGet = left.as_ref() {
+                            return Some(right.clone());
+                        }
+                        if let LogicalSingleGet = right.as_ref() {
+                            return Some(left.clone());
                         }
                     }
                 }
@@ -135,6 +147,15 @@ impl RewriteRule {
             }
         };
         None
+    }
+}
+
+fn prove_singleton(expr: &Expr) -> bool {
+    match expr.as_ref() {
+        LogicalProject(_, input) => prove_singleton(input),
+        LogicalSingleGet => true,
+        LogicalAggregate { group_by, .. } => group_by.is_empty(),
+        _ => false,
     }
 }
 
@@ -467,8 +488,9 @@ fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {
 
 pub fn rewrite(expr: Expr) -> Expr {
     let unnest = vec![
-        RewriteRule::RemoveSingleJoin,
         RewriteRule::MarkJoinToSemiJoin,
+        RewriteRule::SingleJoinToInnerJoin,
+        RewriteRule::RemoveInnerJoin,
     ];
     let predicate_push_down = vec![
         RewriteRule::PushExplicitFilterThroughInnerJoin,
@@ -481,7 +503,7 @@ pub fn rewrite(expr: Expr) -> Expr {
     let projection_push_down = vec![RewriteRule::CombineConsecutiveProjects];
     fn rewrite_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
         for rule in rules {
-            match rule.call(&expr) {
+            match rule.apply(&expr) {
                 // Abandon previous expr.
                 Some(expr) => {
                     return rewrite_all(expr, rules);
