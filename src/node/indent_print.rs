@@ -143,6 +143,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 partition_by,
                 cluster_by,
                 primary_key,
+                input,
             } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for (name, typ) in columns {
@@ -168,6 +169,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                         write!(f, " {}", p)?;
                     }
                     write!(f, ")")?;
+                }
+                if let Some(input) = input {
+                    newline(f)?;
+                    input.indent_print(f, indent + 1)?;
                 }
                 Ok(())
             }
@@ -327,6 +332,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 partition_by,
                 cluster_by,
                 primary_key,
+                input,
             } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for (name, typ) in columns {
@@ -352,6 +358,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                         write!(f, " {}", p)?;
                     }
                     write!(f, ")")?;
+                }
+                if let Some(input) = input {
+                    newline(f)?;
+                    input.indent_print(f, indent + 1)?;
                 }
                 Ok(())
             }

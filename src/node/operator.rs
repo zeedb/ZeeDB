@@ -57,6 +57,7 @@ pub enum Operator<T> {
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
+        input: Option<T>,
     },
     // LogicalCreateIndex implements the CREATE INDEX operation.
     LogicalCreateIndex {
@@ -117,6 +118,7 @@ pub enum Operator<T> {
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
+        input: Option<T>,
     },
     CreateIndex {
         name: Name,
@@ -234,6 +236,7 @@ impl<T> Operator<T> {
             | Operator::LogicalValues(_, _, _)
             | Operator::LogicalUpdate(_, _)
             | Operator::LogicalDelete(_, _)
+            | Operator::LogicalCreateTable { input: Some(_), .. }
             | Operator::Filter { .. }
             | Operator::Project { .. }
             | Operator::Aggregate { .. }
@@ -242,12 +245,13 @@ impl<T> Operator<T> {
             | Operator::Insert { .. }
             | Operator::Values { .. }
             | Operator::Update { .. }
-            | Operator::Delete { .. } => 1,
+            | Operator::Delete { .. }
+            | Operator::CreateTable { input: Some(_), .. } => 1,
             Operator::LogicalSingleGet
             | Operator::LogicalGet(_)
             | Operator::LogicalGetWith(_, _)
             | Operator::LogicalCreateDatabase(_)
-            | Operator::LogicalCreateTable { .. }
+            | Operator::LogicalCreateTable { input: None, .. }
             | Operator::LogicalCreateIndex { .. }
             | Operator::LogicalAlterTable { .. }
             | Operator::LogicalDrop { .. }
@@ -257,7 +261,7 @@ impl<T> Operator<T> {
             | Operator::IndexScan { .. }
             | Operator::GetTempTable { .. }
             | Operator::CreateDatabase { .. }
-            | Operator::CreateTable { .. }
+            | Operator::CreateTable { input: None, .. }
             | Operator::CreateIndex { .. }
             | Operator::AlterTable { .. }
             | Operator::Drop { .. }
@@ -354,12 +358,14 @@ impl<T> Operator<T> {
                 partition_by,
                 cluster_by,
                 primary_key,
+                input,
             } => Operator::LogicalCreateTable {
                 name,
                 columns,
                 partition_by,
                 cluster_by,
                 primary_key,
+                input: input.map(visitor),
             },
             Operator::LogicalCreateIndex {
                 name,
@@ -429,12 +435,14 @@ impl<T> Operator<T> {
                 partition_by,
                 cluster_by,
                 primary_key,
+                input,
             } => Operator::CreateTable {
                 name,
                 columns,
                 partition_by,
                 cluster_by,
                 primary_key,
+                input: input.map(visitor),
             },
             Operator::CreateIndex {
                 name,
@@ -481,6 +489,9 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::LogicalValues(_, _, input)
             | Operator::LogicalUpdate(_, input)
             | Operator::LogicalDelete(_, input)
+            | Operator::LogicalCreateTable {
+                input: Some(input), ..
+            }
             | Operator::Filter(_, input)
             | Operator::Project(_, input)
             | Operator::Aggregate { input, .. }
@@ -489,7 +500,10 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::Insert(_, _, input)
             | Operator::Values(_, _, input)
             | Operator::Update(_, input)
-            | Operator::Delete(_, input) => match index {
+            | Operator::Delete(_, input)
+            | Operator::CreateTable {
+                input: Some(input), ..
+            } => match index {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },

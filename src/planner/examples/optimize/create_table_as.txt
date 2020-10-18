@@ -2,5 +2,8 @@ create table foo (person_id int64 primary key, store_id int64) as select person_
 
 LogicalCreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)
 	LogicalProject foo.person_id:customer.person_id foo.store_id:customer.store_id
-		LogicalProject customer.person_id customer.store_id
-			LogicalGet customer
+		LogicalGet customer
+
+CreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)
+	Project foo.person_id:customer.person_id foo.store_id:customer.store_id
+		SeqScan customer

@@ -82,13 +82,18 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
         }
         Union(_, _) | Intersect(_, _) | Except(_, _) => 0.0,
         Values(_, _, _) => 0.0,
-        Insert(_, _, input) | Update(_, input) | Delete(_, input) => {
+        Insert(_, _, input)
+        | Update(_, input)
+        | Delete(_, input)
+        | CreateTable {
+            input: Some(input), ..
+        } => {
             let length = ss[*input].props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
         CreateDatabase { .. }
-        | CreateTable { .. }
+        | CreateTable { input: None, .. }
         | CreateIndex { .. }
         | AlterTable { .. }
         | Drop { .. }

@@ -84,6 +84,9 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::LogicalValues(_, _, input)
                 | Operator::LogicalUpdate(_, input)
                 | Operator::LogicalDelete(_, input)
+                | Operator::LogicalCreateTable {
+                    input: Some(input), ..
+                }
                 | Operator::Filter(_, input)
                 | Operator::Project(_, input)
                 | Operator::Aggregate { input, .. }

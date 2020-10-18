@@ -397,14 +397,19 @@ impl Converter {
             let column = Column::from(q.parent.get().column_definition_list[i].column.get());
             project.push((value, column))
         }
-        Expr::new(LogicalProject(project, input))
+        let input = Expr::new(LogicalProject(project, input));
+        self.create_table_base(q.parent.get(), Some(input))
     }
 
     fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Expr {
-        self.create_table_base(q.parent.get())
+        self.create_table_base(q.parent.get(), None)
     }
 
-    fn create_table_base(&mut self, q: &ResolvedCreateTableStmtBaseProto) -> Expr {
+    fn create_table_base(
+        &mut self,
+        q: &ResolvedCreateTableStmtBaseProto,
+        input: Option<Expr>,
+    ) -> Expr {
         // TODO fail on unsupported options
         let name = Name {
             path: q.parent.get().name_path.clone(),
@@ -447,6 +452,7 @@ impl Converter {
             partition_by,
             cluster_by,
             primary_key,
+            input,
         })
     }
 

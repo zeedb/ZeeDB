@@ -368,8 +368,23 @@ impl Rule {
                 }
             }
             Rule::LogicalCreateTableToCreateTable => {
-                if let LogicalCreateTable { .. } = bind {
-                    todo!()
+                if let LogicalCreateTable {
+                    name,
+                    columns,
+                    partition_by,
+                    cluster_by,
+                    primary_key,
+                    input,
+                } = bind
+                {
+                    return Some(CreateTable {
+                        name,
+                        columns,
+                        partition_by,
+                        cluster_by,
+                        primary_key,
+                        input,
+                    });
                 }
             }
             Rule::LogicalCreateIndexToCreateIndex => {

@@ -1,0 +1,5 @@
+create table foo (person_id int64 primary key, store_id int64)
+
+LogicalCreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)
+
+CreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)

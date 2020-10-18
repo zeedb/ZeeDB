@@ -160,8 +160,8 @@ fn test_optimize() {
     ok!("examples/optimize/delete.txt", r#"delete customer where person_id = 1"#, errors);
     ok!("examples/optimize/delete_semi_join.txt", r#"delete person where person_id in (select person_id from customer)"#, errors);
     ok!("examples/optimize/delete_semi_join_with_condition.txt", r#"delete customer where person_id in (select person_id from customer where account_number = 0)"#, errors);
-    // ok!("examples/optimize/create_table.txt", r#"create table foo (person_id int64 primary key, store_id int64)"#, errors);
-    // ok!("examples/optimize/create_table_as.txt", r#"create table foo (person_id int64 primary key, store_id int64) as select person_id, store_id from customer"#, errors);
+    ok!("examples/optimize/create_table.txt", r#"create table foo (person_id int64 primary key, store_id int64)"#, errors);
+    ok!("examples/optimize/create_table_as.txt", r#"create table foo (person_id int64 primary key, store_id int64) as select person_id, store_id from customer"#, errors);
     if !errors.is_empty() {
         panic!("{:#?}", errors);
     }
