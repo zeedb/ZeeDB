@@ -1,4 +1,5 @@
-select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100
+select * 
+from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100
 
 LogicalProject $subquery2.id
 	LogicalFilter (Less $subquery2.id 100)

@@ -1,4 +1,5 @@
-select customer_id from (select customer_id from customer) as foo
+select customer_id 
+from (select customer_id from customer) as foo
 
 LogicalProject customer.customer_id
 	LogicalProject customer.customer_id

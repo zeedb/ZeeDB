@@ -5,8 +5,8 @@ use node::*;
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Rule {
     // Rewrite rules
-    LogicalInnerJoinCommutivity,
-    LogicalInnerJoinAssociativity,
+    InnerJoinCommutivity,
+    InnerJoinAssociativity,
     // Implementation rules
     LogicalGetToTableFreeScan,
     LogicalGetToSeqScan,
@@ -74,8 +74,8 @@ impl Rule {
     // Quickly check if rule matches expression *without* exploring the inputs to the expression.
     pub fn matches_fast(&self, mexpr: &MultiExpr) -> bool {
         match (self, &mexpr.op) {
-            (Rule::LogicalInnerJoinCommutivity, LogicalJoin(Join::Inner(_), _, _))
-            | (Rule::LogicalInnerJoinAssociativity, LogicalJoin(Join::Inner(_), _, _))
+            (Rule::InnerJoinCommutivity, LogicalJoin(Join::Inner(_), _, _))
+            | (Rule::InnerJoinAssociativity, LogicalJoin(Join::Inner(_), _, _))
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
@@ -107,7 +107,7 @@ impl Rule {
 
     pub fn non_leaf(&self, child: usize) -> bool {
         match (self, child) {
-            (Rule::LogicalInnerJoinAssociativity, 0) => true,
+            (Rule::InnerJoinAssociativity, 0) => true,
             _ => false,
         }
     }
@@ -115,7 +115,7 @@ impl Rule {
     pub fn bind(&self, ss: &SearchSpace, mid: MultiExprID) -> Vec<Operator<Bind>> {
         let mut binds = vec![];
         match self {
-            Rule::LogicalInnerJoinAssociativity => {
+            Rule::InnerJoinAssociativity => {
                 if let LogicalJoin(Join::Inner(parent_predicates), left, right) = &ss[mid].op {
                     for left in &ss[*left].logical {
                         if let LogicalJoin(Join::Inner(left_predicates), left_left, left_middle) =
@@ -157,7 +157,7 @@ impl Rule {
 
     pub fn apply(&self, ss: &SearchSpace, bind: Operator<Bind>) -> Option<Operator<Bind>> {
         match self {
-            Rule::LogicalInnerJoinCommutivity => {
+            Rule::InnerJoinCommutivity => {
                 if let LogicalJoin(Join::Inner(join_predicates), left, right) = bind {
                     return Some(LogicalJoin(
                         Join::Inner(join_predicates.clone()),
@@ -175,7 +175,7 @@ impl Rule {
             //      |               |
             //      +               +
             //   leftLeft      leftMiddle
-            Rule::LogicalInnerJoinAssociativity => {
+            Rule::InnerJoinAssociativity => {
                 if let LogicalJoin(Join::Inner(parent_predicates), Bind::Operator(left), right) =
                     bind
                 {
@@ -433,8 +433,8 @@ impl Rule {
 
     pub fn all() -> Vec<Rule> {
         vec![
-            Rule::LogicalInnerJoinCommutivity,
-            Rule::LogicalInnerJoinAssociativity,
+            Rule::InnerJoinCommutivity,
+            Rule::InnerJoinAssociativity,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,

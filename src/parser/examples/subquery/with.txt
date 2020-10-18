@@ -1,4 +1,5 @@
-with foo as (select customer_id from customer) select customer_id from foo
+with foo as (select customer_id from customer) select customer_id 
+from foo
 
 LogicalWith foo
 	LogicalProject customer.customer_id

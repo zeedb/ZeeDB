@@ -18,3 +18,4 @@ time = "0.1.39"
 tokio = { version = "0.2", features = ["macros"] }
 tonic = "0.1.1"
 zetasql = { path = "../zetasql" }
+regex = "1"

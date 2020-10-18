@@ -1,4 +1,5 @@
-select (select name from store where store.store_id = customer.store_id) from customer
+select (select name from store where store.store_id = customer.store_id) 
+from customer
 
 LogicalProject $query.$col1:store.name
 	LogicalJoin Single

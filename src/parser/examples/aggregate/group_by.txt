@@ -1,4 +1,6 @@
-select store_id from customer group by 1
+select store_id 
+from customer 
+group by 1
 
 LogicalProject $groupby.store_id
 	LogicalAggregate $groupby.store_id

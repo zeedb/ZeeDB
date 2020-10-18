@@ -1,4 +1,6 @@
-update person set first_name = "Foo" where person_id = 1
+update person 
+set first_name = "Foo" 
+where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
 	LogicalProject $update.$expr:Foo

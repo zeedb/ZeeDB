@@ -1,4 +1,7 @@
-select store_id from customer group by 1 having count(*) > 1
+select store_id 
+from customer 
+group by 1 
+having count(*) > 1
 
 LogicalProject $groupby.store_id
 	LogicalFilter (Greater $aggregate.$agg1 1)

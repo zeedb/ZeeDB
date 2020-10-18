@@ -1,4 +1,5 @@
-select customer.customer_id, store.store_id from customer, store
+select customer.customer_id, store.store_id 
+from customer, store
 
 LogicalProject customer.customer_id store.store_id
 	LogicalJoin Inner

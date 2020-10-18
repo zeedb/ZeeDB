@@ -1,4 +1,6 @@
-select customer_id from customer order by customer_id
+select customer_id 
+from customer 
+order by customer_id
 
 LogicalSort customer.customer_id
 	Project* customer.customer_id

@@ -1,4 +1,6 @@
-select 1 from person join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)
+select 1 
+from person 
+join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)
 
 LogicalProject $query.$col1:1
 	LogicalJoin Inner $mark.$in

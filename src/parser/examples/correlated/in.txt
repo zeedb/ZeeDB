@@ -1,4 +1,5 @@
-select 1 in (select store_id from store where store.store_id = customer.store_id) as ok from customer
+select 1 in (select store_id from store where store.store_id = customer.store_id) as ok 
+from customer
 
 LogicalProject $query.ok:$mark.$in
 	LogicalJoin Mark $mark.$in (Equal 1 store.store_id)

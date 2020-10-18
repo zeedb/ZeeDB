@@ -1,4 +1,6 @@
-select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id
+select customer.customer_id, store.store_id 
+from customer full outer 
+join store on customer.store_id = store.store_id
 
 LogicalProject customer.customer_id store.store_id
 	LogicalJoin Outer (Equal customer.store_id store.store_id)

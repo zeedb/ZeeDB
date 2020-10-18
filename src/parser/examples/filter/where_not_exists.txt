@@ -1,4 +1,6 @@
-select 1 from person where not exists (select person_id from customer where customer.person_id = person.person_id)
+select 1 
+from person 
+where not exists (select person_id from customer where customer.person_id = person.person_id)
 
 LogicalProject $query.$col1:1
 	LogicalFilter (Not $mark.$exists)

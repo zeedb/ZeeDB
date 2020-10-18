@@ -1,4 +1,6 @@
-select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)
+select 1 
+from person, customer 
+where person.person_id = customer.person_id and customer.store_id in (select store_id from store)
 
 LogicalProject $query.$col1:1
 	LogicalFilter (Equal person.person_id customer.person_id) $mark.$in

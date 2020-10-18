@@ -1,4 +1,6 @@
-update person set first_name = (select last_name) where person_id = 1
+update person 
+set first_name = (select last_name) 
+where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
 	LogicalProject $update.$expr:$expr_subquery.last_name
