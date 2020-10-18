@@ -244,6 +244,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 write!(f, "{} {}", self.name(), name)?;
                 newline(f)?;
                 left.indent_print(f, indent + 1)?;
+                newline(f)?;
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }

@@ -13,7 +13,8 @@ LogicalWith foo
 
 CreateTempTable foo
 	Project customer.customer_id customer.store_id
-		SeqScan customerProject foo.customer_id foo.customer_id
+		SeqScan customer
+	Project foo.customer_id foo.customer_id
 		HashJoin Inner foo.store_id=foo.store_id
 			GetTempTable foo
 			GetTempTable foo

@@ -168,6 +168,25 @@ impl<T> Operator<T> {
         }
     }
 
+    pub fn has_side_effects(&self) -> bool {
+        match self {
+            Operator::LogicalInsert { .. }
+            | Operator::LogicalUpdate { .. }
+            | Operator::LogicalDelete { .. }
+            | Operator::LogicalCreateDatabase { .. }
+            | Operator::LogicalCreateTable { .. }
+            | Operator::LogicalCreateIndex { .. }
+            | Operator::LogicalAlterTable { .. }
+            | Operator::LogicalDrop { .. }
+            | Operator::LogicalRename { .. } => true,
+            _ if self.is_logical() => false,
+            _ => panic!(
+                "has_side_effecs is not implemented for physical operator {}",
+                self.name()
+            ),
+        }
+    }
+
     pub fn introduces(&self, column: &Column) -> bool {
         fn contains(predicates: &Vec<Scalar>, column: &Column) -> bool {
             predicates

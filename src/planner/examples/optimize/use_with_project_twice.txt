@@ -1,0 +1,17 @@
+with foo as (select *, current_date() as r from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.r = f2.r
+
+LogicalWith foo
+	LogicalProject foo.r:(CurrentDate) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+		LogicalGet customer
+	LogicalProject foo.customer_id foo.customer_id
+		LogicalJoin Inner (Equal foo.r foo.r)
+			LogicalGetWith foo
+			LogicalGetWith foo
+
+CreateTempTable foo
+	Project foo.r:(CurrentDate) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+		SeqScan customer
+	Project foo.customer_id foo.customer_id
+		HashJoin Inner foo.r=foo.r
+			GetTempTable foo
+			GetTempTable foo

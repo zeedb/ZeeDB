@@ -7,7 +7,7 @@ enum RewriteRule {
     MarkJoinToSemiJoin,
     SingleJoinToInnerJoin,
     RemoveInnerJoin,
-    InlineWith,
+    RemoveWith,
     // Top-down predicate pushdown:
     PushExplicitFilterThroughInnerJoin,
     PushImplicitFilterThroughInnerJoin,
@@ -91,10 +91,12 @@ impl RewriteRule {
                     }
                 }
             }
-            RewriteRule::InlineWith => {
+            RewriteRule::RemoveWith => {
                 if let LogicalWith(name, columns, left, right) = expr.as_ref() {
-                    if count_get_with(name, right) == 1 {
-                        return Some(inline_with(name, columns, left, right.clone()));
+                    match count_get_with(name, right) {
+                        0 if !has_side_effects(left) => return Some(right.clone()),
+                        1 => return Some(inline_with(name, columns, left, right.clone())),
+                        _ => (),
                     }
                 }
             }
@@ -190,6 +192,10 @@ fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -
         }
         expr => Expr::new(expr.map(|child| inline_with(name, columns, left, child))),
     }
+}
+
+fn has_side_effects(expr: &Expr) -> bool {
+    expr.iter().any(|e| e.0.has_side_effects())
 }
 
 fn pull_filter_through_join(
@@ -524,7 +530,7 @@ pub fn rewrite(expr: Expr) -> Expr {
         RewriteRule::MarkJoinToSemiJoin,
         RewriteRule::SingleJoinToInnerJoin,
         RewriteRule::RemoveInnerJoin,
-        RewriteRule::InlineWith,
+        RewriteRule::RemoveWith,
     ];
     let predicate_push_down = vec![
         RewriteRule::PushExplicitFilterThroughInnerJoin,
