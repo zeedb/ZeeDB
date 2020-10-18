@@ -133,9 +133,6 @@ fn test_optimize() {
     ok!("examples/optimize/count_and_sum_distinct.txt", r#"
         select count(distinct account_number), sum(distinct account_number) 
         from customer"#, errors); // TODO this needs to be split into simpler aggregates
-    ok!("examples/rewrite/remove_with.txt", r#"
-        with foo as (select * from customer) 
-        select * from foo"#, errors);
     ok!("examples/optimize/use_with_clause_twice.txt", r#"
         with foo as (select customer_id, store_id from customer) 
         select f1.customer_id, f2.customer_id 
@@ -151,9 +148,9 @@ fn test_optimize() {
         from foo"#, errors);
     ok!("examples/optimize/use_with_select_star_twice.txt", r#"with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id"#, errors);
     ok!("examples/optimize/use_with_project_twice.txt", r#"with foo as (select *, current_date() as r from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.r = f2.r"#, errors);
-    // ok!("examples/optimize/insert_values.txt", r#"insert into person (person_id, first_name, last_name, modified_date) values (1, "Foo", "Bar", current_timestamp())"#, errors);
-    // ok!("examples/optimize/insert_table_free_single_join.txt", r#"insert into person (person_id, first_name, last_name, modified_date) values (1, "Foo", "Bar", (select current_timestamp()))"#, errors);
-    // ok!("examples/optimize/insert_two_table_free_single_joins.txt", r#"insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))"#, errors);
+    ok!("examples/optimize/insert_values.txt", r#"insert into person (person_id, first_name, last_name, modified_date) values (1, "Foo", "Bar", current_timestamp())"#, errors);
+    ok!("examples/optimize/insert_table_free_single_join.txt", r#"insert into person (person_id, first_name, last_name, modified_date) values (1, "Foo", "Bar", (select current_timestamp()))"#, errors);
+    ok!("examples/optimize/insert_two_table_free_single_joins.txt", r#"insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))"#, errors);
     // ok!("examples/optimize/update_where.txt", r#"update person set first_name = "Foo" where person_id = 1"#, errors);
     // ok!("examples/optimize/update_set_table_free_single_join.txt", r#"update person set first_name = (select last_name) where person_id = 1"#, errors);
     // ok!("examples/optimize/update_equi_join.txt", r#"update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id"#, errors);

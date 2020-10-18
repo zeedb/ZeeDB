@@ -81,7 +81,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             log * COST_CPU_COMP_MOVE
         }
         Union(_, _) | Intersect(_, _) | Except(_, _) => 0.0,
-        Values(_, _) => 0.0,
+        Values(_, _, _) => 0.0,
         Insert(_, _, input) | Update(_, input) | Delete(_, input) => {
             let length = ss[*input].props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);

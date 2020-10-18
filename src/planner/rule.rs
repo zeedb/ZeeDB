@@ -343,23 +343,23 @@ impl Rule {
                 }
             }
             Rule::LogicalInsertToInsert => {
-                if let LogicalInsert(_, _, _) = bind {
-                    todo!()
+                if let LogicalInsert(table, columns, input) = bind {
+                    return Some(Insert(table, columns, input));
                 }
             }
             Rule::LogicalValuesToValues => {
-                if let LogicalValues(_, _, _) = bind {
-                    todo!()
+                if let LogicalValues(columns, rows, input) = bind {
+                    return Some(Values(columns, rows, input));
                 }
             }
             Rule::LogicalUpdateToUpdate => {
-                if let LogicalUpdate(_, _) = bind {
-                    todo!()
+                if let LogicalUpdate(updates, input) = bind {
+                    return Some(Update(updates, input));
                 }
             }
             Rule::LogicalDeleteToDelete => {
-                if let LogicalDelete(_, _) = bind {
-                    todo!()
+                if let LogicalDelete(table, input) = bind {
+                    return Some(Delete(table, input));
                 }
             }
             Rule::LogicalCreateDatabaseToCreateDatabase => {

@@ -293,15 +293,16 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Values(columns, values) => {
+            Operator::Values(columns, rows, input) => {
                 write!(f, "{}", self.name())?;
                 for column in columns {
                     write!(f, " {}", column)?;
                 }
-                for row in values {
+                for row in rows {
                     write!(f, " [{}]", join(row))?;
                 }
-                Ok(())
+                newline(f)?;
+                input.indent_print(f, indent + 1)
             }
             Operator::Update(updates, input) => {
                 write!(f, "{}", self.name())?;

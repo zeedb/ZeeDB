@@ -107,7 +107,7 @@ pub enum Operator<T> {
     Intersect(T, T),
     Except(T, T),
     Insert(Table, Vec<Column>, T),
-    Values(Vec<Column>, Vec<Vec<Scalar>>),
+    Values(Vec<Column>, Vec<Vec<Scalar>>, T),
     Update(Vec<(Column, Option<Column>)>, T),
     Delete(Table, T),
     CreateDatabase(Name),
@@ -240,6 +240,7 @@ impl<T> Operator<T> {
             | Operator::Limit { .. }
             | Operator::Sort { .. }
             | Operator::Insert { .. }
+            | Operator::Values { .. }
             | Operator::Update { .. }
             | Operator::Delete { .. } => 1,
             Operator::LogicalSingleGet
@@ -255,7 +256,6 @@ impl<T> Operator<T> {
             | Operator::SeqScan { .. }
             | Operator::IndexScan { .. }
             | Operator::GetTempTable { .. }
-            | Operator::Values { .. }
             | Operator::CreateDatabase { .. }
             | Operator::CreateTable { .. }
             | Operator::CreateIndex { .. }
@@ -417,7 +417,9 @@ impl<T> Operator<T> {
             Operator::Insert(table, columns, input) => {
                 Operator::Insert(table, columns, visitor(input))
             }
-            Operator::Values(columns, rows) => Operator::Values(columns, rows),
+            Operator::Values(columns, rows, input) => {
+                Operator::Values(columns, rows, visitor(input))
+            }
             Operator::Update(updates, input) => Operator::Update(updates, visitor(input)),
             Operator::Delete(table, input) => Operator::Delete(table, visitor(input)),
             Operator::CreateDatabase(name) => Operator::CreateDatabase(name),
@@ -485,6 +487,7 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)
             | Operator::Insert(_, _, input)
+            | Operator::Values(_, _, input)
             | Operator::Update(_, input)
             | Operator::Delete(_, input) => match index {
                 0 => input,
