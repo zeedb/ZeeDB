@@ -1,16 +1,19 @@
+use encoding::*;
 use node::*;
 
 #[derive(Debug)]
 enum RewriteRule {
-    // Bottom-up rewrite rules:
+    // Bottom-up unnest:
     RemoveSingleJoin,
-    // Top-down rewrite rules:
+    MarkJoinToSemiJoin,
+    // Top-down predicate pushdown:
     PushExplicitFilterThroughInnerJoin,
     PushImplicitFilterThroughInnerJoin,
     PushExplicitFilterThroughRightJoin,
     PushImplicitFilterThroughRightJoin,
     PushFilterThroughProject,
     CombineConsecutiveFilters,
+    // Top-down simplification:
     CombineConsecutiveProjects,
 }
 
@@ -25,6 +28,52 @@ impl RewriteRule {
                                 projects.clone(),
                                 right.clone(),
                             )));
+                        }
+                    }
+                }
+            }
+            RewriteRule::MarkJoinToSemiJoin => {
+                if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
+                    if let LogicalJoin(Join::Mark(mark, join_predicates), left, right) =
+                        input.as_ref()
+                    {
+                        let mut filter_predicates = filter_predicates.clone();
+                        let semi = Scalar::Column(mark.clone());
+                        let anti = Scalar::Call(Function::Not, vec![semi.clone()], Type::Bool);
+                        for i in 0..filter_predicates.len() {
+                            if filter_predicates[i] == semi {
+                                filter_predicates.remove(i);
+                                return Some(maybe_filter(
+                                    filter_predicates,
+                                    Expr::new(LogicalProject(
+                                        vec![(
+                                            Scalar::Literal(Value::Bool(true), Type::Bool),
+                                            mark.clone(),
+                                        )],
+                                        Expr::new(LogicalJoin(
+                                            Join::Semi(join_predicates.clone()),
+                                            left.clone(),
+                                            right.clone(),
+                                        )),
+                                    )),
+                                ));
+                            } else if filter_predicates[i] == anti {
+                                filter_predicates.remove(i);
+                                return Some(maybe_filter(
+                                    filter_predicates,
+                                    Expr::new(LogicalProject(
+                                        vec![(
+                                            Scalar::Literal(Value::Bool(true), Type::Bool),
+                                            mark.clone(),
+                                        )],
+                                        Expr::new(LogicalJoin(
+                                            Join::Anti(join_predicates.clone()),
+                                            left.clone(),
+                                            right.clone(),
+                                        )),
+                                    )),
+                                ));
+                            }
                         }
                     }
                 }
@@ -417,7 +466,10 @@ fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {
 }
 
 pub fn rewrite(expr: Expr) -> Expr {
-    let bottom_up_rules = vec![RewriteRule::RemoveSingleJoin];
+    let unnest = vec![
+        RewriteRule::RemoveSingleJoin,
+        RewriteRule::MarkJoinToSemiJoin,
+    ];
     let predicate_push_down = vec![
         RewriteRule::PushExplicitFilterThroughInnerJoin,
         RewriteRule::PushImplicitFilterThroughInnerJoin,
@@ -426,7 +478,7 @@ pub fn rewrite(expr: Expr) -> Expr {
         RewriteRule::PushFilterThroughProject,
         RewriteRule::CombineConsecutiveFilters,
     ];
-    let simplify = vec![RewriteRule::CombineConsecutiveProjects];
+    let projection_push_down = vec![RewriteRule::CombineConsecutiveProjects];
     fn rewrite_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
         for rule in rules {
             match rule.call(&expr) {
@@ -439,8 +491,8 @@ pub fn rewrite(expr: Expr) -> Expr {
         }
         expr
     }
-    let expr = expr.bottom_up_rewrite(&|expr| rewrite_all(expr, &bottom_up_rules));
+    let expr = expr.bottom_up_rewrite(&|expr| rewrite_all(expr, &unnest));
     let expr = expr.top_down_rewrite(&|expr| rewrite_all(expr, &predicate_push_down));
-    let expr = expr.top_down_rewrite(&|expr| rewrite_all(expr, &simplify));
+    let expr = expr.top_down_rewrite(&|expr| rewrite_all(expr, &projection_push_down));
     expr
 }

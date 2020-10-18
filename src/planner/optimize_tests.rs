@@ -8,8 +8,9 @@ macro_rules! ok {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").to_string();
         let (_, expr) = parser.parse(&sql, 0, &adventure_works()).unwrap();
+        let rewrite = crate::rewrite::rewrite(expr.clone());
         let expr = optimize(expr);
-        let found = format!("{}\n\n{}", sql, expr);
+        let found = format!("{}\n\n{}\n\n{}", sql, rewrite, expr);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
         }
@@ -101,7 +102,11 @@ fn test_optimize() {
         from (select * from (select customer_id / 2 as id from customer) where id > 10) 
         where id < 100"#, errors);
     // ok!("examples/optimize/correlated_semi_join.txt", r#"select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)"#, errors);
-    // ok!("examples/optimize/equi_join_semi_join.txt", r#"select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)"#, errors);
+    ok!("examples/optimize/equi_join_semi_join.txt", r#"
+        select 1 
+        from person, customer 
+        where person.person_id = customer.person_id 
+        and customer.store_id in (select store_id from store)"#, errors);
     // ok!("examples/optimize/correlated_semi_join_anti_join.txt", r#"
     // select 1 from customer
     // where exists (select 1 from person where person.person_id = customer.person_id)

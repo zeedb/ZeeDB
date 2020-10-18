@@ -259,7 +259,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             for (c, n) in &ss[*right].props.column_unique_cardinality {
                 scope.insert(c.clone(), *n);
             }
-            let product = ss[*left].props.cardinality * ss[*right].props.cardinality;
+            cardinality = ss[*left].props.cardinality * ss[*right].props.cardinality;
             for (c, n) in &ss[*left].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
