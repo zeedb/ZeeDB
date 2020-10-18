@@ -44,7 +44,8 @@ fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool) {
         if rule.matches_fast(&ss[mid]) {
             // Explore inputs recursively:
             for i in 0..ss[mid].op.len() {
-                if rule.has_inputs(i) {
+                // If the i'th child of the LHS of the rule is not a leaf node, explore it recursively:
+                if rule.non_leaf(i) {
                     explore_group(ss, ss[mid].op[i])
                 }
             }
@@ -75,7 +76,8 @@ fn apply_rule(ss: &mut SearchSpace, rule: Rule, mid: MultiExprID, explore: bool)
     }
 }
 
-// explore_group ensures that optimize_expr is called on every group at least once.
+// explore_group ensures that a non-leaf input to a complex rule has been logically explored,
+// to make sure the logical expression that matches the non-leaf input has a chance to be discovered.
 fn explore_group(ss: &mut SearchSpace, gid: GroupID) {
     if !ss[gid].explored {
         for mid in ss[gid].logical.clone() {
@@ -143,7 +145,7 @@ fn try_to_declare_winner(ss: &mut SearchSpace, mid: MultiExprID, physical_cost: 
         }
     }
     let gid = ss[mid].parent;
-    let current_cost = ss[gid].winner.as_ref().map(|w| w.cost).unwrap_or(f64::MAX);
+    let current_cost = ss[gid].winner.map(|w| w.cost).unwrap_or(f64::MAX);
     if total_cost < current_cost {
         ss[gid].winner = Some(Winner {
             plan: mid,
@@ -277,8 +279,16 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 _ => {}
             }
         }
-        LogicalWith(name, _, _) => todo!("with"),
-        LogicalGetWith(name) => todo!("get_with"),
+        LogicalWith(name, _, right) => {
+            cardinality = ss[*right].props.cardinality;
+            column_unique_cardinality = ss[*right].props.column_unique_cardinality.clone();
+        }
+        LogicalGetWith(name, columns) => {
+            cardinality = 1000; // TODO get from catalog somehow
+            for c in columns {
+                column_unique_cardinality.insert(c.clone(), cardinality);
+            }
+        }
         LogicalAggregate {
             group_by,
             aggregate,
@@ -356,6 +366,9 @@ fn init_costs_using_lower_bound(ss: &SearchSpace, mid: MultiExprID) -> Vec<Cost>
 }
 
 fn winner(ss: &SearchSpace, gid: GroupID) -> Expr {
+    if ss[gid].winner.is_none() {
+        dbg!(ss);
+    }
     let mid = ss[gid].winner.unwrap().plan;
     Expr(Box::new(ss[mid].op.clone().map(|gid| winner(ss, gid))))
 }

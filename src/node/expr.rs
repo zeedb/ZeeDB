@@ -70,7 +70,8 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::LogicalJoin(_, left, right)
                 | Operator::LogicalWith(_, left, right)
                 | Operator::NestedLoop(_, left, right)
-                | Operator::HashJoin(_, _, left, right) => {
+                | Operator::HashJoin(_, _, left, right)
+                | Operator::CreateTempTable(_, left, right) => {
                     self.stack.push(left);
                     self.stack.push(right);
                 }
@@ -85,7 +86,6 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::LogicalDelete(_, input)
                 | Operator::Filter(_, input)
                 | Operator::Project(_, input)
-                | Operator::CreateTempTable(_, input)
                 | Operator::Aggregate { input, .. }
                 | Operator::Limit { input, .. }
                 | Operator::Sort(_, input)

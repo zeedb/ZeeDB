@@ -18,7 +18,7 @@ pub enum Operator<T> {
     // The with-subquery is always on the left.
     LogicalWith(String, T, T),
     // LogicalGetWith(table) reads the subquery that was created by With.
-    LogicalGetWith(String),
+    LogicalGetWith(String, Vec<Column>),
     // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
     LogicalAggregate {
         group_by: Vec<Column>,
@@ -90,7 +90,7 @@ pub enum Operator<T> {
     Project(Vec<(Scalar, Column)>, T),
     NestedLoop(Join, T, T),
     HashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
-    CreateTempTable(String, T),
+    CreateTempTable(String, T, T),
     GetTempTable(String),
     Aggregate {
         group_by: Vec<Column>,
@@ -157,7 +157,7 @@ impl<T> Operator<T> {
             | Operator::LogicalDelete(_, _)
             | Operator::LogicalSingleGet
             | Operator::LogicalGet(_)
-            | Operator::LogicalGetWith(_)
+            | Operator::LogicalGetWith(_, _)
             | Operator::LogicalCreateDatabase(_)
             | Operator::LogicalCreateTable { .. }
             | Operator::LogicalCreateIndex { .. }
@@ -185,7 +185,7 @@ impl<T> Operator<T> {
             | Operator::LogicalJoin(Join::Outer(predicates), _, _)
             | Operator::LogicalJoin(Join::Semi(predicates), _, _)
             | Operator::LogicalJoin(Join::Single(predicates), _, _) => contains(predicates, column),
-            Operator::LogicalGetWith { .. } => todo!("get_with"),
+            Operator::LogicalGetWith(_, columns) => columns.contains(column),
             Operator::LogicalAggregate { aggregate, .. } => {
                 aggregate.iter().any(|(_, c)| c == column)
             }
@@ -202,6 +202,7 @@ impl<T> Operator<T> {
             | Operator::LogicalExcept(_, _)
             | Operator::NestedLoop { .. }
             | Operator::HashJoin { .. }
+            | Operator::CreateTempTable { .. }
             | Operator::Union { .. }
             | Operator::Intersect { .. }
             | Operator::Except { .. } => 2,
@@ -216,7 +217,6 @@ impl<T> Operator<T> {
             | Operator::LogicalDelete(_, _)
             | Operator::Filter { .. }
             | Operator::Project { .. }
-            | Operator::CreateTempTable { .. }
             | Operator::Aggregate { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
@@ -225,7 +225,7 @@ impl<T> Operator<T> {
             | Operator::Delete { .. } => 1,
             Operator::LogicalSingleGet
             | Operator::LogicalGet(_)
-            | Operator::LogicalGetWith(_)
+            | Operator::LogicalGetWith(_, _)
             | Operator::LogicalCreateDatabase(_)
             | Operator::LogicalCreateTable { .. }
             | Operator::LogicalCreateIndex { .. }
@@ -327,7 +327,7 @@ impl<T> Operator<T> {
             }
             Operator::LogicalSingleGet => Operator::LogicalSingleGet,
             Operator::LogicalGet(table) => Operator::LogicalGet(table),
-            Operator::LogicalGetWith(name) => Operator::LogicalGetWith(name),
+            Operator::LogicalGetWith(name, columns) => Operator::LogicalGetWith(name, columns),
             Operator::LogicalCreateDatabase(name) => Operator::LogicalCreateDatabase(name),
             Operator::LogicalCreateTable {
                 name,
@@ -369,8 +369,8 @@ impl<T> Operator<T> {
             Operator::HashJoin(join, equals, left, right) => {
                 Operator::HashJoin(join, equals, visitor(left), visitor(right))
             }
-            Operator::CreateTempTable(name, input) => {
-                Operator::CreateTempTable(name, visitor(input))
+            Operator::CreateTempTable(name, left, right) => {
+                Operator::CreateTempTable(name, visitor(left), visitor(right))
             }
             Operator::GetTempTable(name) => Operator::GetTempTable(name),
             Operator::Aggregate {
@@ -443,6 +443,7 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::LogicalExcept(left, right)
             | Operator::NestedLoop(_, left, right)
             | Operator::HashJoin(_, _, left, right)
+            | Operator::CreateTempTable(_, left, right)
             | Operator::Union(left, right)
             | Operator::Intersect(left, right)
             | Operator::Except(left, right) => match index {
@@ -461,7 +462,6 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::LogicalDelete(_, input)
             | Operator::Filter(_, input)
             | Operator::Project(_, input)
-            | Operator::CreateTempTable(_, input)
             | Operator::Aggregate { input, .. }
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)

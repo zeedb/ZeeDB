@@ -7,7 +7,7 @@ pub type Cost = f64;
 const BLOCK_SIZE: Cost = 4096.0;
 const TUPLE_SIZE: Cost = 100.0;
 const COST_READ_BLOCK: Cost = 1.0;
-const COST_WRITE_BLOCK: Cost = COST_READ_BLOCK;
+const COST_WRITE_BLOCK: Cost = COST_READ_BLOCK * 2.0;
 const COST_CPU_PRED: Cost = 0.0001;
 const COST_CPU_EVAL: Cost = COST_CPU_PRED;
 const COST_CPU_APPLY: Cost = COST_CPU_PRED * 2.0;
@@ -54,8 +54,16 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let probe = ss[*right].props.cardinality as f64;
             build * COST_HASH_BUILD + probe * COST_HASH_PROBE
         }
-        CreateTempTable { .. } => todo!("CreateTempTable"),
-        GetTempTable { .. } => todo!("GetTempTable"),
+        CreateTempTable(_, left, _) => {
+            let output = ss[*left].props.cardinality as f64;
+            let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
+            blocks * COST_WRITE_BLOCK
+        }
+        GetTempTable(_) => {
+            let output = ss[parent].props.cardinality as f64;
+            let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
+            blocks * COST_READ_BLOCK
+        }
         Aggregate {
             group_by,
             aggregate,

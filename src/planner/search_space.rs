@@ -146,6 +146,9 @@ impl fmt::Debug for SearchSpace {
             }
             for j in 0..self.groups[i].physical.len() {
                 write!(f, "{:?}", self[self.groups[i].physical[j]])?;
+                if self.groups[i].winner.map(|w| w.plan) == Some(self.groups[i].physical[j]) {
+                    write!(f, " *")?;
+                }
                 if j + 1 < self.groups[i].physical.len() {
                     write!(f, "\n\t\t")?;
                 }

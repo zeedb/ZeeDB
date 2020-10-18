@@ -90,7 +90,7 @@ impl Rule {
             | (Rule::LogicalIntersectToIntersect, LogicalIntersect(_, _))
             | (Rule::LogicalExceptToExcept, LogicalExcept(_, _))
             | (Rule::LogicalWithToCreateTempTable, LogicalWith(_, _, _))
-            | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith(_))
+            | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith(_, _))
             | (Rule::LogicalInsertToInsert, LogicalInsert(_, _, _))
             | (Rule::LogicalValuesToValues, LogicalValues(_, _, _))
             | (Rule::LogicalUpdateToUpdate, LogicalUpdate(_, _))
@@ -105,8 +105,10 @@ impl Rule {
         }
     }
 
-    pub fn has_inputs(&self, i: usize) -> bool {
-        match (self, i) {
+    pub fn non_leaf(&self, child: usize) -> bool {
+        match (self, child) {
+            (Rule::LogicalInnerJoinAssociativity, 0) => true,
+            // TODO once we add predicate pushdown into LogicalGet, we won't need this anymore
             (Rule::LogicalGetToIndexScan, 0) => true,
             _ => false,
         }
@@ -331,13 +333,13 @@ impl Rule {
                 }
             }
             Rule::LogicalWithToCreateTempTable => {
-                if let LogicalWith(_, _, _) = bind {
-                    todo!()
+                if let LogicalWith(name, left, right) = bind {
+                    return Some(CreateTempTable(name, left, right));
                 }
             }
             Rule::LogicalGetWithToGetTempTable => {
-                if let LogicalGetWith(_) = bind {
-                    todo!()
+                if let LogicalGetWith(name, _) = bind {
+                    return Some(GetTempTable(name));
                 }
             }
             Rule::LogicalInsertToInsert => {

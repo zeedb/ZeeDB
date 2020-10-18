@@ -49,7 +49,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalGetWith(name) => write!(f, "{} {}", self.name(), name),
+            Operator::LogicalGetWith(name, _) => write!(f, "{} {}", self.name(), name),
             Operator::LogicalAggregate {
                 group_by,
                 aggregate,
@@ -240,10 +240,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::CreateTempTable(name, input) => {
+            Operator::CreateTempTable(name, left, right) => {
                 write!(f, "{} {}", self.name(), name)?;
                 newline(f)?;
-                input.indent_print(f, indent + 1)
+                left.indent_print(f, indent + 1)?;
+                right.indent_print(f, indent + 1)?;
+                Ok(())
             }
             Operator::GetTempTable(name) => write!(f, "{} {}", self.name(), name),
             Operator::Aggregate {

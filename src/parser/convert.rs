@@ -269,7 +269,9 @@ impl Converter {
     }
 
     fn with_ref(&mut self, q: &ResolvedWithRefScanProto) -> Expr {
-        Expr::new(LogicalGetWith(q.with_query_name.get().clone()))
+        let name = q.with_query_name.get().clone();
+        let columns = self.columns(&q.parent.get().column_list);
+        Expr::new(LogicalGetWith(name, columns))
     }
 
     fn aggregate(&mut self, q: &ResolvedAggregateScanProto) -> Expr {

@@ -133,11 +133,11 @@ fn test_optimize() {
     ok!("examples/optimize/count_and_sum_distinct.txt", r#"
         select count(distinct account_number), sum(distinct account_number) 
         from customer"#, errors); // TODO this needs to be split into simpler aggregates
-    // ok!("examples/optimize/use_with_clause_twice.txt", r#"
-    //     with foo as (select customer_id, store_id from customer) 
-    //     select f1.customer_id, f2.customer_id 
-    //     from foo f1, foo f2 
-    //     where f1.store_id = f2.store_id"#, errors);
+    ok!("examples/optimize/use_with_clause_twice.txt", r#"
+        with foo as (select customer_id, store_id from customer) 
+        select f1.customer_id, f2.customer_id 
+        from foo f1, foo f2 
+        where f1.store_id = f2.store_id"#, errors);
     // ok!("examples/optimize/redundant_with_clause.txt", r#"with foo as (select * from customer) select customer_id from foo"#, errors);
     // ok!("examples/optimize/redundant_with_clause_with_projection.txt", r#"with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo"#, errors);
     // ok!("examples/optimize/use_with_select_star_twice.txt", r#"with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id"#, errors);
