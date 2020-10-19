@@ -83,32 +83,6 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!(
-    //     "examples/optimize/redundant_table_free_single_join.txt",
-    //     r#"
-    //         select (select 1)
-    //     "#,
-    //     errors
-    // );
-    // ok!(
-    //     "examples/optimize/semi_join.txt",
-    //     r#"
-    //         select first_name
-    //         from person
-    //         where person_id in (select person_id from customer)
-    //     "#,
-    //     errors
-    // );
-    // ok!(
-    //     "examples/optimize/semi_join_or.txt",
-    //     r#"
-    //         select first_name
-    //         from person
-    //         where person_id in (select person_id from customer)
-    //         or person_id = 1
-    //     "#,
-    //     errors
-    // );
 
     ok!(
         "examples/optimize/join_left_index_scan.txt",
@@ -197,25 +171,6 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!(
-    //     "examples/optimize/equi_join_semi_join.txt",
-    //     r#"
-    //         select 1
-    //         from person, customer
-    //         where person.person_id = customer.person_id
-    //         and customer.store_id in (select store_id from store)
-    //     "#,
-    //     errors
-    // );
-    // ok!(
-    //     "examples/optimize/single_join_in_where_clause.txt",
-    //     r#"
-    //         select person_id
-    //         from person
-    //         where modified_date = (select max(modified_date) from person)
-    //     "#,
-    //     errors
-    // );
     ok!(
         "examples/optimize/count_and_sum_distinct.txt",
         r#"
@@ -280,22 +235,6 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!(
-    //     "examples/optimize/insert_table_free_single_join.txt",
-    //     r#"
-    //         insert into person (person_id, first_name, last_name, modified_date)
-    //         values (1, "Foo", "Bar", (select current_timestamp()))
-    //     "#,
-    //     errors
-    // );
-    // ok!(
-    //     "examples/optimize/insert_two_table_free_single_joins.txt",
-    //     r#"
-    //         insert into person (person_id, modified_date)
-    //         values (1, (select current_timestamp())), (2, (select current_timestamp()))
-    //     "#,
-    //     errors
-    // );
     ok!(
         "examples/optimize/update_where.txt",
         r#"
@@ -315,15 +254,6 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!(
-    //     "examples/optimize/update_semi_join.txt",
-    //     r#"
-    //         update customer
-    //         set account_number = 0
-    //         where person_id in (select person_id from person where first_name = "Joe")
-    //     "#,
-    //     errors
-    // );
     ok!(
         "examples/optimize/update_set_default.txt",
         r#"
@@ -341,22 +271,6 @@ fn test_optimize() {
         "#,
         errors
     );
-    // ok!(
-    //     "examples/optimize/delete_semi_join.txt",
-    //     r#"
-    //         delete person
-    //         where person_id in (select person_id from customer)
-    //     "#,
-    //     errors
-    // );
-    // ok!(
-    //     "examples/optimize/delete_semi_join_with_condition.txt",
-    //     r#"
-    //         delete customer
-    //         where person_id in (select person_id from customer where account_number = 0)
-    //     "#,
-    //     errors
-    // );
     ok!(
         "examples/optimize/create_table.txt",
         r#"
@@ -372,6 +286,92 @@ fn test_optimize() {
         "#,
         errors
     );
+    // ok!(
+    //     "examples/optimize/correlated/redundant_table_free_single_join.txt",
+    //     r#"
+    //         select (select 1)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/semi_join.txt",
+    //     r#"
+    //         select first_name
+    //         from person
+    //         where person_id in (select person_id from customer)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/semi_join_or.txt",
+    //     r#"
+    //         select first_name
+    //         from person
+    //         where person_id in (select person_id from customer)
+    //         or person_id = 1
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/equi_join_semi_join.txt",
+    //     r#"
+    //         select 1
+    //         from person, customer
+    //         where person.person_id = customer.person_id
+    //         and customer.store_id in (select store_id from store)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/single_join_in_where_clause.txt",
+    //     r#"
+    //         select person_id
+    //         from person
+    //         where modified_date = (select max(modified_date) from person)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/insert_table_free_single_join.txt",
+    //     r#"
+    //         insert into person (person_id, first_name, last_name, modified_date)
+    //         values (1, "Foo", "Bar", (select current_timestamp()))
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/insert_two_table_free_single_joins.txt",
+    //     r#"
+    //         insert into person (person_id, modified_date)
+    //         values (1, (select current_timestamp())), (2, (select current_timestamp()))
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/update_semi_join.txt",
+    //     r#"
+    //         update customer
+    //         set account_number = 0
+    //         where person_id in (select person_id from person where first_name = "Joe")
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/delete_semi_join.txt",
+    //     r#"
+    //         delete person
+    //         where person_id in (select person_id from customer)
+    //     "#,
+    //     errors
+    // );
+    // ok!(
+    //     "examples/optimize/correlated/delete_semi_join_with_condition.txt",
+    //     r#"
+    //         delete customer
+    //         where person_id in (select person_id from customer where account_number = 0)
+    //     "#,
+    //     errors
+    // );
     // ok!(
     //     "examples/optimize/correlated/single_equi_join.txt",
     //     r#"
