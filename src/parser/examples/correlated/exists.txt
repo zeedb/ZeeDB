@@ -2,7 +2,7 @@ select exists (select store_id from store where store.store_id = customer.store_
 from customer
 
 LogicalProject $query.ok:$mark.$exists
-	LogicalJoin Mark $mark.$exists
+	LogicalDependentJoin Mark $mark.$exists
 		LogicalProject store.store_id
 			LogicalFilter (Equal store.store_id customer.store_id)
 				Project* store.store_id

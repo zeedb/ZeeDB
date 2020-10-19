@@ -3,8 +3,12 @@ from person
 join customer on (select person.person_id = customer.person_id)
 
 LogicalProject $query.$col1:1
-	LogicalJoin Inner $expr_subquery.$col1
-		Project* person.person_id
-			LogicalGet person
-		Project* customer.person_id
-			LogicalGet customer
+	LogicalFilter $expr_subquery.$col1
+		LogicalDependentJoin Single
+			LogicalProject $expr_subquery.$col1:(Equal person.person_id customer.person_id)
+				LogicalSingleGet
+			LogicalJoin Inner
+				Project* person.person_id
+					LogicalGet person
+				Project* customer.person_id
+					LogicalGet customer

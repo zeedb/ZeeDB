@@ -371,9 +371,7 @@ fn push_explicit_filter_through_inner_join(
     if !right_predicates.is_empty() {
         right = Expr::new(LogicalFilter(right_predicates, right));
     }
-
-    let mut top = Expr::new(LogicalJoin(Join::Inner(remaining_predicates), left, right));
-    top
+    Expr::new(LogicalJoin(Join::Inner(remaining_predicates), left, right))
 }
 
 fn push_implicit_filter_through_inner_join(

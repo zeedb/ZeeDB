@@ -15,9 +15,10 @@ pub enum Operator<T> {
     // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
     LogicalFilter(Vec<Scalar>, T),
     // LogicalProject(columns) implements the SELECT clause.
-    // TODO I think this is a misunderstanding of what project represents.
     LogicalProject(Vec<(Scalar, Column)>, T),
     LogicalJoin(Join, T, T),
+    // LogicalDependentJoin allows the left side of the join to depend on the right side.
+    LogicalDependentJoin(Join, T, T),
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
     LogicalWith(String, Vec<Column>, T, T),
@@ -154,6 +155,7 @@ impl<T> Operator<T> {
     pub fn is_logical(&self) -> bool {
         match self {
             Operator::LogicalJoin(_, _, _)
+            | Operator::LogicalDependentJoin(_, _, _)
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
@@ -210,14 +212,8 @@ impl<T> Operator<T> {
                 projects, table, ..
             } => projects.iter().any(|(_, c)| c == column) || table.columns.contains(column),
             Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
-            Operator::LogicalJoin(Join::Mark(mark, predicates), _, _) => {
-                mark == column || contains(predicates, column)
-            }
-            Operator::LogicalJoin(Join::Inner(predicates), _, _)
-            | Operator::LogicalJoin(Join::Right(predicates), _, _)
-            | Operator::LogicalJoin(Join::Outer(predicates), _, _)
-            | Operator::LogicalJoin(Join::Semi(predicates), _, _)
-            | Operator::LogicalJoin(Join::Single(predicates), _, _) => contains(predicates, column),
+            Operator::LogicalJoin(Join::Mark(mark, _), _, _) => mark == column,
+            Operator::LogicalDependentJoin(Join::Mark(mark, _), _, _) => mark == column,
             Operator::LogicalGetWith(_, columns) => columns.contains(column),
             Operator::LogicalAggregate { aggregate, .. } => {
                 aggregate.iter().any(|(_, c)| c == column)
@@ -229,6 +225,7 @@ impl<T> Operator<T> {
     pub fn len(&self) -> usize {
         match self {
             Operator::LogicalJoin(_, _, _)
+            | Operator::LogicalDependentJoin(_, _, _)
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
@@ -295,6 +292,11 @@ impl<T> Operator<T> {
                 let left = visitor(left);
                 let right = visitor(right);
                 Operator::LogicalJoin(join, left, right)
+            }
+            Operator::LogicalDependentJoin(join, left, right) => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalDependentJoin(join, left, right)
             }
             Operator::LogicalWith(name, columns, left, right) => {
                 let left = visitor(left);
@@ -504,6 +506,7 @@ impl<T> ops::Index<usize> for Operator<T> {
     fn index(&self, index: usize) -> &Self::Output {
         match self {
             Operator::LogicalJoin(_, left, right)
+            | Operator::LogicalDependentJoin(_, left, right)
             | Operator::LogicalWith(_, _, left, right)
             | Operator::LogicalUnion(left, right)
             | Operator::LogicalIntersect(left, right)

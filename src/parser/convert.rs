@@ -89,14 +89,30 @@ impl Converter {
     fn join(&mut self, q: &ResolvedJoinScanProto) -> Expr {
         let left = self.any_resolved_scan(q.left_scan.get());
         let right = self.any_resolved_scan(q.right_scan.get());
-        let mut input = Expr::new(LogicalSingleGet); // TODO this is clearly wrong
+        // Convert inner join to join-then-filter.
+        if *q.join_type.get().borrow() == 0 {
+            let mut input = Expr::new(LogicalJoin(Join::Inner(vec![]), left, right));
+            let predicates = match &q.join_expr {
+                Some(expr) => self.predicate(expr.borrow(), &mut input),
+                None => vec![],
+            };
+            if predicates.is_empty() {
+                return input;
+            }
+            return Expr::new(LogicalFilter(predicates, input));
+        }
+        // Convert outer join using join condition.
+        let dummy = Expr::new(TableFreeScan);
+        let mut input = dummy.clone();
         let predicates = match &q.join_expr {
             Some(expr) => self.predicate(expr.borrow(), &mut input),
             None => vec![],
         };
+        // TODO if we introduce the concept of a comparison join, some nested expressions can be handled.
+        if input != dummy {
+            panic!("Nested expressions are not allowed on the ON expressions of outer joins")
+        }
         match q.join_type.get().borrow() {
-            // Inner
-            0 => Expr::new(LogicalJoin(Join::Inner(predicates), left, right)),
             // Left
             1 => Expr::new(LogicalJoin(Join::Right(predicates), right, left)),
             // Right
@@ -745,7 +761,7 @@ impl Converter {
         match subquery_type {
             // Scalar
             0 => {
-                *outer = Expr::new(LogicalJoin(
+                *outer = Expr::new(LogicalDependentJoin(
                     Join::Single(vec![]),
                     corr,
                     mem::replace(outer, Expr::new(LogicalSingleGet)),
@@ -758,7 +774,7 @@ impl Converter {
             2 => {
                 let mark =
                     self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
-                *outer = Expr::new(LogicalJoin(
+                *outer = Expr::new(LogicalDependentJoin(
                     Join::Mark(mark.clone(), vec![]),
                     corr,
                     mem::replace(outer, Expr::new(LogicalSingleGet)),
@@ -776,7 +792,7 @@ impl Converter {
                 };
                 let sel = self.column(column);
                 let equals = Scalar::Call(Function::Equal, vec![inx, sel], Type::Bool);
-                *outer = Expr::new(LogicalJoin(
+                *outer = Expr::new(LogicalDependentJoin(
                     Join::Mark(mark.clone(), vec![equals]),
                     corr,
                     mem::replace(outer, Expr::new(LogicalSingleGet)),

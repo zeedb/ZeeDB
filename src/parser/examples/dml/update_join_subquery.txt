@@ -5,7 +5,7 @@ where customer.person_id = person.person_id
 
 LogicalUpdate customer.account_number:$update.$expr
 	LogicalProject $update.$expr:$expr_subquery.person_id
-		LogicalJoin Single
+		LogicalDependentJoin Single
 			LogicalProject $expr_subquery.person_id:person.person_id
 				LogicalSingleGet
 			LogicalFilter (Equal customer.person_id person.person_id)

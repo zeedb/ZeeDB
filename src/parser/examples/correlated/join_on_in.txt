@@ -3,8 +3,14 @@ from person
 join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)
 
 LogicalProject $query.$col1:1
-	LogicalJoin Inner $mark.$in
-		Project* person.person_id
-			LogicalGet person
-		Project* store.store_id
-			LogicalGet store
+	LogicalFilter $mark.$in
+		LogicalDependentJoin Mark $mark.$in (Equal person.person_id customer.person_id)
+			LogicalProject customer.person_id
+				LogicalFilter (Equal customer.store_id store.store_id)
+					Project* customer.person_id customer.store_id
+						LogicalGet customer
+			LogicalJoin Inner
+				Project* person.person_id
+					LogicalGet person
+				Project* store.store_id
+					LogicalGet store

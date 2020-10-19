@@ -3,8 +3,9 @@ from customer
 join store on customer.store_id = store.store_id
 
 LogicalProject customer.customer_id store.store_id
-	LogicalJoin Inner (Equal customer.store_id store.store_id)
-		Project* customer.customer_id customer.store_id
-			LogicalGet customer
-		Project* store.store_id
-			LogicalGet store
+	LogicalFilter (Equal customer.store_id store.store_id)
+		LogicalJoin Inner
+			Project* customer.customer_id customer.store_id
+				LogicalGet customer
+			Project* store.store_id
+				LogicalGet store

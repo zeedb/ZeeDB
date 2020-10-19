@@ -4,7 +4,7 @@ where exists (select person_id from customer where customer.person_id = person.p
 
 LogicalProject $query.$col1:1
 	LogicalFilter $mark.$exists
-		LogicalJoin Mark $mark.$exists
+		LogicalDependentJoin Mark $mark.$exists
 			LogicalProject customer.person_id
 				LogicalFilter (Equal customer.person_id person.person_id)
 					Project* customer.person_id

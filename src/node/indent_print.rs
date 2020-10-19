@@ -47,21 +47,26 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalJoin(join, left, right) => {
+            Operator::LogicalJoin(join, left, right)
+            | Operator::LogicalDependentJoin(join, left, right)
+            | Operator::NestedLoop(join, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalWith(name, _, left, right) => {
+            Operator::LogicalWith(name, _, left, right)
+            | Operator::CreateTempTable(name, _, left, right) => {
                 write!(f, "{} {}", self.name(), name)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalGetWith(name, _) => write!(f, "{} {}", self.name(), name),
+            Operator::LogicalGetWith(name, _) | Operator::GetTempTable(name, _) => {
+                write!(f, "{} {}", self.name(), name)
+            }
             Operator::LogicalAggregate {
                 group_by,
                 aggregate,
@@ -247,13 +252,6 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::NestedLoop(join, left, right) => {
-                write!(f, "{} {}", self.name(), join)?;
-                newline(f, indent)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f, indent)?;
-                right.indent_print(f, indent + 1)
-            }
             Operator::HashJoin(join, equals, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
                 for (left, right) in equals {
@@ -264,15 +262,6 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::CreateTempTable(name, _, left, right) => {
-                write!(f, "{} {}", self.name(), name)?;
-                newline(f, indent)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f, indent)?;
-                right.indent_print(f, indent + 1)?;
-                Ok(())
-            }
-            Operator::GetTempTable(name, _) => write!(f, "{} {}", self.name(), name),
             Operator::Aggregate {
                 group_by,
                 aggregate,
@@ -419,6 +408,7 @@ impl<T> Operator<T> {
             Operator::LogicalFilter { .. } => "LogicalFilter".to_string(),
             Operator::LogicalProject { .. } => "LogicalProject".to_string(),
             Operator::LogicalJoin { .. } => "LogicalJoin".to_string(),
+            Operator::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
             Operator::LogicalWith { .. } => "LogicalWith".to_string(),
             Operator::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
             Operator::LogicalAggregate { .. } => "LogicalAggregate".to_string(),
