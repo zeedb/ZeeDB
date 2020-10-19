@@ -76,7 +76,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                     self.stack.push(right);
                 }
                 Operator::LogicalFilter(_, input)
-                | Operator::LogicalProject(_, input)
+                | Operator::LogicalMap(_, input)
                 | Operator::LogicalAggregate { input, .. }
                 | Operator::LogicalLimit { input, .. }
                 | Operator::LogicalSort(_, input)
@@ -88,7 +88,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                     input: Some(input), ..
                 }
                 | Operator::Filter(_, input)
-                | Operator::Project(_, input)
+                | Operator::Map(_, input)
                 | Operator::Aggregate { input, .. }
                 | Operator::Limit { input, .. }
                 | Operator::Sort(_, input)

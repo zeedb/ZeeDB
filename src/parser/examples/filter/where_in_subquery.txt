@@ -2,12 +2,12 @@ select 1
 from person 
 where person_id in (select person_id from customer)
 
-LogicalProject $query.$col1:1
+LogicalMap $query.$col1:1
 	LogicalFilter $mark.$in
 		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id)
 			LogicalDependentJoin
-				LogicalProject customer.person_id
-					Project* customer.person_id
+				LogicalMap customer.person_id
+					Map* customer.person_id
 						LogicalGet customer
-			Project* person.person_id
+			Map* person.person_id
 				LogicalGet person

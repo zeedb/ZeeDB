@@ -2,9 +2,9 @@ select customer_id
 from customer 
 where store_id = 1
 
-Project* customer.customer_id
+Map* customer.customer_id
 	Filter* (Equal customer.store_id 1)
 		LogicalGet customer
 
-Project* customer.customer_id
+Map* customer.customer_id
 	IndexScan customer(1:customer.store_id)

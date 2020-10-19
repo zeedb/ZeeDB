@@ -6,5 +6,5 @@ offset 10
 
 LogicalLimit 100 10
 	LogicalSort customer.modified_date
-		Project* customer.customer_id customer.modified_date
+		Map* customer.customer_id customer.modified_date
 			LogicalGet customer

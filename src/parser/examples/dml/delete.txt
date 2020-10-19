@@ -3,5 +3,5 @@ where person_id = 1
 
 LogicalDelete customer
 	LogicalFilter (Equal customer.person_id 1)
-		Project* customer.person_id
+		Map* customer.person_id
 			LogicalGet customer

@@ -1,13 +1,13 @@
 select 1 as a, 2 as b union all select 4 as b, 3 as a union all select 5 as a, 6 as b
 
 LogicalUnion
-	LogicalProject $union_all.a:$union_all3.a $union_all.b:$union_all3.b
-		LogicalProject $union_all3.a:5 $union_all3.b:6
+	LogicalMap $union_all.a:$union_all3.a $union_all.b:$union_all3.b
+		LogicalMap $union_all3.a:5 $union_all3.b:6
 			LogicalSingleGet
 	LogicalUnion
-		LogicalProject $union_all.a:$union_all2.b $union_all.b:$union_all2.a
-			LogicalProject $union_all2.b:4 $union_all2.a:3
+		LogicalMap $union_all.a:$union_all2.b $union_all.b:$union_all2.a
+			LogicalMap $union_all2.b:4 $union_all2.a:3
 				LogicalSingleGet
-		LogicalProject $union_all.a:$union_all1.a $union_all.b:$union_all1.b
-			LogicalProject $union_all1.a:1 $union_all1.b:2
+		LogicalMap $union_all.a:$union_all1.a $union_all.b:$union_all1.b
+			LogicalMap $union_all1.a:1 $union_all1.b:2
 				LogicalSingleGet

@@ -3,11 +3,11 @@ set first_name = (select last_name)
 where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
-	LogicalProject $update.$expr:$expr_subquery.last_name
+	LogicalMap $update.$expr:$expr_subquery.last_name
 		LogicalJoin Single (Equal person.last_name $domain.last_name)
 			LogicalDependentJoin $domain.last_name:person.last_name
-				LogicalProject $expr_subquery.last_name:$domain.last_name
+				LogicalMap $expr_subquery.last_name:$domain.last_name
 					LogicalSingleGet
 			LogicalFilter (Equal person.person_id 1)
-				Project* person.person_id person.first_name person.last_name
+				Map* person.person_id person.first_name person.last_name
 					LogicalGet person

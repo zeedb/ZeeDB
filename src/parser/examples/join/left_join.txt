@@ -2,9 +2,9 @@ select customer.customer_id, store.store_id
 from customer 
 left join store on customer.store_id = store.store_id
 
-LogicalProject customer.customer_id store.store_id
+LogicalMap customer.customer_id store.store_id
 	LogicalJoin Right (Equal customer.store_id store.store_id)
-		Project* store.store_id
+		Map* store.store_id
 			LogicalGet store
-		Project* customer.customer_id customer.store_id
+		Map* customer.customer_id customer.store_id
 			LogicalGet customer

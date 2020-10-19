@@ -1,4 +1,4 @@
 select 1
 
-LogicalProject $query.$col1:1
+LogicalMap $query.$col1:1
 	LogicalSingleGet

@@ -2,12 +2,12 @@ select store_id
 from customer 
 group by 1
 
-LogicalProject $groupby.store_id
+LogicalMap $groupby.store_id
 	LogicalAggregate $groupby.store_id
-		Project* $groupby.store_id:customer.store_id
+		Map* $groupby.store_id:customer.store_id
 			LogicalGet customer
 
-Project $groupby.store_id
+Map $groupby.store_id
 	Aggregate $groupby.store_id
-		Project* $groupby.store_id:customer.store_id
+		Map* $groupby.store_id:customer.store_id
 			SeqScan customer

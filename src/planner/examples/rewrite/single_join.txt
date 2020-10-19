@@ -1,15 +1,15 @@
 select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) from customer
 
-LogicalProject $query.$col1:store.name $query.$col2:person.first_name
+LogicalMap $query.$col1:store.name $query.$col2:person.first_name
 	LogicalJoin Single (Equal customer.person_id $domain.person_id)
 		LogicalDependentJoin $domain.person_id:customer.person_id
-			Project* person.first_name
+			Map* person.first_name
 				Filter* (Equal person.person_id $domain.person_id)
 					LogicalGet person
 		LogicalJoin Single (Equal customer.customer_id $domain.customer_id)
 			LogicalDependentJoin $domain.customer_id:customer.customer_id
-				Project* store.name
+				Map* store.name
 					Filter* (Equal store.store_id $domain.customer_id) (Like store.name A%)
 						LogicalGet store
-			Project* customer.customer_id customer.person_id
+			Map* customer.customer_id customer.person_id
 				LogicalGet customer

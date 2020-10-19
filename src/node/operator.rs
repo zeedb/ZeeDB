@@ -15,8 +15,8 @@ pub enum Operator<T> {
     },
     // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
     LogicalFilter(Vec<Scalar>, T),
-    // LogicalProject(columns) implements the SELECT clause.
-    LogicalProject(Vec<(Scalar, Column)>, T),
+    // LogicalMap(columns) implements the SELECT clause.
+    LogicalMap(Vec<(Scalar, Column)>, T),
     LogicalJoin(Join, T, T),
     // LogicalDependentJoin allows the left side of the join to depend on the right side.
     LogicalDependentJoin {
@@ -103,7 +103,7 @@ pub enum Operator<T> {
         equals: Vec<(Column, Scalar)>,
     },
     Filter(Vec<Scalar>, T),
-    Project(Vec<(Scalar, Column)>, T),
+    Map(Vec<(Scalar, Column)>, T),
     NestedLoop(Join, T, T),
     HashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
     CreateTempTable(String, Vec<Column>, T, T),
@@ -165,7 +165,7 @@ impl<T> Operator<T> {
             | Operator::LogicalIntersect(_, _)
             | Operator::LogicalExcept(_, _)
             | Operator::LogicalFilter(_, _)
-            | Operator::LogicalProject(_, _)
+            | Operator::LogicalMap(_, _)
             | Operator::LogicalAggregate { .. }
             | Operator::LogicalLimit { .. }
             | Operator::LogicalSort(_, _)
@@ -210,7 +210,7 @@ impl<T> Operator<T> {
             Operator::LogicalGet {
                 projects, table, ..
             } => projects.iter().any(|(_, c)| c == column) || table.columns.contains(column),
-            Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
+            Operator::LogicalMap(projects, _) => projects.iter().any(|(_, c)| c == column),
             Operator::LogicalJoin(Join::Mark(mark, _), _, _) => mark == column,
             Operator::LogicalGetWith(_, columns) => columns.contains(column),
             Operator::LogicalAggregate { aggregate, .. } => {
@@ -234,7 +234,7 @@ impl<T> Operator<T> {
             | Operator::Intersect { .. }
             | Operator::Except { .. } => 2,
             Operator::LogicalFilter(_, _)
-            | Operator::LogicalProject(_, _)
+            | Operator::LogicalMap(_, _)
             | Operator::LogicalDependentJoin { .. }
             | Operator::LogicalAggregate { .. }
             | Operator::LogicalLimit { .. }
@@ -245,7 +245,7 @@ impl<T> Operator<T> {
             | Operator::LogicalDelete(_, _)
             | Operator::LogicalCreateTable { input: Some(_), .. }
             | Operator::Filter { .. }
-            | Operator::Project { .. }
+            | Operator::Map { .. }
             | Operator::Aggregate { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
@@ -282,9 +282,9 @@ impl<T> Operator<T> {
                 let input = visitor(input);
                 Operator::LogicalFilter(predicates, input)
             }
-            Operator::LogicalProject(projects, input) => {
+            Operator::LogicalMap(projects, input) => {
                 let input = visitor(input);
-                Operator::LogicalProject(projects, input)
+                Operator::LogicalMap(projects, input)
             }
             Operator::LogicalJoin(join, left, right) => {
                 let left = visitor(left);
@@ -424,7 +424,7 @@ impl<T> Operator<T> {
                 equals,
             },
             Operator::Filter(predicates, input) => Operator::Filter(predicates, visitor(input)),
-            Operator::Project(projects, input) => Operator::Project(projects, visitor(input)),
+            Operator::Map(projects, input) => Operator::Map(projects, visitor(input)),
             Operator::NestedLoop(join, left, right) => {
                 Operator::NestedLoop(join, visitor(left), visitor(right))
             }
@@ -518,7 +518,7 @@ impl<T> ops::Index<usize> for Operator<T> {
                 _ => panic!("{} is out of bounds [0,2)", index),
             },
             Operator::LogicalFilter(_, input)
-            | Operator::LogicalProject(_, input)
+            | Operator::LogicalMap(_, input)
             | Operator::LogicalDependentJoin { left: input, .. }
             | Operator::LogicalAggregate { input, .. }
             | Operator::LogicalLimit { input, .. }
@@ -531,7 +531,7 @@ impl<T> ops::Index<usize> for Operator<T> {
                 input: Some(input), ..
             }
             | Operator::Filter(_, input)
-            | Operator::Project(_, input)
+            | Operator::Map(_, input)
             | Operator::Aggregate { input, .. }
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)

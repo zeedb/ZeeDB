@@ -80,7 +80,7 @@ impl Rule {
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
-            | (Rule::LogicalProjectToProject, LogicalProject(_, _))
+            | (Rule::LogicalProjectToProject, LogicalMap(_, _))
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin(_, _, _))
             | (Rule::LogicalJoinToHashJoin, LogicalJoin(_, _, _))
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
@@ -239,8 +239,8 @@ impl Rule {
                 }
             }
             Rule::LogicalProjectToProject => {
-                if let LogicalProject(projects, input) = bind {
-                    return Some(Project(projects, input));
+                if let LogicalMap(projects, input) = bind {
+                    return Some(Map(projects, input));
                 }
             }
             Rule::LogicalJoinToNestedLoop => {

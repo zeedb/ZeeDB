@@ -252,7 +252,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             for (_, n) in column_unique_cardinality.iter_mut() {
                 *n = apply_selectivity(*n, selectivity);
             }
-            // Project
+            // Map
             for (x, c) in projects {
                 let n = scalar_unique_cardinality(&x, &column_unique_cardinality);
                 column_unique_cardinality.insert(c.clone(), n);
@@ -266,7 +266,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
             }
         }
-        LogicalProject(projects, input) => {
+        LogicalMap(projects, input) => {
             cardinality = ss[*input].props.cardinality;
             for (x, c) in projects {
                 let n = scalar_unique_cardinality(&x, &ss[*input].props.column_unique_cardinality);

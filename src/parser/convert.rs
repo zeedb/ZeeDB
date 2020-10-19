@@ -203,7 +203,7 @@ impl Converter {
             let output = Column::from(&outputs[i]);
             projects.push((input, output))
         }
-        Expr::new(LogicalProject(projects, item))
+        Expr::new(LogicalMap(projects, item))
     }
 
     fn order_by(&mut self, q: &ResolvedOrderByScanProto) -> Expr {
@@ -269,7 +269,7 @@ impl Converter {
             let column = Column::from(&c);
             project.push((Scalar::Column(column.clone()), column))
         }
-        Expr::new(LogicalProject(project, input))
+        Expr::new(LogicalMap(project, input))
     }
 
     fn computed_column(
@@ -322,7 +322,7 @@ impl Converter {
             aggregate.push((expr, column));
         }
         if project.len() > 0 {
-            input = Expr::new(LogicalProject(project, input));
+            input = Expr::new(LogicalMap(project, input));
         }
         Expr::new(LogicalAggregate {
             group_by,
@@ -429,7 +429,7 @@ impl Converter {
             let column = Column::from(q.parent.get().column_definition_list[i].column.get());
             project.push((value, column))
         }
-        let input = Expr::new(LogicalProject(project, input));
+        let input = Expr::new(LogicalMap(project, input));
         self.create_table_base(q.parent.get(), Some(input))
     }
 
@@ -627,10 +627,7 @@ impl Converter {
         if project.is_empty() {
             return Expr::new(LogicalUpdate(update, input));
         }
-        Expr::new(LogicalUpdate(
-            update,
-            Expr::new(LogicalProject(project, input)),
-        ))
+        Expr::new(LogicalUpdate(update, Expr::new(LogicalMap(project, input))))
     }
 
     fn rename(&mut self, q: &ResolvedRenameStmtProto) -> Expr {

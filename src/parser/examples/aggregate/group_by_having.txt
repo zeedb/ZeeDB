@@ -3,9 +3,9 @@ from customer
 group by 1 
 having count(*) > 1
 
-LogicalProject $groupby.store_id
+LogicalMap $groupby.store_id
 	LogicalFilter (Greater $aggregate.$agg1 1)
 		LogicalAggregate $groupby.store_id $aggregate.$agg1:(CountStar)
-			LogicalProject $groupby.store_id:customer.store_id
-				Project* customer.store_id
+			LogicalMap $groupby.store_id:customer.store_id
+				Map* customer.store_id
 					LogicalGet customer

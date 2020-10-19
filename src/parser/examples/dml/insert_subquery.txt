@@ -5,6 +5,6 @@ LogicalInsert person person.person_id person.first_name person.last_name person.
 	LogicalValues person.person_id person.first_name person.last_name person.modified_date [1 Foo Bar $expr_subquery.$col1]
 		LogicalJoin Single
 			LogicalDependentJoin
-				LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
+				LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
 					LogicalSingleGet
 			LogicalSingleGet

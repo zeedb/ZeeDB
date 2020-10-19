@@ -3,5 +3,5 @@ from customer
 order by customer_id
 
 LogicalSort customer.customer_id
-	Project* customer.customer_id
+	Map* customer.customer_id
 		LogicalGet customer

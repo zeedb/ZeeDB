@@ -1,4 +1,4 @@
 with foo as (select * from customer) select * from foo
 
-Project* foo.customer_id:customer.customer_id foo.person_id:customer.person_id foo.store_id:customer.store_id foo.account_number:customer.account_number foo.modified_date:customer.modified_date
+Map* foo.customer_id:customer.customer_id foo.person_id:customer.person_id foo.store_id:customer.store_id foo.account_number:customer.account_number foo.modified_date:customer.modified_date
 	LogicalGet customer

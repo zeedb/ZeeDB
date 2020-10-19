@@ -5,10 +5,10 @@ LogicalInsert person person.person_id person.modified_date
 	LogicalValues person.person_id person.modified_date [1 $expr_subquery.$col1] [2 $expr_subquery.$col1]
 		LogicalJoin Single
 			LogicalDependentJoin
-				LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
+				LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
 					LogicalSingleGet
 			LogicalJoin Single
 				LogicalDependentJoin
-					LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
+					LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
 						LogicalSingleGet
 				LogicalSingleGet

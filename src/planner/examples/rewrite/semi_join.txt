@@ -1,10 +1,10 @@
 select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
 
-LogicalProject $query.$col1:1
+LogicalMap $query.$col1:1
 	LogicalJoin Semi (Equal person.person_id $domain.person_id)
 		LogicalDependentJoin $domain.person_id:person.person_id
-			Project* $expr_subquery.$col1:1
+			Map* $expr_subquery.$col1:1
 				Filter* (Equal customer.person_id $domain.person_id)
 					LogicalGet customer
-		Project* person.person_id
+		Map* person.person_id
 			LogicalGet person

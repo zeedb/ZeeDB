@@ -26,7 +26,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 predicates,
                 table,
             } => {
-                write!(f, "Project* {}", join_projects(projects))?;
+                write!(f, "Map* {}", join_projects(projects))?;
                 newline(f, indent)?;
                 indent += 1;
                 if !predicates.is_empty() {
@@ -42,7 +42,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalProject(projects, input) => {
+            Operator::LogicalMap(projects, input) => {
                 write!(f, "{} {}", self.name(), join_projects(projects))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -231,7 +231,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 table,
                 equals,
             } => {
-                write!(f, "Project* {}", join_projects(projects))?;
+                write!(f, "Map* {}", join_projects(projects))?;
                 newline(f, indent)?;
                 indent += 1;
                 if !predicates.is_empty() {
@@ -253,7 +253,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Project(projects, input) => {
+            Operator::Map(projects, input) => {
                 write!(f, "{} {}", self.name(), join_projects(projects))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -412,7 +412,7 @@ impl<T> Operator<T> {
             Operator::LogicalSingleGet { .. } => "LogicalSingleGet".to_string(),
             Operator::LogicalGet { .. } => "LogicalGet".to_string(),
             Operator::LogicalFilter { .. } => "LogicalFilter".to_string(),
-            Operator::LogicalProject { .. } => "LogicalProject".to_string(),
+            Operator::LogicalMap { .. } => "LogicalMap".to_string(),
             Operator::LogicalJoin { .. } => "LogicalJoin".to_string(),
             Operator::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
             Operator::LogicalWith { .. } => "LogicalWith".to_string(),
@@ -437,7 +437,7 @@ impl<T> Operator<T> {
             Operator::SeqScan { .. } => "SeqScan".to_string(),
             Operator::IndexScan { .. } => "IndexScan".to_string(),
             Operator::Filter { .. } => "Filter".to_string(),
-            Operator::Project { .. } => "Project".to_string(),
+            Operator::Map { .. } => "Map".to_string(),
             Operator::NestedLoop { .. } => "NestedLoop".to_string(),
             Operator::HashJoin { .. } => "HashJoin".to_string(),
             Operator::CreateTempTable { .. } => "CreateTempTable".to_string(),

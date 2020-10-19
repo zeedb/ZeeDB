@@ -1,12 +1,12 @@
 select exists (select store_id from store where store.store_id = customer.store_id) as ok 
 from customer
 
-LogicalProject $query.ok:$mark.$exists
+LogicalMap $query.ok:$mark.$exists
 	LogicalJoin Mark $mark.$exists (Equal customer.store_id $domain.store_id)
 		LogicalDependentJoin $domain.store_id:customer.store_id
-			LogicalProject store.store_id
+			LogicalMap store.store_id
 				LogicalFilter (Equal store.store_id $domain.store_id)
-					Project* store.store_id
+					Map* store.store_id
 						LogicalGet store
-		Project* customer.store_id
+		Map* customer.store_id
 			LogicalGet customer

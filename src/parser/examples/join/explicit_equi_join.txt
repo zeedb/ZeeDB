@@ -2,10 +2,10 @@ select customer.customer_id, store.store_id
 from customer 
 join store on customer.store_id = store.store_id
 
-LogicalProject customer.customer_id store.store_id
+LogicalMap customer.customer_id store.store_id
 	LogicalFilter (Equal customer.store_id store.store_id)
 		LogicalJoin Inner
-			Project* customer.customer_id customer.store_id
+			Map* customer.customer_id customer.store_id
 				LogicalGet customer
-			Project* store.store_id
+			Map* store.store_id
 				LogicalGet store

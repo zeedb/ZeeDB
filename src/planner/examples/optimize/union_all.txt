@@ -3,13 +3,13 @@ union all
 select 2 as a
 
 LogicalUnion
-	LogicalProject $union_all.a:2
+	LogicalMap $union_all.a:2
 		LogicalSingleGet
-	LogicalProject $union_all.a:1
+	LogicalMap $union_all.a:1
 		LogicalSingleGet
 
 Union
-	Project $union_all.a:2
+	Map $union_all.a:2
 		TableFreeScan
-	Project $union_all.a:1
+	Map $union_all.a:1
 		TableFreeScan

@@ -37,7 +37,7 @@ impl RewriteRule {
                                 filter_predicates.remove(i);
                                 return Some(maybe_filter(
                                     filter_predicates,
-                                    Expr::new(LogicalProject(
+                                    Expr::new(LogicalMap(
                                         vec![(
                                             Scalar::Literal(Value::Bool(true), Type::Bool),
                                             mark.clone(),
@@ -53,7 +53,7 @@ impl RewriteRule {
                                 filter_predicates.remove(i);
                                 return Some(maybe_filter(
                                     filter_predicates,
-                                    Expr::new(LogicalProject(
+                                    Expr::new(LogicalMap(
                                         vec![(
                                             Scalar::Literal(Value::Bool(true), Type::Bool),
                                             mark.clone(),
@@ -138,7 +138,7 @@ impl RewriteRule {
             }
             RewriteRule::PushFilterThroughProject => {
                 if let LogicalFilter(predicates, input) = expr.as_ref() {
-                    if let LogicalProject(projects, input) = input.as_ref() {
+                    if let LogicalMap(projects, input) = input.as_ref() {
                         return push_filter_through_project(predicates, projects, input);
                     }
                 }
@@ -174,15 +174,15 @@ impl RewriteRule {
                 }
             }
             RewriteRule::CombineConsecutiveProjects => {
-                if let LogicalProject(outer, input) = expr.as_ref() {
-                    if let LogicalProject(inner, input) = input.as_ref() {
+                if let LogicalMap(outer, input) = expr.as_ref() {
+                    if let LogicalMap(inner, input) = input.as_ref() {
                         let combined = inline_all(outer, inner);
-                        return Some(Expr::new(LogicalProject(combined, input.clone())));
+                        return Some(Expr::new(LogicalMap(combined, input.clone())));
                     }
                 }
             }
             RewriteRule::EmbedProjectIntoGet => {
-                if let LogicalProject(outer, input) = expr.as_ref() {
+                if let LogicalMap(outer, input) = expr.as_ref() {
                     if let LogicalGet {
                         projects: inner,
                         predicates,
@@ -205,7 +205,7 @@ impl RewriteRule {
 
 fn prove_singleton(expr: &Expr) -> bool {
     match expr.as_ref() {
-        LogicalProject(_, input) => prove_singleton(input),
+        LogicalMap(_, input) => prove_singleton(input),
         LogicalSingleGet => true,
         LogicalAggregate { group_by, .. } => group_by.is_empty(),
         _ => false,
@@ -231,7 +231,7 @@ fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -
             for i in 0..columns.len() {
                 projects.push((Scalar::Column(columns[i].clone()), get_columns[i].clone()))
             }
-            Expr::new(LogicalProject(projects, left.clone()))
+            Expr::new(LogicalMap(projects, left.clone()))
         }
         expr => Expr::new(expr.map(|child| inline_with(name, columns, left, child))),
     }
@@ -283,12 +283,12 @@ fn pull_filter_through_project(
     if uncorr.is_empty() {
         return Some(Expr::new(LogicalFilter(
             corr,
-            Expr::new(LogicalProject(projects.clone(), input.clone())),
+            Expr::new(LogicalMap(projects.clone(), input.clone())),
         )));
     }
     Some(Expr::new(LogicalFilter(
         corr,
-        Expr::new(LogicalProject(
+        Expr::new(LogicalMap(
             projects.clone(),
             Expr::new(LogicalFilter(uncorr, input.clone())),
         )),
@@ -490,7 +490,7 @@ fn push_filter_through_project(
     }
     Some(maybe_filter(
         outer,
-        Expr::new(LogicalProject(
+        Expr::new(LogicalMap(
             projects.clone(),
             Expr::new(LogicalFilter(inner, input.clone())),
         )),

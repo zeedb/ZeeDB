@@ -2,8 +2,8 @@ with foo as (select * from customer)
 select customer_id 
 from foo
 
-Project* foo.customer_id:customer.customer_id
+Map* foo.customer_id:customer.customer_id
 	LogicalGet customer
 
-Project* foo.customer_id:customer.customer_id
+Map* foo.customer_id:customer.customer_id
 	SeqScan customer

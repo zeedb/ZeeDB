@@ -1,12 +1,12 @@
 select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
 
-LogicalProject $query.$col2:$aggregate.$agg1 store.store_id
+LogicalMap $query.$col2:$aggregate.$agg1 store.store_id
 	LogicalJoin Single (Equal store.store_id $domain.store_id)
 		LogicalDependentJoin $domain.store_id:store.store_id
-			LogicalProject $aggregate.$agg1
+			LogicalMap $aggregate.$agg1
 				LogicalAggregate $aggregate.$agg1:(CountStar)
-					Project* customer.store_id
+					Map* customer.store_id
 						Filter* (Equal customer.store_id $domain.store_id)
 							LogicalGet customer
-		Project* store.store_id
+		Map* store.store_id
 			LogicalGet store

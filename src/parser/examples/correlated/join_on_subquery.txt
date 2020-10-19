@@ -2,14 +2,14 @@ select 1
 from person 
 join customer on (select person.person_id = customer.person_id)
 
-LogicalProject $query.$col1:1
+LogicalMap $query.$col1:1
 	LogicalFilter $expr_subquery.$col1
 		LogicalJoin Single (Equal person.person_id $domain.person_id) (Equal customer.person_id $domain.person_id)
 			LogicalDependentJoin $domain.person_id:person.person_id $domain.person_id:customer.person_id
-				LogicalProject $expr_subquery.$col1:(Equal $domain.person_id $domain.person_id)
+				LogicalMap $expr_subquery.$col1:(Equal $domain.person_id $domain.person_id)
 					LogicalSingleGet
 			LogicalJoin Inner
-				Project* person.person_id
+				Map* person.person_id
 					LogicalGet person
-				Project* customer.person_id
+				Map* customer.person_id
 					LogicalGet customer

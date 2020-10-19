@@ -3,7 +3,7 @@ select person_id, store_id
 from customer
 
 LogicalCreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)
-	LogicalProject foo.person_id:customer.person_id foo.store_id:customer.store_id
-		LogicalProject customer.person_id customer.store_id
-			Project* customer.person_id customer.store_id
+	LogicalMap foo.person_id:customer.person_id foo.store_id:customer.store_id
+		LogicalMap customer.person_id customer.store_id
+			Map* customer.person_id customer.store_id
 				LogicalGet customer

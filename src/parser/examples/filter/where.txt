@@ -2,7 +2,7 @@ select customer_id
 from customer 
 where store_id = 1
 
-LogicalProject customer.customer_id
+LogicalMap customer.customer_id
 	LogicalFilter (Equal customer.store_id 1)
-		Project* customer.customer_id customer.store_id
+		Map* customer.customer_id customer.store_id
 			LogicalGet customer

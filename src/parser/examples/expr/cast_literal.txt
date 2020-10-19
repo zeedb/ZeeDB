@@ -1,4 +1,4 @@
 select cast(1 as numeric) as bignum
 
-LogicalProject $query.bignum:0
+LogicalMap $query.bignum:0
 	LogicalSingleGet

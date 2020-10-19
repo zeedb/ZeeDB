@@ -4,17 +4,17 @@ from foo f1, foo f2
 where f1.store_id = f2.store_id
 
 LogicalWith foo
-	Project* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 		LogicalGet customer
-	LogicalProject foo.customer_id foo.customer_id
+	LogicalMap foo.customer_id foo.customer_id
 		LogicalJoin Inner (Equal foo.store_id foo.store_id)
 			LogicalGetWith foo
 			LogicalGetWith foo
 
 CreateTempTable foo
-	Project* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 		SeqScan customer
-	Project foo.customer_id foo.customer_id
+	Map foo.customer_id foo.customer_id
 		HashJoin Inner foo.store_id=foo.store_id
 			GetTempTable foo
 			GetTempTable foo

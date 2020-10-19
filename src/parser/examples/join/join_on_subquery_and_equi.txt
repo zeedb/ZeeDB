@@ -2,15 +2,15 @@ select 1
 from person, customer 
 where person.person_id = customer.person_id and customer.store_id in (select store_id from store)
 
-LogicalProject $query.$col1:1
+LogicalMap $query.$col1:1
 	LogicalFilter (Equal person.person_id customer.person_id) $mark.$in
 		LogicalJoin Mark $mark.$in (Equal customer.store_id store.store_id)
 			LogicalDependentJoin
-				LogicalProject store.store_id
-					Project* store.store_id
+				LogicalMap store.store_id
+					Map* store.store_id
 						LogicalGet store
 			LogicalJoin Inner
-				Project* person.person_id
+				Map* person.person_id
 					LogicalGet person
-				Project* customer.person_id customer.store_id
+				Map* customer.person_id customer.store_id
 					LogicalGet customer

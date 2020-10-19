@@ -1,7 +1,7 @@
 select customer_id 
 from (select customer_id from customer) as foo
 
-LogicalProject customer.customer_id
-	LogicalProject customer.customer_id
-		Project* customer.customer_id
+LogicalMap customer.customer_id
+	LogicalMap customer.customer_id
+		Map* customer.customer_id
 			LogicalGet customer

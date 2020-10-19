@@ -2433,7 +2433,7 @@ pub struct ResolvedReplaceFieldProto {
 /// The subquery for a SCALAR or ARRAY or IN subquery must have exactly one
 /// output column.
 /// The output type for a SCALAR or ARRAY subquery is that column's type or
-/// an array of that column's type.  (The subquery scan may include a Project
+/// an array of that column's type.  (The subquery scan may include a Map
 /// with a MakeStruct or MakeProto expression to construct a single value
 /// from multiple columns.)
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -3196,7 +3196,7 @@ pub struct ResolvedOutputColumnProto {
     #[prost(message, optional, tag = "3")]
     pub column: ::std::option::Option<ResolvedColumnProto>,
 }
-/// A Project node computes new expression values, and possibly drops
+/// A Map node computes new expression values, and possibly drops
 /// columns from the input Scan's column_list.
 ///
 /// Each entry in <expr_list> is a new column computed from an expression.
@@ -5226,7 +5226,7 @@ pub struct ResolvedCreateConstantStmtProto {
 /// have a ResolvedAggregateScan that invokes the UDF function.  The engine
 /// should remove the UDF aggregate function from the <aggregate_list>, and
 /// instead compute the additional aggregates from the
-/// UDF's <aggregate_expression_list>, and then add an additional Project
+/// UDF's <aggregate_expression_list>, and then add an additional Map
 /// to compute the final <function_expression>, which should produce the
 /// value for the original ResolvedAggregateScan's computed column for the
 /// UDF.  Some rewrites of the ResolvedColumn references inside the UDF will

@@ -1,4 +1,4 @@
 with foo as (select 1 as a) select 2 as b
 
-LogicalProject $query.b:2
+LogicalMap $query.b:2
 	LogicalSingleGet

@@ -4,10 +4,10 @@ from person
 where customer.person_id = person.person_id
 
 LogicalUpdate customer.account_number:$update.$expr
-	LogicalProject $update.$expr:(Add customer.account_number 1)
+	LogicalMap $update.$expr:(Add customer.account_number 1)
 		LogicalFilter (Equal customer.person_id person.person_id)
 			LogicalJoin Inner
-				Project* customer.person_id customer.account_number
+				Map* customer.person_id customer.account_number
 					LogicalGet customer
-				Project* person.person_id
+				Map* person.person_id
 					LogicalGet person
