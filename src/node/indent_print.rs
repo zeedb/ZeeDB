@@ -47,14 +47,20 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalJoin(join, left, right)
-            | Operator::LogicalDependentJoin(join, left, right)
-            | Operator::NestedLoop(join, left, right) => {
+            Operator::LogicalJoin(join, left, right) | Operator::NestedLoop(join, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
+            }
+            Operator::LogicalDependentJoin { left, right } => {
+                write!(f, "{}", self.name())?;
+                for (column, domain) in right {
+                    write!(f, " {}:{}", domain, column)?;
+                }
+                newline(f, indent)?;
+                left.indent_print(f, indent + 1)
             }
             Operator::LogicalWith(name, _, left, right)
             | Operator::CreateTempTable(name, _, left, right) => {

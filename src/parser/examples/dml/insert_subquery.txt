@@ -3,7 +3,8 @@ values (1, "Foo", "Bar", (select current_timestamp()))
 
 LogicalInsert person person.person_id person.first_name person.last_name person.modified_date
 	LogicalValues person.person_id person.first_name person.last_name person.modified_date [1 Foo Bar $expr_subquery.$col1]
-		LogicalDependentJoin Single
-			LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
-				LogicalSingleGet
+		LogicalJoin Single
+			LogicalDependentJoin
+				LogicalProject $expr_subquery.$col1:(CurrentTimestamp)
+					LogicalSingleGet
 			LogicalSingleGet

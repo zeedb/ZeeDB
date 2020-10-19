@@ -2,10 +2,11 @@ select (select name from store where store.store_id = customer.store_id)
 from customer
 
 LogicalProject $query.$col1:store.name
-	LogicalDependentJoin Single
-		LogicalProject store.name
-			LogicalFilter (Equal store.store_id customer.store_id)
-				Project* store.store_id store.name
-					LogicalGet store
+	LogicalJoin Single (Equal customer.store_id $domain.store_id)
+		LogicalDependentJoin $domain.store_id:customer.store_id
+			LogicalProject store.name
+				LogicalFilter (Equal store.store_id $domain.store_id)
+					Project* store.store_id store.name
+						LogicalGet store
 		Project* customer.store_id
 			LogicalGet customer

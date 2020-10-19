@@ -1,6 +1,7 @@
 use encoding::*;
 use node::*;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::mem;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
 use zetasql::any_resolved_alter_action_proto::Node::*;
@@ -22,11 +23,15 @@ pub fn convert(q: &AnyResolvedStatementProto) -> Expr {
 
 struct Converter {
     next_column_id: i64,
+    correlated: HashMap<i64, Column>,
 }
 
 impl Converter {
     fn new() -> Converter {
-        Converter { next_column_id: -1 }
+        Converter {
+            next_column_id: -1,
+            correlated: HashMap::new(),
+        }
     }
 
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
@@ -205,7 +210,7 @@ impl Converter {
         let input = self.any_resolved_scan(q.input_scan.get().borrow());
         let mut list = vec![];
         for x in &q.order_by_item_list {
-            let column = Column::from(&x.column_ref.get().column.get());
+            let column = self.column_ref(x.column_ref.get());
             let desc = x.is_descending.unwrap_or(false);
             list.push(OrderBy { column, desc });
         }
@@ -557,6 +562,15 @@ impl Converter {
         cs
     }
 
+    fn column_ref(&mut self, x: &ResolvedColumnRefProto) -> Column {
+        if x.is_correlated.unwrap_or(false) {
+            let id = x.column.get().column_id.unwrap();
+            self.correlated[&id].clone()
+        } else {
+            Column::from(x.column.get())
+        }
+    }
+
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
         let mut input = self.table_scan(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
@@ -692,16 +706,12 @@ impl Converter {
                 let typ = x.value.get().r#type.get();
                 Scalar::Literal(literal(value, typ), Type::from(typ))
             }
-            ResolvedColumnRefNode(x) => self.column(x.column.get()),
+            ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
             ResolvedCastNode(x) => self.cast(x, outer),
             ResolvedSubqueryExprNode(x) => self.subquery_expr(x, outer),
             other => panic!("{:?}", other),
         }
-    }
-
-    fn column(&mut self, x: &ResolvedColumnProto) -> Scalar {
-        Scalar::Column(Column::from(x))
     }
 
     fn function_call(&mut self, x: &AnyResolvedFunctionCallBaseProto, outer: &mut Expr) -> Scalar {
@@ -754,19 +764,41 @@ impl Converter {
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
-        let subquery_type = x.subquery_type.get();
-        let subquery = x.subquery.get();
-        let corr = self.any_resolved_scan(subquery);
-        let column = single_column(subquery);
-        match subquery_type {
+        let mut parameters = vec![];
+        let mut equi_predicates = vec![];
+        for c in &x.parameter_list {
+            let column = Column::from(c.column.get());
+            let domain = self.create_column(
+                "$domain".to_string(),
+                c.column.get().name.get().clone(),
+                Type::from(c.column.get().r#type.get()),
+            );
+            self.correlated.insert(column.id, domain.clone());
+            equi_predicates.push(Scalar::Call(
+                Function::Equal,
+                vec![
+                    Scalar::Column(column.clone()),
+                    Scalar::Column(domain.clone()),
+                ],
+                Type::Bool,
+            ));
+            parameters.push((column, domain));
+        }
+        let dependent = self.any_resolved_scan(x.subquery.get());
+        let dependent_join = Expr::new(LogicalDependentJoin {
+            left: dependent,
+            right: parameters,
+        });
+        let independent = mem::replace(outer, Expr::new(LogicalSingleGet));
+        match x.subquery_type.get() {
             // Scalar
             0 => {
-                *outer = Expr::new(LogicalDependentJoin(
-                    Join::Single(vec![]),
-                    corr,
-                    mem::replace(outer, Expr::new(LogicalSingleGet)),
+                *outer = Expr::new(LogicalJoin(
+                    Join::Single(equi_predicates),
+                    dependent_join,
+                    independent,
                 ));
-                Scalar::Column(Column::from(column))
+                single_column(x.subquery.get())
             }
             // Array
             1 => unimplemented!(),
@@ -774,30 +806,31 @@ impl Converter {
             2 => {
                 let mark =
                     self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
-                *outer = Expr::new(LogicalDependentJoin(
-                    Join::Mark(mark.clone(), vec![]),
-                    corr,
-                    mem::replace(outer, Expr::new(LogicalSingleGet)),
+                *outer = Expr::new(LogicalJoin(
+                    Join::Mark(mark.clone(), equi_predicates),
+                    dependent_join,
+                    independent,
                 ));
-                Scalar::Column(mark.clone())
+                Scalar::Column(mark)
             }
             // In
             3 => {
                 let mark = self.create_column("$mark".to_string(), "$in".to_string(), Type::Bool);
-                let inx = match x {
+                let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
                     } => self.expr(x, outer),
                     other => panic!("{:?}", other),
                 };
-                let sel = self.column(column);
-                let equals = Scalar::Call(Function::Equal, vec![inx, sel], Type::Bool);
-                *outer = Expr::new(LogicalDependentJoin(
-                    Join::Mark(mark.clone(), vec![equals]),
-                    corr,
-                    mem::replace(outer, Expr::new(LogicalSingleGet)),
+                let check = single_column(x.subquery.get());
+                let in_condition = Scalar::Call(Function::Equal, vec![find, check], Type::Bool);
+                equi_predicates.push(in_condition);
+                *outer = Expr::new(LogicalJoin(
+                    Join::Mark(mark.clone(), equi_predicates),
+                    dependent_join,
+                    independent,
                 ));
-                Scalar::Column(mark.clone())
+                Scalar::Column(mark)
             }
             other => panic!("{:?}", other),
         }
@@ -837,8 +870,8 @@ fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
     &q.column_list
 }
 
-fn single_column(q: &AnyResolvedScanProto) -> &ResolvedColumnProto {
-    &column_list(q)[0]
+fn single_column(q: &AnyResolvedScanProto) -> Scalar {
+    Scalar::Column(Column::from(&column_list(q)[0]))
 }
 
 fn single_column_aggregate(q: &AnyResolvedAggregateScanBaseProto) -> &ResolvedScanProto {

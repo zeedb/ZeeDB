@@ -1,8 +1,9 @@
 select (select 1) from customer
 
 LogicalProject $query.$col1:$expr_subquery.$col1
-	LogicalDependentJoin Single
-		LogicalProject $expr_subquery.$col1:1
-			LogicalSingleGet
+	LogicalJoin Single
+		LogicalDependentJoin
+			LogicalProject $expr_subquery.$col1:1
+				LogicalSingleGet
 		Project* 
 			LogicalGet customer

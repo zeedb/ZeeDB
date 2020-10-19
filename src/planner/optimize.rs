@@ -273,7 +273,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), n);
             }
         }
-        LogicalJoin(join, left, right) | LogicalDependentJoin(join, left, right) => {
+        LogicalJoin(join, left, right) => {
             let mut scope = HashMap::new();
             for (c, n) in &ss[*left].props.column_unique_cardinality {
                 scope.insert(c.clone(), *n);
@@ -299,6 +299,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 _ => {}
             }
         }
+        LogicalDependentJoin { .. } => todo!(),
         LogicalWith(name, _, _, right) => {
             cardinality = ss[*right].props.cardinality;
             column_unique_cardinality = ss[*right].props.column_unique_cardinality.clone();

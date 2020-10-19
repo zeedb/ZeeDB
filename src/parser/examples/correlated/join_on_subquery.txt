@@ -4,9 +4,10 @@ join customer on (select person.person_id = customer.person_id)
 
 LogicalProject $query.$col1:1
 	LogicalFilter $expr_subquery.$col1
-		LogicalDependentJoin Single
-			LogicalProject $expr_subquery.$col1:(Equal person.person_id customer.person_id)
-				LogicalSingleGet
+		LogicalJoin Single (Equal person.person_id $domain.person_id) (Equal customer.person_id $domain.person_id)
+			LogicalDependentJoin $domain.person_id:person.person_id $domain.person_id:customer.person_id
+				LogicalProject $expr_subquery.$col1:(Equal $domain.person_id $domain.person_id)
+					LogicalSingleGet
 			LogicalJoin Inner
 				Project* person.person_id
 					LogicalGet person

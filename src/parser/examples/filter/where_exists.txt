@@ -4,10 +4,11 @@ where exists (select person_id from customer where customer.person_id = person.p
 
 LogicalProject $query.$col1:1
 	LogicalFilter $mark.$exists
-		LogicalDependentJoin Mark $mark.$exists
-			LogicalProject customer.person_id
-				LogicalFilter (Equal customer.person_id person.person_id)
-					Project* customer.person_id
-						LogicalGet customer
+		LogicalJoin Mark $mark.$exists (Equal person.person_id $domain.person_id)
+			LogicalDependentJoin $domain.person_id:person.person_id
+				LogicalProject customer.person_id
+					LogicalFilter (Equal customer.person_id $domain.person_id)
+						Project* customer.person_id
+							LogicalGet customer
 			Project* person.person_id
 				LogicalGet person

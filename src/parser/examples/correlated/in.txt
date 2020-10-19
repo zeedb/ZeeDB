@@ -2,10 +2,11 @@ select 1 in (select store_id from store where store.store_id = customer.store_id
 from customer
 
 LogicalProject $query.ok:$mark.$in
-	LogicalDependentJoin Mark $mark.$in (Equal 1 store.store_id)
-		LogicalProject store.store_id
-			LogicalFilter (Equal store.store_id customer.store_id)
-				Project* store.store_id
-					LogicalGet store
+	LogicalJoin Mark $mark.$in (Equal customer.store_id $domain.store_id) (Equal 1 store.store_id)
+		LogicalDependentJoin $domain.store_id:customer.store_id
+			LogicalProject store.store_id
+				LogicalFilter (Equal store.store_id $domain.store_id)
+					Project* store.store_id
+						LogicalGet store
 		Project* customer.store_id
 			LogicalGet customer
