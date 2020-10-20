@@ -18,11 +18,14 @@ pub enum Operator<T> {
     // LogicalMap(columns) implements the SELECT clause.
     LogicalMap(Vec<(Scalar, Column)>, T),
     LogicalJoin(Join, T, T),
-    // LogicalDependentJoin allows the left side of the join to depend on the right side.
+    // LogicalDependentJoin is an inner join that allows the left side of the join to depend on the right side.
     LogicalDependentJoin {
+        parameters: Vec<Column>,
         left: T,
-        right: Vec<(Column, Column)>,
+        right: T,
     },
+    // LogicalProject implements the *relational* projection operator, which removes duplicates from a multiset.
+    LogicalProject(Vec<(Column, Column)>, T),
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
     LogicalWith(String, Vec<Column>, T, T),
@@ -160,12 +163,13 @@ impl<T> Operator<T> {
         match self {
             Operator::LogicalJoin(_, _, _)
             | Operator::LogicalDependentJoin { .. }
+            | Operator::LogicalProject { .. }
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
             | Operator::LogicalExcept(_, _)
             | Operator::LogicalFilter(_, _)
-            | Operator::LogicalMap(_, _)
+            | Operator::LogicalMap { .. }
             | Operator::LogicalAggregate { .. }
             | Operator::LogicalLimit { .. }
             | Operator::LogicalSort(_, _)
@@ -182,7 +186,31 @@ impl<T> Operator<T> {
             | Operator::LogicalAlterTable { .. }
             | Operator::LogicalDrop { .. }
             | Operator::LogicalRename { .. } => true,
-            _ => false,
+            Operator::TableFreeScan { .. }
+            | Operator::SeqScan { .. }
+            | Operator::IndexScan { .. }
+            | Operator::Filter { .. }
+            | Operator::Map { .. }
+            | Operator::NestedLoop { .. }
+            | Operator::HashJoin { .. }
+            | Operator::CreateTempTable { .. }
+            | Operator::GetTempTable { .. }
+            | Operator::Aggregate { .. }
+            | Operator::Limit { .. }
+            | Operator::Sort { .. }
+            | Operator::Union { .. }
+            | Operator::Intersect { .. }
+            | Operator::Except { .. }
+            | Operator::Insert { .. }
+            | Operator::Values { .. }
+            | Operator::Update { .. }
+            | Operator::Delete { .. }
+            | Operator::CreateDatabase { .. }
+            | Operator::CreateTable { .. }
+            | Operator::CreateIndex { .. }
+            | Operator::AlterTable { .. }
+            | Operator::Drop { .. }
+            | Operator::Rename { .. } => false,
         }
     }
 
@@ -211,6 +239,7 @@ impl<T> Operator<T> {
                 projects, table, ..
             } => projects.iter().any(|(_, c)| c == column) || table.columns.contains(column),
             Operator::LogicalMap(projects, _) => projects.iter().any(|(_, c)| c == column),
+            Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
             Operator::LogicalJoin(Join::Mark(mark, _), _, _) => mark == column,
             Operator::LogicalGetWith(_, columns) => columns.contains(column),
             Operator::LogicalAggregate { aggregate, .. } => {
@@ -223,6 +252,7 @@ impl<T> Operator<T> {
     pub fn len(&self) -> usize {
         match self {
             Operator::LogicalJoin(_, _, _)
+            | Operator::LogicalDependentJoin { .. }
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
@@ -234,8 +264,8 @@ impl<T> Operator<T> {
             | Operator::Intersect { .. }
             | Operator::Except { .. } => 2,
             Operator::LogicalFilter(_, _)
-            | Operator::LogicalMap(_, _)
-            | Operator::LogicalDependentJoin { .. }
+            | Operator::LogicalMap { .. }
+            | Operator::LogicalProject { .. }
             | Operator::LogicalAggregate { .. }
             | Operator::LogicalLimit { .. }
             | Operator::LogicalSort(_, _)
@@ -291,9 +321,22 @@ impl<T> Operator<T> {
                 let right = visitor(right);
                 Operator::LogicalJoin(join, left, right)
             }
-            Operator::LogicalDependentJoin { left, right } => {
+            Operator::LogicalDependentJoin {
+                parameters,
+                left,
+                right,
+            } => {
                 let left = visitor(left);
-                Operator::LogicalDependentJoin { left, right }
+                let right = visitor(right);
+                Operator::LogicalDependentJoin {
+                    parameters,
+                    left,
+                    right,
+                }
+            }
+            Operator::LogicalProject(projects, input) => {
+                let input = visitor(input);
+                Operator::LogicalProject(projects, input)
             }
             Operator::LogicalWith(name, columns, left, right) => {
                 let left = visitor(left);
@@ -503,6 +546,7 @@ impl<T> ops::Index<usize> for Operator<T> {
     fn index(&self, index: usize) -> &Self::Output {
         match self {
             Operator::LogicalJoin(_, left, right)
+            | Operator::LogicalDependentJoin { left, right, .. }
             | Operator::LogicalWith(_, _, left, right)
             | Operator::LogicalUnion(left, right)
             | Operator::LogicalIntersect(left, right)
@@ -518,8 +562,8 @@ impl<T> ops::Index<usize> for Operator<T> {
                 _ => panic!("{} is out of bounds [0,2)", index),
             },
             Operator::LogicalFilter(_, input)
+            | Operator::LogicalProject(_, input)
             | Operator::LogicalMap(_, input)
-            | Operator::LogicalDependentJoin { left: input, .. }
             | Operator::LogicalAggregate { input, .. }
             | Operator::LogicalLimit { input, .. }
             | Operator::LogicalSort(_, input)
@@ -545,7 +589,25 @@ impl<T> ops::Index<usize> for Operator<T> {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },
-            _ => panic!(),
+            Operator::LogicalSingleGet { .. }
+            | Operator::LogicalGet { .. }
+            | Operator::LogicalGetWith { .. }
+            | Operator::LogicalCreateDatabase { .. }
+            | Operator::LogicalCreateTable { input: None, .. }
+            | Operator::LogicalCreateIndex { .. }
+            | Operator::LogicalAlterTable { .. }
+            | Operator::LogicalDrop { .. }
+            | Operator::LogicalRename { .. }
+            | Operator::TableFreeScan { .. }
+            | Operator::SeqScan { .. }
+            | Operator::IndexScan { .. }
+            | Operator::GetTempTable { .. }
+            | Operator::CreateDatabase { .. }
+            | Operator::CreateTable { input: None, .. }
+            | Operator::CreateIndex { .. }
+            | Operator::AlterTable { .. }
+            | Operator::Drop { .. }
+            | Operator::Rename { .. } => panic!("{} has no inputs", self.name()),
         }
     }
 }

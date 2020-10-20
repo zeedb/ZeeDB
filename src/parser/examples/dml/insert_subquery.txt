@@ -7,4 +7,6 @@ LogicalInsert person person.person_id person.first_name person.last_name person.
 			LogicalDependentJoin
 				LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
 					LogicalSingleGet
+				LogicalProject
+					LogicalSingleGet
 			LogicalSingleGet

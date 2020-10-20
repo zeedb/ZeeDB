@@ -3,10 +3,13 @@ from customer
 
 LogicalMap $query.ok:$mark.$exists
 	LogicalJoin Mark $mark.$exists (Equal customer.store_id $domain.store_id)
-		LogicalDependentJoin $domain.store_id:customer.store_id
+		LogicalDependentJoin $domain.store_id
 			LogicalMap store.store_id
 				LogicalFilter (Equal store.store_id $domain.store_id)
 					Map* store.store_id
 						LogicalGet store
+			LogicalProject customer.store_id:$domain.store_id
+				Map* customer.store_id
+					LogicalGet customer
 		Map* customer.store_id
 			LogicalGet customer

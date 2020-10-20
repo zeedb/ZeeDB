@@ -54,13 +54,27 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalDependentJoin { left, right } => {
+            Operator::LogicalDependentJoin {
+                parameters,
+                left,
+                right,
+            } => {
                 write!(f, "{}", self.name())?;
-                for (column, domain) in right {
-                    write!(f, " {}:{}", domain, column)?;
+                for c in parameters {
+                    write!(f, " {}", c)?;
                 }
                 newline(f, indent)?;
-                left.indent_print(f, indent + 1)
+                left.indent_print(f, indent + 1)?;
+                newline(f, indent)?;
+                right.indent_print(f, indent + 1)
+            }
+            Operator::LogicalProject(projects, input) => {
+                write!(f, "{}", self.name())?;
+                for (duplicate, distinct) in projects {
+                    write!(f, " {}:{}", duplicate, distinct)?;
+                }
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
             }
             Operator::LogicalWith(name, _, left, right)
             | Operator::CreateTempTable(name, _, left, right) => {
@@ -415,6 +429,7 @@ impl<T> Operator<T> {
             Operator::LogicalMap { .. } => "LogicalMap".to_string(),
             Operator::LogicalJoin { .. } => "LogicalJoin".to_string(),
             Operator::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
+            Operator::LogicalProject { .. } => "LogicalProject".to_string(),
             Operator::LogicalWith { .. } => "LogicalWith".to_string(),
             Operator::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
             Operator::LogicalAggregate { .. } => "LogicalAggregate".to_string(),

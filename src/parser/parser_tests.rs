@@ -10,7 +10,7 @@ fn test_analyze() {
         .parse(&"select 1".to_string(), 0, &catalog())
         .unwrap();
     match expr.as_ref() {
-        LogicalMap(_, _) => (),
+        LogicalMap { .. } => (),
         other => panic!("{:?}", other),
     }
 }

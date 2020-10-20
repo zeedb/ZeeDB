@@ -7,8 +7,18 @@ LogicalInsert person person.person_id person.modified_date
 			LogicalDependentJoin
 				LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
 					LogicalSingleGet
+				LogicalProject
+					LogicalJoin Single
+						LogicalDependentJoin
+							LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
+								LogicalSingleGet
+							LogicalProject
+								LogicalSingleGet
+						LogicalSingleGet
 			LogicalJoin Single
 				LogicalDependentJoin
 					LogicalMap $expr_subquery.$col1:(CurrentTimestamp)
+						LogicalSingleGet
+					LogicalProject
 						LogicalSingleGet
 				LogicalSingleGet

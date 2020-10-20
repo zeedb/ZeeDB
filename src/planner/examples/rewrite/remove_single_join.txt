@@ -5,5 +5,8 @@ LogicalMap $query.$col1:$expr_subquery.$col1
 		LogicalDependentJoin
 			LogicalMap $expr_subquery.$col1:1
 				LogicalSingleGet
+			LogicalProject
+				Map* 
+					LogicalGet customer
 		Map* 
 			LogicalGet customer

@@ -5,9 +5,13 @@ where person_id = 1
 LogicalUpdate person.first_name:$update.$expr
 	LogicalMap $update.$expr:$expr_subquery.last_name
 		LogicalJoin Single (Equal person.last_name $domain.last_name)
-			LogicalDependentJoin $domain.last_name:person.last_name
+			LogicalDependentJoin $domain.last_name
 				LogicalMap $expr_subquery.last_name:$domain.last_name
 					LogicalSingleGet
+				LogicalProject person.last_name:$domain.last_name
+					LogicalFilter (Equal person.person_id 1)
+						Map* person.person_id person.first_name person.last_name
+							LogicalGet person
 			LogicalFilter (Equal person.person_id 1)
 				Map* person.person_id person.first_name person.last_name
 					LogicalGet person

@@ -2,14 +2,28 @@ select (select name from store where store.store_id = customer.customer_id and s
 
 LogicalMap $query.$col1:store.name $query.$col2:person.first_name
 	LogicalJoin Single (Equal customer.person_id $domain.person_id)
-		LogicalDependentJoin $domain.person_id:customer.person_id
+		LogicalDependentJoin $domain.person_id
 			Map* person.first_name
 				Filter* (Equal person.person_id $domain.person_id)
 					LogicalGet person
+			LogicalProject customer.person_id:$domain.person_id
+				LogicalJoin Single (Equal customer.customer_id $domain.customer_id)
+					LogicalDependentJoin $domain.customer_id
+						Map* store.name
+							Filter* (Equal store.store_id $domain.customer_id) (Like store.name A%)
+								LogicalGet store
+						LogicalProject customer.customer_id:$domain.customer_id
+							Map* customer.customer_id customer.person_id
+								LogicalGet customer
+					Map* customer.customer_id customer.person_id
+						LogicalGet customer
 		LogicalJoin Single (Equal customer.customer_id $domain.customer_id)
-			LogicalDependentJoin $domain.customer_id:customer.customer_id
+			LogicalDependentJoin $domain.customer_id
 				Map* store.name
 					Filter* (Equal store.store_id $domain.customer_id) (Like store.name A%)
 						LogicalGet store
+				LogicalProject customer.customer_id:$domain.customer_id
+					Map* customer.customer_id customer.person_id
+						LogicalGet customer
 			Map* customer.customer_id customer.person_id
 				LogicalGet customer

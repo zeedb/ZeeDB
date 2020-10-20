@@ -255,9 +255,9 @@ impl Converter {
 
     fn project(&mut self, q: &ResolvedProjectScanProto) -> Expr {
         let mut input = self.any_resolved_scan(q.input_scan.get());
-        let mut project = vec![];
+        let mut projects = vec![];
         for x in &q.expr_list {
-            project.push(self.computed_column(x, &mut input));
+            projects.push(self.computed_column(x, &mut input));
         }
         for c in &q.parent.get().column_list {
             if q.expr_list
@@ -267,9 +267,9 @@ impl Converter {
                 continue;
             }
             let column = Column::from(&c);
-            project.push((Scalar::Column(column.clone()), column))
+            projects.push((Scalar::Column(column.clone()), column))
         }
-        Expr::new(LogicalMap(project, input))
+        Expr::new(LogicalMap(projects, input))
     }
 
     fn computed_column(
@@ -310,19 +310,19 @@ impl Converter {
     fn aggregate(&mut self, q: &ResolvedAggregateScanProto) -> Expr {
         let q = q.parent.get();
         let mut input = self.any_resolved_scan(q.input_scan.get());
-        let mut project = vec![];
+        let mut projects = vec![];
         let mut group_by = vec![];
         let mut aggregate = vec![];
         for c in &q.group_by_list {
-            group_by.push(self.compute(c, &mut project, &mut input));
+            group_by.push(self.compute(c, &mut projects, &mut input));
         }
         for c in &q.aggregate_list {
-            let expr = self.reduce(c, &mut project, &mut input);
+            let expr = self.reduce(c, &mut projects, &mut input);
             let column = Column::from(&c.column.get());
             aggregate.push((expr, column));
         }
-        if project.len() > 0 {
-            input = Expr::new(LogicalMap(project, input));
+        if projects.len() > 0 {
+            input = Expr::new(LogicalMap(projects, input));
         }
         Expr::new(LogicalAggregate {
             group_by,
@@ -423,13 +423,13 @@ impl Converter {
 
     fn create_table_as(&mut self, q: &ResolvedCreateTableAsSelectStmtProto) -> Expr {
         let input = self.any_resolved_scan(q.query.get());
-        let mut project = vec![];
+        let mut projects = vec![];
         for i in 0..q.output_column_list.len() {
             let value = Scalar::Column(Column::from(q.output_column_list[i].column.get()));
             let column = Column::from(q.parent.get().column_definition_list[i].column.get());
-            project.push((value, column))
+            projects.push((value, column))
         }
-        let input = Expr::new(LogicalMap(project, input));
+        let input = Expr::new(LogicalMap(projects, input));
         self.create_table_base(q.parent.get(), Some(input))
     }
 
@@ -595,7 +595,7 @@ impl Converter {
             let pred = self.predicate(pred, &mut input);
             input = Expr::new(LogicalFilter(pred, input));
         }
-        let mut project = vec![];
+        let mut projects = vec![];
         let mut update = vec![];
         for item in &q.update_item_list {
             let target = match item.target.get().node.get() {
@@ -618,16 +618,19 @@ impl Converter {
                         "$expr".to_string(),
                         scalar.typ(),
                     );
-                    project.push((scalar, fake.clone()));
+                    projects.push((scalar, fake.clone()));
                     Some(fake)
                 }
             };
             update.push((target, value))
         }
-        if project.is_empty() {
+        if projects.is_empty() {
             return Expr::new(LogicalUpdate(update, input));
         }
-        Expr::new(LogicalUpdate(update, Expr::new(LogicalMap(project, input))))
+        Expr::new(LogicalUpdate(
+            update,
+            Expr::new(LogicalMap(projects, input)),
+        ))
     }
 
     fn rename(&mut self, q: &ResolvedRenameStmtProto) -> Expr {
@@ -761,41 +764,96 @@ impl Converter {
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
-        let mut parameters = vec![];
-        let mut equi_predicates = vec![];
-        for c in &x.parameter_list {
-            let column = Column::from(c.column.get());
-            let domain = self.create_column(
-                "$domain".to_string(),
-                c.column.get().name.get().clone(),
-                Type::from(c.column.get().r#type.get()),
-            );
-            self.correlated.insert(column.id, domain.clone());
-            equi_predicates.push(Scalar::Call(
-                Function::Equal,
-                vec![
-                    Scalar::Column(column.clone()),
-                    Scalar::Column(domain.clone()),
-                ],
-                Type::Bool,
-            ));
-            parameters.push((column, domain));
+        // A correlated subquery can be interpreted as a dependent join
+        // that executes the subquery once for every tuple in outer:
+        //
+        //        DependentJoin
+        //         +         +
+        //         +         +
+        //    subquery      outer
+        //
+        // As a first step in eliminating the dependent join, we rewrite it as dependent join
+        // that executes the subquery once for every *distinct combination of parameters* in outer,
+        // and then an equi-join that looks up the appropriate row for every tuple in outer:
+        //
+        //             LogicalJoin
+        //              +       +
+        //              +       +
+        //   DependentJoin     outer
+        //    +         +
+        //    +         +
+        // subquery  Project
+        //              +
+        //              +
+        //            outer
+        //
+        // This is a slight improvement because the number of distinct combinations of parameters in outer
+        // is likely much less than the number of tuples in outer,
+        // and it makes the dependent join much easier to manipulate because Project is a set rather than a multiset.
+        // During the rewrite phase, we will take advantage of this to push the dependent join down
+        // until it can be eliminated or converted to an inner join.
+        //
+        //  Project
+        //     +
+        //     +
+        //   outer
+        let project_distinct: Vec<(Column, Column)> = x
+            .parameter_list
+            .iter()
+            .map(|c| {
+                (
+                    Column::from(c.column.get()),
+                    self.create_column(
+                        "$domain".to_string(),
+                        c.column.get().name.get().clone(),
+                        Type::from(c.column.get().r#type.get()),
+                    ),
+                )
+            })
+            .collect();
+        let project = LogicalProject(project_distinct.clone(), outer.clone());
+        for (duplicate, distinct) in &project_distinct {
+            self.correlated.insert(duplicate.id, distinct.clone());
         }
-        let dependent = self.any_resolved_scan(x.subquery.get());
-        let dependent_join = Expr::new(LogicalDependentJoin {
-            left: dependent,
-            right: parameters,
-        });
-        let independent = mem::replace(outer, Expr::new(LogicalSingleGet));
-        match x.subquery_type.get() {
+        //   DependentJoin
+        //    +         +
+        //    +         +
+        // subquery  Project
+        //              +
+        let subquery_parameters: Vec<Column> = project_distinct
+            .iter()
+            .map(|(_, distinct)| distinct.clone())
+            .collect();
+        let subquery = self.any_resolved_scan(x.subquery.get());
+        let dependent_join = LogicalDependentJoin {
+            parameters: subquery_parameters,
+            left: subquery,
+            right: Expr::new(project),
+        };
+        //             LogicalJoin
+        //              +       +
+        //              +       +
+        //   DependentJoin     outer
+        //    +         +
+        let mut natural_join = project_distinct
+            .iter()
+            .map(|(duplicate, distinct)| {
+                Scalar::Call(
+                    Function::Equal,
+                    vec![
+                        Scalar::Column(duplicate.clone()),
+                        Scalar::Column(distinct.clone()),
+                    ],
+                    Type::Bool,
+                )
+            })
+            .collect();
+        let (join, scalar) = match x.subquery_type.get() {
             // Scalar
             0 => {
-                *outer = Expr::new(LogicalJoin(
-                    Join::Single(equi_predicates),
-                    dependent_join,
-                    independent,
-                ));
-                single_column(x.subquery.get())
+                let join = Join::Single(natural_join);
+                let scalar = single_column(x.subquery.get());
+                (join, scalar)
             }
             // Array
             1 => unimplemented!(),
@@ -803,12 +861,9 @@ impl Converter {
             2 => {
                 let mark =
                     self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
-                *outer = Expr::new(LogicalJoin(
-                    Join::Mark(mark.clone(), equi_predicates),
-                    dependent_join,
-                    independent,
-                ));
-                Scalar::Column(mark)
+                let join = Join::Mark(mark.clone(), natural_join);
+                let scalar = Scalar::Column(mark);
+                (join, scalar)
             }
             // In
             3 => {
@@ -820,17 +875,18 @@ impl Converter {
                     other => panic!("{:?}", other),
                 };
                 let check = single_column(x.subquery.get());
-                let in_condition = Scalar::Call(Function::Equal, vec![find, check], Type::Bool);
-                equi_predicates.push(in_condition);
-                *outer = Expr::new(LogicalJoin(
-                    Join::Mark(mark.clone(), equi_predicates),
-                    dependent_join,
-                    independent,
-                ));
-                Scalar::Column(mark)
+                natural_join.push(Scalar::Call(Function::Equal, vec![find, check], Type::Bool));
+                let join = Join::Mark(mark.clone(), natural_join);
+                let scalar = Scalar::Column(mark);
+                (join, scalar)
             }
             other => panic!("{:?}", other),
-        }
+        };
+        let equi_join = LogicalJoin(join, Expr::new(dependent_join), outer.clone());
+        // Push join onto outer.
+        *outer = Expr::new(equi_join);
+        // Return scalar that represents the entire query.
+        scalar
     }
 
     fn create_column(&mut self, table: String, name: String, typ: Type) -> Column {

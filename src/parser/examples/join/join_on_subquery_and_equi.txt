@@ -9,6 +9,12 @@ LogicalMap $query.$col1:1
 				LogicalMap store.store_id
 					Map* store.store_id
 						LogicalGet store
+				LogicalProject
+					LogicalJoin Inner
+						Map* person.person_id
+							LogicalGet person
+						Map* customer.person_id customer.store_id
+							LogicalGet customer
 			LogicalJoin Inner
 				Map* person.person_id
 					LogicalGet person

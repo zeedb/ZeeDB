@@ -77,6 +77,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                 }
                 Operator::LogicalFilter(_, input)
                 | Operator::LogicalMap(_, input)
+                | Operator::LogicalProject(_, input)
                 | Operator::LogicalAggregate { input, .. }
                 | Operator::LogicalLimit { input, .. }
                 | Operator::LogicalSort(_, input)
@@ -97,7 +98,27 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::Delete(_, input) => {
                     self.stack.push(input);
                 }
-                _ => {}
+                Operator::LogicalSingleGet { .. }
+                | Operator::LogicalGet { .. }
+                | Operator::LogicalDependentJoin { .. }
+                | Operator::LogicalGetWith { .. }
+                | Operator::LogicalCreateDatabase { .. }
+                | Operator::LogicalCreateTable { .. }
+                | Operator::LogicalCreateIndex { .. }
+                | Operator::LogicalAlterTable { .. }
+                | Operator::LogicalDrop { .. }
+                | Operator::LogicalRename { .. }
+                | Operator::TableFreeScan { .. }
+                | Operator::SeqScan { .. }
+                | Operator::IndexScan { .. }
+                | Operator::GetTempTable { .. }
+                | Operator::Values { .. }
+                | Operator::CreateDatabase { .. }
+                | Operator::CreateTable { .. }
+                | Operator::CreateIndex { .. }
+                | Operator::AlterTable { .. }
+                | Operator::Drop { .. }
+                | Operator::Rename { .. } => {}
             }
             Some(next)
         } else {

@@ -9,5 +9,8 @@ LogicalMap $query.$col1:1
 				LogicalMap customer.person_id
 					Map* customer.person_id
 						LogicalGet customer
+				LogicalProject
+					Map* person.person_id
+						LogicalGet person
 			Map* person.person_id
 				LogicalGet person
