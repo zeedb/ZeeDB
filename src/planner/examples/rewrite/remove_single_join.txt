@@ -2,11 +2,9 @@ select (select 1) from customer
 
 LogicalMap $query.$col1:$expr_subquery.$col1
 	LogicalJoin Single
-		LogicalDependentJoin
-			LogicalMap $expr_subquery.$col1:1
-				LogicalSingleGet
+		LogicalMap $expr_subquery.$col1:1
 			LogicalProject
-				Map* 
+				Map*
 					LogicalGet customer
-		Map* 
+		Map*
 			LogicalGet customer

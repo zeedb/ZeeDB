@@ -1,5 +1,6 @@
 select * from (select *, store_id + 1 from customer) where store_id = 1
 
-Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(Add customer.store_id 1)
-	Filter* (Equal customer.store_id 1)
-		LogicalGet customer
+LogicalMap $subquery1.$col2:(Add customer.store_id 1)
+	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+		Filter* (Equal customer.store_id 1)
+			LogicalGet customer

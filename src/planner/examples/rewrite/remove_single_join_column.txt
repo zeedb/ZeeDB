@@ -1,0 +1,10 @@
+select (select customer_id) from customer
+
+LogicalMap $query.$col1:$expr_subquery.customer_id
+	LogicalJoin Single (NaturalJoin customer.customer_id)
+		LogicalMap $expr_subquery.customer_id:customer.customer_id
+			LogicalProject customer.customer_id
+				Map* customer.customer_id
+					LogicalGet customer
+		Map* customer.customer_id
+			LogicalGet customer

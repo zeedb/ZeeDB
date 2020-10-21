@@ -26,7 +26,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 predicates,
                 table,
             } => {
-                write!(f, "Map* {}", join_projects(projects))?;
+                write!(f, "Map*")?;
+                for c in projects {
+                    write!(f, " {}", c)?;
+                }
                 newline(f, indent)?;
                 indent += 1;
                 if !predicates.is_empty() {
@@ -70,8 +73,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             }
             Operator::LogicalProject(projects, input) => {
                 write!(f, "{}", self.name())?;
-                for (duplicate, distinct) in projects {
-                    write!(f, " {}:{}", duplicate, distinct)?;
+                for c in projects {
+                    write!(f, " {}", c)?;
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -245,7 +248,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 table,
                 equals,
             } => {
-                write!(f, "Map* {}", join_projects(projects))?;
+                write!(f, "Map*")?;
+                for c in projects {
+                    write!(f, " {}", c)?;
+                }
                 newline(f, indent)?;
                 indent += 1;
                 if !predicates.is_empty() {
@@ -511,6 +517,7 @@ impl fmt::Display for Scalar {
                 }
             }
             Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
+            Scalar::NaturalJoin(column) => write!(f, "(NaturalJoin {})", column),
         }
     }
 }

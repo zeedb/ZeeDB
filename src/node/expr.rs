@@ -1,5 +1,6 @@
 use crate::indent_print::*;
 use crate::operator::*;
+use std::collections::HashSet;
 use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -26,15 +27,6 @@ impl Expr {
         self.0.as_ref()
     }
 
-    pub fn correlated(&self, column: &Column) -> bool {
-        for expr in self.iter() {
-            if expr.0.introduces(column) {
-                return false;
-            }
-        }
-        true
-    }
-
     pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
         let operator = self.0.map(|child| child.bottom_up_rewrite(visitor));
         visitor(Expr::new(operator))
@@ -48,6 +40,15 @@ impl Expr {
 
     pub fn iter(&self) -> ExprIterator {
         ExprIterator { stack: vec![self] }
+    }
+}
+
+impl Scope for Expr {
+    fn attributes(&self) -> HashSet<Column> {
+        self.0.attributes()
+    }
+    fn free(&self, parameters: &Vec<Column>) -> HashSet<Column> {
+        self.0.free(parameters)
     }
 }
 

@@ -3,10 +3,12 @@ set first_name = "Foo"
 where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
-	Map* $update.$expr:Foo
-		Filter* (Equal person.person_id 1)
-			LogicalGet person
+	LogicalMap $update.$expr:Foo
+		Map* person.person_id person.first_name
+			Filter* (Equal person.person_id 1)
+				LogicalGet person
 
 Update person.first_name:$update.$expr
-	Map* $update.$expr:Foo
-		IndexScan person(1:person.person_id)
+	Map $update.$expr:Foo
+		Map* person.person_id person.first_name
+			IndexScan person(1:person.person_id)

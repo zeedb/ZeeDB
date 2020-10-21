@@ -239,7 +239,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         } => {
             // Scan
             cardinality = 1000; // TODO get from LogicalGet or Table
-            for c in &table.columns {
+            for c in projects {
                 if c.name.ends_with("id") {
                     column_unique_cardinality.insert(c.clone(), 1000);
                 } else {
@@ -251,11 +251,6 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             cardinality = apply_selectivity(cardinality, selectivity);
             for (_, n) in column_unique_cardinality.iter_mut() {
                 *n = apply_selectivity(*n, selectivity);
-            }
-            // Map
-            for (x, c) in projects {
-                let n = scalar_unique_cardinality(&x, &column_unique_cardinality);
-                column_unique_cardinality.insert(c.clone(), n);
             }
         }
         LogicalFilter(predicates, input) => {
@@ -410,6 +405,10 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             let right = scalar_unique_cardinality(&args[1], scope) as f64;
             1.0 / left.max(right).max(1.0)
         }
+        Scalar::NaturalJoin(column) => {
+            let card = scalar_unique_cardinality(&Scalar::Column(column.clone()), scope) as f64;
+            1.0 / card.max(1.0)
+        }
         Scalar::Call(Function::Or, args, _) => {
             let left = predicate_selectivity(&args[0], scope);
             let right = predicate_selectivity(&args[1], scope);
@@ -453,6 +452,7 @@ fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> u
             .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),
         Scalar::Call(_, _, _) => 1, // TODO
         Scalar::Cast(value, _) => scalar_unique_cardinality(value, scope),
+        Scalar::NaturalJoin(_) => 2,
     }
 }
 

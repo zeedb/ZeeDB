@@ -1,6 +1,7 @@
 use crate::search_space::*;
 use encoding::*;
 use node::*;
+use std::collections::HashSet;
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Rule {
@@ -504,12 +505,12 @@ fn hash_join(
         if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
             let right_side = arguments.pop().unwrap();
             let left_side = arguments.pop().unwrap();
-            if left_side.columns().all(|c| introduces(ss, left, c))
-                && right_side.columns().all(|c| introduces(ss, right, c))
+            if contains_all(&ss[left], left_side.free())
+                && contains_all(&ss[right], right_side.free())
             {
                 hash_predicates.push((left_side, right_side))
-            } else if right_side.columns().all(|c| introduces(ss, left, c))
-                && left_side.columns().all(|c| introduces(ss, right, c))
+            } else if contains_all(&ss[right], left_side.free())
+                && contains_all(&ss[left], right_side.free())
             {
                 hash_predicates.push((right_side, left_side))
             } else {
@@ -526,19 +527,8 @@ fn hash_join(
     (hash_predicates, remaining_predicates)
 }
 
-fn introduces(ss: &SearchSpace, gid: GroupID, column: &Column) -> bool {
-    // use the first logical expression in the group to check for column
-    let mid = ss[gid].logical[0];
-    // check if the operator at the head of the logical expression introduces column
-    let op = &ss[mid].op;
-    if op.introduces(column) {
-        return true;
-    }
-    // check if any of the inputs to the logical expression introduces column
-    for i in 0..op.len() {
-        if introduces(ss, op[i], column) {
-            return true;
-        }
-    }
-    return false;
+fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
+    columns
+        .iter()
+        .all(|c| group.props.column_unique_cardinality.contains_key(c))
 }

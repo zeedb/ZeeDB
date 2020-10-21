@@ -3,5 +3,5 @@ from person
 
 LogicalMap $aggregate.$agg1
 	LogicalAggregate $aggregate.$agg1:(CountStar)
-		Map* 
+		Map*
 			LogicalGet person

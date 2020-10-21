@@ -24,32 +24,17 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].op {
         TableFreeScan { .. } => 0.0,
-        SeqScan {
-            projects,
-            predicates,
-            ..
-        } => {
-            let output_cardinality = ss[parent].props.cardinality as f64;
+        SeqScan { predicates, .. } => {
             let table_cardinality = 1000 as f64; // TODO table cardinality
             let read_blocks = f64::max(1.0, table_cardinality * TUPLE_SIZE / BLOCK_SIZE);
             let count_predicates = predicates.len() as f64;
-            let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
-            read_blocks * COST_READ_BLOCK
-                + count_predicates * table_cardinality * COST_CPU_PRED
-                + count_exprs * output_cardinality * COST_CPU_EVAL
+            read_blocks * COST_READ_BLOCK + count_predicates * table_cardinality * COST_CPU_PRED
         }
-        IndexScan {
-            projects,
-            predicates,
-            ..
-        } => {
-            let output_cardinality = ss[parent].props.cardinality as f64;
+        IndexScan { predicates, .. } => {
             let index_cardinality = 1 as f64; // TODO real index cardinality
             let count_predicates = predicates.len() as f64;
-            let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
             index_cardinality * COST_READ_BLOCK
                 + count_predicates * index_cardinality * COST_CPU_PRED
-                + count_exprs * output_cardinality * COST_CPU_EVAL
         }
         Filter(predicates, input) => {
             let input = ss[*input].props.cardinality as f64;

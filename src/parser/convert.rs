@@ -1,8 +1,6 @@
 use encoding::*;
 use node::*;
 use std::borrow::Borrow;
-use std::collections::HashMap;
-use std::mem;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
 use zetasql::any_resolved_alter_action_proto::Node::*;
 use zetasql::any_resolved_alter_object_stmt_proto::Node::*;
@@ -23,15 +21,11 @@ pub fn convert(q: &AnyResolvedStatementProto) -> Expr {
 
 struct Converter {
     next_column_id: i64,
-    correlated: HashMap<i64, Column>,
 }
 
 impl Converter {
     fn new() -> Converter {
-        Converter {
-            next_column_id: -1,
-            correlated: HashMap::new(),
-        }
+        Converter { next_column_id: -1 }
     }
 
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
@@ -82,7 +76,7 @@ impl Converter {
             .get()
             .column_list
             .iter()
-            .map(|c| (Scalar::Column(Column::from(c)), Column::from(c)))
+            .map(|c| Column::from(c))
             .collect();
         Expr::new(LogicalGet {
             projects,
@@ -563,12 +557,7 @@ impl Converter {
     }
 
     fn column_ref(&mut self, x: &ResolvedColumnRefProto) -> Column {
-        if x.is_correlated.unwrap_or(false) {
-            let id = x.column.get().column_id.unwrap();
-            self.correlated[&id].clone()
-        } else {
-            Column::from(x.column.get())
-        }
+        Column::from(x.column.get())
     }
 
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
@@ -797,36 +786,20 @@ impl Converter {
         //     +
         //     +
         //   outer
-        let project_distinct: Vec<(Column, Column)> = x
+        let subquery_parameters: Vec<Column> = x
             .parameter_list
             .iter()
-            .map(|c| {
-                (
-                    Column::from(c.column.get()),
-                    self.create_column(
-                        "$domain".to_string(),
-                        c.column.get().name.get().clone(),
-                        Type::from(c.column.get().r#type.get()),
-                    ),
-                )
-            })
+            .map(|c| Column::from(c.column.get()))
             .collect();
-        let project = LogicalProject(project_distinct.clone(), outer.clone());
-        for (duplicate, distinct) in &project_distinct {
-            self.correlated.insert(duplicate.id, distinct.clone());
-        }
+        let project = LogicalProject(subquery_parameters.clone(), outer.clone());
         //   DependentJoin
         //    +         +
         //    +         +
         // subquery  Project
         //              +
-        let subquery_parameters: Vec<Column> = project_distinct
-            .iter()
-            .map(|(_, distinct)| distinct.clone())
-            .collect();
         let subquery = self.any_resolved_scan(x.subquery.get());
         let dependent_join = LogicalDependentJoin {
-            parameters: subquery_parameters,
+            parameters: subquery_parameters.clone(),
             left: subquery,
             right: Expr::new(project),
         };
@@ -835,18 +808,9 @@ impl Converter {
         //              +       +
         //   DependentJoin     outer
         //    +         +
-        let mut natural_join = project_distinct
+        let mut natural_join = subquery_parameters
             .iter()
-            .map(|(duplicate, distinct)| {
-                Scalar::Call(
-                    Function::Equal,
-                    vec![
-                        Scalar::Column(duplicate.clone()),
-                        Scalar::Column(distinct.clone()),
-                    ],
-                    Type::Bool,
-                )
-            })
+            .map(|c| Scalar::NaturalJoin(c.clone()))
             .collect();
         let (join, scalar) = match x.subquery_type.get() {
             // Scalar

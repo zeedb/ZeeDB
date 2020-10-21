@@ -9,7 +9,7 @@ pub enum Operator<T> {
     LogicalSingleGet,
     // LogicalGet(table) implements the FROM clause.
     LogicalGet {
-        projects: Vec<(Scalar, Column)>,
+        projects: Vec<Column>,
         predicates: Vec<Scalar>,
         table: Table,
     },
@@ -19,13 +19,14 @@ pub enum Operator<T> {
     LogicalMap(Vec<(Scalar, Column)>, T),
     LogicalJoin(Join, T, T),
     // LogicalDependentJoin is an inner join that allows the left side of the join to depend on the right side.
+    // The right side is always a LogicalProject.
     LogicalDependentJoin {
         parameters: Vec<Column>,
         left: T,
         right: T,
     },
     // LogicalProject implements the *relational* projection operator, which removes duplicates from a multiset.
-    LogicalProject(Vec<(Column, Column)>, T),
+    LogicalProject(Vec<Column>, T),
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
     LogicalWith(String, Vec<Column>, T, T),
@@ -95,12 +96,12 @@ pub enum Operator<T> {
     },
     TableFreeScan,
     SeqScan {
-        projects: Vec<(Scalar, Column)>,
+        projects: Vec<Column>,
         predicates: Vec<Scalar>,
         table: Table,
     },
     IndexScan {
-        projects: Vec<(Scalar, Column)>,
+        projects: Vec<Column>,
         predicates: Vec<Scalar>,
         table: Table,
         equals: Vec<(Column, Scalar)>,
@@ -230,22 +231,6 @@ impl<T> Operator<T> {
                 "has_side_effecs is not implemented for physical operator {}",
                 self.name()
             ),
-        }
-    }
-
-    pub fn introduces(&self, column: &Column) -> bool {
-        match self {
-            Operator::LogicalGet {
-                projects, table, ..
-            } => projects.iter().any(|(_, c)| c == column) || table.columns.contains(column),
-            Operator::LogicalMap(projects, _) => projects.iter().any(|(_, c)| c == column),
-            Operator::LogicalProject(projects, _) => projects.iter().any(|(_, c)| c == column),
-            Operator::LogicalJoin(Join::Mark(mark, _), _, _) => mark == column,
-            Operator::LogicalGetWith(_, columns) => columns.contains(column),
-            Operator::LogicalAggregate { aggregate, .. } => {
-                aggregate.iter().any(|(_, c)| c == column)
-            }
-            _ => false,
         }
     }
 
@@ -612,6 +597,116 @@ impl<T> ops::Index<usize> for Operator<T> {
     }
 }
 
+pub trait Scope {
+    fn attributes(&self) -> HashSet<Column>;
+    fn free(&self, parameters: &Vec<Column>) -> HashSet<Column>;
+}
+
+impl<T: Scope> Scope for Operator<T> {
+    fn attributes(&self) -> HashSet<Column> {
+        match self {
+            Operator::LogicalGet { projects, .. } => projects.iter().map(|c| c.clone()).collect(),
+            Operator::LogicalMap(projects, ..) => projects.iter().map(|(_, c)| c.clone()).collect(),
+            Operator::LogicalFilter(_, input)
+            | Operator::LogicalWith(_, _, _, input)
+            | Operator::LogicalLimit { input, .. }
+            | Operator::LogicalSort(_, input)
+            | Operator::LogicalUnion(_, input)
+            | Operator::LogicalIntersect(_, input)
+            | Operator::LogicalExcept(_, input)
+            | Operator::LogicalJoin(Join::Semi(_), _, input)
+            | Operator::LogicalJoin(Join::Anti(_), _, input)
+            | Operator::LogicalJoin(Join::Single(_), _, input) => input.attributes(),
+            Operator::LogicalJoin(Join::Mark(mark, _), left, right) => {
+                let mut set = HashSet::new();
+                for c in left.attributes() {
+                    set.insert(c.clone());
+                }
+                for c in right.attributes() {
+                    set.insert(c.clone());
+                }
+                set.insert(mark.clone());
+                set
+            }
+            Operator::LogicalJoin(Join::Inner(_), left, right)
+            | Operator::LogicalJoin(Join::Right(_), left, right)
+            | Operator::LogicalJoin(Join::Outer(_), left, right)
+            | Operator::LogicalDependentJoin { left, right, .. } => {
+                let mut set = HashSet::new();
+                for c in left.attributes() {
+                    set.insert(c.clone());
+                }
+                for c in right.attributes() {
+                    set.insert(c.clone());
+                }
+                set
+            }
+            Operator::LogicalProject(columns, ..)
+            | Operator::LogicalGetWith(_, columns)
+            | Operator::LogicalValues(columns, _, _) => columns.iter().map(|c| c.clone()).collect(),
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+                ..
+            } => {
+                let mut set = HashSet::new();
+                for c in group_by {
+                    set.insert(c.clone());
+                }
+                for (_, c) in aggregate {
+                    set.insert(c.clone());
+                }
+                set
+            }
+            any if any.is_logical() => HashSet::new(),
+            any => unimplemented!(
+                "attributes is not implemented for physical operator {}",
+                any.name()
+            ),
+        }
+    }
+
+    fn free(&self, parameters: &Vec<Column>) -> HashSet<Column> {
+        let mut set = HashSet::new();
+        let mut check = |scalar: &Scalar| {
+            let free = scalar.free();
+            for column in parameters {
+                if free.contains(column) {
+                    set.insert(column.clone());
+                }
+            }
+        };
+        match self {
+            Operator::LogicalGet { predicates, .. } | Operator::LogicalFilter(predicates, _) => {
+                for scalar in predicates {
+                    check(scalar);
+                }
+            }
+            Operator::LogicalMap(projects, _) => {
+                for (scalar, _) in projects {
+                    check(scalar);
+                }
+            }
+            Operator::LogicalValues(_, rows, _) => {
+                for row in rows {
+                    for scalar in row {
+                        check(scalar);
+                    }
+                }
+            }
+            any if any.is_logical() => {}
+            any => unimplemented!(
+                "free is not implemented for physical operator {}",
+                any.name()
+            ),
+        }
+        for i in 0..self.len() {
+            set.extend(self[i].free(parameters));
+        }
+        set
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Join {
     // Inner implements the default SQL join.
@@ -791,6 +886,7 @@ pub enum Scalar {
     Column(Column),
     Call(Function, Vec<Scalar>, encoding::Type),
     Cast(Box<Scalar>, encoding::Type),
+    NaturalJoin(Column),
 }
 
 impl Scalar {
@@ -800,11 +896,32 @@ impl Scalar {
             Scalar::Column(column) => column.typ.clone(),
             Scalar::Call(_, _, returns) => returns.clone(),
             Scalar::Cast(_, typ) => typ.clone(),
+            Scalar::NaturalJoin(column) => column.typ.clone(),
         }
     }
 
-    pub fn columns(&self) -> ColumnIterator {
-        ColumnIterator { stack: vec![self] }
+    pub fn free(&self) -> HashSet<Column> {
+        let mut free = HashSet::new();
+        self.collect_free(&mut free);
+        free
+    }
+
+    fn collect_free(&self, free: &mut HashSet<Column>) {
+        match self {
+            Scalar::Literal(_, _) => {}
+            Scalar::Column(column) => {
+                free.insert(column.clone());
+            }
+            Scalar::Call(_, arguments, _) => {
+                for a in arguments {
+                    a.collect_free(free);
+                }
+            }
+            Scalar::Cast(scalar, _) => scalar.collect_free(free),
+            Scalar::NaturalJoin(column) => {
+                free.insert(column.clone());
+            }
+        }
     }
 
     pub fn inline(&self, expr: &Scalar, column: &Column) -> Scalar {
@@ -820,6 +937,9 @@ impl Scalar {
             Scalar::Cast(uncast, typ) => {
                 Scalar::Cast(Box::new(uncast.inline(expr, column)), typ.clone())
             }
+            Scalar::NaturalJoin(c) if c == column => {
+                Scalar::Literal(encoding::Value::Bool(true), encoding::Type::Bool)
+            }
             _ => self.clone(),
         }
     }
@@ -828,34 +948,6 @@ impl Scalar {
         match self {
             Scalar::Column(c) => c == column,
             _ => false,
-        }
-    }
-}
-
-pub struct ColumnIterator<'it> {
-    stack: Vec<&'it Scalar>,
-}
-
-impl<'it> Iterator for ColumnIterator<'it> {
-    type Item = &'it Column;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.stack.pop() {
-                None => return None,
-                Some(Scalar::Literal(_, _)) => continue,
-                Some(Scalar::Column(column)) => return Some(column),
-                Some(Scalar::Cast(scalar, _)) => {
-                    self.stack.push(scalar);
-                    continue;
-                }
-                Some(Scalar::Call(_, arguments, _)) => {
-                    for a in arguments {
-                        self.stack.push(a);
-                    }
-                    continue;
-                }
-            }
         }
     }
 }

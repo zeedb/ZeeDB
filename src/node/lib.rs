@@ -3,8 +3,6 @@ mod expr;
 mod expr_tests;
 mod indent_print;
 mod operator;
-#[cfg(test)]
-mod operator_tests;
 
 pub use expr::*;
 pub use indent_print::*;
