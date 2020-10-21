@@ -752,6 +752,7 @@ impl Converter {
         Scalar::Cast(Box::new(self.expr(expr, outer)), Type::from(ty))
     }
 
+    // TODO alternative, simpler path for uncorrelated subqueries
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
         // A correlated subquery can be interpreted as a dependent join
         // that executes the subquery once for every tuple in outer:

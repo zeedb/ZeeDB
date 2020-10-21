@@ -292,15 +292,16 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             for (c, n) in &ss[*right].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
+            // Mark join projects the $mark attribute
+            if let Join::Mark(mark, _) = join {
+                column_unique_cardinality.insert(mark.clone(), 2);
+            }
             // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
-            match join {
-                Join::Semi(_) | Join::Anti(_) => {
-                    cardinality = apply_selectivity(cardinality, 0.5);
-                    for (_, n) in column_unique_cardinality.iter_mut() {
-                        *n = apply_selectivity(*n, 0.5);
-                    }
+            if let Join::Semi(_) | Join::Anti(_) = join {
+                cardinality = apply_selectivity(cardinality, 0.5);
+                for (_, n) in column_unique_cardinality.iter_mut() {
+                    *n = apply_selectivity(*n, 0.5);
                 }
-                _ => {}
             }
         }
         LogicalDependentJoin { .. } => todo!(),

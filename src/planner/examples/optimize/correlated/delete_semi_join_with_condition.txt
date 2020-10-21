@@ -2,7 +2,7 @@ delete customer
 where person_id in (select person_id from customer where account_number = 0)
 
 Delete customer
-	Map $mark.$in:true
+	Map $mark.$in:true customer.person_id customer.person_id
 		HashJoin Semi customer.person_id=customer.person_id
 			Map customer.person_id
 				NestedLoop Inner

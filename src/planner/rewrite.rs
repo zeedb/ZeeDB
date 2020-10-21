@@ -25,6 +25,7 @@ enum RewriteRule {
     PushImplicitFilterThroughInnerJoin,
     PushExplicitFilterThroughRightJoin,
     PushImplicitFilterThroughRightJoin,
+    PushExplicitFilterThroughSemiJoin,
     PushFilterThroughProject,
     CombineConsecutiveFilters,
     EmbedFilterIntoGet,
@@ -242,16 +243,23 @@ impl RewriteRule {
                         let mut filter_predicates = filter_predicates.clone();
                         let semi = Scalar::Column(mark.clone());
                         let anti = Scalar::Call(Function::Not, vec![semi.clone()], Type::Bool);
+                        let mut combined_attributes = vec![];
+                        for c in left.attributes() {
+                            combined_attributes.push((Scalar::Column(c.clone()), c));
+                        }
+                        for c in right.attributes() {
+                            combined_attributes.push((Scalar::Column(c.clone()), c));
+                        }
+                        combined_attributes
+                            .push((Scalar::Literal(Value::Bool(true), Type::Bool), mark.clone()));
+                        combined_attributes.sort_by_key(|(_, c)| c.id);
                         for i in 0..filter_predicates.len() {
                             if filter_predicates[i] == semi {
                                 filter_predicates.remove(i);
                                 return Some(maybe_filter(
                                     filter_predicates,
                                     Expr::new(LogicalMap(
-                                        vec![(
-                                            Scalar::Literal(Value::Bool(true), Type::Bool),
-                                            mark.clone(),
-                                        )],
+                                        combined_attributes,
                                         Expr::new(LogicalJoin(
                                             Join::Semi(join_predicates.clone()),
                                             left.clone(),
@@ -264,10 +272,7 @@ impl RewriteRule {
                                 return Some(maybe_filter(
                                     filter_predicates,
                                     Expr::new(LogicalMap(
-                                        vec![(
-                                            Scalar::Literal(Value::Bool(true), Type::Bool),
-                                            mark.clone(),
-                                        )],
+                                        combined_attributes,
                                         Expr::new(LogicalJoin(
                                             Join::Anti(join_predicates.clone()),
                                             left.clone(),
@@ -347,6 +352,37 @@ impl RewriteRule {
             RewriteRule::PushImplicitFilterThroughRightJoin => {
                 if let LogicalJoin(Join::Right(join_predicates), left, right) = expr.as_ref() {
                     return push_implicit_filter_through_right_join(join_predicates, left, right);
+                }
+            }
+            RewriteRule::PushExplicitFilterThroughSemiJoin => {
+                if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
+                    if let LogicalJoin(join, left, right) = input.as_ref() {
+                        if let Join::Semi(_) | Join::Anti(_) | Join::Mark(_, _) | Join::Single(_) =
+                            join
+                        {
+                            let mut outer = vec![];
+                            let mut inner = vec![];
+                            let right_attributes = right.attributes();
+                            for p in filter_predicates {
+                                if p.free().is_subset(&right_attributes) {
+                                    inner.push(p.clone());
+                                } else {
+                                    outer.push(p.clone());
+                                }
+                            }
+                            if inner.is_empty() {
+                                return None;
+                            }
+                            return Some(maybe_filter(
+                                outer,
+                                Expr::new(LogicalJoin(
+                                    join.clone(),
+                                    left.clone(),
+                                    Expr::new(LogicalFilter(inner, right.clone())),
+                                )),
+                            ));
+                        }
+                    }
                 }
             }
             RewriteRule::PushFilterThroughProject => {
@@ -830,8 +866,8 @@ fn apply_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
 }
 pub fn rewrite(expr: Expr) -> Expr {
     let expr = unnest_all(expr);
-    let expr = optimize_join_type(expr);
     let expr = predicate_push_down(expr);
+    let expr = optimize_join_type(expr);
     let expr = projection_push_down(expr);
     expr
 }
@@ -885,6 +921,7 @@ fn predicate_push_down(expr: Expr) -> Expr {
                 RewriteRule::PushImplicitFilterThroughInnerJoin,
                 RewriteRule::PushExplicitFilterThroughRightJoin,
                 RewriteRule::PushImplicitFilterThroughRightJoin,
+                RewriteRule::PushExplicitFilterThroughSemiJoin,
                 RewriteRule::PushFilterThroughProject,
                 RewriteRule::CombineConsecutiveFilters,
                 RewriteRule::EmbedFilterIntoGet,

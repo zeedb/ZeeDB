@@ -4,19 +4,18 @@ where person.person_id = customer.person_id
 and customer.store_id in (select store_id from store)
 
 Map $query.$col1:1
-	Filter (Equal person.person_id customer.person_id)
-		HashJoin Semi store.store_id=customer.store_id
-			NestedLoop Inner
-				Project
-					NestedLoop Inner
-						Map* customer.person_id customer.store_id
-							SeqScan customer
-						Map* person.person_id
-							SeqScan person
-				Map* store.store_id
-					SeqScan store
-			NestedLoop Inner
-				Map* customer.person_id customer.store_id
-					SeqScan customer
-				Map* person.person_id
-					SeqScan person
+	HashJoin Semi store.store_id=customer.store_id
+		NestedLoop Inner
+			Project
+				NestedLoop Inner
+					Map* customer.person_id customer.store_id
+						SeqScan customer
+					Map* person.person_id
+						SeqScan person
+			Map* store.store_id
+				SeqScan store
+		HashJoin Inner customer.person_id=person.person_id
+			Map* customer.person_id customer.store_id
+				SeqScan customer
+			Map* person.person_id
+				SeqScan person

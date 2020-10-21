@@ -82,7 +82,6 @@ fn test_optimize() {
         "#,
         errors
     );
-
     ok!(
         "examples/optimize/join_left_index_scan.txt",
         r#"
