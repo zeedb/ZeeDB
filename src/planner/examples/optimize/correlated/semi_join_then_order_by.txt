@@ -1,0 +1,16 @@
+select first_name
+from person
+where person_id in (select person_id from customer) order by modified_date limit 10
+
+Limit 10 0
+	Sort person.modified_date
+		Map $mark.$in:true
+			HashJoin Semi customer.person_id=person.person_id
+				NestedLoop Inner
+					Project
+						Map* person.person_id person.first_name person.modified_date
+							SeqScan person
+					Map* customer.person_id
+						SeqScan customer
+				Map* person.person_id person.first_name person.modified_date
+					SeqScan person

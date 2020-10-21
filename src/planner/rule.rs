@@ -13,10 +13,11 @@ pub enum Rule {
     LogicalGetToSeqScan,
     LogicalGetToIndexScan,
     LogicalFilterToFilter,
-    LogicalProjectToProject,
+    LogicalMapToMap,
     LogicalJoinToNestedLoop,
     LogicalJoinToHashJoin,
     LogicalAggregateToAggregate,
+    LogicalProjectToProject,
     LogicalLimitToLimit,
     LogicalSortToSort,
     LogicallUnionToUnion,
@@ -43,10 +44,11 @@ impl Rule {
             | Rule::LogicalGetToSeqScan
             | Rule::LogicalGetToIndexScan
             | Rule::LogicalFilterToFilter
-            | Rule::LogicalProjectToProject
+            | Rule::LogicalMapToMap
             | Rule::LogicalJoinToNestedLoop
             | Rule::LogicalJoinToHashJoin
             | Rule::LogicalAggregateToAggregate
+            | Rule::LogicalProjectToProject
             | Rule::LogicalLimitToLimit
             | Rule::LogicalSortToSort
             | Rule::LogicallUnionToUnion
@@ -81,10 +83,11 @@ impl Rule {
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
-            | (Rule::LogicalProjectToProject, LogicalMap(_, _))
+            | (Rule::LogicalMapToMap, LogicalMap(_, _))
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin(_, _, _))
             | (Rule::LogicalJoinToHashJoin, LogicalJoin(_, _, _))
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
+            | (Rule::LogicalProjectToProject, LogicalProject { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort(_, _))
             | (Rule::LogicallUnionToUnion, LogicalUnion(_, _))
@@ -239,7 +242,7 @@ impl Rule {
                     return Some(Filter(predicates, input));
                 }
             }
-            Rule::LogicalProjectToProject => {
+            Rule::LogicalMapToMap => {
                 if let LogicalMap(projects, input) = bind {
                     return Some(Map(projects, input));
                 }
@@ -317,6 +320,11 @@ impl Rule {
                         aggregate,
                         input,
                     });
+                }
+            }
+            Rule::LogicalProjectToProject => {
+                if let LogicalProject(projects, input) = bind {
+                    return Some(Project { projects, input });
                 }
             }
             Rule::LogicalLimitToLimit => {
@@ -440,10 +448,11 @@ impl Rule {
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,
             Rule::LogicalFilterToFilter,
-            Rule::LogicalProjectToProject,
+            Rule::LogicalMapToMap,
             Rule::LogicalJoinToNestedLoop,
             Rule::LogicalJoinToHashJoin,
             Rule::LogicalAggregateToAggregate,
+            Rule::LogicalProjectToProject,
             Rule::LogicalLimitToLimit,
             Rule::LogicalSortToSort,
             Rule::LogicallUnionToUnion,

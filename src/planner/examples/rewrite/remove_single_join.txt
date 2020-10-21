@@ -1,4 +1,5 @@
-select (select 1) from customer
+select (select 1) 
+from customer
 
 LogicalMap $query.$col1:$expr_subquery.$col1
 	LogicalJoin Single

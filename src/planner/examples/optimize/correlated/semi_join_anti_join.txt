@@ -1,0 +1,32 @@
+select 1 from customer
+where exists (select 1 from person where person.person_id = customer.person_id)
+and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
+
+Map $query.$col1:1
+	Filter $mark.$exists
+		NestedLoop Anti (NaturalJoin customer.store_id) (NaturalJoin customer.modified_date)
+			Map $expr_subquery.$col1:1 customer.store_id customer.modified_date
+				HashJoin Inner (Greater customer.modified_date store.modified_date) customer.store_id=store.store_id
+					Project customer.store_id customer.modified_date
+						NestedLoop Mark $mark.$exists (NaturalJoin customer.person_id)
+							Map $expr_subquery.$col1:1 customer.person_id
+								HashJoin Inner customer.person_id=person.person_id
+									Project customer.person_id
+										Map* customer.person_id customer.store_id customer.modified_date
+											SeqScan customer
+									Map* person.person_id
+										SeqScan person
+							Map* customer.person_id customer.store_id customer.modified_date
+								SeqScan customer
+					Map* store.store_id store.modified_date
+						SeqScan store
+			NestedLoop Mark $mark.$exists (NaturalJoin customer.person_id)
+				Map $expr_subquery.$col1:1 customer.person_id
+					HashJoin Inner customer.person_id=person.person_id
+						Project customer.person_id
+							Map* customer.person_id customer.store_id customer.modified_date
+								SeqScan customer
+						Map* person.person_id
+							SeqScan person
+				Map* customer.person_id customer.store_id customer.modified_date
+					SeqScan customer

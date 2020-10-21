@@ -1,4 +1,4 @@
-insert into person (person_id, first_name, last_name, modified_date) 
+insert into person (person_id, first_name, last_name, modified_date)
 values (1, "Foo", "Bar", current_timestamp())
 
 Insert person person.person_id person.first_name person.last_name person.modified_date

@@ -1,0 +1,14 @@
+delete person
+where person_id in (select person_id from customer)
+
+Delete person
+	Map $mark.$in:true
+		HashJoin Semi customer.person_id=person.person_id
+			NestedLoop Inner
+				Project
+					Map* person.person_id
+						SeqScan person
+				Map* customer.person_id
+					SeqScan customer
+			Map* person.person_id
+				SeqScan person

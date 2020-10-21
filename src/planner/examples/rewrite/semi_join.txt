@@ -1,8 +1,10 @@
-select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
+select 1 
+from person 
+where exists (select 1 from customer where customer.person_id = person.person_id)
 
 LogicalMap $query.$col1:1
 	LogicalJoin Semi (NaturalJoin person.person_id)
-		LogicalMap $expr_subquery.$col1:1
+		LogicalMap $expr_subquery.$col1:1 person.person_id
 			LogicalJoin Inner (Equal customer.person_id person.person_id)
 				Map* customer.person_id
 					LogicalGet customer

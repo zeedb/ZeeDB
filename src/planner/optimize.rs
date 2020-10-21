@@ -235,7 +235,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         LogicalGet {
             projects,
             predicates,
-            table,
+            ..
         } => {
             // Scan
             cardinality = 1000; // TODO get from LogicalGet or Table
@@ -268,6 +268,15 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), n);
             }
         }
+        LogicalProject(projects, input) => {
+            cardinality = 1;
+            for c in projects {
+                let n = ss[*input].props.column_unique_cardinality[c];
+                column_unique_cardinality.insert(c.clone(), n);
+                cardinality *= n;
+            }
+            cardinality = ss[*input].props.cardinality.min(cardinality);
+        }
         LogicalJoin(join, left, right) => {
             let mut scope = HashMap::new();
             for (c, n) in &ss[*left].props.column_unique_cardinality {
@@ -295,11 +304,11 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             }
         }
         LogicalDependentJoin { .. } => todo!(),
-        LogicalWith(name, _, _, right) => {
+        LogicalWith(_, _, _, right) => {
             cardinality = ss[*right].props.cardinality;
             column_unique_cardinality = ss[*right].props.column_unique_cardinality.clone();
         }
-        LogicalGetWith(name, columns) => {
+        LogicalGetWith(_, columns) => {
             cardinality = 1000; // TODO get from catalog somehow
             for c in columns {
                 column_unique_cardinality.insert(c.clone(), cardinality);
@@ -312,7 +321,11 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         } => {
             cardinality = 1;
             for c in group_by {
-                let n = ss[*input].props.column_unique_cardinality[&c];
+                let n = *ss[*input]
+                    .props
+                    .column_unique_cardinality
+                    .get(c)
+                    .unwrap_or_else(|| panic!("no column {} in {} {:?}", c, input.0, ss));
                 column_unique_cardinality.insert(c.clone(), n);
                 cardinality *= n;
             }
@@ -320,11 +333,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), cardinality);
             }
         }
-        LogicalLimit {
-            limit,
-            offset,
-            input,
-        } => {
+        LogicalLimit { limit, input, .. } => {
             cardinality = *limit;
             for (c, n) in &ss[*input].props.column_unique_cardinality {
                 if *limit < *n {
@@ -346,7 +355,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             );
         }
         LogicalIntersect(left, right) => todo!("intersect"),
-        LogicalExcept(left, right) => {
+        LogicalExcept(left, _) => {
             cardinality = ss[*left].props.cardinality;
             column_unique_cardinality = ss[*left].props.column_unique_cardinality.clone();
         }
@@ -360,7 +369,11 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         | LogicalAlterTable { .. }
         | LogicalDrop { .. }
         | LogicalRename { .. } => {}
-        _ => panic!(),
+        op if !op.is_logical() => panic!(
+            "tried to compute logical props of physical operator {}",
+            op.name()
+        ),
+        op => panic!("tried to compute logical props of {}", op.name()),
     };
     LogicalProps {
         cardinality,
@@ -382,7 +395,10 @@ fn init_costs_using_lower_bound(ss: &SearchSpace, mid: MultiExprID) -> Vec<Cost>
 }
 
 fn winner(ss: &SearchSpace, gid: GroupID) -> Expr {
-    let mid = ss[gid].winner.unwrap().plan;
+    let mid = ss[gid]
+        .winner
+        .unwrap_or_else(|| panic!("group {} has no winner {:?}", gid.0, ss))
+        .plan;
     Expr(Box::new(ss[mid].op.clone().map(|gid| winner(ss, gid))))
 }
 
@@ -419,6 +435,7 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
         | Scalar::Call(Function::LessOrEqual, _, _)
         | Scalar::Call(Function::Greater, _, _)
         | Scalar::Call(Function::GreaterOrEqual, _, _) => 1.0,
+        Scalar::Call(Function::Like, _, _) => 0.5,
         Scalar::Call(_, _, _) => todo!("{}", predicate),
         Scalar::Cast(_, _) => 0.5,
     }

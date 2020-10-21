@@ -1,5 +1,5 @@
-update customer 
-set account_number = default 
+update customer
+set account_number = default
 where person_id = 1
 
 Update customer.account_number:_

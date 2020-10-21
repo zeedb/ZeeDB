@@ -1,5 +1,5 @@
-select customer.customer_id, store.store_id 
-from customer 
+select customer.customer_id, store.store_id
+from customer
 full outer join store on customer.store_id = store.store_id
 
 Map customer.customer_id store.store_id

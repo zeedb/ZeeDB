@@ -26,17 +26,16 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 predicates,
                 table,
             } => {
-                write!(f, "Map*")?;
-                for c in projects {
-                    write!(f, " {}", c)?;
-                }
-                newline(f, indent)?;
-                indent += 1;
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(predicates))?;
                     newline(f, indent)?;
                     indent += 1;
                 }
+                write!(f, "Map*")?;
+                for c in projects {
+                    write!(f, " {}", c)?;
+                }
+                newline(f, indent)?;
                 write!(f, "{} {}", self.name(), table.name)?;
                 Ok(())
             }
@@ -248,17 +247,16 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 table,
                 equals,
             } => {
-                write!(f, "Map*")?;
-                for c in projects {
-                    write!(f, " {}", c)?;
-                }
-                newline(f, indent)?;
-                indent += 1;
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(predicates))?;
                     newline(f, indent)?;
                     indent += 1;
                 }
+                write!(f, "Map*")?;
+                for c in projects {
+                    write!(f, " {}", c)?;
+                }
+                newline(f, indent)?;
                 write!(
                     f,
                     "{} {}({})",
@@ -299,6 +297,14 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 }
                 for (aggregate, column) in aggregate {
                     write!(f, " {}:{}", column, aggregate)?;
+                }
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
+            }
+            Operator::Project { projects, input } => {
+                write!(f, "{}", self.name())?;
+                for column in projects {
+                    write!(f, " {}", column)?;
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -464,6 +470,7 @@ impl<T> Operator<T> {
             Operator::CreateTempTable { .. } => "CreateTempTable".to_string(),
             Operator::GetTempTable { .. } => "GetTempTable".to_string(),
             Operator::Aggregate { .. } => "Aggregate".to_string(),
+            Operator::Project { .. } => "Project".to_string(),
             Operator::Limit { .. } => "Limit".to_string(),
             Operator::Sort { .. } => "Sort".to_string(),
             Operator::Union { .. } => "Union".to_string(),

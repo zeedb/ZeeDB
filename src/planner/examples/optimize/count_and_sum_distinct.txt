@@ -1,8 +1,7 @@
-select count(distinct account_number), sum(distinct account_number) 
+select count(distinct account_number), sum(distinct account_number)
 from customer
 
-Map $aggregate.$agg1 $aggregate.$agg2
-	Aggregate $aggregate.$agg1:(Count (Distinct $proj.$count)) $aggregate.$agg2:(Sum (Distinct $proj.$sum))
-		Map $proj.$count:customer.account_number $proj.$sum:customer.account_number
-			Map* customer.account_number
-				SeqScan customer
+Aggregate $aggregate.$agg1:(Count (Distinct $proj.$count)) $aggregate.$agg2:(Sum (Distinct $proj.$sum))
+	Map $proj.$count:customer.account_number $proj.$sum:customer.account_number
+		Map* customer.account_number
+			SeqScan customer

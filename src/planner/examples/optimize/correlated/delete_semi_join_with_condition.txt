@@ -1,0 +1,16 @@
+delete customer
+where person_id in (select person_id from customer where account_number = 0)
+
+Delete customer
+	Map $mark.$in:true
+		HashJoin Semi customer.person_id=customer.person_id
+			Map customer.person_id
+				NestedLoop Inner
+					Project
+						Map* customer.person_id
+							SeqScan customer
+					Filter* (Equal customer.account_number 0)
+						Map* customer.person_id customer.account_number
+							SeqScan customer
+			Map* customer.person_id
+				SeqScan customer

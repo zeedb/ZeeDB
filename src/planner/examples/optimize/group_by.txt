@@ -1,9 +1,8 @@
-select store_id 
-from customer 
+select store_id
+from customer
 group by 1
 
-Map $groupby.store_id
-	Aggregate $groupby.store_id
-		Map $groupby.store_id:customer.store_id
-			Map* customer.store_id
-				SeqScan customer
+Project $groupby.store_id
+	Map $groupby.store_id:customer.store_id
+		Map* customer.store_id
+			SeqScan customer

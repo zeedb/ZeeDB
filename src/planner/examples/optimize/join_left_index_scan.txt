@@ -1,10 +1,9 @@
-select customer.customer_id, store.store_id 
-from customer, store 
+select customer.customer_id, store.store_id
+from customer, store
 where customer.customer_id = 1
 
-Map customer.customer_id store.store_id
-	NestedLoop Inner
-		Map* customer.customer_id
-			IndexScan customer(1:customer.customer_id)
-		Map* store.store_id
-			SeqScan store
+NestedLoop Inner
+	Map* customer.customer_id
+		IndexScan customer(1:customer.customer_id)
+	Map* store.store_id
+		SeqScan store

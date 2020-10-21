@@ -1,0 +1,15 @@
+select 1
+from person
+where person_id in (select person_id from customer where person.modified_date = customer.modified_date)
+
+Map $query.$col1:1
+	HashJoin Semi (NaturalJoin person.modified_date) customer.person_id=person.person_id
+		Map customer.person_id person.modified_date
+			HashJoin Inner person.modified_date=customer.modified_date
+				Project person.modified_date
+					Map* person.person_id person.modified_date
+						SeqScan person
+				Map* customer.person_id customer.modified_date
+					SeqScan customer
+		Map* person.person_id person.modified_date
+			SeqScan person

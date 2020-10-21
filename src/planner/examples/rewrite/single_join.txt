@@ -1,17 +1,18 @@
-select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) from customer
+select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) 
+from customer
 
 LogicalMap $query.$col1:store.name $query.$col2:person.first_name
 	LogicalJoin Single (NaturalJoin customer.person_id)
-		LogicalMap person.first_name
+		LogicalMap person.first_name customer.person_id
 			LogicalJoin Inner (Equal person.person_id customer.person_id)
 				Map* person.person_id person.first_name
 					LogicalGet person
 				LogicalProject customer.person_id
 					LogicalJoin Single (NaturalJoin customer.customer_id)
-						LogicalMap store.name
+						LogicalMap store.name customer.customer_id
 							LogicalJoin Inner (Equal store.store_id customer.customer_id)
-								Map* store.store_id store.name
-									Filter* (Like store.name A%)
+								Filter* (Like store.name A%)
+									Map* store.store_id store.name
 										LogicalGet store
 								LogicalProject customer.customer_id
 									Map* customer.customer_id customer.person_id
@@ -19,10 +20,10 @@ LogicalMap $query.$col1:store.name $query.$col2:person.first_name
 						Map* customer.customer_id customer.person_id
 							LogicalGet customer
 		LogicalJoin Single (NaturalJoin customer.customer_id)
-			LogicalMap store.name
+			LogicalMap store.name customer.customer_id
 				LogicalJoin Inner (Equal store.store_id customer.customer_id)
-					Map* store.store_id store.name
-						Filter* (Like store.name A%)
+					Filter* (Like store.name A%)
+						Map* store.store_id store.name
 							LogicalGet store
 					LogicalProject customer.customer_id
 						Map* customer.customer_id customer.person_id

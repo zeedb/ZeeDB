@@ -1,4 +1,4 @@
-create table foo (person_id int64 primary key, store_id int64) as 
+create table foo (person_id int64 primary key, store_id int64) as
 select person_id, store_id from customer
 
 CreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)

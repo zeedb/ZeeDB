@@ -1,6 +1,6 @@
-with foo as (select customer_id, store_id from customer) 
-select f1.customer_id, f2.customer_id 
-from foo f1, foo f2 
+with foo as (select customer_id, store_id from customer)
+select f1.customer_id, f2.customer_id
+from foo f1, foo f2
 where f1.store_id = f2.store_id
 
 CreateTempTable foo

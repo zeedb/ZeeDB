@@ -1,5 +1,5 @@
-update person 
-set first_name = "Foo" 
+update person
+set first_name = "Foo"
 where person_id = 1
 
 Update person.first_name:$update.$expr

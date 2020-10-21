@@ -5,10 +5,6 @@ use node::*;
 enum RewriteRule {
     // Unnest meta rule:
     PushDependentJoin,
-    MarkJoinToSemiJoin,
-    SingleJoinToInnerJoin,
-    RemoveInnerJoin,
-    RemoveWith,
     // Unnesting implementation rules:
     PushDependentJoinThroughFilter,
     PushDependentJoinThroughMap,
@@ -19,7 +15,11 @@ enum RewriteRule {
     PushDependentJoinThroughSort,
     PushDependentJoinThroughSetOperation,
     DependentJoinToInnerJoin,
-    // Join simplification:
+    // Optimize joins:
+    MarkJoinToSemiJoin,
+    SingleJoinToInnerJoin,
+    RemoveInnerJoin,
+    RemoveWith,
     // Predicate pushdown:
     PushExplicitFilterThroughInnerJoin,
     PushImplicitFilterThroughInnerJoin,
@@ -28,9 +28,11 @@ enum RewriteRule {
     PushFilterThroughProject,
     CombineConsecutiveFilters,
     EmbedFilterIntoGet,
-    // Projection simplification:
+    // Optimize projections:
     CombineConsecutiveProjects,
     EmbedProjectIntoGet,
+    AggregateToProject,
+    RemoveMap,
 }
 
 impl RewriteRule {
@@ -64,8 +66,14 @@ impl RewriteRule {
                 } = expr.as_ref()
                 {
                     if let LogicalMap(projects, subquery) = subquery.as_ref() {
+                        let mut projects = projects.clone();
+                        for p in parameters {
+                            if !projects.iter().any(|(_, c)| c == p) {
+                                projects.push((Scalar::Column(p.clone()), p.clone()));
+                            }
+                        }
                         return Some(Expr::new(LogicalMap(
-                            projects.clone(),
+                            projects,
                             push_dependent_join(parameters, subquery, domain),
                         )));
                     }
@@ -378,9 +386,32 @@ impl RewriteRule {
             }
             RewriteRule::CombineConsecutiveProjects => {
                 if let LogicalMap(outer, input) = expr.as_ref() {
+                    // Map(x, Map(y, _)) => Map(x & y, _)
                     if let LogicalMap(inner, input) = input.as_ref() {
-                        let combined = inline_all(outer, inner);
-                        return Some(Expr::new(LogicalMap(combined, input.clone())));
+                        let mut inlined = vec![];
+                        for (outer_expr, outer_column) in outer {
+                            let mut outer_expr = outer_expr.clone();
+                            for (inner_expr, inner_column) in inner {
+                                outer_expr = outer_expr.inline(inner_expr, inner_column);
+                            }
+                            inlined.push((outer_expr, outer_column.clone()));
+                        }
+                        return Some(Expr::new(LogicalMap(inlined, input.clone())));
+                    }
+                }
+                if let LogicalProject(outer, input) = expr.as_ref() {
+                    // Project(x, Map(y, _)) => Project(x, _) if y in x
+                    if let LogicalMap(inner, input) = input.as_ref() {
+                        if inner
+                            .iter()
+                            .all(|(x, c)| x.is_just(c) || !outer.contains(c))
+                        {
+                            return Some(Expr::new(LogicalProject(outer.clone(), input.clone())));
+                        }
+                    }
+                    // Project(x, Project(y, _)) => Project(x, _)
+                    if let LogicalProject(_, input) = input.as_ref() {
+                        return Some(Expr::new(LogicalProject(outer.clone(), input.clone())));
                     }
                 }
             }
@@ -392,34 +423,41 @@ impl RewriteRule {
                         table,
                     } = input.as_ref()
                     {
-                        let mut stuck = vec![];
-                        let mut inner = inner.clone();
+                        let mut combined = inner.clone();
                         for (x, c) in outer {
-                            // TODO in theory we can do renaming in the Get operator
-                            if x.is_just(c) {
-                                if !inner.contains(c) {
-                                    inner.push(c.clone());
-                                }
-                            } else {
-                                stuck.push((x.clone(), c.clone()));
+                            if !x.is_just(c) {
+                                return None;
+                            }
+                            if !combined.contains(c) {
+                                combined.push(c.clone());
                             }
                         }
-                        if stuck.is_empty() {
-                            return Some(Expr::new(LogicalGet {
-                                projects: inner,
-                                predicates: predicates.clone(),
-                                table: table.clone(),
-                            }));
-                        } else if stuck.len() < outer.len() {
-                            return Some(Expr::new(LogicalMap(
-                                stuck,
-                                Expr::new(LogicalGet {
-                                    projects: inner,
-                                    predicates: predicates.clone(),
-                                    table: table.clone(),
-                                }),
-                            )));
-                        }
+                        return Some(Expr::new(LogicalGet {
+                            projects: combined,
+                            predicates: predicates.clone(),
+                            table: table.clone(),
+                        }));
+                    }
+                }
+            }
+            RewriteRule::AggregateToProject => {
+                if let LogicalAggregate {
+                    group_by,
+                    aggregate,
+                    input,
+                } = expr.as_ref()
+                {
+                    if aggregate.is_empty() {
+                        return Some(Expr::new(LogicalProject(group_by.clone(), input.clone())));
+                    }
+                }
+            }
+            RewriteRule::RemoveMap => {
+                if let LogicalMap(projects, input) = expr.as_ref() {
+                    if projects.len() == input.attributes().len()
+                        && projects.iter().all(|(x, c)| x.is_just(c))
+                    {
+                        return Some(input.clone());
                     }
                 }
             }
@@ -448,8 +486,29 @@ pub fn free_parameters(parameters: &Vec<Column>, subquery: &Expr) -> Vec<Column>
 fn prove_singleton(expr: &Expr) -> bool {
     match expr.as_ref() {
         LogicalMap(_, input) => prove_singleton(input),
+        LogicalProject(projects, input)
+        | LogicalAggregate {
+            group_by: projects,
+            input,
+            ..
+        } => {
+            if projects.is_empty() {
+                prove_non_empty(input)
+            } else {
+                prove_singleton(input)
+            }
+        }
         LogicalSingleGet => true,
-        LogicalAggregate { group_by, .. } => group_by.is_empty(),
+        _ => false,
+    }
+}
+
+fn prove_non_empty(expr: &Expr) -> bool {
+    match expr.as_ref() {
+        LogicalMap(_, input) | LogicalProject(_, input) | LogicalAggregate { input, .. } => {
+            prove_non_empty(input)
+        }
+        LogicalSingleGet => true,
         _ => false,
     }
 }
@@ -457,11 +516,10 @@ fn prove_singleton(expr: &Expr) -> bool {
 fn remove_inner_join_left(left: Expr, right: Expr) -> Option<Expr> {
     match *left.0 {
         LogicalMap(projects, left) => {
-            remove_inner_join_left(left, Expr::new(LogicalMap(projects, right)))
+            remove_inner_join_left(left, right).map(|left| Expr::new(LogicalMap(projects, left)))
         }
-        LogicalProject(projects, left) => {
-            remove_inner_join_left(left, Expr::new(LogicalProject(projects, right)))
-        }
+        LogicalProject(projects, left) => remove_inner_join_left(left, right)
+            .map(|left| Expr::new(LogicalProject(projects, left))),
         LogicalSingleGet => Some(right),
         _ => None,
     }
@@ -731,21 +789,6 @@ fn combine_consecutive_filters(
     Some(Expr::new(LogicalFilter(combined, input.clone())))
 }
 
-fn inline_all(
-    outer: &Vec<(Scalar, Column)>,
-    inner: &Vec<(Scalar, Column)>,
-) -> Vec<(Scalar, Column)> {
-    let mut combined = vec![];
-    for (outer_expr, outer_column) in outer {
-        let mut outer_expr = outer_expr.clone();
-        for (inner_expr, inner_column) in inner {
-            outer_expr = outer_expr.inline(inner_expr, inner_column);
-        }
-        combined.push((outer_expr, outer_column.clone()));
-    }
-    combined
-}
-
 fn split_correlated_predicates(
     predicates: &Vec<Scalar>,
     input: &Expr,
@@ -819,7 +862,7 @@ fn unnest_one(expr: Expr) -> Expr {
 }
 
 fn optimize_join_type(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&|expr| {
+    expr.bottom_up_rewrite(&|expr| {
         apply_all(
             expr,
             &vec![
@@ -857,6 +900,8 @@ fn projection_push_down(expr: Expr) -> Expr {
             &vec![
                 RewriteRule::CombineConsecutiveProjects,
                 RewriteRule::EmbedProjectIntoGet,
+                RewriteRule::AggregateToProject,
+                RewriteRule::RemoveMap,
             ],
         )
     })

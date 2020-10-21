@@ -117,6 +117,10 @@ pub enum Operator<T> {
         aggregate: Vec<(AggregateFn, Column)>,
         input: T,
     },
+    Project {
+        projects: Vec<Column>,
+        input: T,
+    },
     Limit {
         limit: usize,
         offset: usize,
@@ -197,6 +201,7 @@ impl<T> Operator<T> {
             | Operator::CreateTempTable { .. }
             | Operator::GetTempTable { .. }
             | Operator::Aggregate { .. }
+            | Operator::Project { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
             | Operator::Union { .. }
@@ -262,6 +267,7 @@ impl<T> Operator<T> {
             | Operator::Filter { .. }
             | Operator::Map { .. }
             | Operator::Aggregate { .. }
+            | Operator::Project { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
             | Operator::Insert { .. }
@@ -472,6 +478,10 @@ impl<T> Operator<T> {
                 aggregate,
                 input: visitor(input),
             },
+            Operator::Project { projects, input } => Operator::Project {
+                projects,
+                input: visitor(input),
+            },
             Operator::Limit {
                 limit,
                 offset,
@@ -562,6 +572,7 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::Filter(_, input)
             | Operator::Map(_, input)
             | Operator::Aggregate { input, .. }
+            | Operator::Project { input, .. }
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)
             | Operator::Insert(_, _, input)

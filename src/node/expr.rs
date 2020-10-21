@@ -92,6 +92,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::Filter(_, input)
                 | Operator::Map(_, input)
                 | Operator::Aggregate { input, .. }
+                | Operator::Project { input, .. }
                 | Operator::Limit { input, .. }
                 | Operator::Sort(_, input)
                 | Operator::Insert(_, _, input)

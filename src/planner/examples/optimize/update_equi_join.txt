@@ -1,6 +1,6 @@
-update customer 
-set account_number = account_number + 1 
-from person 
+update customer
+set account_number = account_number + 1
+from person
 where customer.person_id = person.person_id
 
 Update customer.account_number:$update.$expr

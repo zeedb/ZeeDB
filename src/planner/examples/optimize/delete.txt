@@ -1,4 +1,4 @@
-delete customer 
+delete customer
 where person_id = 1
 
 Delete customer

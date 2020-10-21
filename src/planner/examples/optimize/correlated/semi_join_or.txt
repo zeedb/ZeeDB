@@ -1,0 +1,16 @@
+select first_name
+from person
+where person_id in (select person_id from customer)
+or person_id = 1
+
+Map person.first_name
+	Filter (Or $mark.$in (Equal person.person_id 1))
+		HashJoin Mark $mark.$in customer.person_id=person.person_id
+			NestedLoop Inner
+				Project
+					Map* person.person_id person.first_name
+						SeqScan person
+				Map* customer.person_id
+					SeqScan customer
+			Map* person.person_id person.first_name
+				SeqScan person

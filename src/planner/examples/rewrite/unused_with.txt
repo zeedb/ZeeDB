@@ -1,4 +1,5 @@
-with foo as (select 1 as a) select 2 as b
+with foo as (select 1 as a) 
+select 2 as b
 
 LogicalMap $query.b:2
 	LogicalSingleGet
