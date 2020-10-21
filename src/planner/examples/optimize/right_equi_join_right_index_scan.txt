@@ -3,14 +3,6 @@ from customer
 right join store on customer.store_id = store.store_id 
 where store.store_id = 1
 
-LogicalMap customer.customer_id store.store_id
-	LogicalJoin Right (Equal customer.store_id store.store_id)
-		Map* customer.customer_id customer.store_id
-			LogicalGet customer
-		Map* store.store_id
-			Filter* (Equal store.store_id 1)
-				LogicalGet store
-
 Map customer.customer_id store.store_id
 	NestedLoop Right (Equal customer.store_id store.store_id)
 		Map* customer.customer_id customer.store_id

@@ -3,13 +3,6 @@ from (select *, rand() as random from customer)
 where customer_id < random 
 and customer_id <> 0
 
-LogicalMap $query.$col1:1
-	LogicalFilter (Less (Cast customer.customer_id DOUBLE) $subquery1.random)
-		LogicalMap $subquery1.random:(Rand)
-			Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-				Filter* (NotEqual customer.customer_id 0)
-					LogicalGet customer
-
 Map $query.$col1:1
 	Filter (Less (Cast customer.customer_id DOUBLE) $subquery1.random)
 		Map $subquery1.random:(Rand)

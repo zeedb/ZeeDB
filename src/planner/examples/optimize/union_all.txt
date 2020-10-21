@@ -2,12 +2,6 @@ select 1 as a
 union all 
 select 2 as a
 
-LogicalUnion
-	LogicalMap $union_all.a:2
-		LogicalSingleGet
-	LogicalMap $union_all.a:1
-		LogicalSingleGet
-
 Union
 	Map $union_all.a:2
 		TableFreeScan

@@ -8,9 +8,8 @@ macro_rules! ok {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
         let (_, expr) = parser.parse(&sql, 0, &adventure_works()).unwrap();
-        let rewrite = crate::rewrite::rewrite(expr.clone());
         let expr = optimize(expr);
-        let found = format!("{}\n\n{}\n\n{}", sql, rewrite, expr);
+        let found = format!("{}\n\n{}", sql, expr);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
         }

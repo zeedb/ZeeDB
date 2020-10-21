@@ -1,13 +1,6 @@
 select customer.customer_id, store.store_id 
 from customer, store
 
-LogicalMap customer.customer_id store.store_id
-	LogicalJoin Inner
-		Map* customer.customer_id
-			LogicalGet customer
-		Map* store.store_id
-			LogicalGet store
-
 Map customer.customer_id store.store_id
 	NestedLoop Inner
 		Map* store.store_id

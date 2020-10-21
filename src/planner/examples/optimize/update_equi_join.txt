@@ -3,14 +3,6 @@ set account_number = account_number + 1
 from person 
 where customer.person_id = person.person_id
 
-LogicalUpdate customer.account_number:$update.$expr
-	LogicalMap $update.$expr:(Add customer.account_number 1)
-		LogicalJoin Inner (Equal customer.person_id person.person_id)
-			Map* customer.person_id customer.account_number
-				LogicalGet customer
-			Map* person.person_id
-				LogicalGet person
-
 Update customer.account_number:$update.$expr
 	Map $update.$expr:(Add customer.account_number 1)
 		HashJoin Inner person.person_id=customer.person_id

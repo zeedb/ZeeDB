@@ -2,13 +2,6 @@ select customer.customer_id, store.store_id
 from customer 
 full outer join store on customer.store_id = store.store_id
 
-LogicalMap customer.customer_id store.store_id
-	LogicalJoin Outer (Equal customer.store_id store.store_id)
-		Map* customer.customer_id customer.store_id
-			LogicalGet customer
-		Map* store.store_id
-			LogicalGet store
-
 Map customer.customer_id store.store_id
 	HashJoin Outer customer.store_id=store.store_id
 		Map* customer.customer_id customer.store_id
