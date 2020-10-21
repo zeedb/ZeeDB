@@ -5,12 +5,8 @@ where person_id in (select person_id from customer)
 LogicalMap $query.$col1:1
 	LogicalFilter $mark.$in
 		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id)
-			LogicalDependentJoin
-				LogicalMap customer.person_id
-					Map* customer.person_id
-						LogicalGet customer
-				LogicalProject
-					Map* person.person_id
-						LogicalGet person
+			LogicalMap customer.person_id
+				Map* customer.person_id
+					LogicalGet customer
 			Map* person.person_id
 				LogicalGet person

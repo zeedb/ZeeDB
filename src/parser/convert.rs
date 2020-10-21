@@ -752,8 +752,66 @@ impl Converter {
         Scalar::Cast(Box::new(self.expr(expr, outer)), Type::from(ty))
     }
 
-    // TODO alternative, simpler path for uncorrelated subqueries
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
+        if x.parameter_list.is_empty() {
+            return self.uncorrelated_subquery_expr(x, outer);
+        } else {
+            return self.correlated_subquery_expr(x, outer);
+        }
+    }
+
+    fn uncorrelated_subquery_expr(
+        &mut self,
+        x: &ResolvedSubqueryExprProto,
+        outer: &mut Expr,
+    ) -> Scalar {
+        let subquery = self.any_resolved_scan(x.subquery.get());
+        let (join, scalar) = match x.subquery_type.get() {
+            // Scalar
+            0 => {
+                let join = Join::Single(vec![]);
+                let scalar = single_column(x.subquery.get());
+                (join, scalar)
+            }
+            // Array
+            1 => unimplemented!(),
+            // Exists
+            2 => {
+                let mark =
+                    self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
+                let join = Join::Mark(mark.clone(), vec![]);
+                let scalar = Scalar::Column(mark);
+                (join, scalar)
+            }
+            // In
+            3 => {
+                let mark = self.create_column("$mark".to_string(), "$in".to_string(), Type::Bool);
+                let find = match x {
+                    ResolvedSubqueryExprProto {
+                        in_expr: Some(x), ..
+                    } => self.expr(x, outer),
+                    other => panic!("{:?}", other),
+                };
+                let check = single_column(x.subquery.get());
+                let join_filter =
+                    vec![Scalar::Call(Function::Equal, vec![find, check], Type::Bool)];
+                let join = Join::Mark(mark.clone(), join_filter);
+                let scalar = Scalar::Column(mark);
+                (join, scalar)
+            }
+            other => panic!("{:?}", other),
+        };
+        // Push join onto outer.
+        *outer = Expr::new(LogicalJoin(join, subquery, outer.clone()));
+        // Return scalar that represents the entire query.
+        scalar
+    }
+
+    fn correlated_subquery_expr(
+        &mut self,
+        x: &ResolvedSubqueryExprProto,
+        outer: &mut Expr,
+    ) -> Scalar {
         // A correlated subquery can be interpreted as a dependent join
         // that executes the subquery once for every tuple in outer:
         //
