@@ -7,11 +7,7 @@ Map person.person_id
 		NestedLoop Single
 			Aggregate $aggregate.$agg1:(Max $proj.$max)
 				Map $proj.$max:person.modified_date
-					NestedLoop Inner
-						Project
-							Map* person.person_id person.modified_date
-								SeqScan person
-						Map* person.modified_date
-							SeqScan person
+					Map* person.modified_date
+						SeqScan person
 			Map* person.person_id person.modified_date
 				SeqScan person

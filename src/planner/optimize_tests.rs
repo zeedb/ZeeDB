@@ -20,7 +20,99 @@ macro_rules! ok {
 fn test_optimize() {
     let mut errors = vec![];
     ok!(
-        "examples/optimize/index_scan.txt",
+        "examples/semi_join.txt",
+        r#"
+            select 1 
+            from person 
+            where exists (select 1 from customer where customer.person_id = person.person_id)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/single_join.txt",
+        r#"
+            select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) 
+            from customer
+        "#,
+        errors
+    );
+    ok!(
+        "examples/combine_consecutive_filters.txt",
+        r#"
+            select 1 
+            from (select * from person where first_name like "A%") 
+            where last_name like "A%"
+        "#,
+        errors
+    );
+    ok!(
+        "examples/combine_consecutive_projects.txt",
+        r#"
+            select a + 1 as b 
+            from (select 1 as a)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/combine_consecutive_projects_star.txt",
+        r#"
+            select *, a + 1 as b 
+            from (select 1 as a)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/pull_filter_through_aggregate.txt",
+        r#"
+            select store_id, (select count(*) 
+            from customer where customer.store_id = store.store_id) 
+            from store
+        "#,
+        errors
+    );
+    ok!(
+        "examples/remove_single_join.txt",
+        r#"
+            select (select 1) 
+            from customer
+        "#,
+        errors
+    );
+    ok!(
+        "examples/remove_single_join_column.txt",
+        r#"
+            select (select customer_id) 
+            from customer
+        "#,
+        errors
+    );
+    ok!(
+        "examples/remove_with.txt",
+        r#"
+            with foo as (select * from customer) 
+            select * from foo
+        "#,
+        errors
+    );
+    ok!(
+        "examples/unused_with.txt",
+        r#"
+            with foo as (select 1 as a) 
+            select 2 as b
+        "#,
+        errors
+    );
+    ok!(
+        "examples/push_filter_through_project.txt",
+        r#"
+            select * 
+            from (select *, store_id + 1 from customer) 
+            where store_id = 1
+        "#,
+        errors
+    );
+    ok!(
+        "examples/index_scan.txt",
         r#"
             select customer_id
             from customer
@@ -29,7 +121,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/nested_loop.txt",
+        "examples/nested_loop.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer, store
@@ -37,7 +129,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/equi_join.txt",
+        "examples/equi_join.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer, store
@@ -46,7 +138,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/equi_full_outer_join.txt",
+        "examples/equi_full_outer_join.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer
@@ -55,7 +147,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/limit_offset.txt",
+        "examples/limit_offset.txt",
         r#"
             select customer_id
             from customer
@@ -65,7 +157,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/order_by.txt",
+        "examples/order_by.txt",
         r#"
             select customer_id
             from customer
@@ -74,7 +166,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/group_by.txt",
+        "examples/group_by.txt",
         r#"
             select store_id
             from customer
@@ -83,7 +175,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/join_left_index_scan.txt",
+        "examples/join_left_index_scan.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer, store
@@ -92,7 +184,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/join_right_index_scan.txt",
+        "examples/join_right_index_scan.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer, store
@@ -101,7 +193,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/equi_join_left_index_scan.txt",
+        "examples/equi_join_left_index_scan.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer, store
@@ -111,7 +203,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/equi_join_right_index_scan.txt",
+        "examples/equi_join_right_index_scan.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer, store
@@ -121,7 +213,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/left_equi_join_right_index_scan.txt",
+        "examples/left_equi_join_right_index_scan.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer
@@ -131,7 +223,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/right_equi_join_right_index_scan.txt",
+        "examples/right_equi_join_right_index_scan.txt",
         r#"
             select customer.customer_id, store.store_id
             from customer
@@ -141,7 +233,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/union_all.txt",
+        "examples/union_all.txt",
         r#"
             select 1 as a
             union all
@@ -151,7 +243,7 @@ fn test_optimize() {
     );
 
     ok!(
-        "examples/optimize/project_then_filter.txt",
+        "examples/project_then_filter.txt",
         r#"
             select 1
             from (select *, rand() as random from customer)
@@ -161,7 +253,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/project_then_filter_twice.txt",
+        "examples/project_then_filter_twice.txt",
         r#"
             select *
             from (select * from (select customer_id / 2 as id from customer) where id > 10)
@@ -170,7 +262,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/count_and_sum_distinct.txt",
+        "examples/count_and_sum_distinct.txt",
         r#"
             select count(distinct account_number), sum(distinct account_number)
             from customer
@@ -178,7 +270,7 @@ fn test_optimize() {
         errors
     ); // TODO this needs to be split into simpler aggregates
     ok!(
-        "examples/optimize/use_with_clause_twice.txt",
+        "examples/use_with_clause_twice.txt",
         r#"
             with foo as (select customer_id, store_id from customer)
             select f1.customer_id, f2.customer_id
@@ -188,7 +280,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/redundant_with_clause.txt",
+        "examples/redundant_with_clause.txt",
         r#"
             with foo as (select * from customer)
             select customer_id
@@ -197,7 +289,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/redundant_with_clause_with_projection.txt",
+        "examples/redundant_with_clause_with_projection.txt",
         r#"
             with foo as (select customer_id, current_date() as r from customer)
             select customer_id, r
@@ -206,7 +298,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/use_with_select_star_twice.txt",
+        "examples/use_with_select_star_twice.txt",
         r#"
             with foo as (select * from customer)
             select f1.customer_id, f2.customer_id
@@ -216,7 +308,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/use_with_project_twice.txt",
+        "examples/use_with_project_twice.txt",
         r#"
             with foo as (select *, current_date() as r from customer)
             select f1.customer_id, f2.customer_id
@@ -226,7 +318,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/insert_values.txt",
+        "examples/insert_values.txt",
         r#"
             insert into person (person_id, first_name, last_name, modified_date)
             values (1, "Foo", "Bar", current_timestamp())
@@ -234,7 +326,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/update_where.txt",
+        "examples/update_where.txt",
         r#"
             update person
             set first_name = "Foo"
@@ -243,7 +335,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/update_equi_join.txt",
+        "examples/update_equi_join.txt",
         r#"
             update customer
             set account_number = account_number + 1
@@ -253,7 +345,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/update_set_default.txt",
+        "examples/update_set_default.txt",
         r#"
             update customer
             set account_number = default
@@ -262,7 +354,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/delete.txt",
+        "examples/delete.txt",
         r#"
             delete customer
             where person_id = 1
@@ -270,14 +362,14 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/create_table.txt",
+        "examples/create_table.txt",
         r#"
             create table foo (person_id int64 primary key, store_id int64)
         "#,
         errors
     );
     ok!(
-        "examples/optimize/create_table_as.txt",
+        "examples/create_table_as.txt",
         r#"
             create table foo (person_id int64 primary key, store_id int64) as
             select person_id, store_id from customer
@@ -285,14 +377,14 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/redundant_table_free_single_join.txt",
+        "examples/correlated/redundant_table_free_single_join.txt",
         r#"
             select (select 1)
         "#,
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join.txt",
+        "examples/correlated/semi_join.txt",
         r#"
             select first_name
             from person
@@ -301,7 +393,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_or.txt",
+        "examples/correlated/semi_join_or.txt",
         r#"
             select first_name
             from person
@@ -311,7 +403,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/equi_join_semi_join.txt",
+        "examples/correlated/equi_join_semi_join.txt",
         r#"
             select 1
             from person, customer
@@ -321,7 +413,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_join_in_where_clause.txt",
+        "examples/correlated/single_join_in_where_clause.txt",
         r#"
             select person_id
             from person
@@ -330,7 +422,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/insert_table_free_single_join.txt",
+        "examples/correlated/insert_table_free_single_join.txt",
         r#"
             insert into person (person_id, first_name, last_name, modified_date)
             values (1, "Foo", "Bar", (select current_timestamp()))
@@ -338,7 +430,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/insert_two_table_free_single_joins.txt",
+        "examples/correlated/insert_two_table_free_single_joins.txt",
         r#"
             insert into person (person_id, modified_date)
             values (1, (select current_timestamp())), (2, (select current_timestamp()))
@@ -346,7 +438,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/update_semi_join.txt",
+        "examples/correlated/update_semi_join.txt",
         r#"
             update customer
             set account_number = 0
@@ -355,7 +447,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/delete_semi_join.txt",
+        "examples/correlated/delete_semi_join.txt",
         r#"
             delete person
             where person_id in (select person_id from customer)
@@ -363,7 +455,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/delete_semi_join_with_condition.txt",
+        "examples/correlated/delete_semi_join_with_condition.txt",
         r#"
             delete customer
             where person_id in (select person_id from customer where account_number = 0)
@@ -371,7 +463,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_equi_join.txt",
+        "examples/correlated/single_equi_join.txt",
         r#"
             select (select name from store where store.store_id = customer.store_id)
             from customer
@@ -379,7 +471,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_equi_join_group_by.txt",
+        "examples/correlated/single_equi_join_group_by.txt",
         r#"
             select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers
             from store
@@ -387,7 +479,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_with_condition.txt",
+        "examples/correlated/semi_join_with_condition.txt",
         r#"
             select 1
             from person, store
@@ -396,7 +488,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_anti_join.txt",
+        "examples/correlated/semi_join_anti_join.txt",
         r#"
             select 1 from customer
             where exists (select 1 from person where person.person_id = customer.person_id)
@@ -405,7 +497,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_join_twice.txt",
+        "examples/correlated/single_join_twice.txt",
         r#"
             select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id)
             from customer
@@ -413,7 +505,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_join_twice_plus_condition.txt",
+        "examples/correlated/single_join_twice_plus_condition.txt",
         r#"
             select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id)
             from customer
@@ -421,7 +513,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_to_group_by.txt",
+        "examples/correlated/semi_join_to_group_by.txt",
         r#"
             select 1
             from customer c1
@@ -430,7 +522,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_to_group_by_correlated_column.txt",
+        "examples/correlated/semi_join_to_group_by_correlated_column.txt",
         r#"
             select 1
             from customer c1
@@ -439,7 +531,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_equi_join.txt",
+        "examples/correlated/semi_equi_join.txt",
         r#"
             select 1
             from person
@@ -448,7 +540,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_join_with_condition.txt",
+        "examples/correlated/single_join_with_condition.txt",
         r#"
             select (select max(modified_date)
             from customer
@@ -458,7 +550,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/single_join_with_condition_and_group_by.txt",
+        "examples/correlated/single_join_with_condition_and_group_by.txt",
         r#"
             select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100)
             from store
@@ -466,7 +558,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_in_where_clause.txt",
+        "examples/correlated/semi_join_in_where_clause.txt",
         r#"
             select customer_id
             from customer c1, store where c1.store_id = store.store_id
@@ -475,7 +567,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_self_join.txt",
+        "examples/correlated/semi_self_join.txt",
         r#"
             select customer_id
             from (select *, account_number - 1 as prev_account_number from customer) c1
@@ -484,7 +576,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/semi_join_then_order_by.txt",
+        "examples/correlated/semi_join_then_order_by.txt",
         r#"
             select first_name
             from person
@@ -493,7 +585,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/update_set_table_free_single_join.txt",
+        "examples/correlated/update_set_table_free_single_join.txt",
         r#"
             update person
             set first_name = (select last_name)
@@ -502,7 +594,7 @@ fn test_optimize() {
         errors
     );
     ok!(
-        "examples/optimize/correlated/update_set_redundant_single_join.txt",
+        "examples/correlated/update_set_redundant_single_join.txt",
         r#"
             update customer
             set account_number = (select person.person_id)

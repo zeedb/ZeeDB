@@ -4,5 +4,4 @@ values (1, "Foo", "Bar", (select current_timestamp()))
 Insert person person.person_id person.first_name person.last_name person.modified_date
 	Values person.person_id person.first_name person.last_name person.modified_date [1 Foo Bar $expr_subquery.$col1]
 		Map $expr_subquery.$col1:(CurrentTimestamp)
-			Project
-				TableFreeScan
+			TableFreeScan

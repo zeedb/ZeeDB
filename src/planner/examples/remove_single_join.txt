@@ -1,0 +1,6 @@
+select (select 1) 
+from customer
+
+Map $query.$col1:1
+	Map*
+		SeqScan customer
