@@ -2,12 +2,12 @@ select (select name from store where store.store_id = customer.customer_id), (se
 from customer
 
 Map $query.$col1:store.name $query.$col2:person.first_name
-	NestedLoop Single (NaturalJoin customer.person_id)
-		Map person.first_name customer.person_id
+	HashJoin Single customer.person_id=customer.person_id
+		Map person.first_name customer.person_id:customer.person_id
 			HashJoin Inner customer.person_id=person.person_id
 				Project customer.person_id
-					NestedLoop Single (NaturalJoin customer.customer_id)
-						Map store.name customer.customer_id
+					HashJoin Single customer.customer_id=customer.customer_id
+						Map store.name customer.customer_id:customer.customer_id
 							HashJoin Inner customer.customer_id=store.store_id
 								Project customer.customer_id
 									Map* customer.customer_id customer.person_id
@@ -18,8 +18,8 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 							SeqScan customer
 				Map* person.person_id person.first_name
 					SeqScan person
-		NestedLoop Single (NaturalJoin customer.customer_id)
-			Map store.name customer.customer_id
+		HashJoin Single customer.customer_id=customer.customer_id
+			Map store.name customer.customer_id:customer.customer_id
 				HashJoin Inner customer.customer_id=store.store_id
 					Project customer.customer_id
 						Map* customer.customer_id customer.person_id

@@ -324,7 +324,7 @@ impl Rule {
             }
             Rule::LogicalProjectToProject => {
                 if let LogicalProject(projects, input) = bind {
-                    return Some(Project { projects, input });
+                    return Some(Project(projects, input));
                 }
             }
             Rule::LogicalLimitToLimit => {

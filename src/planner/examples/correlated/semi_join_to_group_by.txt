@@ -3,8 +3,8 @@ from customer c1
 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
 
 Map $query.$col1:1
-	HashJoin Semi (NaturalJoin customer.store_id) $aggregate.$agg1=customer.customer_id
-		Map $aggregate.$agg1 customer.store_id
+	HashJoin Semi customer.store_id=customer.store_id $aggregate.$agg1=customer.customer_id
+		Map customer.store_id:customer.store_id $aggregate.$agg1
 			Aggregate $groupby.account_number customer.store_id $aggregate.$agg1:(Max $proj.$max)
 				Map $groupby.account_number:customer.account_number $proj.$max:customer.customer_id customer.store_id
 					HashJoin Inner customer.store_id=customer.store_id

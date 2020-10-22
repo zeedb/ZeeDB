@@ -47,8 +47,8 @@ impl Scope for Expr {
     fn attributes(&self) -> HashSet<Column> {
         self.0.attributes()
     }
-    fn free(&self, parameters: &Vec<Column>) -> HashSet<Column> {
-        self.0.free(parameters)
+    fn free(&self) -> HashSet<Column> {
+        self.0.free()
     }
 }
 
@@ -92,7 +92,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::Filter(_, input)
                 | Operator::Map(_, input)
                 | Operator::Aggregate { input, .. }
-                | Operator::Project { input, .. }
+                | Operator::Project(_, input)
                 | Operator::Limit { input, .. }
                 | Operator::Sort(_, input)
                 | Operator::Insert(_, _, input)

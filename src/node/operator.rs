@@ -19,7 +19,6 @@ pub enum Operator<T> {
     LogicalMap(Vec<(Scalar, Column)>, T),
     LogicalJoin(Join, T, T),
     // LogicalDependentJoin is an inner join that allows the left side of the join to depend on the right side.
-    // The right side is always a LogicalProject.
     LogicalDependentJoin {
         parameters: Vec<Column>,
         join: Join,
@@ -118,10 +117,7 @@ pub enum Operator<T> {
         aggregate: Vec<(AggregateFn, Column)>,
         input: T,
     },
-    Project {
-        projects: Vec<Column>,
-        input: T,
-    },
+    Project(Vec<Column>, T),
     Limit {
         limit: usize,
         offset: usize,
@@ -481,10 +477,7 @@ impl<T> Operator<T> {
                 aggregate,
                 input: visitor(input),
             },
-            Operator::Project { projects, input } => Operator::Project {
-                projects,
-                input: visitor(input),
-            },
+            Operator::Project(projects, input) => Operator::Project(projects, visitor(input)),
             Operator::Limit {
                 limit,
                 offset,
@@ -575,7 +568,7 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::Filter(_, input)
             | Operator::Map(_, input)
             | Operator::Aggregate { input, .. }
-            | Operator::Project { input, .. }
+            | Operator::Project(_, input)
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)
             | Operator::Insert(_, _, input)
@@ -613,7 +606,8 @@ impl<T> ops::Index<usize> for Operator<T> {
 
 pub trait Scope {
     fn attributes(&self) -> HashSet<Column>;
-    fn free(&self, parameters: &Vec<Column>) -> HashSet<Column>;
+    // TODO this isn't actually free, this is all column references.
+    fn free(&self) -> HashSet<Column>;
 }
 
 impl<T: Scope> Scope for Operator<T> {
@@ -655,7 +649,7 @@ impl<T: Scope> Scope for Operator<T> {
                 }
                 set
             }
-            Operator::LogicalProject(columns, ..)
+            Operator::LogicalProject(columns, _)
             | Operator::LogicalGetWith(_, columns)
             | Operator::LogicalValues(columns, _, _) => columns.iter().map(|c| c.clone()).collect(),
             Operator::LogicalAggregate {
@@ -680,31 +674,50 @@ impl<T: Scope> Scope for Operator<T> {
         }
     }
 
-    fn free(&self, parameters: &Vec<Column>) -> HashSet<Column> {
+    fn free(&self) -> HashSet<Column> {
         let mut set = HashSet::new();
-        let mut check = |scalar: &Scalar| {
-            let free = scalar.free();
-            for column in parameters {
-                if free.contains(column) {
-                    set.insert(column.clone());
-                }
-            }
-        };
         match self {
             Operator::LogicalGet { predicates, .. } | Operator::LogicalFilter(predicates, _) => {
-                for scalar in predicates {
-                    check(scalar);
+                for p in predicates {
+                    set.extend(p.free());
                 }
             }
             Operator::LogicalMap(projects, _) => {
-                for (scalar, _) in projects {
-                    check(scalar);
+                for (x, _) in projects {
+                    set.extend(x.free());
                 }
             }
-            Operator::LogicalValues(_, rows, _) => {
+            Operator::LogicalJoin(join, _, _) | Operator::LogicalDependentJoin { join, .. } => {
+                for p in join.predicates() {
+                    set.extend(p.free());
+                }
+            }
+            Operator::LogicalProject(projects, _) => {
+                set.extend(projects.clone());
+            }
+            Operator::LogicalWith(_, columns, _, _) | Operator::LogicalGetWith(_, columns) => {
+                set.extend(columns.clone());
+            }
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+                ..
+            } => {
+                set.extend(group_by.clone());
+                for (f, _) in aggregate {
+                    set.extend(f.free());
+                }
+            }
+            Operator::LogicalSort(order_by, _) => {
+                for o in order_by {
+                    set.insert(o.column.clone());
+                }
+            }
+            Operator::LogicalValues(columns, rows, _) => {
+                set.extend(columns.clone());
                 for row in rows {
-                    for scalar in row {
-                        check(scalar);
+                    for x in row {
+                        set.extend(x.free());
                     }
                 }
             }
@@ -715,7 +728,7 @@ impl<T: Scope> Scope for Operator<T> {
             ),
         }
         for i in 0..self.len() {
-            set.extend(self[i].free(parameters));
+            set.extend(self[i].free());
         }
         set
     }
@@ -800,7 +813,7 @@ impl fmt::Display for Table {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Column {
     pub id: i64,
     pub name: String,
@@ -820,6 +833,15 @@ impl Column {
             table,
             typ,
         }
+    }
+}
+
+impl fmt::Debug for Column {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(table) = &self.table {
+            write!(f, "{}.", table)?;
+        }
+        write!(f, "{}#{}", self.name, self.id)
     }
 }
 
@@ -900,7 +922,6 @@ pub enum Scalar {
     Column(Column),
     Call(Function, Vec<Scalar>, encoding::Type),
     Cast(Box<Scalar>, encoding::Type),
-    NaturalJoin(Column),
 }
 
 impl Scalar {
@@ -910,7 +931,6 @@ impl Scalar {
             Scalar::Column(column) => column.typ.clone(),
             Scalar::Call(_, _, returns) => returns.clone(),
             Scalar::Cast(_, typ) => typ.clone(),
-            Scalar::NaturalJoin(column) => column.typ.clone(),
         }
     }
 
@@ -932,9 +952,6 @@ impl Scalar {
                 }
             }
             Scalar::Cast(scalar, _) => scalar.collect_free(free),
-            Scalar::NaturalJoin(column) => {
-                free.insert(column.clone());
-            }
         }
     }
 
@@ -950,9 +967,6 @@ impl Scalar {
             }
             Scalar::Cast(uncast, typ) => {
                 Scalar::Cast(Box::new(uncast.inline(expr, column)), typ.clone())
-            }
-            Scalar::NaturalJoin(c) if c == column => {
-                Scalar::Literal(encoding::Value::Bool(true), encoding::Type::Bool)
             }
             _ => self.clone(),
         }
@@ -1252,6 +1266,26 @@ impl AggregateFn {
             "ZetaSQL:string_agg" => AggregateFn::StringAgg(distinct, argument.unwrap()),
             "ZetaSQL:sum" => AggregateFn::Sum(distinct, argument.unwrap()),
             _ => panic!("{} is not supported", name),
+        }
+    }
+
+    fn free(&self) -> Option<Column> {
+        match self {
+            AggregateFn::AnyValue(c) => Some(c.clone()),
+            AggregateFn::ArrayAgg(_, _, c) => Some(c.clone()),
+            AggregateFn::ArrayConcatAgg(c) => Some(c.clone()),
+            AggregateFn::Avg(_, c) => Some(c.clone()),
+            AggregateFn::BitAnd(_, c) => Some(c.clone()),
+            AggregateFn::BitOr(_, c) => Some(c.clone()),
+            AggregateFn::BitXor(_, c) => Some(c.clone()),
+            AggregateFn::Count(_, c) => Some(c.clone()),
+            AggregateFn::CountStar => None,
+            AggregateFn::LogicalAnd(c) => Some(c.clone()),
+            AggregateFn::LogicalOr(c) => Some(c.clone()),
+            AggregateFn::Max(c) => Some(c.clone()),
+            AggregateFn::Min(c) => Some(c.clone()),
+            AggregateFn::StringAgg(_, c) => Some(c.clone()),
+            AggregateFn::Sum(_, c) => Some(c.clone()),
         }
     }
 }

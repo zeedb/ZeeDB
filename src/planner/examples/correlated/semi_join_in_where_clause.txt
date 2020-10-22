@@ -3,8 +3,8 @@ from customer c1, store where c1.store_id = store.store_id
 and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
 
 Map customer.customer_id
-	HashJoin Semi (NaturalJoin customer.account_number) customer.modified_date=customer.modified_date
-		Map customer.modified_date customer.account_number
+	HashJoin Semi customer.account_number=customer.account_number customer.modified_date=customer.modified_date
+		Map customer.account_number:customer.account_number customer.modified_date
 			NestedLoop Inner (Greater customer.account_number customer.account_number)
 				Project customer.account_number
 					NestedLoop Inner

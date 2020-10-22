@@ -422,10 +422,6 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             let right = scalar_unique_cardinality(&args[1], scope) as f64;
             1.0 / left.max(right).max(1.0)
         }
-        Scalar::NaturalJoin(column) => {
-            let card = scalar_unique_cardinality(&Scalar::Column(column.clone()), scope) as f64;
-            1.0 / card.max(1.0)
-        }
         Scalar::Call(Function::Or, args, _) => {
             let left = predicate_selectivity(&args[0], scope);
             let right = predicate_selectivity(&args[1], scope);
@@ -470,7 +466,6 @@ fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> u
             .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),
         Scalar::Call(_, _, _) => 1, // TODO
         Scalar::Cast(value, _) => scalar_unique_cardinality(value, scope),
-        Scalar::NaturalJoin(_) => 2,
     }
 }
 

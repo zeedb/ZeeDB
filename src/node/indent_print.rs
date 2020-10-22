@@ -71,7 +71,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalProject(projects, input) => {
+            Operator::LogicalProject(projects, input) | Operator::Project(projects, input) => {
                 write!(f, "{}", self.name())?;
                 for c in projects {
                     write!(f, " {}", c)?;
@@ -302,14 +302,6 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Project { projects, input } => {
-                write!(f, "{}", self.name())?;
-                for column in projects {
-                    write!(f, " {}", column)?;
-                }
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
             Operator::Limit {
                 limit,
                 offset,
@@ -525,7 +517,6 @@ impl fmt::Display for Scalar {
                 }
             }
             Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
-            Scalar::NaturalJoin(column) => write!(f, "(NaturalJoin {})", column),
         }
     }
 }

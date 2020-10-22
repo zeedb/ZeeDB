@@ -83,7 +83,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let n_aggregate = n * aggregate.len() as f64;
             n_group_by * COST_HASH_BUILD + n_aggregate * COST_CPU_APPLY
         }
-        Project { projects, input } => {
+        Project(projects, input) => {
             let n = ss[*input].props.cardinality as f64;
             let n_group_by = n * projects.len() as f64;
             n_group_by * COST_HASH_BUILD
