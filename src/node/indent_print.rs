@@ -58,10 +58,11 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             }
             Operator::LogicalDependentJoin {
                 parameters,
+                join,
                 left,
                 right,
             } => {
-                write!(f, "{}", self.name())?;
+                write!(f, "{} {}", self.name(), join)?;
                 for c in parameters {
                     write!(f, " {}", c)?;
                 }

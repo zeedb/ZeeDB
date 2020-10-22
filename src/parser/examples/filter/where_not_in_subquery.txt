@@ -4,7 +4,7 @@ where person_id not in (select person_id from customer)
 
 LogicalMap $query.$col1:1
 	LogicalFilter (Not $mark.$in)
-		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id)
+		LogicalDependentJoin Mark $mark.$in (Equal person.person_id customer.person_id)
 			LogicalMap customer.person_id
 				Map* customer.person_id
 					LogicalGet customer

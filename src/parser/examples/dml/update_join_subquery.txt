@@ -5,17 +5,9 @@ where customer.person_id = person.person_id
 
 LogicalUpdate customer.account_number:$update.$expr
 	LogicalMap $update.$expr:$expr_subquery.person_id
-		LogicalJoin Single (NaturalJoin person.person_id)
-			LogicalDependentJoin person.person_id
-				LogicalMap $expr_subquery.person_id:person.person_id
-					LogicalSingleGet
-				LogicalProject person.person_id
-					LogicalFilter (Equal customer.person_id person.person_id)
-						LogicalJoin Inner
-							Map* customer.person_id customer.account_number
-								LogicalGet customer
-							Map* person.person_id
-								LogicalGet person
+		LogicalDependentJoin Single person.person_id
+			LogicalMap $expr_subquery.person_id:person.person_id
+				LogicalSingleGet
 			LogicalFilter (Equal customer.person_id person.person_id)
 				LogicalJoin Inner
 					Map* customer.person_id customer.account_number

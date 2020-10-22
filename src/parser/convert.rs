@@ -753,18 +753,11 @@ impl Converter {
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
-        if x.parameter_list.is_empty() {
-            return self.uncorrelated_subquery_expr(x, outer);
-        } else {
-            return self.correlated_subquery_expr(x, outer);
-        }
-    }
-
-    fn uncorrelated_subquery_expr(
-        &mut self,
-        x: &ResolvedSubqueryExprProto,
-        outer: &mut Expr,
-    ) -> Scalar {
+        let parameters: Vec<Column> = x
+            .parameter_list
+            .iter()
+            .map(|c| Column::from(c.column.get()))
+            .collect();
         let subquery = self.any_resolved_scan(x.subquery.get());
         let (join, scalar) = match x.subquery_type.get() {
             // Scalar
@@ -802,112 +795,12 @@ impl Converter {
             other => panic!("{:?}", other),
         };
         // Push join onto outer.
-        *outer = Expr::new(LogicalJoin(join, subquery, outer.clone()));
-        // Return scalar that represents the entire query.
-        scalar
-    }
-
-    fn correlated_subquery_expr(
-        &mut self,
-        x: &ResolvedSubqueryExprProto,
-        outer: &mut Expr,
-    ) -> Scalar {
-        // A correlated subquery can be interpreted as a dependent join
-        // that executes the subquery once for every tuple in outer:
-        //
-        //        DependentJoin
-        //         +         +
-        //         +         +
-        //    subquery      outer
-        //
-        // As a first step in eliminating the dependent join, we rewrite it as dependent join
-        // that executes the subquery once for every *distinct combination of parameters* in outer,
-        // and then an equi-join that looks up the appropriate row for every tuple in outer:
-        //
-        //             LogicalJoin
-        //              +       +
-        //              +       +
-        //   DependentJoin     outer
-        //    +         +
-        //    +         +
-        // subquery  Project
-        //              +
-        //              +
-        //            outer
-        //
-        // This is a slight improvement because the number of distinct combinations of parameters in outer
-        // is likely much less than the number of tuples in outer,
-        // and it makes the dependent join much easier to manipulate because Project is a set rather than a multiset.
-        // During the rewrite phase, we will take advantage of this to push the dependent join down
-        // until it can be eliminated or converted to an inner join.
-        //
-        //  Project
-        //     +
-        //     +
-        //   outer
-        let subquery_parameters: Vec<Column> = x
-            .parameter_list
-            .iter()
-            .map(|c| Column::from(c.column.get()))
-            .collect();
-        let project = LogicalProject(subquery_parameters.clone(), outer.clone());
-        //   DependentJoin
-        //    +         +
-        //    +         +
-        // subquery  Project
-        //              +
-        let subquery = self.any_resolved_scan(x.subquery.get());
-        let dependent_join = LogicalDependentJoin {
-            parameters: subquery_parameters.clone(),
+        *outer = Expr::new(LogicalDependentJoin {
+            parameters,
+            join,
             left: subquery,
-            right: Expr::new(project),
-        };
-        //             LogicalJoin
-        //              +       +
-        //              +       +
-        //   DependentJoin     outer
-        //    +         +
-        let mut natural_join = subquery_parameters
-            .iter()
-            .map(|c| Scalar::NaturalJoin(c.clone()))
-            .collect();
-        let (join, scalar) = match x.subquery_type.get() {
-            // Scalar
-            0 => {
-                let join = Join::Single(natural_join);
-                let scalar = single_column(x.subquery.get());
-                (join, scalar)
-            }
-            // Array
-            1 => unimplemented!(),
-            // Exists
-            2 => {
-                let mark =
-                    self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
-                let join = Join::Mark(mark.clone(), natural_join);
-                let scalar = Scalar::Column(mark);
-                (join, scalar)
-            }
-            // In
-            3 => {
-                let mark = self.create_column("$mark".to_string(), "$in".to_string(), Type::Bool);
-                let find = match x {
-                    ResolvedSubqueryExprProto {
-                        in_expr: Some(x), ..
-                    } => self.expr(x, outer),
-                    other => panic!("{:?}", other),
-                };
-                let check = single_column(x.subquery.get());
-                natural_join.push(Scalar::Call(Function::Equal, vec![find, check], Type::Bool));
-                let join = Join::Mark(mark.clone(), natural_join);
-                let scalar = Scalar::Column(mark);
-                (join, scalar)
-            }
-            other => panic!("{:?}", other),
-        };
-        let equi_join = LogicalJoin(join, Expr::new(dependent_join), outer.clone());
-        // Push join onto outer.
-        *outer = Expr::new(equi_join);
+            right: outer.clone(),
+        });
         // Return scalar that represents the entire query.
         scalar
     }

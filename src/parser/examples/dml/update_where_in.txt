@@ -5,7 +5,7 @@ where person_id in (select person_id from person where first_name = "Joe")
 LogicalUpdate customer.account_number:$update.$expr
 	LogicalMap $update.$expr:0
 		LogicalFilter $mark.$in
-			LogicalJoin Mark $mark.$in (Equal customer.person_id person.person_id)
+			LogicalDependentJoin Mark $mark.$in (Equal customer.person_id person.person_id)
 				LogicalMap person.person_id
 					LogicalFilter (Equal person.first_name Joe)
 						Map* person.person_id person.first_name

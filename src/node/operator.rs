@@ -22,6 +22,7 @@ pub enum Operator<T> {
     // The right side is always a LogicalProject.
     LogicalDependentJoin {
         parameters: Vec<Column>,
+        join: Join,
         left: T,
         right: T,
     },
@@ -314,6 +315,7 @@ impl<T> Operator<T> {
             }
             Operator::LogicalDependentJoin {
                 parameters,
+                join,
                 left,
                 right,
             } => {
@@ -321,6 +323,7 @@ impl<T> Operator<T> {
                 let right = visitor(right);
                 Operator::LogicalDependentJoin {
                     parameters,
+                    join,
                     left,
                     right,
                 }

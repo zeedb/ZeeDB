@@ -4,14 +4,10 @@ where not exists (select person_id from customer where customer.person_id = pers
 
 LogicalMap $query.$col1:1
 	LogicalFilter (Not $mark.$exists)
-		LogicalJoin Mark $mark.$exists (NaturalJoin person.person_id)
-			LogicalDependentJoin person.person_id
-				LogicalMap customer.person_id
-					LogicalFilter (Equal customer.person_id person.person_id)
-						Map* customer.person_id
-							LogicalGet customer
-				LogicalProject person.person_id
-					Map* person.person_id
-						LogicalGet person
+		LogicalDependentJoin Mark $mark.$exists person.person_id
+			LogicalMap customer.person_id
+				LogicalFilter (Equal customer.person_id person.person_id)
+					Map* customer.person_id
+						LogicalGet customer
 			Map* person.person_id
 				LogicalGet person

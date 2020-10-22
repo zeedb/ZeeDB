@@ -40,17 +40,27 @@ impl RewriteRule {
     fn apply(&self, expr: &Expr) -> Option<Expr> {
         match self {
             RewriteRule::PushDependentJoin => {
-                if let LogicalDependentJoin { .. } = expr.as_ref() {
-                    return Some(unnest_one(expr.clone()));
+                if let LogicalDependentJoin {
+                    parameters,
+                    join,
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
+                    return Some(unnest_one(parameters, join, left, right));
                 }
             }
             RewriteRule::PushDependentJoinThroughFilter => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalFilter(predicates, subquery) = subquery.as_ref() {
                         return Some(Expr::new(LogicalFilter(
                             predicates.clone(),
@@ -62,10 +72,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughMap => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalMap(projects, subquery) = subquery.as_ref() {
                         let mut projects = projects.clone();
                         for p in parameters {
@@ -83,10 +97,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughJoin => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalJoin(join, left_subquery, right_subquery) = subquery.as_ref() {
                         match join {
                             Join::Inner(predicates) => {
@@ -141,10 +159,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughWith => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalWith(name, columns, left_left, left_right) = subquery.as_ref() {
                         todo!()
                     }
@@ -153,10 +175,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughAggregate => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalAggregate {
                         group_by,
                         aggregate,
@@ -178,10 +204,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughLimit => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalLimit {
                         limit,
                         offset,
@@ -195,10 +225,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughSort => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if let LogicalSort(order_by, subquery) = subquery.as_ref() {
                         todo!()
                     }
@@ -207,10 +241,14 @@ impl RewriteRule {
             RewriteRule::PushDependentJoinThroughSetOperation => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     match subquery.as_ref() {
                         LogicalUnion(left_subquery, right_subquery) => todo!(),
                         LogicalIntersect(left_subquery, right_subquery) => todo!(),
@@ -222,10 +260,14 @@ impl RewriteRule {
             RewriteRule::DependentJoinToInnerJoin => {
                 if let LogicalDependentJoin {
                     parameters,
+                    join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if !join_predicates.is_empty() {
+                        return None;
+                    }
                     if parameters.is_empty() {
                         return Some(Expr::new(LogicalJoin(
                             Join::Inner(vec![]),
@@ -505,6 +547,7 @@ impl RewriteRule {
 fn push_dependent_join(parameters: &Vec<Column>, subquery: &Expr, domain: &Expr) -> Expr {
     Expr::new(LogicalDependentJoin {
         parameters: free_parameters(parameters, subquery),
+        join: Join::Inner(vec![]),
         left: subquery.clone(),
         right: domain.clone(),
     })
@@ -878,8 +921,84 @@ fn unnest_all(expr: Expr) -> Expr {
 }
 
 // Unnest one dependent join, assuming there are no dependent joins under it.
-fn unnest_one(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&|expr| {
+fn unnest_one(
+    subquery_parameters: &Vec<Column>,
+    join: &Join,
+    subquery: &Expr,
+    outer: &Expr,
+) -> Expr {
+    // A correlated subquery can be interpreted as a dependent join
+    // that executes the subquery once for every tuple in outer:
+    //
+    //        DependentJoin
+    //         +         +
+    //         +         +
+    //    subquery      outer
+    //
+    // As a first step in eliminating the dependent join, we rewrite it as dependent join
+    // that executes the subquery once for every *distinct combination of parameters* in outer,
+    // and then an equi-join that looks up the appropriate row for every tuple in outer:
+    //
+    //             LogicalJoin
+    //              +       +
+    //              +       +
+    //   DependentJoin     outer
+    //    +         +
+    //    +         +
+    // subquery  Project
+    //              +
+    //              +
+    //            outer
+    //
+    // This is a slight improvement because the number of distinct combinations of parameters in outer
+    // is likely much less than the number of tuples in outer,
+    // and it makes the dependent join much easier to manipulate because Project is a set rather than a multiset.
+    // During the rewrite phase, we will take advantage of this to push the dependent join down
+    // until it can be eliminated or converted to an inner join.
+    //
+    //  Project
+    //     +
+    //     +
+    //   outer
+    let project = LogicalProject(subquery_parameters.clone(), outer.clone());
+    //   DependentJoin
+    //    +         +
+    //    +         +
+    // subquery  Project
+    //              +
+    let dependent_join = LogicalDependentJoin {
+        parameters: subquery_parameters.clone(),
+        join: Join::Inner(vec![]),
+        left: subquery.clone(),
+        right: Expr::new(project),
+    };
+    //             LogicalJoin
+    //              +       +
+    //              +       +
+    //   DependentJoin     outer
+    //    +         +
+    let mut join_predicates: Vec<Scalar> = subquery_parameters
+        .iter()
+        .map(|c| Scalar::NaturalJoin(c.clone()))
+        .collect();
+    let join = match join {
+        Join::Single(additional_predicates) => {
+            for p in additional_predicates {
+                join_predicates.push(p.clone());
+            }
+            Join::Single(join_predicates)
+        }
+        Join::Mark(mark, additional_predicates) => {
+            for p in additional_predicates {
+                join_predicates.push(p.clone());
+            }
+            Join::Mark(mark.clone(), join_predicates)
+        }
+        _ => panic!("{}", join),
+    };
+    let equi_join = Expr::new(LogicalJoin(join, Expr::new(dependent_join), outer.clone()));
+    // Push down dependent join.
+    equi_join.top_down_rewrite(&|expr| {
         apply_all(
             expr,
             &vec![
