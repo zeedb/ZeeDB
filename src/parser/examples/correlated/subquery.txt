@@ -2,7 +2,7 @@ select (select name from store where store.store_id = customer.store_id)
 from customer
 
 LogicalMap $query.$col1:store.name
-	LogicalDependentJoin Single customer.store_id
+	LogicalJoin Single [customer.store_id]
 		LogicalMap store.name
 			LogicalFilter (Equal store.store_id customer.store_id)
 				Map* store.store_id store.name

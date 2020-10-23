@@ -1,3 +1,4 @@
+use std::cmp;
 use std::collections::HashSet;
 use std::fmt;
 use std::ops;
@@ -17,9 +18,8 @@ pub enum Operator<T> {
     LogicalFilter(Vec<Scalar>, T),
     // LogicalMap(columns) implements the SELECT clause.
     LogicalMap(Vec<(Scalar, Column)>, T),
-    LogicalJoin(Join, T, T),
-    // LogicalDependentJoin is an inner join that allows the left side of the join to depend on the right side.
-    LogicalDependentJoin {
+    // LogicalJoin implements the JOIN operator, and correlated subqueries if parameters is non-empty.
+    LogicalJoin {
         parameters: Vec<Column>,
         join: Join,
         left: T,
@@ -163,8 +163,7 @@ pub enum Operator<T> {
 impl<T> Operator<T> {
     pub fn is_logical(&self) -> bool {
         match self {
-            Operator::LogicalJoin(_, _, _)
-            | Operator::LogicalDependentJoin { .. }
+            Operator::LogicalJoin { .. }
             | Operator::LogicalProject { .. }
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
@@ -238,8 +237,7 @@ impl<T> Operator<T> {
 
     pub fn len(&self) -> usize {
         match self {
-            Operator::LogicalJoin(_, _, _)
-            | Operator::LogicalDependentJoin { .. }
+            Operator::LogicalJoin { .. }
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
@@ -304,12 +302,7 @@ impl<T> Operator<T> {
                 let input = visitor(input);
                 Operator::LogicalMap(projects, input)
             }
-            Operator::LogicalJoin(join, left, right) => {
-                let left = visitor(left);
-                let right = visitor(right);
-                Operator::LogicalJoin(join, left, right)
-            }
-            Operator::LogicalDependentJoin {
+            Operator::LogicalJoin {
                 parameters,
                 join,
                 left,
@@ -317,7 +310,7 @@ impl<T> Operator<T> {
             } => {
                 let left = visitor(left);
                 let right = visitor(right);
-                Operator::LogicalDependentJoin {
+                Operator::LogicalJoin {
                     parameters,
                     join,
                     left,
@@ -536,8 +529,7 @@ impl<T> ops::Index<usize> for Operator<T> {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            Operator::LogicalJoin(_, left, right)
-            | Operator::LogicalDependentJoin { left, right, .. }
+            Operator::LogicalJoin { left, right, .. }
             | Operator::LogicalWith(_, _, left, right)
             | Operator::LogicalUnion(left, right)
             | Operator::LogicalIntersect(left, right)
@@ -622,24 +614,51 @@ impl<T: Scope> Scope for Operator<T> {
             | Operator::LogicalUnion(_, input)
             | Operator::LogicalIntersect(_, input)
             | Operator::LogicalExcept(_, input)
-            | Operator::LogicalJoin(Join::Semi(_), _, input)
-            | Operator::LogicalJoin(Join::Anti(_), _, input)
-            | Operator::LogicalJoin(Join::Single(_), _, input) => input.attributes(),
-            Operator::LogicalJoin(Join::Mark(mark, _), left, right) => {
+            | Operator::LogicalJoin {
+                join: Join::Semi(_),
+                right: input,
+                ..
+            }
+            | Operator::LogicalJoin {
+                join: Join::Anti(_),
+                right: input,
+                ..
+            }
+            | Operator::LogicalJoin {
+                join: Join::Single(_),
+                right: input,
+                ..
+            } => input.attributes(),
+            Operator::LogicalJoin {
+                join: Join::Mark(mark, _),
+                right,
+                ..
+            } => {
                 let mut set = HashSet::new();
-                for c in left.attributes() {
-                    set.insert(c.clone());
-                }
                 for c in right.attributes() {
                     set.insert(c.clone());
                 }
                 set.insert(mark.clone());
                 set
             }
-            Operator::LogicalJoin(Join::Inner(_), left, right)
-            | Operator::LogicalJoin(Join::Right(_), left, right)
-            | Operator::LogicalJoin(Join::Outer(_), left, right)
-            | Operator::LogicalDependentJoin { left, right, .. } => {
+            Operator::LogicalJoin {
+                join: Join::Inner(_),
+                left,
+                right,
+                ..
+            }
+            | Operator::LogicalJoin {
+                join: Join::Right(_),
+                left,
+                right,
+                ..
+            }
+            | Operator::LogicalJoin {
+                join: Join::Outer(_),
+                left,
+                right,
+                ..
+            } => {
                 let mut set = HashSet::new();
                 for c in left.attributes() {
                     set.insert(c.clone());
@@ -687,7 +706,7 @@ impl<T: Scope> Scope for Operator<T> {
                     set.extend(x.free());
                 }
             }
-            Operator::LogicalJoin(join, _, _) | Operator::LogicalDependentJoin { join, .. } => {
+            Operator::LogicalJoin { join, .. } => {
                 for p in join.predicates() {
                     set.extend(p.free());
                 }
@@ -833,6 +852,21 @@ impl Column {
             table,
             typ,
         }
+    }
+}
+
+impl cmp::PartialOrd for Column {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl cmp::Ord for Column {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        let table = self.table.cmp(&other.table);
+        let name = self.name.cmp(&other.name);
+        let id = self.id.cmp(&other.id);
+        table.then(name).then(id)
     }
 }
 

@@ -31,10 +31,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     newline(f, indent)?;
                     indent += 1;
                 }
-                write!(f, "Map*")?;
-                for c in projects {
-                    write!(f, " {}", c)?;
-                }
+                write!(f, "Map* {}", join_columns(projects))?;
                 newline(f, indent)?;
                 write!(f, "{} {}", self.name(), table.name)?;
                 Ok(())
@@ -49,33 +46,30 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalJoin(join, left, right) | Operator::NestedLoop(join, left, right) => {
-                write!(f, "{} {}", self.name(), join)?;
-                newline(f, indent)?;
-                left.indent_print(f, indent + 1)?;
-                newline(f, indent)?;
-                right.indent_print(f, indent + 1)
-            }
-            Operator::LogicalDependentJoin {
+            Operator::LogicalJoin {
                 parameters,
                 join,
                 left,
                 right,
             } => {
                 write!(f, "{} {}", self.name(), join)?;
-                for c in parameters {
-                    write!(f, " {}", c)?;
+                if !parameters.is_empty() {
+                    write!(f, " [{}]", join_columns(parameters))?;
                 }
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
+            Operator::NestedLoop(join, left, right) => {
+                write!(f, "{} {}", self.name(), join)?;
+                newline(f, indent)?;
+                left.indent_print(f, indent + 1)?;
+                newline(f, indent)?;
+                right.indent_print(f, indent + 1)
+            }
             Operator::LogicalProject(projects, input) | Operator::Project(projects, input) => {
-                write!(f, "{}", self.name())?;
-                for c in projects {
-                    write!(f, " {}", c)?;
-                }
+                write!(f, "{} {}", self.name(), join_columns(projects))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
@@ -253,10 +247,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     newline(f, indent)?;
                     indent += 1;
                 }
-                write!(f, "Map*")?;
-                for c in projects {
-                    write!(f, " {}", c)?;
-                }
+                write!(f, "Map* {}", join_columns(projects))?;
                 newline(f, indent)?;
                 write!(
                     f,
@@ -324,18 +315,18 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input.indent_print(f, indent + 1)
             }
             Operator::Insert(table, columns, input) => {
-                write!(f, "{} {}", self.name(), table.name)?;
-                for c in columns {
-                    write!(f, " {}", c)?;
-                }
+                write!(
+                    f,
+                    "{} {} {}",
+                    self.name(),
+                    table.name,
+                    join_columns(columns)
+                )?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
             Operator::Values(columns, rows, input) => {
-                write!(f, "{}", self.name())?;
-                for column in columns {
-                    write!(f, " {}", column)?;
-                }
+                write!(f, "{} {}", self.name(), join_columns(columns))?;
                 for row in rows {
                     write!(f, " [{}]", join_scalars(row))?;
                 }
@@ -433,7 +424,6 @@ impl<T> Operator<T> {
             Operator::LogicalFilter { .. } => "LogicalFilter".to_string(),
             Operator::LogicalMap { .. } => "LogicalMap".to_string(),
             Operator::LogicalJoin { .. } => "LogicalJoin".to_string(),
-            Operator::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
             Operator::LogicalProject { .. } => "LogicalProject".to_string(),
             Operator::LogicalWith { .. } => "LogicalWith".to_string(),
             Operator::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
@@ -529,6 +519,14 @@ fn join_projects(projects: &Vec<(Scalar, Column)>) -> String {
         } else {
             strings.push(format!("{}:{}", c, x));
         }
+    }
+    strings.join(" ")
+}
+
+fn join_columns(cs: &Vec<Column>) -> String {
+    let mut strings = vec![];
+    for c in cs {
+        strings.push(format!("{}", c));
     }
     strings.join(" ")
 }

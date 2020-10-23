@@ -90,7 +90,12 @@ impl Converter {
         let right = self.any_resolved_scan(q.right_scan.get());
         // Convert inner join to join-then-filter.
         if *q.join_type.get().borrow() == 0 {
-            let mut input = Expr::new(LogicalJoin(Join::Inner(vec![]), left, right));
+            let mut input = Expr::new(LogicalJoin {
+                join: Join::Inner(vec![]),
+                parameters: vec![],
+                left,
+                right,
+            });
             let predicates = match &q.join_expr {
                 Some(expr) => self.predicate(expr.borrow(), &mut input),
                 None => vec![],
@@ -113,11 +118,26 @@ impl Converter {
         }
         match q.join_type.get().borrow() {
             // Left
-            1 => Expr::new(LogicalJoin(Join::Right(predicates), right, left)),
+            1 => Expr::new(LogicalJoin {
+                join: Join::Right(predicates),
+                parameters: vec![],
+                left: right,
+                right: left,
+            }),
             // Right
-            2 => Expr::new(LogicalJoin(Join::Right(predicates), left, right)),
+            2 => Expr::new(LogicalJoin {
+                join: Join::Right(predicates),
+                parameters: vec![],
+                left,
+                right,
+            }),
             // Full
-            3 => Expr::new(LogicalJoin(Join::Outer(predicates), left, right)),
+            3 => Expr::new(LogicalJoin {
+                join: Join::Outer(predicates),
+                parameters: vec![],
+                left,
+                right,
+            }),
             // Invalid
             other => panic!("{:?}", other),
         }
@@ -578,7 +598,12 @@ impl Converter {
         if let Some(from) = &q.from_scan {
             let from = self.any_resolved_scan(from);
             let predicates = vec![];
-            input = Expr::new(LogicalJoin(Join::Inner(predicates), input, from));
+            input = Expr::new(LogicalJoin {
+                join: Join::Inner(predicates),
+                parameters: vec![],
+                left: input,
+                right: from,
+            });
         }
         if let Some(pred) = &q.where_expr {
             let pred = self.predicate(pred, &mut input);
@@ -795,7 +820,7 @@ impl Converter {
             other => panic!("{:?}", other),
         };
         // Push join onto outer.
-        *outer = Expr::new(LogicalDependentJoin {
+        *outer = Expr::new(LogicalJoin {
             parameters,
             join,
             left: subquery,

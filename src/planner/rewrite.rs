@@ -18,7 +18,6 @@ enum RewriteRule {
     PushDependentJoinThroughLimit,
     PushDependentJoinThroughSort,
     PushDependentJoinThroughSetOperation,
-    DependentJoinToJoin,
     // Optimize joins:
     MarkJoinToSemiJoin,
     SingleJoinToInnerJoin,
@@ -42,18 +41,25 @@ impl RewriteRule {
     fn apply(&self, expr: &Expr) -> Option<Expr> {
         match self {
             RewriteRule::PullExplicitFilterIntoInnerJoin => {
-                if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
+                if let LogicalJoin {
+                    parameters,
+                    join: Join::Inner(join_predicates),
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
                     if let LogicalFilter(left_predicates, left) = left.as_ref() {
                         let (correlated, uncorrelated) =
                             correlated_predicates(left_predicates, left);
                         if !correlated.is_empty() {
                             let mut join_predicates = join_predicates.clone();
                             join_predicates.extend(correlated);
-                            return Some(Expr::new(LogicalJoin(
-                                Join::Inner(join_predicates),
-                                maybe_filter(uncorrelated, left.clone()),
-                                right.clone(),
-                            )));
+                            return Some(Expr::new(LogicalJoin {
+                                parameters: free_parameters(parameters, left),
+                                join: Join::Inner(join_predicates),
+                                left: maybe_filter(uncorrelated, left.clone()),
+                                right: right.clone(),
+                            }));
                         }
                     }
                     if let LogicalFilter(right_predicates, right) = right.as_ref() {
@@ -62,67 +68,88 @@ impl RewriteRule {
                         if !correlated.is_empty() {
                             let mut join_predicates = join_predicates.clone();
                             join_predicates.extend(correlated);
-                            return Some(Expr::new(LogicalJoin(
-                                Join::Inner(join_predicates),
-                                left.clone(),
-                                maybe_filter(uncorrelated, right.clone()),
-                            )));
+                            return Some(Expr::new(LogicalJoin {
+                                parameters: parameters.clone(),
+                                join: Join::Inner(join_predicates),
+                                left: left.clone(),
+                                right: maybe_filter(uncorrelated, right.clone()),
+                            }));
                         }
                     }
                 }
             }
             RewriteRule::PullImplicitFilterThroughInnerJoin => {
-                if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
+                if let LogicalJoin {
+                    parameters,
+                    join: Join::Inner(join_predicates),
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
                     let (correlated, uncorrelated) = correlated_predicates(join_predicates, expr);
                     if !correlated.is_empty() {
                         return Some(Expr::new(LogicalFilter(
                             correlated,
-                            Expr::new(LogicalJoin(
-                                Join::Inner(uncorrelated),
-                                left.clone(),
-                                right.clone(),
-                            )),
+                            Expr::new(LogicalJoin {
+                                parameters: free_parameters(parameters, left),
+                                join: Join::Inner(uncorrelated),
+                                left: left.clone(),
+                                right: right.clone(),
+                            }),
                         )));
                     }
                 }
             }
             RewriteRule::PullExplicitFilterThroughOuterJoin => {
-                if let LogicalJoin(join, left, right) = expr.as_ref() {
-                    if let LogicalFilter(filter_predicates, right) = right.as_ref() {
-                        let (correlated, uncorrelated) =
-                            correlated_predicates(filter_predicates, right);
-                        if !correlated.is_empty() {
-                            return Some(Expr::new(LogicalFilter(
-                                correlated,
-                                Expr::new(LogicalJoin(
-                                    join.clone(),
-                                    left.clone(),
-                                    maybe_filter(uncorrelated, right.clone()),
-                                )),
-                            )));
-                        }
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoin => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join,
                     left,
                     right,
                 } = expr.as_ref()
                 {
+                    if let LogicalFilter(filter_predicates, right) = right.as_ref() {
+                        let (correlated, uncorrelated) =
+                            correlated_predicates(filter_predicates, right);
+                        if !correlated.is_empty() {
+                            return Some(Expr::new(LogicalFilter(
+                                correlated,
+                                Expr::new(LogicalJoin {
+                                    parameters: free_parameters(parameters, left),
+                                    join: join.clone(),
+                                    left: left.clone(),
+                                    right: maybe_filter(uncorrelated, right.clone()),
+                                }),
+                            )));
+                        }
+                    }
+                }
+            }
+            RewriteRule::PushDependentJoin => {
+                if let LogicalJoin {
+                    parameters,
+                    join,
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     return Some(unnest_one(parameters, join, left, right));
                 }
             }
             RewriteRule::PushDependentJoinThroughFilter => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -135,13 +162,16 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughMap => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -160,31 +190,53 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughJoin => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
-                    if let LogicalJoin(join, left_subquery, right_subquery) = subquery.as_ref() {
+                    if let LogicalJoin {
+                        parameters: empty_parameters,
+                        join,
+                        left: left_subquery,
+                        right: right_subquery,
+                    } = subquery.as_ref()
+                    {
+                        if !empty_parameters.is_empty() {
+                            return None;
+                        }
                         match join {
                             Join::Inner(predicates) => {
                                 if free_parameters(parameters, left_subquery).is_empty() {
-                                    return Some(Expr::new(LogicalJoin(
-                                        Join::Inner(predicates.clone()),
-                                        left_subquery.clone(),
-                                        push_dependent_join(parameters, right_subquery, domain),
-                                    )));
+                                    return Some(Expr::new(LogicalJoin {
+                                        parameters: vec![],
+                                        join: Join::Inner(predicates.clone()),
+                                        left: left_subquery.clone(),
+                                        right: push_dependent_join(
+                                            parameters,
+                                            right_subquery,
+                                            domain,
+                                        ),
+                                    }));
                                 } else if free_parameters(parameters, right_subquery).is_empty() {
-                                    return Some(Expr::new(LogicalJoin(
-                                        Join::Inner(predicates.clone()),
-                                        push_dependent_join(parameters, left_subquery, domain),
-                                        right_subquery.clone(),
-                                    )));
+                                    return Some(Expr::new(LogicalJoin {
+                                        parameters: vec![],
+                                        join: Join::Inner(predicates.clone()),
+                                        left: push_dependent_join(
+                                            parameters,
+                                            left_subquery,
+                                            domain,
+                                        ),
+                                        right: right_subquery.clone(),
+                                    }));
                                 } else {
                                     todo!()
                                 }
@@ -221,13 +273,16 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughWith => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -237,13 +292,16 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughAggregate => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -266,13 +324,16 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughLimit => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -287,13 +348,16 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughSort => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -303,13 +367,16 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughSetOperation => {
-                if let LogicalDependentJoin {
+                if let LogicalJoin {
                     parameters,
                     join: Join::Inner(join_predicates),
                     left: subquery,
                     right: domain,
                 } = expr.as_ref()
                 {
+                    if parameters.is_empty() {
+                        return None;
+                    }
                     if !join_predicates.is_empty() {
                         return None;
                     }
@@ -321,28 +388,18 @@ impl RewriteRule {
                     }
                 }
             }
-            RewriteRule::DependentJoinToJoin => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    join,
-                    left: subquery,
-                    right: domain,
-                } = expr.as_ref()
-                {
-                    if parameters.is_empty() {
-                        return Some(Expr::new(LogicalJoin(
-                            join.clone(),
-                            subquery.clone(),
-                            domain.clone(),
-                        )));
-                    }
-                }
-            }
             RewriteRule::MarkJoinToSemiJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
-                    if let LogicalJoin(Join::Mark(mark, join_predicates), left, right) =
-                        input.as_ref()
+                    if let LogicalJoin {
+                        parameters,
+                        join: Join::Mark(mark, join_predicates),
+                        left,
+                        right,
+                    } = input.as_ref()
                     {
+                        if !parameters.is_empty() {
+                            return None;
+                        }
                         let mut filter_predicates = filter_predicates.clone();
                         let semi = Scalar::Column(mark.clone());
                         let anti = Scalar::Call(Function::Not, vec![semi.clone()], Type::Bool);
@@ -355,7 +412,7 @@ impl RewriteRule {
                         }
                         combined_attributes
                             .push((Scalar::Literal(Value::Bool(true), Type::Bool), mark.clone()));
-                        combined_attributes.sort_by_key(|(_, c)| c.id);
+                        combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));
                         for i in 0..filter_predicates.len() {
                             if filter_predicates[i] == semi {
                                 filter_predicates.remove(i);
@@ -363,11 +420,12 @@ impl RewriteRule {
                                     filter_predicates,
                                     Expr::new(LogicalMap(
                                         combined_attributes,
-                                        Expr::new(LogicalJoin(
-                                            Join::Semi(join_predicates.clone()),
-                                            left.clone(),
-                                            right.clone(),
-                                        )),
+                                        Expr::new(LogicalJoin {
+                                            parameters: vec![],
+                                            join: Join::Semi(join_predicates.clone()),
+                                            left: left.clone(),
+                                            right: right.clone(),
+                                        }),
                                     )),
                                 ));
                             } else if filter_predicates[i] == anti {
@@ -376,11 +434,12 @@ impl RewriteRule {
                                     filter_predicates,
                                     Expr::new(LogicalMap(
                                         combined_attributes,
-                                        Expr::new(LogicalJoin(
-                                            Join::Anti(join_predicates.clone()),
-                                            left.clone(),
-                                            right.clone(),
-                                        )),
+                                        Expr::new(LogicalJoin {
+                                            parameters: vec![],
+                                            join: Join::Anti(join_predicates.clone()),
+                                            left: left.clone(),
+                                            right: right.clone(),
+                                        }),
                                     )),
                                 ));
                             }
@@ -389,18 +448,37 @@ impl RewriteRule {
                 }
             }
             RewriteRule::SingleJoinToInnerJoin => {
-                if let LogicalJoin(Join::Single(join_predicates), left, right) = expr.as_ref() {
+                if let LogicalJoin {
+                    parameters,
+                    join: Join::Single(join_predicates),
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
+                    if !parameters.is_empty() {
+                        return None;
+                    }
                     if join_predicates.is_empty() && prove_singleton(left) {
-                        return Some(Expr::new(LogicalJoin(
-                            Join::Inner(vec![]),
-                            left.clone(),
-                            right.clone(),
-                        )));
+                        return Some(Expr::new(LogicalJoin {
+                            parameters: vec![],
+                            join: Join::Inner(vec![]),
+                            left: left.clone(),
+                            right: right.clone(),
+                        }));
                     }
                 }
             }
             RewriteRule::RemoveInnerJoin => {
-                if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
+                if let LogicalJoin {
+                    parameters,
+                    join: Join::Inner(join_predicates),
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
+                    if !parameters.is_empty() {
+                        return None;
+                    }
                     if let Some(single) = remove_inner_join_left(
                         left.clone(),
                         maybe_filter(join_predicates.clone(), right.clone()),
@@ -425,52 +503,83 @@ impl RewriteRule {
             }
             RewriteRule::PushExplicitFilterIntoInnerJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
-                    if let LogicalJoin(Join::Inner(join_predicates), left, right) = input.as_ref() {
+                    if let LogicalJoin {
+                        parameters,
+                        join: Join::Inner(join_predicates),
+                        left,
+                        right,
+                    } = input.as_ref()
+                    {
+                        if !parameters.is_empty() {
+                            return None;
+                        }
                         let mut combined = join_predicates.clone();
                         for p in filter_predicates {
                             combined.push(p.clone());
                         }
-                        return Some(Expr::new(LogicalJoin(
-                            Join::Inner(combined),
-                            left.clone(),
-                            right.clone(),
-                        )));
+                        return Some(Expr::new(LogicalJoin {
+                            parameters: vec![],
+                            join: Join::Inner(combined),
+                            left: left.clone(),
+                            right: right.clone(),
+                        }));
                     }
                 }
             }
             RewriteRule::PushImplicitFilterThroughInnerJoin => {
-                if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
+                if let LogicalJoin {
+                    parameters,
+                    join: Join::Inner(join_predicates),
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
+                    if !parameters.is_empty() {
+                        return None;
+                    }
                     let (correlated, uncorrelated) = correlated_predicates(join_predicates, left);
                     if !uncorrelated.is_empty() {
-                        return Some(Expr::new(LogicalJoin(
-                            Join::Inner(correlated),
-                            Expr::new(LogicalFilter(uncorrelated, left.clone())),
-                            right.clone(),
-                        )));
+                        return Some(Expr::new(LogicalJoin {
+                            parameters: vec![],
+                            join: Join::Inner(correlated),
+                            left: Expr::new(LogicalFilter(uncorrelated, left.clone())),
+                            right: right.clone(),
+                        }));
                     }
                     let (correlated, uncorrelated) = correlated_predicates(join_predicates, right);
                     if !uncorrelated.is_empty() {
-                        return Some(Expr::new(LogicalJoin(
-                            Join::Inner(correlated),
-                            left.clone(),
-                            Expr::new(LogicalFilter(uncorrelated, right.clone())),
-                        )));
+                        return Some(Expr::new(LogicalJoin {
+                            parameters: vec![],
+                            join: Join::Inner(correlated),
+                            left: left.clone(),
+                            right: Expr::new(LogicalFilter(uncorrelated, right.clone())),
+                        }));
                     }
                 }
             }
             RewriteRule::PushExplicitFilterThroughOuterJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
-                    if let LogicalJoin(join, left, right) = input.as_ref() {
+                    if let LogicalJoin {
+                        parameters,
+                        join,
+                        left,
+                        right,
+                    } = input.as_ref()
+                    {
+                        if !parameters.is_empty() {
+                            return None;
+                        }
                         let (correlated, uncorrelated) =
                             correlated_predicates(filter_predicates, right);
                         if !uncorrelated.is_empty() {
                             return Some(maybe_filter(
                                 correlated,
-                                Expr::new(LogicalJoin(
-                                    join.clone(),
-                                    left.clone(),
-                                    Expr::new(LogicalFilter(uncorrelated, right.clone())),
-                                )),
+                                Expr::new(LogicalJoin {
+                                    parameters: vec![],
+                                    join: join.clone(),
+                                    left: left.clone(),
+                                    right: Expr::new(LogicalFilter(uncorrelated, right.clone())),
+                                }),
                             ));
                         }
                     }
@@ -603,7 +712,7 @@ fn correlated_predicates(predicates: &Vec<Scalar>, input: &Expr) -> (Vec<Scalar>
 }
 
 fn push_dependent_join(parameters: &Vec<Column>, subquery: &Expr, domain: &Expr) -> Expr {
-    Expr::new(LogicalDependentJoin {
+    Expr::new(LogicalJoin {
         parameters: free_parameters(parameters, subquery),
         join: Join::Inner(vec![]),
         left: subquery.clone(),
@@ -615,8 +724,8 @@ pub fn free_parameters(parameters: &Vec<Column>, subquery: &Expr) -> Vec<Column>
     let free = subquery.free();
     parameters
         .iter()
-        .filter(|p| free.contains(p))
         .map(|p| p.clone())
+        .filter(|p| free.contains(p))
         .collect()
 }
 
@@ -785,7 +894,6 @@ fn simple_unnest(expr: Expr) -> Expr {
                 RewriteRule::PullImplicitFilterThroughInnerJoin,
                 RewriteRule::PullExplicitFilterThroughOuterJoin,
                 RewriteRule::CombineConsecutiveFilters,
-                RewriteRule::DependentJoinToJoin,
             ],
         )
     })
@@ -851,7 +959,7 @@ fn unnest_one(
             typ: subquery_parameters[i].typ.clone(),
         })
         .collect();
-    let dependent_join = LogicalDependentJoin {
+    let dependent_join = LogicalJoin {
         parameters: subquery_parameters.clone(),
         join: Join::Inner(vec![]),
         left: subquery.clone(),
@@ -873,7 +981,7 @@ fn unnest_one(
             (Scalar::Column(c.clone()), c.clone())
         })
         .collect();
-    map_names.sort_by_key(|(_, c)| c.id);
+    map_names.sort_by(|(_, a), (_, b)| a.cmp(b));
     let map_dependent_join = LogicalMap(map_names, Expr::new(dependent_join));
     //             LogicalJoin
     //              +       +
@@ -907,11 +1015,12 @@ fn unnest_one(
         }
         _ => panic!("{}", join),
     };
-    let equi_join = Expr::new(LogicalJoin(
+    let equi_join = Expr::new(LogicalJoin {
         join,
-        Expr::new(map_dependent_join),
-        outer.clone(),
-    ));
+        parameters: vec![],
+        left: Expr::new(map_dependent_join),
+        right: outer.clone(),
+    });
     // Push down dependent join.
     equi_join.top_down_rewrite(&|expr| {
         apply_all(
@@ -925,7 +1034,6 @@ fn unnest_one(
                 RewriteRule::PushDependentJoinThroughLimit,
                 RewriteRule::PushDependentJoinThroughSort,
                 RewriteRule::PushDependentJoinThroughSetOperation,
-                RewriteRule::DependentJoinToJoin,
             ],
         )
     })

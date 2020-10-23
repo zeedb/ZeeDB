@@ -68,7 +68,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::Union(left, right)
                 | Operator::Intersect(left, right)
                 | Operator::Except(left, right)
-                | Operator::LogicalJoin(_, left, right)
+                | Operator::LogicalJoin { left, right, .. }
                 | Operator::LogicalWith(_, _, left, right)
                 | Operator::NestedLoop(_, left, right)
                 | Operator::HashJoin(_, _, left, right)
@@ -102,7 +102,6 @@ impl<'it> Iterator for ExprIterator<'it> {
                 }
                 Operator::LogicalSingleGet { .. }
                 | Operator::LogicalGet { .. }
-                | Operator::LogicalDependentJoin { .. }
                 | Operator::LogicalGetWith { .. }
                 | Operator::LogicalCreateDatabase { .. }
                 | Operator::LogicalCreateTable { .. }

@@ -4,7 +4,7 @@ where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
 	LogicalMap $update.$expr:$expr_subquery.last_name
-		LogicalDependentJoin Single person.last_name
+		LogicalJoin Single [person.last_name]
 			LogicalMap $expr_subquery.last_name:person.last_name
 				LogicalSingleGet
 			LogicalFilter (Equal person.person_id 1)

@@ -4,5 +4,5 @@ from person
 LogicalMap $aggregate.$agg1
 	LogicalAggregate $aggregate.$agg1:(Sum $proj.$sum)
 		LogicalMap $proj.$sum:1
-			Map*
+			Map* 
 				LogicalGet person

@@ -4,11 +4,11 @@ and not exists (select 1 from store where store.store_id = customer.store_id and
 
 Map $query.$col1:1
 	HashJoin Anti customer.store_id=customer.store_id customer.modified_date=customer.modified_date
-		Map $expr_subquery.$col1:1 customer.store_id:customer.store_id customer.modified_date:customer.modified_date
+		Map $expr_subquery.$col1:1 customer.modified_date:customer.modified_date customer.store_id:customer.store_id
 			HashJoin Inner (Greater customer.modified_date store.modified_date) customer.store_id=store.store_id
 				Project customer.store_id customer.modified_date
 					HashJoin Mark $mark.$exists customer.person_id=customer.person_id
-						Map customer.person_id:customer.person_id $expr_subquery.$col1:1
+						Map $expr_subquery.$col1:1 customer.person_id:customer.person_id
 							HashJoin Inner customer.person_id=person.person_id
 								Project customer.person_id
 									Map* customer.person_id customer.store_id customer.modified_date
@@ -19,9 +19,9 @@ Map $query.$col1:1
 							SeqScan customer
 				Map* store.store_id store.modified_date
 					SeqScan store
-		Map $mark.$exists:true customer.person_id customer.store_id customer.modified_date customer.person_id $expr_subquery.$col1
+		Map $expr_subquery.$col1 $mark.$exists:true customer.modified_date customer.person_id customer.person_id customer.store_id
 			HashJoin Semi customer.person_id=customer.person_id
-				Map customer.person_id:customer.person_id $expr_subquery.$col1:1
+				Map $expr_subquery.$col1:1 customer.person_id:customer.person_id
 					HashJoin Inner customer.person_id=person.person_id
 						Project customer.person_id
 							Map* customer.person_id customer.store_id customer.modified_date

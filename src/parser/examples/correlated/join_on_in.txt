@@ -4,7 +4,7 @@ join store on person.person_id in (select person_id from customer where customer
 
 LogicalMap $query.$col1:1
 	LogicalFilter $mark.$in
-		LogicalDependentJoin Mark $mark.$in (Equal person.person_id customer.person_id) store.store_id
+		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id) [store.store_id]
 			LogicalMap customer.person_id
 				LogicalFilter (Equal customer.store_id store.store_id)
 					Map* customer.person_id customer.store_id

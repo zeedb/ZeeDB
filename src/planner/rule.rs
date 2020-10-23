@@ -77,15 +77,27 @@ impl Rule {
     // Quickly check if rule matches expression *without* exploring the inputs to the expression.
     pub fn matches_fast(&self, mexpr: &MultiExpr) -> bool {
         match (self, &mexpr.op) {
-            (Rule::InnerJoinCommutivity, LogicalJoin(Join::Inner(_), _, _))
-            | (Rule::InnerJoinAssociativity, LogicalJoin(Join::Inner(_), _, _))
+            (
+                Rule::InnerJoinCommutivity,
+                LogicalJoin {
+                    join: Join::Inner(_),
+                    ..
+                },
+            )
+            | (
+                Rule::InnerJoinAssociativity,
+                LogicalJoin {
+                    join: Join::Inner(_),
+                    ..
+                },
+            )
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
             | (Rule::LogicalMapToMap, LogicalMap(_, _))
-            | (Rule::LogicalJoinToNestedLoop, LogicalJoin(_, _, _))
-            | (Rule::LogicalJoinToHashJoin, LogicalJoin(_, _, _))
+            | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
+            | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
             | (Rule::LogicalProjectToProject, LogicalProject { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
@@ -120,20 +132,32 @@ impl Rule {
         let mut binds = vec![];
         match self {
             Rule::InnerJoinAssociativity => {
-                if let LogicalJoin(Join::Inner(parent_predicates), left, right) = &ss[mid].op {
+                if let LogicalJoin {
+                    join: Join::Inner(parent_predicates),
+                    left,
+                    right,
+                    ..
+                } = &ss[mid].op
+                {
                     for left in &ss[*left].logical {
-                        if let LogicalJoin(Join::Inner(left_predicates), left_left, left_middle) =
-                            &ss[*left].op
+                        if let LogicalJoin {
+                            join: Join::Inner(left_predicates),
+                            left: left_left,
+                            right: left_middle,
+                            ..
+                        } = &ss[*left].op
                         {
-                            binds.push(LogicalJoin(
-                                Join::Inner(parent_predicates.clone()),
-                                Bind::Operator(Box::new(LogicalJoin(
-                                    Join::Inner(left_predicates.clone()),
-                                    Bind::Group(*left_left),
-                                    Bind::Group(*left_middle),
-                                ))),
-                                Bind::Group(*right),
-                            ))
+                            binds.push(LogicalJoin {
+                                parameters: vec![],
+                                join: Join::Inner(parent_predicates.clone()),
+                                left: Bind::Operator(Box::new(LogicalJoin {
+                                    parameters: vec![],
+                                    join: Join::Inner(left_predicates.clone()),
+                                    left: Bind::Group(*left_left),
+                                    right: Bind::Group(*left_middle),
+                                })),
+                                right: Bind::Group(*right),
+                            })
                         }
                     }
                 }
@@ -162,12 +186,19 @@ impl Rule {
     pub fn apply(&self, ss: &SearchSpace, bind: Operator<Bind>) -> Option<Operator<Bind>> {
         match self {
             Rule::InnerJoinCommutivity => {
-                if let LogicalJoin(Join::Inner(join_predicates), left, right) = bind {
-                    return Some(LogicalJoin(
-                        Join::Inner(join_predicates.clone()),
-                        right,
-                        left,
-                    ));
+                if let LogicalJoin {
+                    join: Join::Inner(join_predicates),
+                    left,
+                    right,
+                    ..
+                } = bind
+                {
+                    return Some(LogicalJoin {
+                        parameters: vec![],
+                        join: Join::Inner(join_predicates.clone()),
+                        left: right,
+                        right: left,
+                    });
                 }
             }
             // Rearrange left-deep join into right-deep join.
@@ -180,23 +211,34 @@ impl Rule {
             //      +               +
             //   leftLeft      leftMiddle
             Rule::InnerJoinAssociativity => {
-                if let LogicalJoin(Join::Inner(parent_predicates), Bind::Operator(left), right) =
-                    bind
+                if let LogicalJoin {
+                    join: Join::Inner(parent_predicates),
+                    left: Bind::Operator(left),
+                    right,
+                    ..
+                } = bind
                 {
-                    if let LogicalJoin(Join::Inner(left_predicates), left_left, left_middle) = *left
+                    if let LogicalJoin {
+                        join: Join::Inner(left_predicates),
+                        left: left_left,
+                        right: left_middle,
+                        ..
+                    } = *left
                     {
                         let mut new_parent_predicates = vec![];
                         let mut new_right_predicates = vec![];
                         todo!("redistribute predicates");
-                        return Some(LogicalJoin(
-                            Join::Inner(new_parent_predicates),
-                            left_left,
-                            Bind::Operator(Box::new(LogicalJoin(
-                                Join::Inner(new_right_predicates),
-                                left_middle,
+                        return Some(LogicalJoin {
+                            parameters: vec![],
+                            join: Join::Inner(new_parent_predicates),
+                            left: left_left,
+                            right: Bind::Operator(Box::new(LogicalJoin {
+                                parameters: vec![],
+                                join: Join::Inner(new_right_predicates),
+                                left: left_middle,
                                 right,
-                            ))),
-                        ));
+                            })),
+                        });
                     }
                 }
             }
@@ -248,12 +290,21 @@ impl Rule {
                 }
             }
             Rule::LogicalJoinToNestedLoop => {
-                if let LogicalJoin(join, left, right) = bind {
+                if let LogicalJoin {
+                    join, left, right, ..
+                } = bind
+                {
                     return Some(NestedLoop(join, left, right));
                 }
             }
             Rule::LogicalJoinToHashJoin => {
-                if let LogicalJoin(join, Bind::Group(left), Bind::Group(right)) = bind {
+                if let LogicalJoin {
+                    join,
+                    left: Bind::Group(left),
+                    right: Bind::Group(right),
+                    ..
+                } = bind
+                {
                     let (hash_predicates, join) = match join {
                         Join::Inner(join_predicates) => {
                             let (hash_predicates, remaining_predicates) =
