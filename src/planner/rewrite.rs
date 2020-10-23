@@ -4,8 +4,9 @@ use node::*;
 #[derive(Debug)]
 enum RewriteRule {
     // Simple unnesting:
-    PullExplicitFilterIntoJoin,
-    PullImplicitFilterThroughJoin,
+    PullExplicitFilterIntoInnerJoin,
+    PullImplicitFilterThroughInnerJoin,
+    PullExplicitFilterThroughOuterJoin,
     // Unnest meta rule:
     PushDependentJoin,
     // Unnesting implementation rules:
@@ -24,8 +25,9 @@ enum RewriteRule {
     RemoveInnerJoin,
     RemoveWith,
     // Predicate pushdown:
-    PushExplicitFilterIntoJoin,
-    PushImplicitFilterThroughJoin,
+    PushExplicitFilterIntoInnerJoin,
+    PushImplicitFilterThroughInnerJoin,
+    PushExplicitFilterThroughOuterJoin,
     PushFilterThroughProject,
     CombineConsecutiveFilters,
     EmbedFilterIntoGet,
@@ -39,50 +41,67 @@ enum RewriteRule {
 impl RewriteRule {
     fn apply(&self, expr: &Expr) -> Option<Expr> {
         match self {
-            RewriteRule::PullExplicitFilterIntoJoin => {
+            RewriteRule::PullExplicitFilterIntoInnerJoin => {
                 if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
                     if let LogicalFilter(left_predicates, left) = left.as_ref() {
-                        if let Some((join_predicates, left_predicates)) =
-                            pull_explicit_filter_into_join(join_predicates, left_predicates, left)
-                        {
+                        let (correlated, uncorrelated) =
+                            correlated_predicates(left_predicates, left);
+                        if !correlated.is_empty() {
+                            let mut join_predicates = join_predicates.clone();
+                            join_predicates.extend(correlated);
                             return Some(Expr::new(LogicalJoin(
                                 Join::Inner(join_predicates),
-                                maybe_filter(left_predicates, left.clone()),
+                                maybe_filter(uncorrelated, left.clone()),
                                 right.clone(),
                             )));
                         }
                     }
-                }
-                if let LogicalJoin(join, left, right) = expr.as_ref() {
                     if let LogicalFilter(right_predicates, right) = right.as_ref() {
-                        if let Some((join_predicates, right_predicates)) =
-                            pull_explicit_filter_into_join(
-                                join.predicates(),
-                                right_predicates,
-                                right,
-                            )
-                        {
-                            let join = match join {
-                                Join::Inner(_) => Join::Inner(join_predicates),
-                                Join::Right(_) => Join::Right(join_predicates),
-                                Join::Outer(_) => Join::Outer(join_predicates),
-                                Join::Semi(_) => Join::Semi(join_predicates),
-                                Join::Anti(_) => Join::Anti(join_predicates),
-                                Join::Single(_) => Join::Single(join_predicates),
-                                Join::Mark(mark, _) => Join::Mark(mark.clone(), join_predicates),
-                            };
+                        let (correlated, uncorrelated) =
+                            correlated_predicates(right_predicates, right);
+                        if !correlated.is_empty() {
+                            let mut join_predicates = join_predicates.clone();
+                            join_predicates.extend(correlated);
                             return Some(Expr::new(LogicalJoin(
-                                join,
+                                Join::Inner(join_predicates),
                                 left.clone(),
-                                maybe_filter(right_predicates, right.clone()),
+                                maybe_filter(uncorrelated, right.clone()),
                             )));
                         }
                     }
                 }
             }
-            RewriteRule::PullImplicitFilterThroughJoin => {
+            RewriteRule::PullImplicitFilterThroughInnerJoin => {
                 if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
-                    todo!()
+                    let (correlated, uncorrelated) = correlated_predicates(join_predicates, expr);
+                    if !correlated.is_empty() {
+                        return Some(Expr::new(LogicalFilter(
+                            correlated,
+                            Expr::new(LogicalJoin(
+                                Join::Inner(uncorrelated),
+                                left.clone(),
+                                right.clone(),
+                            )),
+                        )));
+                    }
+                }
+            }
+            RewriteRule::PullExplicitFilterThroughOuterJoin => {
+                if let LogicalJoin(join, left, right) = expr.as_ref() {
+                    if let LogicalFilter(filter_predicates, right) = right.as_ref() {
+                        let (correlated, uncorrelated) =
+                            correlated_predicates(filter_predicates, right);
+                        if !correlated.is_empty() {
+                            return Some(Expr::new(LogicalFilter(
+                                correlated,
+                                Expr::new(LogicalJoin(
+                                    join.clone(),
+                                    left.clone(),
+                                    maybe_filter(uncorrelated, right.clone()),
+                                )),
+                            )));
+                        }
+                    }
                 }
             }
             RewriteRule::PushDependentJoin => {
@@ -201,7 +220,6 @@ impl RewriteRule {
                     }
                 }
             }
-            // TODO what happens when a dependent join sits on top of another dependent join? Need a bottom-up transform?
             RewriteRule::PushDependentJoinThroughWith => {
                 if let LogicalDependentJoin {
                     parameters,
@@ -405,7 +423,7 @@ impl RewriteRule {
                     }
                 }
             }
-            RewriteRule::PushExplicitFilterIntoJoin => {
+            RewriteRule::PushExplicitFilterIntoInnerJoin => {
                 if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
                     if let LogicalJoin(Join::Inner(join_predicates), left, right) = input.as_ref() {
                         let mut combined = join_predicates.clone();
@@ -418,61 +436,43 @@ impl RewriteRule {
                             right.clone(),
                         )));
                     }
-                    if let LogicalJoin(join, left, right) = input.as_ref() {
-                        if let Some((filter_predicates, join_predicates)) =
-                            push_explicit_filter_into_join(
-                                filter_predicates,
-                                join.predicates(),
-                                right,
-                            )
-                        {
-                            let join = match join {
-                                Join::Inner(_) => Join::Inner(join_predicates),
-                                Join::Right(_) => Join::Right(join_predicates),
-                                Join::Outer(_) => Join::Outer(join_predicates),
-                                Join::Semi(_) => Join::Semi(join_predicates),
-                                Join::Anti(_) => Join::Anti(join_predicates),
-                                Join::Single(_) => Join::Single(join_predicates),
-                                Join::Mark(mark, _) => Join::Mark(mark.clone(), join_predicates),
-                            };
-                            return Some(maybe_filter(
-                                filter_predicates,
-                                Expr::new(LogicalJoin(join, left.clone(), right.clone())),
-                            ));
-                        }
-                    }
                 }
             }
-            RewriteRule::PushImplicitFilterThroughJoin => {
+            RewriteRule::PushImplicitFilterThroughInnerJoin => {
                 if let LogicalJoin(Join::Inner(join_predicates), left, right) = expr.as_ref() {
-                    if let Some((join_predicates, filter_predicates)) =
-                        push_implicit_filter_through_join(join_predicates, left)
-                    {
+                    let (correlated, uncorrelated) = correlated_predicates(join_predicates, left);
+                    if !uncorrelated.is_empty() {
                         return Some(Expr::new(LogicalJoin(
-                            Join::Inner(join_predicates),
-                            Expr::new(LogicalFilter(filter_predicates, left.clone())),
+                            Join::Inner(correlated),
+                            Expr::new(LogicalFilter(uncorrelated, left.clone())),
                             right.clone(),
                         )));
                     }
-                }
-                if let LogicalJoin(join, left, right) = expr.as_ref() {
-                    if let Some((join_predicates, filter_predicates)) =
-                        push_implicit_filter_through_join(join.predicates(), right)
-                    {
-                        let join = match join {
-                            Join::Inner(_) => Join::Inner(join_predicates),
-                            Join::Right(_) => Join::Right(join_predicates),
-                            Join::Outer(_) => Join::Outer(join_predicates),
-                            Join::Semi(_) => Join::Semi(join_predicates),
-                            Join::Anti(_) => Join::Anti(join_predicates),
-                            Join::Single(_) => Join::Single(join_predicates),
-                            Join::Mark(mark, _) => Join::Mark(mark.clone(), join_predicates),
-                        };
+                    let (correlated, uncorrelated) = correlated_predicates(join_predicates, right);
+                    if !uncorrelated.is_empty() {
                         return Some(Expr::new(LogicalJoin(
-                            join,
+                            Join::Inner(correlated),
                             left.clone(),
-                            Expr::new(LogicalFilter(filter_predicates, right.clone())),
+                            Expr::new(LogicalFilter(uncorrelated, right.clone())),
                         )));
+                    }
+                }
+            }
+            RewriteRule::PushExplicitFilterThroughOuterJoin => {
+                if let LogicalFilter(filter_predicates, input) = expr.as_ref() {
+                    if let LogicalJoin(join, left, right) = input.as_ref() {
+                        let (correlated, uncorrelated) =
+                            correlated_predicates(filter_predicates, right);
+                        if !uncorrelated.is_empty() {
+                            return Some(maybe_filter(
+                                correlated,
+                                Expr::new(LogicalJoin(
+                                    join.clone(),
+                                    left.clone(),
+                                    Expr::new(LogicalFilter(uncorrelated, right.clone())),
+                                )),
+                            ));
+                        }
                     }
                 }
             }
@@ -593,25 +593,13 @@ impl RewriteRule {
     }
 }
 
-fn pull_explicit_filter_into_join(
-    join_predicates: &Vec<Scalar>,
-    filter_predicates: &Vec<Scalar>,
-    input: &Expr,
-) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+fn correlated_predicates(predicates: &Vec<Scalar>, input: &Expr) -> (Vec<Scalar>, Vec<Scalar>) {
     let scope = input.attributes();
-    let mut outer = join_predicates.clone();
-    let mut inner = vec![];
-    for p in filter_predicates {
-        if p.free().is_subset(&scope) {
-            outer.push(p.clone());
-        } else {
-            inner.push(p.clone());
-        }
-    }
-    if outer.is_empty() {
-        return None;
-    }
-    Some((outer, inner))
+    predicates
+        .clone()
+        .iter()
+        .map(|c| c.clone())
+        .partition(|c| !c.free().is_subset(&scope))
 }
 
 fn push_dependent_join(parameters: &Vec<Column>, subquery: &Expr, domain: &Expr) -> Expr {
@@ -707,47 +695,6 @@ fn has_side_effects(expr: &Expr) -> bool {
     expr.iter().any(|e| e.0.has_side_effects())
 }
 
-fn push_explicit_filter_into_join(
-    filter_predicates: &Vec<Scalar>,
-    join_predicates: &Vec<Scalar>,
-    input: &Expr,
-) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
-    let mut outer = vec![];
-    let mut inner = join_predicates.clone();
-    let scope = input.attributes();
-    for p in filter_predicates {
-        if p.free().is_subset(&scope) {
-            inner.push(p.clone());
-        } else {
-            outer.push(p.clone());
-        }
-    }
-    if inner.len() == join_predicates.len() {
-        return None;
-    }
-    Some((outer, inner))
-}
-
-fn push_implicit_filter_through_join(
-    join_predicates: &Vec<Scalar>,
-    input: &Expr,
-) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
-    let mut outer = vec![];
-    let mut inner = vec![];
-    let scope = input.attributes();
-    for p in join_predicates {
-        if p.free().is_subset(&scope) {
-            inner.push(p.clone());
-        } else {
-            outer.push(p.clone());
-        }
-    }
-    if inner.is_empty() {
-        return None;
-    }
-    Some((outer, inner))
-}
-
 fn push_filter_through_project(
     predicates: &Vec<Scalar>,
     projects: &Vec<(Scalar, Column)>,
@@ -822,7 +769,7 @@ fn apply_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
 }
 pub fn rewrite(expr: Expr) -> Expr {
     let expr = simple_unnest(expr);
-    let expr = unnest_all(expr);
+    let expr = general_unnest(expr);
     let expr = predicate_push_down(expr);
     let expr = optimize_join_type(expr);
     let expr = projection_push_down(expr);
@@ -834,10 +781,10 @@ fn simple_unnest(expr: Expr) -> Expr {
         apply_all(
             expr,
             &vec![
-                // TODO
-                // RewriteRule::PullExplicitFilterIntoJoin,
-                // RewriteRule::PullImplicitFilterThroughJoin,
-                // RewriteRule::CombineConsecutiveFilters,
+                RewriteRule::PullExplicitFilterIntoInnerJoin,
+                RewriteRule::PullImplicitFilterThroughInnerJoin,
+                RewriteRule::PullExplicitFilterThroughOuterJoin,
+                RewriteRule::CombineConsecutiveFilters,
                 RewriteRule::DependentJoinToJoin,
             ],
         )
@@ -845,7 +792,7 @@ fn simple_unnest(expr: Expr) -> Expr {
 }
 
 // Unnest all dependent joins, and simplify joins where possible.
-fn unnest_all(expr: Expr) -> Expr {
+fn general_unnest(expr: Expr) -> Expr {
     expr.bottom_up_rewrite(&|expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
 }
 
@@ -911,7 +858,7 @@ fn unnest_one(
         right: Expr::new(project),
     };
     // Rename attributes of DependentJoin so LogicalJoin can reference both sides.
-    let map_names = dependent_join
+    let mut map_names: Vec<(Scalar, Column)> = dependent_join
         .attributes()
         .iter()
         .map(|c| {
@@ -926,6 +873,7 @@ fn unnest_one(
             (Scalar::Column(c.clone()), c.clone())
         })
         .collect();
+    map_names.sort_by_key(|(_, c)| c.id);
     let map_dependent_join = LogicalMap(map_names, Expr::new(dependent_join));
     //             LogicalJoin
     //              +       +
@@ -1003,8 +951,9 @@ fn predicate_push_down(expr: Expr) -> Expr {
         apply_all(
             expr,
             &vec![
-                RewriteRule::PushExplicitFilterIntoJoin,
-                RewriteRule::PushImplicitFilterThroughJoin,
+                RewriteRule::PushExplicitFilterIntoInnerJoin,
+                RewriteRule::PushImplicitFilterThroughInnerJoin,
+                RewriteRule::PushExplicitFilterThroughOuterJoin,
                 RewriteRule::PushFilterThroughProject,
                 RewriteRule::CombineConsecutiveFilters,
                 RewriteRule::EmbedFilterIntoGet,

@@ -3,7 +3,7 @@ from store
 
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single store.store_id=store.store_id
-		Map store.store_id:store.store_id $aggregate.$agg1
+		Map $aggregate.$agg1 store.store_id:store.store_id
 			Aggregate store.store_id $aggregate.$agg1:(Max $proj.$max)
 				Map $proj.$max:customer.modified_date store.store_id
 					HashJoin Inner store.store_id=customer.store_id

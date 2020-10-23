@@ -3,7 +3,7 @@ from customer
 
 Map $query.$col1:store.name
 	HashJoin Single customer.store_id=customer.store_id
-		Map customer.store_id:customer.store_id store.name
+		Map store.name customer.store_id:customer.store_id
 			HashJoin Inner customer.store_id=store.store_id
 				Project customer.store_id
 					Map* customer.store_id
