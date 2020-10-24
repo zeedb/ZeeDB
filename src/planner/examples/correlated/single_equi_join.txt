@@ -2,13 +2,8 @@ select (select name from store where store.store_id = customer.store_id)
 from customer
 
 Map $query.$col1:store.name
-	HashJoin Single customer.store_id=customer.store_id
-		Map customer.store_id:customer.store_id store.name
-			HashJoin Inner customer.store_id=store.store_id
-				Project customer.store_id
-					Map* customer.store_id
-						SeqScan customer
-				Map* store.store_id store.name
-					SeqScan store
+	HashJoin Single store.store_id=customer.store_id
+		Map* store.store_id store.name
+			SeqScan store
 		Map* customer.store_id
 			SeqScan customer

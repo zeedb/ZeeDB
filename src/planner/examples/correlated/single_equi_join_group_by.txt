@@ -5,7 +5,7 @@ Map $query.customers:$aggregate.$agg1 store.store_id
 	HashJoin Single store.store_id=store.store_id
 		Map $aggregate.$agg1 store.store_id:store.store_id
 			Aggregate store.store_id $aggregate.$agg1:(Count $proj.$count)
-				Map $proj.$count:1 store.store_id
+				Map $proj.$count:1 customer.store_id store.store_id
 					HashJoin Inner store.store_id=customer.store_id
 						Project store.store_id
 							Map* store.store_id

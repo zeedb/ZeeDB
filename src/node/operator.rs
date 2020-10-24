@@ -884,6 +884,7 @@ impl fmt::Display for Column {
         if let Some(table) = &self.table {
             write!(f, "{}.", table)?;
         }
+        // TODO write # when there are multiple columns with the same name
         write!(f, "{}", self.name)
     }
 }

@@ -22,7 +22,7 @@ fn test_optimize() {
     ok!(
         "examples/aggregate/combine_consecutive_projects.txt",
         r#"
-            select a + 1 as b 
+            select a + 1 as b
             from (select 1 as a)
         "#,
         errors
@@ -30,7 +30,7 @@ fn test_optimize() {
     ok!(
         "examples/aggregate/combine_consecutive_projects_star.txt",
         r#"
-            select *, a + 1 as b 
+            select *, a + 1 as b
             from (select 1 as a)
         "#,
         errors

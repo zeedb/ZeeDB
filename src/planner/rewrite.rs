@@ -4,8 +4,10 @@ use node::*;
 #[derive(Debug)]
 enum RewriteRule {
     // Simple unnesting:
+    PullFilterThroughMap,
     PullExplicitFilterIntoInnerJoin,
     PullImplicitFilterThroughInnerJoin,
+    PullExplicitFilterIntoOuterJoin,
     PullExplicitFilterThroughOuterJoin,
     // Unnest meta rule:
     PushDependentJoin,
@@ -18,6 +20,7 @@ enum RewriteRule {
     PushDependentJoinThroughLimit,
     PushDependentJoinThroughSort,
     PushDependentJoinThroughSetOperation,
+    RemoveDependentJoin,
     // Optimize joins:
     MarkJoinToSemiJoin,
     SingleJoinToInnerJoin,
@@ -40,6 +43,34 @@ enum RewriteRule {
 impl RewriteRule {
     fn apply(&self, expr: &Expr) -> Option<Expr> {
         match self {
+            RewriteRule::PullFilterThroughMap => {
+                if let LogicalMap(projects, input) = expr.as_ref() {
+                    if let LogicalFilter(predicates, input) = input.as_ref() {
+                        let (correlated, uncorrelated) = correlated_predicates(predicates, input);
+                        if correlated.is_empty() {
+                            return None;
+                        }
+                        let mut projects = projects.clone();
+                        let input_attributes = input.attributes();
+                        for x in &correlated {
+                            for free in x.free() {
+                                if input_attributes.contains(&free)
+                                    && !projects.iter().any(|(_, project)| project == &free)
+                                {
+                                    projects.push((Scalar::Column(free.clone()), free.clone()));
+                                }
+                            }
+                        }
+                        return Some(Expr::new(LogicalFilter(
+                            correlated,
+                            Expr::new(LogicalMap(
+                                projects,
+                                maybe_filter(uncorrelated, input.clone()),
+                            )),
+                        )));
+                    }
+                }
+            }
             RewriteRule::PullExplicitFilterIntoInnerJoin => {
                 if let LogicalJoin {
                     parameters,
@@ -97,6 +128,40 @@ impl RewriteRule {
                                 right: right.clone(),
                             }),
                         )));
+                    }
+                }
+            }
+            RewriteRule::PullExplicitFilterIntoOuterJoin => {
+                if let LogicalJoin {
+                    parameters,
+                    join,
+                    left,
+                    right,
+                } = expr.as_ref()
+                {
+                    if let LogicalFilter(left_predicates, left) = left.as_ref() {
+                        let (correlated, uncorrelated) =
+                            correlated_predicates(left_predicates, left);
+                        if correlated.is_empty() {
+                            return None;
+                        }
+                        let mut join_predicates = join.predicates().clone();
+                        join_predicates.extend(correlated);
+                        let join = match join {
+                            Join::Inner(_) => Join::Inner(join_predicates),
+                            Join::Right(_) => Join::Right(join_predicates),
+                            Join::Outer(_) => Join::Outer(join_predicates),
+                            Join::Semi(_) => Join::Semi(join_predicates),
+                            Join::Anti(_) => Join::Anti(join_predicates),
+                            Join::Single(_) => Join::Single(join_predicates),
+                            Join::Mark(mark, _) => Join::Mark(mark.clone(), join_predicates),
+                        };
+                        return Some(Expr::new(LogicalJoin {
+                            parameters: free_parameters(parameters, left),
+                            join,
+                            left: maybe_filter(uncorrelated, left.clone()),
+                            right: right.clone(),
+                        }));
                     }
                 }
             }
@@ -385,6 +450,27 @@ impl RewriteRule {
                         LogicalIntersect(left_subquery, right_subquery) => todo!(),
                         LogicalExcept(left_subquery, right_subquery) => todo!(),
                         _ => {}
+                    }
+                }
+            }
+            RewriteRule::RemoveDependentJoin => {
+                if let LogicalJoin {
+                    parameters,
+                    join,
+                    left: subquery,
+                    right: domain,
+                } = expr.as_ref()
+                {
+                    if parameters.is_empty() {
+                        return None;
+                    }
+                    if free_parameters(parameters, subquery).is_empty() {
+                        return Some(Expr::new(LogicalJoin {
+                            parameters: vec![],
+                            join: join.clone(),
+                            left: subquery.clone(),
+                            right: domain.clone(),
+                        }));
                     }
                 }
             }
@@ -713,7 +799,7 @@ fn correlated_predicates(predicates: &Vec<Scalar>, input: &Expr) -> (Vec<Scalar>
 
 fn push_dependent_join(parameters: &Vec<Column>, subquery: &Expr, domain: &Expr) -> Expr {
     Expr::new(LogicalJoin {
-        parameters: free_parameters(parameters, subquery),
+        parameters: parameters.clone(),
         join: Join::Inner(vec![]),
         left: subquery.clone(),
         right: domain.clone(),
@@ -890,8 +976,10 @@ fn simple_unnest(expr: Expr) -> Expr {
         apply_all(
             expr,
             &vec![
+                RewriteRule::PullFilterThroughMap,
                 RewriteRule::PullExplicitFilterIntoInnerJoin,
                 RewriteRule::PullImplicitFilterThroughInnerJoin,
+                RewriteRule::PullExplicitFilterIntoOuterJoin,
                 RewriteRule::PullExplicitFilterThroughOuterJoin,
                 RewriteRule::CombineConsecutiveFilters,
             ],
@@ -1034,6 +1122,7 @@ fn unnest_one(
                 RewriteRule::PushDependentJoinThroughLimit,
                 RewriteRule::PushDependentJoinThroughSort,
                 RewriteRule::PushDependentJoinThroughSetOperation,
+                RewriteRule::RemoveDependentJoin,
             ],
         )
     })
