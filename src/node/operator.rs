@@ -834,23 +834,28 @@ impl fmt::Display for Table {
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Column {
+    pub created: Phase,
     pub id: i64,
     pub name: String,
     pub table: Option<String>,
     pub typ: encoding::Type,
 }
 
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub enum Phase {
+    Parse,
+    Convert,
+    Plan,
+}
+
 impl Column {
     pub fn from(column: &zetasql::ResolvedColumnProto) -> Self {
-        let id = column.column_id.unwrap();
-        let name = column.name.clone().unwrap();
-        let table = column.table_name.clone();
-        let typ = encoding::Type::from(column.r#type.as_ref().unwrap());
         Column {
-            id,
-            name,
-            table,
-            typ,
+            created: Phase::Parse,
+            id: column.column_id.unwrap(),
+            name: column.name.clone().unwrap(),
+            table: column.table_name.clone(),
+            typ: encoding::Type::from(column.r#type.as_ref().unwrap()),
         }
     }
 }

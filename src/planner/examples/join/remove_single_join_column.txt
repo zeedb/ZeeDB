@@ -2,8 +2,8 @@ select (select customer_id)
 from customer
 
 Map $query.$col1:$expr_subquery.customer_id
-	HashJoin Single customer.customer_id=customer.customer_id
-		Map $expr_subquery.customer_id:customer.customer_id customer.customer_id:customer.customer_id
+	HashJoin Single $subquery.customer_id=customer.customer_id
+		Map $expr_subquery.customer_id:customer.customer_id $subquery.customer_id:customer.customer_id
 			Project customer.customer_id
 				Map* customer.customer_id
 					SeqScan customer

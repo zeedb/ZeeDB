@@ -4,8 +4,8 @@ where customer.store_id = store.store_id
 and store.name like "A%") from store
 
 Map $query.$col1:$aggregate.$agg1
-	HashJoin Single store.store_id=store.store_id store.name=store.name
-		Map $aggregate.$agg1 store.name:store.name store.store_id:store.store_id
+	HashJoin Single $subquery.store_id=store.store_id $subquery.name=store.name
+		Map $aggregate.$agg1 $subquery.name:store.name $subquery.store_id:store.store_id
 			Aggregate store.store_id store.name $aggregate.$agg1:(Max $proj.$max)
 				Map $proj.$max:customer.modified_date customer.store_id store.store_id store.name
 					HashJoin Inner store.store_id=customer.store_id

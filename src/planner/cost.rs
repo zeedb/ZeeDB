@@ -41,7 +41,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let columns = predicates.len() as f64;
             input * columns * COST_CPU_PRED
         }
-        Map(projects, input) => {
+        Map(projects, _) => {
             let output_cardinality = ss[parent].props.cardinality as f64;
             let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
             count_exprs * output_cardinality * COST_CPU_EVAL

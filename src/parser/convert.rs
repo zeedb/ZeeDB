@@ -25,7 +25,7 @@ struct Converter {
 
 impl Converter {
     fn new() -> Converter {
-        Converter { next_column_id: -1 }
+        Converter { next_column_id: 0 }
     }
 
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
@@ -832,12 +832,13 @@ impl Converter {
 
     fn create_column(&mut self, table: String, name: String, typ: Type) -> Column {
         let column = Column {
+            created: Phase::Convert,
             id: self.next_column_id,
             name,
             table: Some(table),
             typ,
         };
-        self.next_column_id -= 1;
+        self.next_column_id += 1;
         column
     }
 }

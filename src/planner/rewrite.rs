@@ -791,10 +791,9 @@ impl RewriteRule {
 fn correlated_predicates(predicates: &Vec<Scalar>, input: &Expr) -> (Vec<Scalar>, Vec<Scalar>) {
     let scope = input.attributes();
     predicates
-        .clone()
         .iter()
-        .map(|c| c.clone())
-        .partition(|c| !c.free().is_subset(&scope))
+        .map(|p| p.clone())
+        .partition(|p| !p.free().is_subset(&scope))
 }
 
 fn push_dependent_join(parameters: &Vec<Column>, subquery: &Expr, domain: &Expr) -> Expr {
@@ -1038,12 +1037,20 @@ fn unnest_one(
     //    +         +
     // subquery  Project
     //              +
-    let fresh_column = subquery.free().iter().map(|c| c.id).max().unwrap_or(0) + 1;
+    let fresh_column = subquery
+        .free()
+        .iter()
+        .filter(|c| c.created == Phase::Plan)
+        .map(|c| c.id)
+        .max()
+        .unwrap_or(0)
+        + 1;
     let rename_subquery_parameters: Vec<Column> = (0..subquery_parameters.len())
         .map(|i| Column {
+            created: Phase::Plan,
             id: fresh_column + i as i64,
             name: subquery_parameters[i].name.clone(),
-            table: subquery_parameters[i].table.clone(),
+            table: Some("$subquery".to_string()),
             typ: subquery_parameters[i].typ.clone(),
         })
         .collect();
