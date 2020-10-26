@@ -2,11 +2,12 @@ select person_id
 from person
 where modified_date = (select max(modified_date) from person)
 
-Filter (Equal person.modified_date $aggregate.$agg1)
-	NestedLoop Single
-		Aggregate $aggregate.$agg1:(Max $proj.$max)
-			Map $proj.$max:person.modified_date
-				Map* person.modified_date
-					SeqScan person
-		Map* person.person_id person.modified_date
-			SeqScan person
+Map person.person_id
+	Filter (Equal person.modified_date $aggregate.$agg1)
+		NestedLoop Single
+			Aggregate $aggregate.$agg1:(Max $proj.$max)
+				Map $proj.$max:person.modified_date
+					Map* person.modified_date
+						SeqScan person
+			Map* person.person_id person.modified_date
+				SeqScan person

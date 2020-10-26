@@ -162,22 +162,6 @@ impl Rule {
                     }
                 }
             }
-            Rule::LogicalGetToIndexScan => {
-                if let LogicalGet {
-                    projects,
-                    predicates,
-                    table,
-                } = &ss[mid].op
-                {
-                    if find_index_scan(predicates, table).is_some() {
-                        binds.push(LogicalGet {
-                            projects: projects.clone(),
-                            predicates: predicates.clone(),
-                            table: table.clone(),
-                        })
-                    }
-                }
-            }
             _ => binds.push(ss[mid].op.clone().map(|group| Bind::Group(group))),
         }
         binds
@@ -268,15 +252,16 @@ impl Rule {
                     table,
                 } = bind
                 {
-                    let mut predicates = predicates;
-                    let i = find_index_scan(&predicates, &table).unwrap();
-                    let (c, x) = unpack_index_lookup(predicates.remove(i), &table).unwrap();
-                    return Some(IndexScan {
-                        projects,
-                        predicates,
-                        table,
-                        equals: vec![(c, x)],
-                    });
+                    if let Some(i) = find_index_scan(&predicates, &table) {
+                        let mut predicates = predicates;
+                        let (c, x) = unpack_index_lookup(predicates.remove(i), &table).unwrap();
+                        return Some(IndexScan {
+                            projects,
+                            predicates,
+                            table,
+                            equals: vec![(c, x)],
+                        });
+                    }
                 }
             }
             Rule::LogicalFilterToFilter => {
@@ -565,12 +550,12 @@ fn hash_join(
         if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
             let right_side = arguments.pop().unwrap();
             let left_side = arguments.pop().unwrap();
-            if contains_all(&ss[left], left_side.free())
-                && contains_all(&ss[right], right_side.free())
+            if contains_all(&ss[left], left_side.references())
+                && contains_all(&ss[right], right_side.references())
             {
                 hash_predicates.push((left_side, right_side))
-            } else if contains_all(&ss[right], left_side.free())
-                && contains_all(&ss[left], right_side.free())
+            } else if contains_all(&ss[right], left_side.references())
+                && contains_all(&ss[left], right_side.references())
             {
                 hash_predicates.push((right_side, left_side))
             } else {

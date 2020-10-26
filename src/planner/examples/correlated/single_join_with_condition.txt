@@ -4,16 +4,15 @@ where customer.store_id = store.store_id
 and store.name like "A%") from store
 
 Map $query.$col1:$aggregate.$agg1
-	HashJoin Single $subquery.store_id=store.store_id $subquery.name=store.name
-		Map $aggregate.$agg1 $subquery.name:store.name $subquery.store_id:store.store_id
-			Aggregate store.store_id store.name $aggregate.$agg1:(Max $proj.$max)
-				Map $proj.$max:customer.modified_date customer.store_id store.store_id store.name
-					HashJoin Inner store.store_id=customer.store_id
-						Filter (Like store.name A%)
-							Project store.store_id store.name
-								Map* store.store_id store.name
-									SeqScan store
-						Map* customer.store_id customer.modified_date
-							SeqScan customer
+	HashJoin Single store.store_id'=store.store_id store.name'=store.name
+		Aggregate store.store_id' store.name' $aggregate.$agg1:(Max $proj.$max)
+			Map $proj.$max:customer.modified_date store.store_id' store.name'
+				HashJoin Inner store.store_id'=customer.store_id
+					Filter (Like store.name' A%)
+						Project store.store_id' store.name'
+							Map* store.store_id' store.name'
+								SeqScan store
+					Map* customer.store_id customer.modified_date
+						SeqScan customer
 		Map* store.store_id store.name
 			SeqScan store

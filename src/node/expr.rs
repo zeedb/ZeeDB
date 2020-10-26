@@ -1,6 +1,6 @@
 use crate::indent_print::*;
 use crate::operator::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
@@ -47,8 +47,11 @@ impl Scope for Expr {
     fn attributes(&self) -> HashSet<Column> {
         self.0.attributes()
     }
-    fn free(&self) -> HashSet<Column> {
-        self.0.free()
+    fn references(&self) -> HashSet<Column> {
+        self.0.references()
+    }
+    fn subst(self, map: &HashMap<Column, Column>) -> Self {
+        Expr::new(self.0.subst(map))
     }
 }
 

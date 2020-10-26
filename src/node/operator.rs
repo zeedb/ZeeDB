@@ -1,5 +1,5 @@
 use std::cmp;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops;
 
@@ -598,8 +598,8 @@ impl<T> ops::Index<usize> for Operator<T> {
 
 pub trait Scope {
     fn attributes(&self) -> HashSet<Column>;
-    // TODO this isn't actually free, this is all column references.
-    fn free(&self) -> HashSet<Column>;
+    fn references(&self) -> HashSet<Column>;
+    fn subst(self, map: &HashMap<Column, Column>) -> Self;
 }
 
 impl<T: Scope> Scope for Operator<T> {
@@ -693,22 +693,22 @@ impl<T: Scope> Scope for Operator<T> {
         }
     }
 
-    fn free(&self) -> HashSet<Column> {
+    fn references(&self) -> HashSet<Column> {
         let mut set = HashSet::new();
         match self {
             Operator::LogicalGet { predicates, .. } | Operator::LogicalFilter(predicates, _) => {
                 for p in predicates {
-                    set.extend(p.free());
+                    set.extend(p.references());
                 }
             }
             Operator::LogicalMap(projects, _) => {
                 for (x, _) in projects {
-                    set.extend(x.free());
+                    set.extend(x.references());
                 }
             }
             Operator::LogicalJoin { join, .. } => {
                 for p in join.predicates() {
-                    set.extend(p.free());
+                    set.extend(p.references());
                 }
             }
             Operator::LogicalProject(projects, _) => {
@@ -724,7 +724,7 @@ impl<T: Scope> Scope for Operator<T> {
             } => {
                 set.extend(group_by.clone());
                 for (f, _) in aggregate {
-                    set.extend(f.free());
+                    set.extend(f.references());
                 }
             }
             Operator::LogicalSort(order_by, _) => {
@@ -736,7 +736,7 @@ impl<T: Scope> Scope for Operator<T> {
                 set.extend(columns.clone());
                 for row in rows {
                     for x in row {
-                        set.extend(x.free());
+                        set.extend(x.references());
                     }
                 }
             }
@@ -747,9 +747,89 @@ impl<T: Scope> Scope for Operator<T> {
             ),
         }
         for i in 0..self.len() {
-            set.extend(self[i].free());
+            set.extend(self[i].references());
         }
         set
+    }
+
+    fn subst(self, map: &HashMap<Column, Column>) -> Self {
+        let subst_c = |c: &Column| map.get(c).unwrap_or(c).clone();
+        let subst_x = |x: &Scalar| x.clone().subst(map);
+        let subst_o = |o: &OrderBy| OrderBy {
+            column: map.get(&o.column).unwrap_or(&o.column).clone(),
+            desc: o.desc,
+        };
+        match self {
+            Operator::LogicalGet {
+                projects,
+                predicates,
+                table,
+            } => Operator::LogicalGet {
+                projects: projects.iter().map(subst_c).collect(),
+                predicates: predicates.iter().map(subst_x).collect(),
+                table: table.clone(),
+            },
+            Operator::LogicalFilter(predicates, input) => {
+                Operator::LogicalFilter(predicates.iter().map(subst_x).collect(), input.subst(map))
+            }
+            Operator::LogicalMap(projects, input) => Operator::LogicalMap(
+                projects
+                    .iter()
+                    .map(|(x, c)| (subst_x(x), subst_c(c)))
+                    .collect(),
+                input.subst(map),
+            ),
+            Operator::LogicalJoin {
+                parameters,
+                join,
+                left,
+                right,
+            } => Operator::LogicalJoin {
+                parameters: parameters.iter().map(subst_c).collect(),
+                join: join.replace(join.predicates().iter().map(subst_x).collect()),
+                left: left.subst(map),
+                right: right.subst(map),
+            },
+            Operator::LogicalProject(projects, input) => {
+                Operator::LogicalProject(projects.iter().map(subst_c).collect(), input.subst(map))
+            }
+            Operator::LogicalWith(name, columns, left, right) => Operator::LogicalWith(
+                name.clone(),
+                columns.iter().map(subst_c).collect(),
+                left.subst(map),
+                right.subst(map),
+            ),
+            Operator::LogicalGetWith(name, columns) => {
+                Operator::LogicalGetWith(name.clone(), columns.iter().map(subst_c).collect())
+            }
+            Operator::LogicalAggregate {
+                group_by,
+                aggregate,
+                input,
+            } => Operator::LogicalAggregate {
+                group_by: group_by.iter().map(subst_c).collect(),
+                aggregate: aggregate
+                    .iter()
+                    .map(|(f, c)| (f.clone(), subst_c(c)))
+                    .collect(),
+                input: input.subst(map),
+            },
+            Operator::LogicalSort(order_by, input) => {
+                Operator::LogicalSort(order_by.iter().map(subst_o).collect(), input.subst(map))
+            }
+            Operator::LogicalValues(columns, rows, input) => Operator::LogicalValues(
+                columns.iter().map(subst_c).collect(),
+                rows.iter()
+                    .map(|row| row.iter().map(subst_x).collect())
+                    .collect(),
+                input.subst(map),
+            ),
+            any if any.is_logical() => any.map(|child| child.subst(map)),
+            any => unimplemented!(
+                "subst is not implemented for physical operator {}",
+                any.name()
+            ),
+        }
     }
 }
 
@@ -787,6 +867,18 @@ impl Join {
             | Join::Anti(predicates)
             | Join::Single(predicates)
             | Join::Mark(_, predicates) => predicates,
+        }
+    }
+
+    pub fn replace(&self, predicates: Vec<Scalar>) -> Self {
+        match self {
+            Join::Inner(_) => Join::Inner(predicates),
+            Join::Right(_) => Join::Right(predicates),
+            Join::Outer(_) => Join::Outer(predicates),
+            Join::Semi(_) => Join::Semi(predicates),
+            Join::Anti(_) => Join::Anti(predicates),
+            Join::Single(_) => Join::Single(predicates),
+            Join::Mark(mark, _) => Join::Mark(mark.clone(), predicates),
         }
     }
 }
@@ -841,7 +933,7 @@ pub struct Column {
     pub typ: encoding::Type,
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Debug)]
 pub enum Phase {
     Parse,
     Convert,
@@ -880,7 +972,11 @@ impl fmt::Debug for Column {
         if let Some(table) = &self.table {
             write!(f, "{}.", table)?;
         }
-        write!(f, "{}#{}", self.name, self.id)
+        write!(f, "{}#", self.name)?;
+        if self.created != Phase::Parse {
+            write!(f, "{:?}/", self.created)?;
+        }
+        write!(f, "{}", self.id)
     }
 }
 
@@ -889,8 +985,11 @@ impl fmt::Display for Column {
         if let Some(table) = &self.table {
             write!(f, "{}.", table)?;
         }
-        // TODO write # when there are multiple columns with the same name
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.name)?;
+        if self.created == Phase::Plan {
+            write!(f, "'")?;
+        }
+        Ok(())
     }
 }
 
@@ -974,13 +1073,13 @@ impl Scalar {
         }
     }
 
-    pub fn free(&self) -> HashSet<Column> {
+    pub fn references(&self) -> HashSet<Column> {
         let mut free = HashSet::new();
-        self.collect_free(&mut free);
+        self.collect_references(&mut free);
         free
     }
 
-    fn collect_free(&self, free: &mut HashSet<Column>) {
+    fn collect_references(&self, free: &mut HashSet<Column>) {
         match self {
             Scalar::Literal(_, _) => {}
             Scalar::Column(column) => {
@@ -988,10 +1087,21 @@ impl Scalar {
             }
             Scalar::Call(_, arguments, _) => {
                 for a in arguments {
-                    a.collect_free(free);
+                    a.collect_references(free);
                 }
             }
-            Scalar::Cast(scalar, _) => scalar.collect_free(free),
+            Scalar::Cast(scalar, _) => scalar.collect_references(free),
+        }
+    }
+
+    pub fn subst(self, map: &HashMap<Column, Column>) -> Self {
+        match self {
+            Scalar::Column(c) if map.contains_key(&c) => Scalar::Column(map[&c].clone()),
+            Scalar::Call(f, args, t) => {
+                Scalar::Call(f, args.iter().map(|x| x.clone().subst(map)).collect(), t)
+            }
+            Scalar::Cast(x, t) => Scalar::Cast(Box::new(x.subst(map)), t),
+            _ => self,
         }
     }
 
@@ -1309,7 +1419,7 @@ impl AggregateFn {
         }
     }
 
-    fn free(&self) -> Option<Column> {
+    fn references(&self) -> Option<Column> {
         match self {
             AggregateFn::AnyValue(c) => Some(c.clone()),
             AggregateFn::ArrayAgg(_, _, c) => Some(c.clone()),

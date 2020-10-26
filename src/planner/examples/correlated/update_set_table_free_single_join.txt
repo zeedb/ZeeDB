@@ -4,10 +4,10 @@ where person_id = 1
 
 Update person.first_name:$update.$expr
 	Map $update.$expr:$expr_subquery.last_name
-		NestedLoop Single (Equal person.last_name $subquery.last_name)
-			Map $expr_subquery.last_name:person.last_name $subquery.last_name:person.last_name
-				Project person.last_name
-					Map* person.person_id person.first_name person.last_name
+		NestedLoop Single (Equal person.last_name person.last_name')
+			Map $expr_subquery.last_name:person.last_name' person.last_name'
+				Project person.last_name'
+					Map* person.person_id person.first_name person.last_name'
 						IndexScan person(1:person.person_id)
 			Map* person.person_id person.first_name person.last_name
 				IndexScan person(1:person.person_id)
