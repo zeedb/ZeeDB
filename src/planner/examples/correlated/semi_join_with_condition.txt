@@ -5,7 +5,7 @@ where person.person_id in (select person_id from customer where customer.store_i
 Map $query.$col1:1
 	HashJoin Semi store.store_id'=store.store_id customer.person_id=person.person_id
 		Map customer.person_id store.store_id'
-			Map *, store.store_id':customer.store_id
+			Map store.store_id':customer.store_id, ..
 				Map* customer.person_id customer.store_id
 					SeqScan customer
 		NestedLoop Inner

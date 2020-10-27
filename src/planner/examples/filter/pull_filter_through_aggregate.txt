@@ -5,7 +5,7 @@ from store
 Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single store.store_id'=store.store_id
 		Aggregate store.store_id' $aggregate.$agg1:(CountStar)
-			Map *, store.store_id':customer.store_id
+			Map store.store_id':customer.store_id, ..
 				Map* customer.store_id
 					SeqScan customer
 		Map* store.store_id

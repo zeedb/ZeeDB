@@ -4,7 +4,7 @@ from customer
 Map $query.$col1:store.name
 	HashJoin Single customer.store_id'=customer.store_id
 		Map store.name customer.store_id'
-			Map *, customer.store_id':store.store_id
+			Map customer.store_id':store.store_id, ..
 				Map* store.store_id store.name
 					SeqScan store
 		Map* customer.store_id

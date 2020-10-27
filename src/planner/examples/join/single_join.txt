@@ -10,7 +10,7 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 				Aggregate customer.person_id'
 					HashJoin Single customer.customer_id'=customer.customer_id
 						Map store.name customer.customer_id'
-							Map *, customer.customer_id':store.store_id
+							Map customer.customer_id':store.store_id, ..
 								Filter* (Like store.name A%)
 									Map* store.store_id store.name
 										SeqScan store
@@ -18,7 +18,7 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 							SeqScan customer
 		HashJoin Single customer.customer_id'=customer.customer_id
 			Map store.name customer.customer_id'
-				Map *, customer.customer_id':store.store_id
+				Map customer.customer_id':store.store_id, ..
 					Filter* (Like store.name A%)
 						Map* store.store_id store.name
 							SeqScan store

@@ -57,11 +57,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 projects,
                 input,
             } => {
-                write!(f, "{} ", self.name())?;
+                write!(f, "{} {}", self.name(), join_projects(projects))?;
                 if *include_existing {
-                    write!(f, "*, ")?;
+                    write!(f, ", ..")?;
                 }
-                write!(f, "{}", join_projects(projects))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }

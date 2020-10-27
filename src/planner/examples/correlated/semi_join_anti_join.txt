@@ -11,7 +11,7 @@ Map $query.$col1:1
 				Aggregate customer.store_id' customer.modified_date'
 					HashJoin Mark $mark.$exists customer.person_id'=customer.person_id
 						Map $expr_subquery.$col1:1 customer.person_id'
-							Map *, customer.person_id':person.person_id
+							Map customer.person_id':person.person_id, ..
 								Map* person.person_id
 									SeqScan person
 						Map* customer.person_id customer.store_id' customer.modified_date'
@@ -19,7 +19,7 @@ Map $query.$col1:1
 		Map $expr_subquery.$col1 $mark.$exists:true customer.modified_date customer.person_id' customer.person_id customer.store_id
 			HashJoin Semi customer.person_id'=customer.person_id
 				Map $expr_subquery.$col1:1 customer.person_id'
-					Map *, customer.person_id':person.person_id
+					Map customer.person_id':person.person_id, ..
 						Map* person.person_id
 							SeqScan person
 				Map* customer.person_id customer.store_id customer.modified_date
