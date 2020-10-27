@@ -4,9 +4,18 @@ from customer
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single customer.person_id'=customer.person_id
 		Map person.first_name customer.person_id'
-			Map *, customer.person_id':person.person_id
+			LookupJoin Inner
 				Map* person.person_id person.first_name
-					SeqScan person
+					IndexScan* person(customer.person_id':person.person_id)
+				Aggregate customer.person_id'
+					HashJoin Single customer.customer_id'=customer.customer_id
+						Map store.name customer.customer_id'
+							Map *, customer.customer_id':store.store_id
+								Filter* (Like store.name A%)
+									Map* store.store_id store.name
+										SeqScan store
+						Map* customer.customer_id customer.person_id'
+							SeqScan customer
 		HashJoin Single customer.customer_id'=customer.customer_id
 			Map store.name customer.customer_id'
 				Map *, customer.customer_id':store.store_id

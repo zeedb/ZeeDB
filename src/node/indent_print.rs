@@ -266,7 +266,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 projects,
                 predicates,
                 table,
-                equals,
+                index_predicates,
             } => {
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(predicates))?;
@@ -280,7 +280,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                     "{} {}({})",
                     self.name(),
                     table.name,
-                    join_index_lookups(equals)
+                    join_index_lookups(index_predicates)
                 )?;
                 Ok(())
             }
@@ -289,15 +289,48 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::HashJoin(join, equals, left, right) => {
+            Operator::HashJoin {
+                join,
+                equi_predicates,
+                left,
+                right,
+            } => {
                 write!(f, "{} {}", self.name(), join)?;
-                for (left, right) in equals {
+                for (left, right) in equi_predicates {
                     write!(f, " {}={}", left, right)?;
                 }
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
+            }
+            Operator::LookupJoin {
+                join,
+                projects,
+                table,
+                index_predicates,
+                input,
+            } => {
+                write!(f, "{} {}", self.name(), join.replace(vec![]))?;
+                newline(f, indent)?;
+                let predicates = join.predicates();
+                let extra_indent = if !predicates.is_empty() {
+                    write!(f, "Filter* {}", join_scalars(predicates))?;
+                    newline(f, indent + 1)?;
+                    1
+                } else {
+                    0
+                };
+                write!(f, "Map* {}", join_columns(projects))?;
+                newline(f, indent + 1 + extra_indent)?;
+                write!(
+                    f,
+                    "IndexScan* {}({})",
+                    table.name,
+                    join_index_lookups(index_predicates)
+                )?;
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
             }
             Operator::Aggregate {
                 group_by,
@@ -471,6 +504,7 @@ impl<T> Operator<T> {
             Operator::Map { .. } => "Map".to_string(),
             Operator::NestedLoop { .. } => "NestedLoop".to_string(),
             Operator::HashJoin { .. } => "HashJoin".to_string(),
+            Operator::LookupJoin { .. } => "LookupJoin".to_string(),
             Operator::CreateTempTable { .. } => "CreateTempTable".to_string(),
             Operator::GetTempTable { .. } => "GetTempTable".to_string(),
             Operator::Aggregate { .. } => "Aggregate".to_string(),
@@ -559,9 +593,9 @@ fn join_scalars(xs: &Vec<Scalar>) -> String {
     strings.join(" ")
 }
 
-fn join_index_lookups(equals: &Vec<(Column, Scalar)>) -> String {
+fn join_index_lookups(index_predicates: &Vec<(Column, Scalar)>) -> String {
     let mut strings = vec![];
-    for (x, c) in equals {
+    for (x, c) in index_predicates {
         strings.push(format!("{}:{}", c, x));
     }
     strings.join(" ")

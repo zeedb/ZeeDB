@@ -112,8 +112,8 @@ pub enum Operator<T> {
     IndexScan {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
+        index_predicates: Vec<(Column, Scalar)>,
         table: Table,
-        equals: Vec<(Column, Scalar)>,
     },
     Filter(Vec<Scalar>, T),
     Map {
@@ -122,7 +122,19 @@ pub enum Operator<T> {
         input: T,
     },
     NestedLoop(Join, T, T),
-    HashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
+    HashJoin {
+        join: Join,
+        equi_predicates: Vec<(Scalar, Scalar)>,
+        left: T,
+        right: T,
+    },
+    LookupJoin {
+        join: Join,
+        projects: Vec<Column>,
+        index_predicates: Vec<(Column, Scalar)>,
+        table: Table,
+        input: T,
+    },
     CreateTempTable(String, Vec<Column>, T, T),
     GetTempTable(String, Vec<Column>),
     Aggregate {
@@ -206,6 +218,7 @@ impl<T> Operator<T> {
             | Operator::Map { .. }
             | Operator::NestedLoop { .. }
             | Operator::HashJoin { .. }
+            | Operator::LookupJoin { .. }
             | Operator::CreateTempTable { .. }
             | Operator::GetTempTable { .. }
             | Operator::Aggregate { .. }
@@ -272,6 +285,7 @@ impl<T> Operator<T> {
             | Operator::LogicalCreateTable { input: Some(_), .. }
             | Operator::Filter { .. }
             | Operator::Map { .. }
+            | Operator::LookupJoin { .. }
             | Operator::Aggregate { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
@@ -461,12 +475,12 @@ impl<T> Operator<T> {
                 projects,
                 predicates,
                 table,
-                equals,
+                index_predicates,
             } => Operator::IndexScan {
                 projects,
                 predicates,
                 table,
-                equals,
+                index_predicates,
             },
             Operator::Filter(predicates, input) => Operator::Filter(predicates, visitor(input)),
             Operator::Map {
@@ -481,13 +495,34 @@ impl<T> Operator<T> {
             Operator::NestedLoop(join, left, right) => {
                 Operator::NestedLoop(join, visitor(left), visitor(right))
             }
-            Operator::HashJoin(join, equals, left, right) => {
-                Operator::HashJoin(join, equals, visitor(left), visitor(right))
-            }
+            Operator::HashJoin {
+                join,
+                equi_predicates,
+                left,
+                right,
+            } => Operator::HashJoin {
+                join,
+                equi_predicates,
+                left: visitor(left),
+                right: visitor(right),
+            },
             Operator::CreateTempTable(name, columns, left, right) => {
                 Operator::CreateTempTable(name, columns, visitor(left), visitor(right))
             }
             Operator::GetTempTable(name, columns) => Operator::GetTempTable(name, columns),
+            Operator::LookupJoin {
+                join,
+                projects,
+                table,
+                index_predicates,
+                input,
+            } => Operator::LookupJoin {
+                join,
+                projects,
+                table,
+                index_predicates,
+                input: visitor(input),
+            },
             Operator::Aggregate {
                 group_by,
                 aggregate,
@@ -566,7 +601,7 @@ impl<T> ops::Index<usize> for Operator<T> {
             | Operator::LogicalIntersect(left, right)
             | Operator::LogicalExcept(left, right)
             | Operator::NestedLoop(_, left, right)
-            | Operator::HashJoin(_, _, left, right)
+            | Operator::HashJoin { left, right, .. }
             | Operator::CreateTempTable(_, _, left, right)
             | Operator::Union(left, right)
             | Operator::Intersect(left, right)
@@ -589,6 +624,7 @@ impl<T> ops::Index<usize> for Operator<T> {
             }
             | Operator::Filter(_, input)
             | Operator::Map { input, .. }
+            | Operator::LookupJoin { input, .. }
             | Operator::Aggregate { input, .. }
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)

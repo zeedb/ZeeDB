@@ -4,8 +4,8 @@ where customer.store_id = store.store_id
 and customer.customer_id = 1
 
 Map customer.customer_id store.store_id
-	NestedLoop Inner (Equal customer.store_id store.store_id)
+	LookupJoin Inner
+		Map* store.store_id
+			IndexScan* store(customer.store_id:store.store_id)
 		Map* customer.customer_id customer.store_id
 			IndexScan customer(1:customer.customer_id)
-		Map* store.store_id
-			SeqScan store

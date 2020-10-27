@@ -4,8 +4,8 @@ right join store on customer.store_id = store.store_id
 where store.store_id = 1
 
 Map customer.customer_id store.store_id
-	NestedLoop Right (Equal customer.store_id store.store_id)
+	LookupJoin Right
 		Map* customer.customer_id customer.store_id
-			SeqScan customer
+			IndexScan* customer(store.store_id:customer.store_id)
 		Map* store.store_id
 			IndexScan store(1:store.store_id)

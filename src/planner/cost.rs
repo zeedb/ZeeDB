@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 pub type Cost = f64;
 
-const BLOCK_SIZE: Cost = 4096.0;
+const BLOCK_SIZE: Cost = 1_000_000.0;
 const TUPLE_SIZE: Cost = 100.0;
 const COST_READ_BLOCK: Cost = 1.0;
 const COST_WRITE_BLOCK: Cost = COST_READ_BLOCK * 2.0;
@@ -57,13 +57,21 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
                 + iterations * COST_ARRAY_PROBE
                 + iterations * count_predicates * COST_CPU_PRED
         }
-        HashJoin(join, _, left, right) => {
+        HashJoin {
+            join, left, right, ..
+        } => {
             let build = ss[*left].props.cardinality as f64;
             let probe = ss[*right].props.cardinality as f64;
-            let count_predicates = join.predicates().len() as f64 + 1.0;
+            let count_predicates = join.predicates().len() as f64;
             build * COST_HASH_BUILD
                 + probe * COST_HASH_PROBE
                 + probe * count_predicates * COST_CPU_PRED
+        }
+        LookupJoin { join, input, .. } => {
+            let index_cardinality = ss[*input].props.cardinality as f64;
+            let count_predicates = join.predicates().len() as f64;
+            index_cardinality * COST_READ_BLOCK
+                + count_predicates * index_cardinality * COST_CPU_PRED
         }
         CreateTempTable(_, _, left, _) => {
             let output = ss[*left].props.cardinality as f64;

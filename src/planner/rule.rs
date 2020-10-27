@@ -19,6 +19,7 @@ pub enum Rule {
     LogicalMapToMap,
     LogicalJoinToNestedLoop,
     LogicalJoinToHashJoin,
+    LogicalJoinToLookupJoin,
     LogicalAggregateToAggregate,
     LogicalLimitToLimit,
     LogicalSortToSort,
@@ -49,6 +50,7 @@ impl Rule {
             | Rule::LogicalMapToMap
             | Rule::LogicalJoinToNestedLoop
             | Rule::LogicalJoinToHashJoin
+            | Rule::LogicalJoinToLookupJoin
             | Rule::LogicalAggregateToAggregate
             | Rule::LogicalLimitToLimit
             | Rule::LogicalSortToSort
@@ -101,6 +103,7 @@ impl Rule {
             | (Rule::LogicalMapToMap, LogicalMap { .. })
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
             | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
+            | (Rule::LogicalJoinToLookupJoin, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort(_, _))
@@ -126,6 +129,7 @@ impl Rule {
     pub fn non_leaf(&self, child: usize) -> bool {
         match (self, child) {
             (Rule::InnerJoinAssociativity, 0) => true,
+            (Rule::LogicalJoinToLookupJoin, 0) => true,
             _ => false,
         }
     }
@@ -138,7 +142,6 @@ impl Rule {
                     join: Join::Inner(parent_predicates),
                     left,
                     right,
-                    ..
                 } = &ss[mid].op
                 {
                     for left in &ss[*left].logical {
@@ -155,6 +158,28 @@ impl Rule {
                                     join: Join::Inner(left_predicates.clone()),
                                     left: Bind::Group(*left_left),
                                     right: Bind::Group(*left_middle),
+                                })),
+                                right: Bind::Group(*right),
+                            })
+                        }
+                    }
+                }
+            }
+            Rule::LogicalJoinToLookupJoin => {
+                if let LogicalJoin { join, left, right } = &ss[mid].op {
+                    for left in &ss[*left].logical {
+                        if let LogicalGet {
+                            predicates,
+                            projects,
+                            table,
+                        } = &ss[*left].op
+                        {
+                            binds.push(LogicalJoin {
+                                join: join.clone(),
+                                left: Bind::Operator(Box::new(LogicalGet {
+                                    predicates: predicates.clone(),
+                                    projects: projects.clone(),
+                                    table: table.clone(),
                                 })),
                                 right: Bind::Group(*right),
                             })
@@ -362,7 +387,7 @@ impl Rule {
                             projects,
                             predicates,
                             table,
-                            equals: vec![(c, x)],
+                            index_predicates: vec![(c, x)],
                         });
                     }
                 }
@@ -399,60 +424,46 @@ impl Rule {
                     join,
                     left: Bind::Group(left),
                     right: Bind::Group(right),
-                    ..
                 } = bind
                 {
-                    let (hash_predicates, join) = match join {
-                        Join::Inner(join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Inner(remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                        Join::Right(join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Right(remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                        Join::Outer(join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Outer(remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                        Join::Semi(join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Semi(remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                        Join::Anti(join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Anti(remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                        Join::Single(join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Single(remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                        Join::Mark(column, join_predicates) => {
-                            let (hash_predicates, remaining_predicates) =
-                                hash_join(ss, join_predicates, left, right);
-                            let join = Join::Mark(column, remaining_predicates);
-                            (hash_predicates, join)
-                        }
-                    };
-                    if !hash_predicates.is_empty() {
-                        return Some(HashJoin(
+                    let (equi_predicates, remaining_predicates) =
+                        hash_join(ss, join.predicates().clone(), left, right);
+                    let join = join.replace(remaining_predicates);
+                    if !equi_predicates.is_empty() {
+                        return Some(HashJoin {
                             join,
-                            hash_predicates,
-                            Bind::Group(left),
-                            Bind::Group(right),
-                        ));
+                            equi_predicates,
+                            left: Bind::Group(left),
+                            right: Bind::Group(right),
+                        });
+                    }
+                }
+            }
+            Rule::LogicalJoinToLookupJoin => {
+                if let LogicalJoin {
+                    join,
+                    left: Bind::Operator(left),
+                    right: Bind::Group(right),
+                } = bind
+                {
+                    if let LogicalGet {
+                        predicates: table_predicates,
+                        projects,
+                        table,
+                    } = *left
+                    {
+                        let mut predicates = join.predicates().clone();
+                        predicates.extend(table_predicates);
+                        if let Some(i) = find_index_scan(&predicates, &table) {
+                            let (c, x) = unpack_index_lookup(predicates.remove(i), &table).unwrap();
+                            return Some(LookupJoin {
+                                join: join.replace(predicates),
+                                projects,
+                                table,
+                                index_predicates: vec![(c, x)],
+                                input: Bind::Group(right),
+                            });
+                        }
                     }
                 }
             }
@@ -596,6 +607,7 @@ impl Rule {
             Rule::LogicalMapToMap,
             Rule::LogicalJoinToNestedLoop,
             Rule::LogicalJoinToHashJoin,
+            Rule::LogicalJoinToLookupJoin,
             Rule::LogicalAggregateToAggregate,
             Rule::LogicalLimitToLimit,
             Rule::LogicalSortToSort,
@@ -644,10 +656,11 @@ fn find_index_scan(predicates: &Vec<Scalar>, table: &Table) -> Option<usize> {
 fn unpack_index_lookup(predicate: Scalar, table: &Table) -> Option<(Column, Scalar)> {
     if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
         match (arguments.pop().unwrap(), arguments.pop().unwrap()) {
-            (Scalar::Column(column), equals) | (equals, Scalar::Column(column))
+            (Scalar::Column(column), index_predicates)
+            | (index_predicates, Scalar::Column(column))
                 if column.name.ends_with("_id") && column.table.as_ref() == Some(&table.name) =>
             {
-                return Some((column, equals))
+                return Some((column, index_predicates))
             }
             _ => {}
         }
@@ -661,7 +674,7 @@ fn hash_join(
     left: GroupID,
     right: GroupID,
 ) -> (Vec<(Scalar, Scalar)>, Vec<Scalar>) {
-    let mut hash_predicates = vec![];
+    let mut equi_predicates = vec![];
     let mut remaining_predicates = vec![];
     for predicate in join_predicates.drain(0..) {
         if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
@@ -670,11 +683,11 @@ fn hash_join(
             if contains_all(&ss[left], left_side.references())
                 && contains_all(&ss[right], right_side.references())
             {
-                hash_predicates.push((left_side, right_side))
+                equi_predicates.push((left_side, right_side))
             } else if contains_all(&ss[right], left_side.references())
                 && contains_all(&ss[left], right_side.references())
             {
-                hash_predicates.push((right_side, left_side))
+                equi_predicates.push((right_side, left_side))
             } else {
                 remaining_predicates.push(Scalar::Call(
                     Function::Equal,
@@ -686,7 +699,7 @@ fn hash_join(
             remaining_predicates.push(predicate);
         }
     }
-    (hash_predicates, remaining_predicates)
+    (equi_predicates, remaining_predicates)
 }
 
 fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
