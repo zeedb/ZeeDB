@@ -565,7 +565,7 @@ impl Rule {
         vec![
             Rule::InnerJoinCommutivity,
             Rule::InnerJoinAssociativity,
-            // Rule::RemoveDependentJoin,
+            Rule::RemoveDependentJoin,
             Rule::RewriteDependentJoin,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
