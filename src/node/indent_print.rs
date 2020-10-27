@@ -5,6 +5,12 @@ pub trait IndentPrint {
     fn indent_print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result;
 }
 
+impl<T: IndentPrint> fmt::Display for Operator<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.indent_print(f, 0)
+    }
+}
+
 impl<T: IndentPrint> IndentPrint for Operator<T> {
     fn indent_print(&self, f: &mut fmt::Formatter<'_>, mut indent: usize) -> fmt::Result {
         let newline = |f: &mut fmt::Formatter<'_>, indent: usize| -> fmt::Result {
@@ -41,25 +47,50 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalMap(projects, input) => {
-                write!(f, "{} {}", self.name(), join_projects(projects))?;
+            Operator::LogicalMap {
+                include_existing,
+                projects,
+                input,
+            }
+            | Operator::Map {
+                include_existing,
+                projects,
+                input,
+            } => {
+                write!(f, "{} ", self.name())?;
+                if *include_existing {
+                    write!(f, "*, ")?;
+                }
+                write!(f, "{}", join_projects(projects))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalJoin {
-                parameters,
-                join,
-                left,
-                right,
-            } => {
+            Operator::LogicalJoin { join, left, right } => {
                 write!(f, "{} {}", self.name(), join)?;
-                if !parameters.is_empty() {
-                    write!(f, " [{}]", join_columns(parameters))?;
-                }
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
+            }
+            Operator::LogicalDependentJoin {
+                parameters,
+                predicates,
+                subquery,
+                domain,
+            } => {
+                if !predicates.is_empty() {
+                    write!(f, "Filter* {}", join_scalars(predicates))?;
+                    newline(f, indent)?;
+                    indent += 1;
+                }
+                write!(f, "{}", self.name())?;
+                if !parameters.is_empty() {
+                    write!(f, " [{}]", join_columns(parameters))?;
+                }
+                newline(f, indent)?;
+                subquery.indent_print(f, indent + 1)?;
+                newline(f, indent)?;
+                domain.indent_print(f, indent + 1)
             }
             Operator::NestedLoop(join, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
@@ -67,11 +98,6 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
-            }
-            Operator::LogicalProject(projects, input) | Operator::Project(projects, input) => {
-                write!(f, "{} {}", self.name(), join_columns(projects))?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
             }
             Operator::LogicalWith(name, _, left, right)
             | Operator::CreateTempTable(name, _, left, right) => {
@@ -263,11 +289,6 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Map(projects, input) => {
-                write!(f, "{} {}", self.name(), join_projects(projects))?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
             Operator::HashJoin(join, equals, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
                 for (left, right) in equals {
@@ -424,7 +445,7 @@ impl<T> Operator<T> {
             Operator::LogicalFilter { .. } => "LogicalFilter".to_string(),
             Operator::LogicalMap { .. } => "LogicalMap".to_string(),
             Operator::LogicalJoin { .. } => "LogicalJoin".to_string(),
-            Operator::LogicalProject { .. } => "LogicalProject".to_string(),
+            Operator::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
             Operator::LogicalWith { .. } => "LogicalWith".to_string(),
             Operator::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
             Operator::LogicalAggregate { .. } => "LogicalAggregate".to_string(),
@@ -453,7 +474,6 @@ impl<T> Operator<T> {
             Operator::CreateTempTable { .. } => "CreateTempTable".to_string(),
             Operator::GetTempTable { .. } => "GetTempTable".to_string(),
             Operator::Aggregate { .. } => "Aggregate".to_string(),
-            Operator::Project { .. } => "Project".to_string(),
             Operator::Limit { .. } => "Limit".to_string(),
             Operator::Sort { .. } => "Sort".to_string(),
             Operator::Union { .. } => "Union".to_string(),

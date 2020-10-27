@@ -17,16 +17,25 @@ pub enum Operator<T> {
     // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
     LogicalFilter(Vec<Scalar>, T),
     // LogicalMap(columns) implements the SELECT clause.
-    LogicalMap(Vec<(Scalar, Column)>, T),
-    // LogicalJoin implements the JOIN operator, and correlated subqueries if parameters is non-empty.
+    LogicalMap {
+        include_existing: bool,
+        projects: Vec<(Scalar, Column)>,
+        input: T,
+    },
+    // LogicalJoin implements the JOIN operator.
     LogicalJoin {
-        parameters: Vec<Column>,
         join: Join,
         left: T,
         right: T,
     },
-    // LogicalProject implements the *relational* projection operator, which removes duplicates from a multiset.
-    LogicalProject(Vec<Column>, T),
+    // LogicalJoin implements a special inner join where the right side (domain) is deduplicated,
+    // and the left side (subquery) is allowed to depend on the right side.
+    LogicalDependentJoin {
+        parameters: Vec<Column>,
+        predicates: Vec<Scalar>,
+        subquery: T,
+        domain: T,
+    },
     // LogicalWith(table) implements with subquery as  _.
     // The with-subquery is always on the left.
     LogicalWith(String, Vec<Column>, T, T),
@@ -107,7 +116,11 @@ pub enum Operator<T> {
         equals: Vec<(Column, Scalar)>,
     },
     Filter(Vec<Scalar>, T),
-    Map(Vec<(Scalar, Column)>, T),
+    Map {
+        include_existing: bool,
+        projects: Vec<(Scalar, Column)>,
+        input: T,
+    },
     NestedLoop(Join, T, T),
     HashJoin(Join, Vec<(Scalar, Scalar)>, T, T),
     CreateTempTable(String, Vec<Column>, T, T),
@@ -117,7 +130,6 @@ pub enum Operator<T> {
         aggregate: Vec<(AggregateFn, Column)>,
         input: T,
     },
-    Project(Vec<Column>, T),
     Limit {
         limit: usize,
         offset: usize,
@@ -164,7 +176,7 @@ impl<T> Operator<T> {
     pub fn is_logical(&self) -> bool {
         match self {
             Operator::LogicalJoin { .. }
-            | Operator::LogicalProject { .. }
+            | Operator::LogicalDependentJoin { .. }
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
@@ -197,7 +209,6 @@ impl<T> Operator<T> {
             | Operator::CreateTempTable { .. }
             | Operator::GetTempTable { .. }
             | Operator::Aggregate { .. }
-            | Operator::Project { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
             | Operator::Union { .. }
@@ -238,6 +249,7 @@ impl<T> Operator<T> {
     pub fn len(&self) -> usize {
         match self {
             Operator::LogicalJoin { .. }
+            | Operator::LogicalDependentJoin { .. }
             | Operator::LogicalWith(_, _, _, _)
             | Operator::LogicalUnion(_, _)
             | Operator::LogicalIntersect(_, _)
@@ -250,7 +262,6 @@ impl<T> Operator<T> {
             | Operator::Except { .. } => 2,
             Operator::LogicalFilter(_, _)
             | Operator::LogicalMap { .. }
-            | Operator::LogicalProject { .. }
             | Operator::LogicalAggregate { .. }
             | Operator::LogicalLimit { .. }
             | Operator::LogicalSort(_, _)
@@ -262,7 +273,6 @@ impl<T> Operator<T> {
             | Operator::Filter { .. }
             | Operator::Map { .. }
             | Operator::Aggregate { .. }
-            | Operator::Project { .. }
             | Operator::Limit { .. }
             | Operator::Sort { .. }
             | Operator::Insert { .. }
@@ -298,28 +308,37 @@ impl<T> Operator<T> {
                 let input = visitor(input);
                 Operator::LogicalFilter(predicates, input)
             }
-            Operator::LogicalMap(projects, input) => {
-                let input = visitor(input);
-                Operator::LogicalMap(projects, input)
-            }
-            Operator::LogicalJoin {
-                parameters,
-                join,
-                left,
-                right,
+            Operator::LogicalMap {
+                include_existing,
+                projects,
+                input,
             } => {
-                let left = visitor(left);
-                let right = visitor(right);
-                Operator::LogicalJoin {
-                    parameters,
-                    join,
-                    left,
-                    right,
+                let input = visitor(input);
+                Operator::LogicalMap {
+                    include_existing,
+                    projects,
+                    input,
                 }
             }
-            Operator::LogicalProject(projects, input) => {
-                let input = visitor(input);
-                Operator::LogicalProject(projects, input)
+            Operator::LogicalJoin { join, left, right } => {
+                let left = visitor(left);
+                let right = visitor(right);
+                Operator::LogicalJoin { join, left, right }
+            }
+            Operator::LogicalDependentJoin {
+                parameters,
+                predicates,
+                subquery,
+                domain,
+            } => {
+                let subquery = visitor(subquery);
+                let domain = visitor(domain);
+                Operator::LogicalDependentJoin {
+                    parameters,
+                    predicates,
+                    subquery,
+                    domain,
+                }
             }
             Operator::LogicalWith(name, columns, left, right) => {
                 let left = visitor(left);
@@ -450,7 +469,15 @@ impl<T> Operator<T> {
                 equals,
             },
             Operator::Filter(predicates, input) => Operator::Filter(predicates, visitor(input)),
-            Operator::Map(projects, input) => Operator::Map(projects, visitor(input)),
+            Operator::Map {
+                include_existing,
+                projects,
+                input,
+            } => Operator::Map {
+                include_existing,
+                projects,
+                input: visitor(input),
+            },
             Operator::NestedLoop(join, left, right) => {
                 Operator::NestedLoop(join, visitor(left), visitor(right))
             }
@@ -470,7 +497,6 @@ impl<T> Operator<T> {
                 aggregate,
                 input: visitor(input),
             },
-            Operator::Project(projects, input) => Operator::Project(projects, visitor(input)),
             Operator::Limit {
                 limit,
                 offset,
@@ -530,6 +556,11 @@ impl<T> ops::Index<usize> for Operator<T> {
     fn index(&self, index: usize) -> &Self::Output {
         match self {
             Operator::LogicalJoin { left, right, .. }
+            | Operator::LogicalDependentJoin {
+                subquery: left,
+                domain: right,
+                ..
+            }
             | Operator::LogicalWith(_, _, left, right)
             | Operator::LogicalUnion(left, right)
             | Operator::LogicalIntersect(left, right)
@@ -545,8 +576,7 @@ impl<T> ops::Index<usize> for Operator<T> {
                 _ => panic!("{} is out of bounds [0,2)", index),
             },
             Operator::LogicalFilter(_, input)
-            | Operator::LogicalProject(_, input)
-            | Operator::LogicalMap(_, input)
+            | Operator::LogicalMap { input, .. }
             | Operator::LogicalAggregate { input, .. }
             | Operator::LogicalLimit { input, .. }
             | Operator::LogicalSort(_, input)
@@ -558,9 +588,8 @@ impl<T> ops::Index<usize> for Operator<T> {
                 input: Some(input), ..
             }
             | Operator::Filter(_, input)
-            | Operator::Map(_, input)
+            | Operator::Map { input, .. }
             | Operator::Aggregate { input, .. }
-            | Operator::Project(_, input)
             | Operator::Limit { input, .. }
             | Operator::Sort(_, input)
             | Operator::Insert(_, _, input)
@@ -606,7 +635,21 @@ impl<T: Scope> Scope for Operator<T> {
     fn attributes(&self) -> HashSet<Column> {
         match self {
             Operator::LogicalGet { projects, .. } => projects.iter().map(|c| c.clone()).collect(),
-            Operator::LogicalMap(projects, ..) => projects.iter().map(|(_, c)| c.clone()).collect(),
+            Operator::LogicalMap {
+                include_existing,
+                projects,
+                input,
+            } => {
+                let mut set = if *include_existing {
+                    input.attributes()
+                } else {
+                    HashSet::new()
+                };
+                for (_, c) in projects {
+                    set.insert(c.clone());
+                }
+                set
+            }
             Operator::LogicalFilter(_, input)
             | Operator::LogicalWith(_, _, _, input)
             | Operator::LogicalLimit { input, .. }
@@ -634,10 +677,7 @@ impl<T: Scope> Scope for Operator<T> {
                 right,
                 ..
             } => {
-                let mut set = HashSet::new();
-                for c in right.attributes() {
-                    set.insert(c.clone());
-                }
+                let mut set = right.attributes();
                 set.insert(mark.clone());
                 set
             }
@@ -658,28 +698,26 @@ impl<T: Scope> Scope for Operator<T> {
                 left,
                 right,
                 ..
+            }
+            | Operator::LogicalDependentJoin {
+                subquery: left,
+                domain: right,
+                ..
             } => {
-                let mut set = HashSet::new();
-                for c in left.attributes() {
-                    set.insert(c.clone());
-                }
-                for c in right.attributes() {
-                    set.insert(c.clone());
-                }
+                let mut set = left.attributes();
+                set.extend(right.attributes());
                 set
             }
-            Operator::LogicalProject(columns, _)
-            | Operator::LogicalGetWith(_, columns)
-            | Operator::LogicalValues(columns, _, _) => columns.iter().map(|c| c.clone()).collect(),
+            Operator::LogicalGetWith(_, columns) | Operator::LogicalValues(columns, _, _) => {
+                columns.iter().map(|c| c.clone()).collect()
+            }
             Operator::LogicalAggregate {
                 group_by,
                 aggregate,
                 ..
             } => {
                 let mut set = HashSet::new();
-                for c in group_by {
-                    set.insert(c.clone());
-                }
+                set.extend(group_by.clone());
                 for (_, c) in aggregate {
                     set.insert(c.clone());
                 }
@@ -701,7 +739,7 @@ impl<T: Scope> Scope for Operator<T> {
                     set.extend(p.references());
                 }
             }
-            Operator::LogicalMap(projects, _) => {
+            Operator::LogicalMap { projects, .. } => {
                 for (x, _) in projects {
                     set.extend(x.references());
                 }
@@ -711,8 +749,10 @@ impl<T: Scope> Scope for Operator<T> {
                     set.extend(p.references());
                 }
             }
-            Operator::LogicalProject(projects, _) => {
-                set.extend(projects.clone());
+            Operator::LogicalDependentJoin { predicates, .. } => {
+                for p in predicates {
+                    set.extend(p.references());
+                }
             }
             Operator::LogicalWith(_, columns, _, _) | Operator::LogicalGetWith(_, columns) => {
                 set.extend(columns.clone());
@@ -772,27 +812,34 @@ impl<T: Scope> Scope for Operator<T> {
             Operator::LogicalFilter(predicates, input) => {
                 Operator::LogicalFilter(predicates.iter().map(subst_x).collect(), input.subst(map))
             }
-            Operator::LogicalMap(projects, input) => Operator::LogicalMap(
-                projects
+            Operator::LogicalMap {
+                include_existing,
+                projects,
+                input,
+            } => Operator::LogicalMap {
+                include_existing,
+                projects: projects
                     .iter()
                     .map(|(x, c)| (subst_x(x), subst_c(c)))
                     .collect(),
-                input.subst(map),
-            ),
-            Operator::LogicalJoin {
-                parameters,
-                join,
-                left,
-                right,
-            } => Operator::LogicalJoin {
-                parameters: parameters.iter().map(subst_c).collect(),
+                input: input.subst(map),
+            },
+            Operator::LogicalJoin { join, left, right } => Operator::LogicalJoin {
                 join: join.replace(join.predicates().iter().map(subst_x).collect()),
                 left: left.subst(map),
                 right: right.subst(map),
             },
-            Operator::LogicalProject(projects, input) => {
-                Operator::LogicalProject(projects.iter().map(subst_c).collect(), input.subst(map))
-            }
+            Operator::LogicalDependentJoin {
+                parameters,
+                predicates,
+                subquery,
+                domain,
+            } => Operator::LogicalDependentJoin {
+                parameters: parameters.iter().map(subst_c).collect(),
+                predicates: predicates.iter().map(subst_x).collect(),
+                subquery: subquery.subst(map),
+                domain: domain.subst(map),
+            },
             Operator::LogicalWith(name, columns, left, right) => Operator::LogicalWith(
                 name.clone(),
                 columns.iter().map(subst_c).collect(),
@@ -973,10 +1020,11 @@ impl fmt::Debug for Column {
             write!(f, "{}.", table)?;
         }
         write!(f, "{}#", self.name)?;
-        if self.created != Phase::Parse {
-            write!(f, "{:?}/", self.created)?;
+        write!(f, "{}", self.id)?;
+        if self.created == Phase::Plan {
+            write!(f, "'")?;
         }
-        write!(f, "{}", self.id)
+        Ok(())
     }
 }
 

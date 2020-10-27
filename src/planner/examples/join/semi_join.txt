@@ -1,12 +1,12 @@
-select 1 
-from person 
+select 1
+from person
 where exists (select 1 from customer where customer.person_id = person.person_id)
 
 Map $query.$col1:1
 	HashJoin Semi person.person_id'=person.person_id
 		Map $expr_subquery.$col1:1 person.person_id'
 			HashJoin Inner person.person_id'=customer.person_id
-				Project person.person_id'
+				Aggregate person.person_id'
 					Map* person.person_id'
 						SeqScan person
 				Map* customer.person_id

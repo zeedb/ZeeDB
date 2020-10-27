@@ -1,15 +1,13 @@
-select (select max(modified_date)
-from customer
-where customer.store_id = store.store_id
-and store.name like "A%") from store
+select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like "A%")
+from store
 
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single store.store_id'=store.store_id store.name'=store.name
 		Aggregate store.store_id' store.name' $aggregate.$agg1:(Max $proj.$max)
 			Map $proj.$max:customer.modified_date store.store_id' store.name'
 				HashJoin Inner store.store_id'=customer.store_id
-					Filter (Like store.name' A%)
-						Project store.store_id' store.name'
+					Aggregate store.store_id' store.name'
+						Filter* (Like store.name' A%)
 							Map* store.store_id' store.name'
 								SeqScan store
 					Map* customer.store_id customer.modified_date

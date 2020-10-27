@@ -1,4 +1,4 @@
-with foo as (select 1 as a) 
+with foo as (select 1 as a)
 select 2 as b
 
 Map $query.b:2

@@ -1,5 +1,5 @@
-select 1 
-from (select * from person where first_name like "A%") 
+select 1
+from (select * from person where first_name like "A%")
 where last_name like "A%"
 
 Map $query.$col1:1

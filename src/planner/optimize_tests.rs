@@ -42,7 +42,7 @@ fn test_optimize() {
             from customer
         "#,
         errors
-    ); // TODO this needs to be split into simpler aggregates
+    );
     ok!(
         "examples/aggregate/group_by.txt",
         r#"
@@ -218,10 +218,8 @@ fn test_optimize() {
     ok!(
         "examples/correlated/single_join_with_condition.txt",
         r#"
-            select (select max(modified_date)
-            from customer
-            where customer.store_id = store.store_id
-            and store.name like "A%") from store
+            select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like "A%")
+            from store
         "#,
         errors
     );
@@ -340,8 +338,8 @@ fn test_optimize() {
     ok!(
         "examples/filter/combine_consecutive_filters.txt",
         r#"
-            select 1 
-            from (select * from person where first_name like "A%") 
+            select 1
+            from (select * from person where first_name like "A%")
             where last_name like "A%"
         "#,
         errors
@@ -377,8 +375,8 @@ fn test_optimize() {
     ok!(
         "examples/filter/pull_filter_through_aggregate.txt",
         r#"
-            select store_id, (select count(*) 
-            from customer where customer.store_id = store.store_id) 
+            select store_id, (select count(*)
+            from customer where customer.store_id = store.store_id)
             from store
         "#,
         errors
@@ -386,8 +384,8 @@ fn test_optimize() {
     ok!(
         "examples/filter/push_filter_through_project.txt",
         r#"
-            select * 
-            from (select *, store_id + 1 from customer) 
+            select *
+            from (select *, store_id + 1 from customer)
             where store_id = 1
         "#,
         errors
@@ -395,8 +393,8 @@ fn test_optimize() {
     ok!(
         "examples/join/semi_join.txt",
         r#"
-            select 1 
-            from person 
+            select 1
+            from person
             where exists (select 1 from customer where customer.person_id = person.person_id)
         "#,
         errors
@@ -404,7 +402,7 @@ fn test_optimize() {
     ok!(
         "examples/join/single_join.txt",
         r#"
-            select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) 
+            select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id)
             from customer
         "#,
         errors
@@ -412,7 +410,7 @@ fn test_optimize() {
     ok!(
         "examples/join/remove_single_join.txt",
         r#"
-            select (select 1) 
+            select (select 1)
             from customer
         "#,
         errors
@@ -420,7 +418,7 @@ fn test_optimize() {
     ok!(
         "examples/join/remove_single_join_column.txt",
         r#"
-            select (select customer_id) 
+            select (select customer_id)
             from customer
         "#,
         errors
@@ -558,7 +556,7 @@ fn test_optimize() {
     ok!(
         "examples/with/remove_with.txt",
         r#"
-            with foo as (select * from customer) 
+            with foo as (select * from customer)
             select * from foo
         "#,
         errors
@@ -566,7 +564,7 @@ fn test_optimize() {
     ok!(
         "examples/with/unused_with.txt",
         r#"
-            with foo as (select 1 as a) 
+            with foo as (select 1 as a)
             select 2 as b
         "#,
         errors

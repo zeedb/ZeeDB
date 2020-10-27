@@ -1,18 +1,18 @@
-select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id) 
+select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id)
 from customer
 
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single customer.person_id'=customer.person_id
 		Map person.first_name customer.person_id'
 			HashJoin Inner customer.person_id'=person.person_id
-				Project customer.person_id'
+				Aggregate customer.person_id'
 					HashJoin Single customer.customer_id'=customer.customer_id
 						Map store.name customer.customer_id'
 							HashJoin Inner store.store_id=customer.customer_id'
 								Filter* (Like store.name A%)
 									Map* store.store_id store.name
 										SeqScan store
-								Project customer.customer_id'
+								Aggregate customer.customer_id'
 									Map* customer.customer_id' customer.person_id'
 										SeqScan customer
 						Map* customer.customer_id customer.person_id'
@@ -25,7 +25,7 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 					Filter* (Like store.name A%)
 						Map* store.store_id store.name
 							SeqScan store
-					Project customer.customer_id'
+					Aggregate customer.customer_id'
 						Map* customer.customer_id' customer.person_id
 							SeqScan customer
 			Map* customer.customer_id customer.person_id

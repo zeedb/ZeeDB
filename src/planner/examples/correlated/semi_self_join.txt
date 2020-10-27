@@ -6,7 +6,7 @@ Map customer.customer_id
 	HashJoin Semi c1.prev_account_number'=c1.prev_account_number customer.person_id=customer.person_id
 		Map customer.person_id c1.prev_account_number'
 			NestedLoop Inner (Equal c1.prev_account_number' customer.account_number)
-				Project c1.prev_account_number'
+				Aggregate c1.prev_account_number'
 					Map c1.prev_account_number':(Subtract customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 							SeqScan customer

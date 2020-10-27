@@ -4,11 +4,17 @@ where person.person_id in (select person_id from customer where customer.store_i
 
 LogicalMap $query.$col1:1
 	LogicalFilter $mark.$in
-		LogicalJoin Mark $mark.$in (Equal person.person_id customer.person_id) [store.store_id]
-			LogicalMap customer.person_id
-				LogicalFilter (Equal customer.store_id store.store_id)
-					Map* customer.person_id customer.store_id
-						LogicalGet customer
+		LogicalJoin Mark $mark.$in (Equal store.store_id store.store_id') (Equal person.person_id customer.person_id)
+			LogicalDependentJoin [store.store_id']
+				LogicalMap customer.person_id
+					LogicalFilter (Equal customer.store_id store.store_id')
+						Map* customer.person_id customer.store_id
+							LogicalGet customer
+				LogicalJoin Inner
+					Map* person.person_id
+						LogicalGet person
+					Map* store.store_id'
+						LogicalGet store
 			LogicalJoin Inner
 				Map* person.person_id
 					LogicalGet person

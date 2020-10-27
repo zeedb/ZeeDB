@@ -6,7 +6,7 @@ Map $query.$col1:1
 	HashJoin Semi store.store_id'=store.store_id customer.person_id=person.person_id
 		Map customer.person_id store.store_id'
 			HashJoin Inner store.store_id'=customer.store_id
-				Project store.store_id'
+				Aggregate store.store_id'
 					NestedLoop Inner
 						Map* store.store_id'
 							SeqScan store

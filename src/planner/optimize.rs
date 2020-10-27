@@ -261,32 +261,25 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
             }
         }
-        LogicalMap(projects, input) => {
+        LogicalMap {
+            include_existing,
+            projects,
+            input,
+        } => {
             cardinality = ss[*input].props.cardinality;
+            if *include_existing {
+                for (c, n) in &ss[*input].props.column_unique_cardinality {
+                    column_unique_cardinality.insert(c.clone(), *n);
+                }
+            }
             for (x, c) in projects {
                 let n = scalar_unique_cardinality(&x, &ss[*input].props.column_unique_cardinality);
                 column_unique_cardinality.insert(c.clone(), n);
             }
         }
-        LogicalProject(projects, input) => {
-            cardinality = 1;
-            for c in projects {
-                let n = ss[*input].props.column_unique_cardinality[c];
-                column_unique_cardinality.insert(c.clone(), n);
-                cardinality *= n;
-            }
-            cardinality = ss[*input].props.cardinality.min(cardinality);
-        }
         LogicalJoin {
             join, left, right, ..
         } => {
-            let mut scope = HashMap::new();
-            for (c, n) in &ss[*left].props.column_unique_cardinality {
-                scope.insert(c.clone(), *n);
-            }
-            for (c, n) in &ss[*right].props.column_unique_cardinality {
-                scope.insert(c.clone(), *n);
-            }
             cardinality = ss[*left].props.cardinality * ss[*right].props.cardinality;
             for (c, n) in &ss[*left].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
@@ -298,12 +291,43 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             if let Join::Mark(mark, _) = join {
                 column_unique_cardinality.insert(mark.clone(), 2);
             }
+            // Apply predicates
+            for p in join.predicates() {
+                let selectivity = predicate_selectivity(p, &column_unique_cardinality);
+                cardinality = apply_selectivity(cardinality, selectivity);
+            }
             // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
             if let Join::Semi(_) | Join::Anti(_) = join {
                 cardinality = apply_selectivity(cardinality, 0.5);
+                // TODO does this make sense?
                 for (_, n) in column_unique_cardinality.iter_mut() {
                     *n = apply_selectivity(*n, 0.5);
                 }
+            }
+        }
+        LogicalDependentJoin {
+            parameters,
+            predicates,
+            subquery,
+            domain,
+        } => {
+            // Figure out the cardinality of domain after projection.
+            let mut domain_cardinality = 1;
+            for c in parameters {
+                let n = ss[*domain].props.column_unique_cardinality[c];
+                column_unique_cardinality.insert(c.clone(), n);
+                domain_cardinality *= n;
+            }
+            domain_cardinality = ss[*domain].props.cardinality.min(domain_cardinality);
+            // Figure out the cardinality of the join before filtering.
+            cardinality = ss[*subquery].props.cardinality * domain_cardinality;
+            for (c, n) in &ss[*subquery].props.column_unique_cardinality {
+                column_unique_cardinality.insert(c.clone(), *n);
+            }
+            // Apply predicates
+            for p in predicates {
+                let selectivity = predicate_selectivity(p, &column_unique_cardinality);
+                cardinality = apply_selectivity(cardinality, selectivity);
             }
         }
         LogicalWith(_, _, _, right) => {
@@ -323,14 +347,11 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         } => {
             cardinality = 1;
             for c in group_by {
-                let n = *ss[*input]
-                    .props
-                    .column_unique_cardinality
-                    .get(c)
-                    .unwrap_or_else(|| panic!("no column {} in {} {:?}", c, input.0, ss));
+                let n = ss[*input].props.column_unique_cardinality[c];
                 column_unique_cardinality.insert(c.clone(), n);
                 cardinality *= n;
             }
+            cardinality = ss[*input].props.cardinality.min(cardinality);
             for (_, c) in aggregate {
                 column_unique_cardinality.insert(c.clone(), cardinality);
             }

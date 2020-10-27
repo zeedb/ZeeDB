@@ -72,6 +72,11 @@ impl<'it> Iterator for ExprIterator<'it> {
                 | Operator::Intersect(left, right)
                 | Operator::Except(left, right)
                 | Operator::LogicalJoin { left, right, .. }
+                | Operator::LogicalDependentJoin {
+                    subquery: left,
+                    domain: right,
+                    ..
+                }
                 | Operator::LogicalWith(_, _, left, right)
                 | Operator::NestedLoop(_, left, right)
                 | Operator::HashJoin(_, _, left, right)
@@ -80,8 +85,7 @@ impl<'it> Iterator for ExprIterator<'it> {
                     self.stack.push(right);
                 }
                 Operator::LogicalFilter(_, input)
-                | Operator::LogicalMap(_, input)
-                | Operator::LogicalProject(_, input)
+                | Operator::LogicalMap { input, .. }
                 | Operator::LogicalAggregate { input, .. }
                 | Operator::LogicalLimit { input, .. }
                 | Operator::LogicalSort(_, input)
@@ -93,9 +97,8 @@ impl<'it> Iterator for ExprIterator<'it> {
                     input: Some(input), ..
                 }
                 | Operator::Filter(_, input)
-                | Operator::Map(_, input)
+                | Operator::Map { input, .. }
                 | Operator::Aggregate { input, .. }
-                | Operator::Project(_, input)
                 | Operator::Limit { input, .. }
                 | Operator::Sort(_, input)
                 | Operator::Insert(_, _, input)

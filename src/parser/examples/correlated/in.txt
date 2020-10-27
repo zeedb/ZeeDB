@@ -2,10 +2,13 @@ select 1 in (select store_id from store where store.store_id = customer.store_id
 from customer
 
 LogicalMap $query.ok:$mark.$in
-	LogicalJoin Mark $mark.$in (Equal 1 store.store_id) [customer.store_id]
-		LogicalMap store.store_id
-			LogicalFilter (Equal store.store_id customer.store_id)
-				Map* store.store_id
-					LogicalGet store
+	LogicalJoin Mark $mark.$in (Equal customer.store_id customer.store_id') (Equal 1 store.store_id)
+		LogicalDependentJoin [customer.store_id']
+			LogicalMap store.store_id
+				LogicalFilter (Equal store.store_id customer.store_id')
+					Map* store.store_id
+						LogicalGet store
+			Map* customer.store_id'
+				LogicalGet customer
 		Map* customer.store_id
 			LogicalGet customer

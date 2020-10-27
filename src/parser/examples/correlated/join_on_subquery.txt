@@ -4,9 +4,15 @@ join customer on (select person.person_id = customer.person_id)
 
 LogicalMap $query.$col1:1
 	LogicalFilter $expr_subquery.$col1
-		LogicalJoin Single [person.person_id customer.person_id]
-			LogicalMap $expr_subquery.$col1:(Equal person.person_id customer.person_id)
-				LogicalSingleGet
+		LogicalJoin Single (Equal person.person_id person.person_id') (Equal customer.person_id customer.person_id')
+			LogicalDependentJoin [person.person_id' customer.person_id']
+				LogicalMap $expr_subquery.$col1:(Equal person.person_id' customer.person_id')
+					LogicalSingleGet
+				LogicalJoin Inner
+					Map* person.person_id'
+						LogicalGet person
+					Map* customer.person_id'
+						LogicalGet customer
 			LogicalJoin Inner
 				Map* person.person_id
 					LogicalGet person

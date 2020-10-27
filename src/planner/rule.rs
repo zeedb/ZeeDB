@@ -1,13 +1,16 @@
 use crate::search_space::*;
 use encoding::*;
 use node::*;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::fmt;
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Rule {
     // Rewrite rules
     InnerJoinCommutivity,
     InnerJoinAssociativity,
+    RemoveDependentJoin,
+    RewriteDependentJoin,
     // Implementation rules
     LogicalGetToTableFreeScan,
     LogicalGetToSeqScan,
@@ -17,7 +20,6 @@ pub enum Rule {
     LogicalJoinToNestedLoop,
     LogicalJoinToHashJoin,
     LogicalAggregateToAggregate,
-    LogicalProjectToProject,
     LogicalLimitToLimit,
     LogicalSortToSort,
     LogicallUnionToUnion,
@@ -48,7 +50,6 @@ impl Rule {
             | Rule::LogicalJoinToNestedLoop
             | Rule::LogicalJoinToHashJoin
             | Rule::LogicalAggregateToAggregate
-            | Rule::LogicalProjectToProject
             | Rule::LogicalLimitToLimit
             | Rule::LogicalSortToSort
             | Rule::LogicallUnionToUnion
@@ -91,15 +92,16 @@ impl Rule {
                     ..
                 },
             )
+            | (Rule::RemoveDependentJoin, LogicalDependentJoin { .. })
+            | (Rule::RewriteDependentJoin, LogicalDependentJoin { .. })
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
-            | (Rule::LogicalMapToMap, LogicalMap(_, _))
+            | (Rule::LogicalMapToMap, LogicalMap { .. })
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
             | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
-            | (Rule::LogicalProjectToProject, LogicalProject { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort(_, _))
             | (Rule::LogicallUnionToUnion, LogicalUnion(_, _))
@@ -148,10 +150,8 @@ impl Rule {
                         } = &ss[*left].op
                         {
                             binds.push(LogicalJoin {
-                                parameters: vec![],
                                 join: Join::Inner(parent_predicates.clone()),
                                 left: Bind::Operator(Box::new(LogicalJoin {
-                                    parameters: vec![],
                                     join: Join::Inner(left_predicates.clone()),
                                     left: Bind::Group(*left_left),
                                     right: Bind::Group(*left_middle),
@@ -178,7 +178,6 @@ impl Rule {
                 } = bind
                 {
                     return Some(LogicalJoin {
-                        parameters: vec![],
                         join: Join::Inner(join_predicates.clone()),
                         left: right,
                         right: left,
@@ -211,19 +210,101 @@ impl Rule {
                     {
                         let mut new_parent_predicates = vec![];
                         let mut new_right_predicates = vec![];
+                        return None;
                         todo!("redistribute predicates");
                         return Some(LogicalJoin {
-                            parameters: vec![],
                             join: Join::Inner(new_parent_predicates),
                             left: left_left,
                             right: Bind::Operator(Box::new(LogicalJoin {
-                                parameters: vec![],
                                 join: Join::Inner(new_right_predicates),
                                 left: left_middle,
                                 right,
                             })),
                         });
                     }
+                }
+            }
+            Rule::RemoveDependentJoin => {
+                if let LogicalDependentJoin {
+                    parameters,
+                    predicates,
+                    subquery: Bind::Group(subquery),
+                    ..
+                } = bind
+                {
+                    debug_assert!(!parameters.is_empty());
+                    // Check if predicates contains subquery.a = domain.b for every b in domain.
+                    let subquery_scope = &ss[subquery].props.column_unique_cardinality;
+                    let match_equals = |x: &Scalar| {
+                        if let Scalar::Call(Function::Equal, args, _) = x {
+                            if let Scalar::Column(left) = &args[0] {
+                                if let Scalar::Column(right) = &args[1] {
+                                    if subquery_scope.contains_key(&left)
+                                        && parameters.contains(&right)
+                                    {
+                                        return Some((left.clone(), right.clone()));
+                                    } else if subquery_scope.contains_key(&right)
+                                        && parameters.contains(&left)
+                                    {
+                                        return Some((right.clone(), left.clone()));
+                                    }
+                                }
+                            }
+                        }
+                        None
+                    };
+                    let mut equiv_predicates = HashMap::new();
+                    let mut filter_predicates = vec![];
+                    for p in predicates {
+                        if let Some((subquery_column, domain_column)) = match_equals(&p) {
+                            equiv_predicates.insert(domain_column, subquery_column);
+                        } else {
+                            filter_predicates.push(p.clone())
+                        }
+                    }
+                    if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
+                        return None;
+                    }
+                    // Infer domain from subquery using equivalences from the join condition.
+                    let project_domain: Vec<(Scalar, Column)> = parameters
+                        .iter()
+                        .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
+                        .collect();
+                    if filter_predicates.is_empty() {
+                        return Some(LogicalMap {
+                            include_existing: true,
+                            projects: project_domain,
+                            input: Bind::Group(subquery),
+                        });
+                    } else {
+                        return Some(LogicalFilter(
+                            filter_predicates,
+                            Bind::Operator(Box::new(LogicalMap {
+                                include_existing: true,
+                                projects: project_domain,
+                                input: Bind::Group(subquery),
+                            })),
+                        ));
+                    }
+                }
+            }
+            Rule::RewriteDependentJoin => {
+                if let LogicalDependentJoin {
+                    parameters,
+                    predicates,
+                    subquery,
+                    domain,
+                } = bind
+                {
+                    return Some(LogicalJoin {
+                        join: Join::Inner(predicates),
+                        left: subquery,
+                        right: Bind::Operator(Box::new(LogicalAggregate {
+                            group_by: parameters,
+                            aggregate: vec![],
+                            input: domain,
+                        })),
+                    });
                 }
             }
             Rule::LogicalGetToTableFreeScan => {
@@ -270,8 +351,17 @@ impl Rule {
                 }
             }
             Rule::LogicalMapToMap => {
-                if let LogicalMap(projects, input) = bind {
-                    return Some(Map(projects, input));
+                if let LogicalMap {
+                    include_existing,
+                    projects,
+                    input,
+                } = bind
+                {
+                    return Some(Map {
+                        include_existing,
+                        projects,
+                        input,
+                    });
                 }
             }
             Rule::LogicalJoinToNestedLoop => {
@@ -356,11 +446,6 @@ impl Rule {
                         aggregate,
                         input,
                     });
-                }
-            }
-            Rule::LogicalProjectToProject => {
-                if let LogicalProject(projects, input) = bind {
-                    return Some(Project(projects, input));
                 }
             }
             Rule::LogicalLimitToLimit => {
@@ -480,6 +565,8 @@ impl Rule {
         vec![
             Rule::InnerJoinCommutivity,
             Rule::InnerJoinAssociativity,
+            // Rule::RemoveDependentJoin,
+            Rule::RewriteDependentJoin,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,
@@ -488,7 +575,6 @@ impl Rule {
             Rule::LogicalJoinToNestedLoop,
             Rule::LogicalJoinToHashJoin,
             Rule::LogicalAggregateToAggregate,
-            Rule::LogicalProjectToProject,
             Rule::LogicalLimitToLimit,
             Rule::LogicalSortToSort,
             Rule::LogicallUnionToUnion,
@@ -513,6 +599,15 @@ impl Rule {
 pub enum Bind {
     Group(GroupID),
     Operator(Box<Operator<Bind>>),
+}
+
+impl IndentPrint for Bind {
+    fn indent_print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
+        match self {
+            Bind::Group(id) => write!(f, "{}", id.0),
+            Bind::Operator(op) => op.indent_print(f, indent),
+        }
+    }
 }
 
 fn find_index_scan(predicates: &Vec<Scalar>, table: &Table) -> Option<usize> {

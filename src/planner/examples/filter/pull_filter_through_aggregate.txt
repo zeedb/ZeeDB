@@ -1,12 +1,12 @@
-select store_id, (select count(*) 
-from customer where customer.store_id = store.store_id) 
+select store_id, (select count(*)
+from customer where customer.store_id = store.store_id)
 from store
 
 Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single store.store_id'=store.store_id
 		Aggregate store.store_id' $aggregate.$agg1:(CountStar)
 			HashJoin Inner store.store_id'=customer.store_id
-				Project store.store_id'
+				Aggregate store.store_id'
 					Map* store.store_id'
 						SeqScan store
 				Map* customer.store_id

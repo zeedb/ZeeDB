@@ -1,6 +1,7 @@
 use encoding::*;
 use node::*;
 use std::borrow::Borrow;
+use std::collections::HashMap;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
 use zetasql::any_resolved_alter_action_proto::Node::*;
 use zetasql::any_resolved_alter_object_stmt_proto::Node::*;
@@ -92,7 +93,6 @@ impl Converter {
         if *q.join_type.get().borrow() == 0 {
             let mut input = Expr::new(LogicalJoin {
                 join: Join::Inner(vec![]),
-                parameters: vec![],
                 left,
                 right,
             });
@@ -120,21 +120,18 @@ impl Converter {
             // Left
             1 => Expr::new(LogicalJoin {
                 join: Join::Right(predicates),
-                parameters: vec![],
                 left: right,
                 right: left,
             }),
             // Right
             2 => Expr::new(LogicalJoin {
                 join: Join::Right(predicates),
-                parameters: vec![],
                 left,
                 right,
             }),
             // Full
             3 => Expr::new(LogicalJoin {
                 join: Join::Outer(predicates),
-                parameters: vec![],
                 left,
                 right,
             }),
@@ -217,7 +214,11 @@ impl Converter {
             let output = Column::from(&outputs[i]);
             projects.push((input, output))
         }
-        Expr::new(LogicalMap(projects, item))
+        Expr::new(LogicalMap {
+            include_existing: false,
+            projects,
+            input: item,
+        })
     }
 
     fn order_by(&mut self, q: &ResolvedOrderByScanProto) -> Expr {
@@ -283,7 +284,11 @@ impl Converter {
             let column = Column::from(&c);
             projects.push((Scalar::Column(column.clone()), column))
         }
-        Expr::new(LogicalMap(projects, input))
+        Expr::new(LogicalMap {
+            include_existing: false,
+            projects,
+            input,
+        })
     }
 
     fn computed_column(
@@ -336,7 +341,11 @@ impl Converter {
             aggregate.push((expr, column));
         }
         if projects.len() > 0 {
-            input = Expr::new(LogicalMap(projects, input));
+            input = Expr::new(LogicalMap {
+                include_existing: false,
+                projects,
+                input,
+            });
         }
         Expr::new(LogicalAggregate {
             group_by,
@@ -443,7 +452,11 @@ impl Converter {
             let column = Column::from(q.parent.get().column_definition_list[i].column.get());
             projects.push((value, column))
         }
-        let input = Expr::new(LogicalMap(projects, input));
+        let input = Expr::new(LogicalMap {
+            include_existing: false,
+            projects,
+            input,
+        });
         self.create_table_base(q.parent.get(), Some(input))
     }
 
@@ -600,7 +613,6 @@ impl Converter {
             let predicates = vec![];
             input = Expr::new(LogicalJoin {
                 join: Join::Inner(predicates),
-                parameters: vec![],
                 left: input,
                 right: from,
             });
@@ -643,7 +655,11 @@ impl Converter {
         }
         Expr::new(LogicalUpdate(
             update,
-            Expr::new(LogicalMap(projects, input)),
+            Expr::new(LogicalMap {
+                include_existing: false,
+                projects,
+                input,
+            }),
         ))
     }
 
@@ -820,12 +836,7 @@ impl Converter {
             other => panic!("{:?}", other),
         };
         // Push join onto outer.
-        *outer = Expr::new(LogicalJoin {
-            parameters,
-            join,
-            left: subquery,
-            right: outer.clone(),
-        });
+        *outer = create_dependent_join(parameters, join, subquery, outer.clone());
         // Return scalar that represents the entire query.
         scalar
     }
@@ -841,6 +852,127 @@ impl Converter {
         self.next_column_id += 1;
         column
     }
+}
+
+fn create_dependent_join(
+    subquery_parameters: Vec<Column>,
+    join: Join,
+    subquery: Expr,
+    outer: Expr,
+) -> Expr {
+    if subquery_parameters.is_empty() {
+        return Expr::new(LogicalJoin {
+            join,
+            left: subquery,
+            right: outer,
+        });
+    }
+    // A correlated subquery can be interpreted as a dependent join
+    // that executes the subquery once for every tuple in outer:
+    //
+    //        DependentJoin
+    //         +         +
+    //         +         +
+    //    subquery      outer
+    //
+    // As a first step in eliminating the dependent join, we rewrite it as dependent join
+    // that executes the subquery once for every *distinct combination of parameters* in outer,
+    // and then an equi-join that looks up the appropriate row for every tuple in outer:
+    //
+    //             LogicalJoin
+    //              +       +
+    //              +       +
+    //   DependentJoin     outer
+    //    +         +
+    //    +         +
+    // subquery  Project
+    //              +
+    //              +
+    //            outer
+    //
+    // This is a slight improvement because the number of distinct combinations of parameters in outer
+    // is likely much less than the number of tuples in outer,
+    // and it makes the dependent join much easier to manipulate because Project is a set rather than a multiset.
+    // During the rewrite phase, we will take advantage of this to push the dependent join down
+    // until it can be eliminated or converted to an inner join.
+    //
+    //   DependentJoin
+    //    +         +
+    //    +         +
+    // subquery  Project
+    //              +
+    //              +
+    //            outer
+    //
+    // TODO this doesn't work if we're only looking at part of the expression
+    let fresh_column = subquery
+        .references()
+        .iter()
+        .filter(|c| c.created == Phase::Plan)
+        .map(|c| c.id)
+        .max()
+        .unwrap_or(0)
+        + 1;
+    let rename_subquery_parameters: Vec<Column> = (0..subquery_parameters.len())
+        .map(|i| Column {
+            created: Phase::Plan,
+            id: fresh_column + i as i64,
+            name: subquery_parameters[i].name.clone(),
+            table: subquery_parameters[i].table.clone(),
+            typ: subquery_parameters[i].typ.clone(),
+        })
+        .collect();
+    let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
+        .map(|i| {
+            (
+                subquery_parameters[i].clone(),
+                rename_subquery_parameters[i].clone(),
+            )
+        })
+        .collect();
+    let dependent_join = LogicalDependentJoin {
+        parameters: rename_subquery_parameters.clone(),
+        predicates: vec![],
+        subquery: subquery.clone().subst(&map_subquery_parameters),
+        domain: outer.clone().subst(&map_subquery_parameters),
+    };
+    //             LogicalJoin
+    //              +       +
+    //              +       +
+    //   DependentJoin     outer
+    //    +         +
+    let mut join_predicates: Vec<Scalar> = (0..subquery_parameters.len())
+        .map(|i| {
+            Scalar::Call(
+                Function::Equal,
+                vec![
+                    Scalar::Column(subquery_parameters[i].clone()),
+                    Scalar::Column(rename_subquery_parameters[i].clone()),
+                ],
+                Type::Bool,
+            )
+        })
+        .collect();
+    let join = match join {
+        Join::Single(additional_predicates) => {
+            for p in additional_predicates {
+                join_predicates.push(p.clone());
+            }
+            Join::Single(join_predicates)
+        }
+        Join::Mark(mark, additional_predicates) => {
+            for p in additional_predicates {
+                join_predicates.push(p.clone());
+            }
+            Join::Mark(mark.clone(), join_predicates)
+        }
+        _ => panic!("{}", join),
+    };
+    Expr::new(LogicalJoin {
+        join,
+        left: Expr::new(dependent_join),
+        right: outer,
+    })
 }
 
 fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {

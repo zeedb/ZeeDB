@@ -8,7 +8,7 @@ Map $query.$col1:1
 			Aggregate $groupby.account_number customer.store_id' $aggregate.$agg1:(Max $proj.$max)
 				Map $groupby.account_number:customer.account_number $proj.$max:customer.customer_id customer.store_id'
 					HashJoin Inner customer.store_id'=customer.store_id
-						Project customer.store_id'
+						Aggregate customer.store_id'
 							Map* customer.customer_id customer.store_id'
 								SeqScan customer
 						Map* customer.customer_id customer.store_id customer.account_number
