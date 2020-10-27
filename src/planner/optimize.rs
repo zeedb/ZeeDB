@@ -250,7 +250,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             let selectivity = total_selectivity(predicates, &column_unique_cardinality);
             cardinality = apply_selectivity(cardinality, selectivity);
             for (_, n) in column_unique_cardinality.iter_mut() {
-                *n = apply_selectivity(*n, selectivity);
+                *n = cardinality.min(*n);
             }
         }
         LogicalFilter(predicates, input) => {
@@ -258,7 +258,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             let selectivity = total_selectivity(predicates, scope);
             cardinality = apply_selectivity(ss[*input].props.cardinality, selectivity);
             for (c, n) in &ss[*input].props.column_unique_cardinality {
-                column_unique_cardinality.insert(c.clone(), apply_selectivity(*n, selectivity));
+                column_unique_cardinality.insert(c.clone(), cardinality.min(*n));
             }
         }
         LogicalMap {
@@ -299,9 +299,8 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
             if let Join::Semi(_) | Join::Anti(_) = join {
                 cardinality = apply_selectivity(cardinality, 0.5);
-                // TODO does this make sense?
                 for (_, n) in column_unique_cardinality.iter_mut() {
-                    *n = apply_selectivity(*n, 0.5);
+                    *n = cardinality.min(*n);
                 }
             }
         }
