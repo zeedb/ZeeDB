@@ -185,40 +185,62 @@ impl Rule {
                 }
             }
             // Rearrange left-deep join into right-deep join.
+            //               parent
+            //                +  +
+            //                +  +
+            //        left_join  right
+            //         +     +
+            //         +     +
+            // left_left   left_middle
             //
-            //             +---+ parent +---+
-            //             |                |
-            //             +                +
-            //      +--+leftJoin+---+     right
-            //      |               |
-            //      +               +
-            //   leftLeft      leftMiddle
+            //               parent
+            //                +  +
+            //                +  +
+            //        left_left  right_join
+            //                    +     +
+            //                    +     +
+            //            left_middle  right
             Rule::InnerJoinAssociativity => {
                 if let LogicalJoin {
                     join: Join::Inner(parent_predicates),
                     left: Bind::Operator(left),
-                    right,
+                    right: Bind::Group(right),
                     ..
                 } = bind
                 {
                     if let LogicalJoin {
                         join: Join::Inner(left_predicates),
-                        left: left_left,
-                        right: left_middle,
+                        left: Bind::Group(left_left),
+                        right: Bind::Group(left_middle),
                         ..
                     } = *left
                     {
                         let mut new_parent_predicates = vec![];
                         let mut new_right_predicates = vec![];
-                        return None;
-                        todo!("redistribute predicates");
+                        let middle_scope = &ss[left_middle].props.column_unique_cardinality;
+                        let right_scope = &ss[right].props.column_unique_cardinality;
+                        let mut redistribute_predicate = |p: Scalar| {
+                            if p.references().iter().all(|c| {
+                                middle_scope.contains_key(c) || right_scope.contains_key(c)
+                            }) {
+                                new_right_predicates.push(p);
+                            } else {
+                                new_parent_predicates.push(p);
+                            }
+                        };
+                        for p in parent_predicates {
+                            redistribute_predicate(p);
+                        }
+                        for p in left_predicates {
+                            redistribute_predicate(p);
+                        }
                         return Some(LogicalJoin {
                             join: Join::Inner(new_parent_predicates),
-                            left: left_left,
+                            left: Bind::Group(left_left),
                             right: Bind::Operator(Box::new(LogicalJoin {
                                 join: Join::Inner(new_right_predicates),
-                                left: left_middle,
-                                right,
+                                left: Bind::Group(left_middle),
+                                right: Bind::Group(right),
                             })),
                         });
                     }

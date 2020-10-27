@@ -24,8 +24,10 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].op {
         TableFreeScan { .. } => 0.0,
-        SeqScan { predicates, .. } => {
-            let table_cardinality = 1000 as f64; // TODO table cardinality
+        SeqScan {
+            predicates, table, ..
+        } => {
+            let table_cardinality = crate::optimize::table_cardinality(table) as f64;
             let read_blocks = f64::max(1.0, table_cardinality * TUPLE_SIZE / BLOCK_SIZE);
             let count_predicates = predicates.len() as f64;
             read_blocks * COST_READ_BLOCK + count_predicates * table_cardinality * COST_CPU_PRED

@@ -235,15 +235,15 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         LogicalGet {
             projects,
             predicates,
-            ..
+            table,
         } => {
             // Scan
-            cardinality = 1000; // TODO get from LogicalGet or Table
+            cardinality = table_cardinality(table);
             for c in projects {
                 if c.name.ends_with("id") {
-                    column_unique_cardinality.insert(c.clone(), 1000);
+                    column_unique_cardinality.insert(c.clone(), cardinality);
                 } else {
-                    column_unique_cardinality.insert(c.clone(), 100);
+                    column_unique_cardinality.insert(c.clone(), cardinality / 10);
                 }
             }
             // Filter
@@ -400,6 +400,15 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
     LogicalProps {
         cardinality,
         column_unique_cardinality,
+    }
+}
+
+pub fn table_cardinality(table: &Table) -> usize {
+    match table.name.as_str() {
+        "store" => 1000,
+        "customer" => 100000,
+        "person" => 10000000,
+        _ => 1000,
     }
 }
 
