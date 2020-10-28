@@ -36,6 +36,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ast"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "zetasql",
+]
+
+[[package]]
 name = "async-stream"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -541,14 +549,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "zetasql",
-]
-
-[[package]]
 name = "num"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -628,11 +628,11 @@ dependencies = [
 name = "parser"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "chrono",
  "encoding",
  "fixtures",
  "futures",
- "node",
  "prost-types",
  "regex",
  "time",
@@ -683,9 +683,9 @@ checksum = "5894c618ce612a3fa23881b152b608bafb8c56cfc22f434a3ba3120b40f7b587"
 name = "planner"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "encoding",
  "fixtures",
- "node",
  "parser",
  "regex",
  "zetasql",

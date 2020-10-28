@@ -1,5 +1,5 @@
 use crate::parser::*;
-use node::*;
+use ast::*;
 
 #[test]
 fn test_analyze() {

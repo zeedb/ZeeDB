@@ -1,6 +1,6 @@
 use crate::cost::*;
 use crate::rule::*;
-use node::*;
+use ast::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops;

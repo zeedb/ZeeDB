@@ -1,5 +1,5 @@
 use crate::search_space::*;
-use node::*;
+use ast::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 

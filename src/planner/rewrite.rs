@@ -1,4 +1,4 @@
-use node::*;
+use ast::*;
 use std::collections::HashMap;
 
 #[derive(Debug)]

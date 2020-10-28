@@ -1,7 +1,7 @@
 use crate::cost::*;
 use crate::rule::*;
 use crate::search_space::*;
-use node::*;
+use ast::*;
 use std::collections::{HashMap, HashSet};
 
 // Our implementation of tasks differs from Columbia/Cascades:

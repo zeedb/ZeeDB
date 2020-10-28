@@ -1,5 +1,5 @@
+use ast::*;
 use encoding::varint128;
-use node::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;

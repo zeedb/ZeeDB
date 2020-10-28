@@ -1,9 +1,9 @@
 [workspace]
 members = [
+    "src/ast",
     "src/catalog",
     "src/encoding",
     "src/execute",
-    "src/node",
     "src/parser",
     "src/planner",
     "src/zetasql",
