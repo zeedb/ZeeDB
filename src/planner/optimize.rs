@@ -1,7 +1,6 @@
 use crate::cost::*;
 use crate::rule::*;
 use crate::search_space::*;
-use encoding::*;
 use node::*;
 use std::collections::{HashMap, HashSet};
 

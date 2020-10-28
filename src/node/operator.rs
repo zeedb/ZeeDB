@@ -1,3 +1,5 @@
+use crate::types::*;
+use crate::values::*;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -75,7 +77,7 @@ pub enum Operator<T> {
     // LogicalCreateTable implements the CREATE TABLE operation.
     LogicalCreateTable {
         name: Name,
-        columns: Vec<(String, encoding::Type)>,
+        columns: Vec<(String, Type)>,
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
@@ -158,7 +160,7 @@ pub enum Operator<T> {
     CreateDatabase(Name),
     CreateTable {
         name: Name,
-        columns: Vec<(String, encoding::Type)>,
+        columns: Vec<(String, Type)>,
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
@@ -1013,7 +1015,7 @@ pub struct Column {
     pub id: i64,
     pub name: String,
     pub table: Option<String>,
-    pub typ: encoding::Type,
+    pub typ: Type,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -1030,7 +1032,7 @@ impl Column {
             id: column.column_id.unwrap(),
             name: column.name.clone().unwrap(),
             table: column.table_name.clone(),
-            typ: encoding::Type::from(column.r#type.as_ref().unwrap()),
+            typ: Type::from(column.r#type.as_ref().unwrap()),
         }
     }
 }
@@ -1126,7 +1128,7 @@ impl fmt::Display for OrderBy {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Alter {
-    AddColumn { name: String, typ: encoding::Type },
+    AddColumn { name: String, typ: Type },
     DropColumn { name: String },
 }
 
@@ -1141,14 +1143,14 @@ impl fmt::Display for Alter {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Scalar {
-    Literal(encoding::Value, encoding::Type),
+    Literal(Value, Type),
     Column(Column),
-    Call(Function, Vec<Scalar>, encoding::Type),
-    Cast(Box<Scalar>, encoding::Type),
+    Call(Function, Vec<Scalar>, Type),
+    Cast(Box<Scalar>, Type),
 }
 
 impl Scalar {
-    pub fn typ(&self) -> encoding::Type {
+    pub fn typ(&self) -> Type {
         match self {
             Scalar::Literal(_, typ) => typ.clone(),
             Scalar::Column(column) => column.typ.clone(),

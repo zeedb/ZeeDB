@@ -1,8 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::fmt;
 
-// TODO write custom serializer that uses varints
-#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Value {
     Int64(i64),
     Bool(bool),

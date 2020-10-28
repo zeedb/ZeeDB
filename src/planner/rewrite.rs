@@ -1,4 +1,3 @@
-use encoding::*;
 use node::*;
 use std::collections::HashMap;
 

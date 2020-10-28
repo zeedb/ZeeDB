@@ -191,7 +191,6 @@ name = "encoding"
 version = "0.1.0"
 dependencies = [
  "bincode",
- "chrono",
  "serde",
  "zetasql",
 ]
@@ -545,7 +544,7 @@ dependencies = [
 name = "node"
 version = "0.1.0"
 dependencies = [
- "encoding",
+ "chrono",
  "zetasql",
 ]
 

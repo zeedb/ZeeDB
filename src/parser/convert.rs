@@ -1,4 +1,4 @@
-use encoding::*;
+use encoding::varint128;
 use node::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
