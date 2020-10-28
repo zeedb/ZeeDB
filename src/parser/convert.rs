@@ -774,7 +774,7 @@ impl Converter {
         };
         let function = Function::from(function.clone());
         let arguments = self.exprs(arguments, outer);
-        let returns = encoding::Type::from(returns);
+        let returns = Type::from(returns);
         Scalar::Call(function, arguments, returns)
     }
 

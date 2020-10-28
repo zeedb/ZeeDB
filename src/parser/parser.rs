@@ -38,7 +38,7 @@ impl ParseProvider {
         &mut self,
         sql: &String,
         offset: i32,
-        catalog: &SimpleCatalogProto, // TODO eliminate catalog in favor of rocksdb reference
+        catalog: SimpleCatalogProto,
     ) -> Result<(i32, Expr), String> {
         match self.analyze(sql, offset, catalog) {
             Ok(response) => {
@@ -58,14 +58,23 @@ impl ParseProvider {
         &mut self,
         sql: &String,
         offset: i32,
-        catalog: &SimpleCatalogProto,
+        catalog: SimpleCatalogProto,
     ) -> Result<Response<AnalyzeResponse>, Status> {
+        let enabled_language_features = catalog
+            .builtin_function_options
+            .as_ref()
+            .unwrap()
+            .language_options
+            .as_ref()
+            .unwrap()
+            .enabled_language_features
+            .clone();
         let request = tonic::Request::new(AnalyzeRequest {
-            simple_catalog: Some(catalog.clone()),
+            simple_catalog: Some(catalog),
             options: Some(AnalyzerOptionsProto {
                 default_timezone: Some("UTC".to_string()),
                 language_options: Some(LanguageOptionsProto {
-                    enabled_language_features: all_features(),
+                    enabled_language_features,
                     ..Default::default()
                 }),
                 prune_unused_columns: Some(true),
@@ -82,26 +91,4 @@ impl ParseProvider {
         });
         self.runtime.block_on(self.client.analyze(request))
     }
-}
-
-fn all_features() -> Vec<i32> {
-    vec![
-        LanguageFeature::FeatureTimestampNanos as i32,
-        LanguageFeature::FeatureDmlUpdateWithJoin as i32,
-        LanguageFeature::FeatureCreateTablePartitionBy as i32,
-        LanguageFeature::FeatureCreateTableClusterBy as i32,
-        LanguageFeature::FeatureNumericType as i32,
-        LanguageFeature::FeatureCreateTableFieldAnnotations as i32,
-        LanguageFeature::FeatureCreateTableAsSelectColumnList as i32,
-        LanguageFeature::FeatureDisallowNullPrimaryKeys as i32,
-        LanguageFeature::FeatureDisallowPrimaryKeyUpdates as i32,
-        LanguageFeature::FeatureParametersInGranteeList as i32,
-        LanguageFeature::FeatureNamedArguments as i32,
-        LanguageFeature::FeatureV11SelectStarExceptReplace as i32,
-        LanguageFeature::FeatureV12CorrelatedRefsInNestedDml as i32,
-        LanguageFeature::FeatureV12WeekWithWeekday as i32,
-        LanguageFeature::FeatureV13OmitInsertColumnList as i32,
-        LanguageFeature::FeatureV13NullsFirstLastInOrderBy as i32,
-        LanguageFeature::FeatureV13ConcatMixedTypes as i32,
-    ]
 }

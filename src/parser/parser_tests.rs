@@ -1,13 +1,11 @@
 use crate::parser::*;
-use fixtures::*;
 use node::*;
-use zetasql::*;
 
 #[test]
 fn test_analyze() {
     let mut parser = ParseProvider::new();
     let (_, expr) = parser
-        .parse(&"select 1".to_string(), 0, &catalog())
+        .parse(&"select 1".to_string(), 0, empty_catalog())
         .unwrap();
     match expr.as_ref() {
         LogicalMap { .. } => (),
@@ -15,40 +13,39 @@ fn test_analyze() {
     }
 }
 
+fn empty_catalog() -> zetasql::SimpleCatalogProto {
+    let mut cat = fixtures::catalog();
+    cat.catalog.push(fixtures::metadata());
+    cat
+}
+
 #[test]
 fn test_split() {
     let mut parser = ParseProvider::new();
     let sql = "select 1; select 2".to_string();
-    let (select1, _) = parser.parse(&sql, 0, &catalog()).unwrap();
+    let (select1, _) = parser.parse(&sql, 0, empty_catalog()).unwrap();
     assert!(select1 > 0);
-    let (select2, _) = parser.parse(&sql, select1, &catalog()).unwrap();
+    let (select2, _) = parser.parse(&sql, select1, empty_catalog()).unwrap();
     assert_eq!(select2 as usize, sql.len());
 }
 
 #[test]
 fn test_not_available_fn() {
     let mut parser = ParseProvider::new();
-    match parser.parse(&"select to_proto(true)".to_string(), 0, &catalog()) {
+    match parser.parse(&"select to_proto(true)".to_string(), 0, empty_catalog()) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
     }
 }
 
 #[test]
-fn test_add_table() {
-    let table = SimpleTableProto {
-        name: Some(String::from("test_table")),
-        serialization_id: Some(1),
-        column: vec![SimpleColumnProto {
-            name: Some(String::from("test_column")),
-            r#type: Some(TypeProto {
-                type_kind: Some(TypeKind::TypeInt64 as i32),
-                ..Default::default()
-            }),
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    let mut catalog = catalog();
-    catalog.table.push(table);
+fn test_metadata() {
+    let mut parser = ParseProvider::new();
+    let q = "
+        select * 
+        from metadata.column 
+        join metadata.table using (table_id) 
+        join metadata.catalog using (catalog_id)";
+    let (offset, _) = parser.parse(&q.to_string(), 0, empty_catalog()).unwrap();
+    assert!(offset > 0);
 }

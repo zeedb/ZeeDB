@@ -1,0 +1,14 @@
+[package]
+name = "execute"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+parser = { path = "../parser" }
+planner = { path = "../planner" }
+zetasql = { path = "../zetasql" }
+arrow = "2.0.0"

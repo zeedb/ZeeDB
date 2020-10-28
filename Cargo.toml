@@ -1,10 +1,10 @@
 [workspace]
 members = [
+    "src/catalog",
     "src/encoding",
+    "src/execute",
     "src/node",
     "src/parser",
     "src/planner",
-    "src/scratch",
-    "src/storage",
     "src/zetasql",
 ]

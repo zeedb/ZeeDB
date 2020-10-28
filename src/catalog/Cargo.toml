@@ -1,5 +1,5 @@
 [package]
-name = "planner"
+name = "catalog"
 version = "0.1.0"
 edition = "2018"
 publish = false
@@ -8,9 +8,6 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-encoding = { path = "../encoding" }
+execute = { path = "../execute" }
 fixtures = { path = "../fixtures" }
-node = { path = "../node" }
-parser = { path = "../parser" }
-regex = "1"
 zetasql = { path = "../zetasql" }

@@ -17,6 +17,68 @@ pub fn catalog() -> SimpleCatalogProto {
     }
 }
 
+pub fn metadata() -> SimpleCatalogProto {
+    let mut count = 0;
+    let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {
+        let serialization_id = count;
+        count += 1;
+        SimpleTableProto {
+            name: Some(String::from(name)),
+            column: columns,
+            serialization_id: Some(serialization_id),
+            ..Default::default()
+        }
+    };
+    let column = |name: &str, kind: TypeKind| -> SimpleColumnProto {
+        SimpleColumnProto {
+            name: Some(String::from(name)),
+            r#type: Some(TypeProto {
+                type_kind: Some(kind as i32),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    };
+    SimpleCatalogProto {
+        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
+            language_options: Some(LanguageOptionsProto {
+                enabled_language_features: enabled_features(),
+                ..Default::default()
+            }),
+            include_function_ids: enabled_functions(),
+            ..Default::default()
+        }),
+        name: Some("metadata".to_string()),
+        table: vec![
+            table(
+                "catalog",
+                vec![
+                    column("parent_id", TypeKind::TypeInt64),
+                    column("catalog_id", TypeKind::TypeInt64),
+                    column("catalog_name", TypeKind::TypeString),
+                ],
+            ),
+            table(
+                "table",
+                vec![
+                    column("catalog_id", TypeKind::TypeInt64),
+                    column("table_id", TypeKind::TypeInt64),
+                    column("table_name", TypeKind::TypeString),
+                ],
+            ),
+            table(
+                "column",
+                vec![
+                    column("table_id", TypeKind::TypeInt64),
+                    column("column_id", TypeKind::TypeInt64),
+                    column("column_name", TypeKind::TypeString),
+                ],
+            ),
+        ],
+        ..Default::default()
+    }
+}
+
 fn enabled_features() -> Vec<i32> {
     vec![
         LanguageFeature::FeatureTimestampNanos as i32,
