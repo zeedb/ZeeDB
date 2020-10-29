@@ -1,18 +1,5 @@
-struct CatalogProvider {
-    execute: execute::ExecuteProvider,
-}
+mod catalog;
+#[cfg(test)]
+mod catalog_tests;
 
-impl CatalogProvider {
-    pub fn new() -> Self {
-        Self {
-            execute: execute::ExecuteProvider::new(),
-        }
-    }
-
-    pub fn catalog(&mut self, name: &String) -> zetasql::SimpleCatalogProto {
-        let mut cat = fixtures::catalog();
-        cat.name = Some(name.clone());
-        cat.catalog.push(fixtures::metadata());
-        cat
-    }
-}
+pub use catalog::CatalogProvider;

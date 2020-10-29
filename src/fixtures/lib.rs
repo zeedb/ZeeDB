@@ -53,7 +53,6 @@ pub fn metadata() -> SimpleCatalogProto {
             table(
                 "catalog",
                 vec![
-                    column("parent_id", TypeKind::TypeInt64),
                     column("catalog_id", TypeKind::TypeInt64),
                     column("catalog_name", TypeKind::TypeString),
                 ],
@@ -72,6 +71,7 @@ pub fn metadata() -> SimpleCatalogProto {
                     column("table_id", TypeKind::TypeInt64),
                     column("column_id", TypeKind::TypeInt64),
                     column("column_name", TypeKind::TypeString),
+                    column("column_type", TypeKind::TypeString),
                 ],
             ),
         ],

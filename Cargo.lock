@@ -143,8 +143,11 @@ dependencies = [
 name = "catalog"
 version = "0.1.0"
 dependencies = [
+ "arrow",
+ "ast",
  "execute",
  "fixtures",
+ "parser",
  "zetasql",
 ]
 
@@ -208,6 +211,8 @@ name = "execute"
 version = "0.1.0"
 dependencies = [
  "arrow",
+ "ast",
+ "fixtures",
  "parser",
  "planner",
  "zetasql",

@@ -43,9 +43,11 @@ fn test_metadata() {
     let mut parser = ParseProvider::new();
     let q = "
         select * 
-        from metadata.column 
-        join metadata.table using (table_id) 
-        join metadata.catalog using (catalog_id)";
-    let (offset, _) = parser.parse(&q.to_string(), 0, empty_catalog()).unwrap();
+        from column 
+        join table using (table_id) 
+        join catalog using (catalog_id)";
+    let (offset, _) = parser
+        .parse(&q.to_string(), 0, fixtures::metadata())
+        .unwrap();
     assert!(offset > 0);
 }

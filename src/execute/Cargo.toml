@@ -8,7 +8,9 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
+arrow = "2.0.0"
+ast = { path = "../ast" }
+fixtures = { path = "../fixtures" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 zetasql = { path = "../zetasql" }
-arrow = "2.0.0"

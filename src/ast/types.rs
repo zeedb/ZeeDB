@@ -18,34 +18,72 @@ pub enum Type {
 impl Type {
     pub fn from(typ: &zetasql::TypeProto) -> Self {
         match typ.type_kind.unwrap() {
-            // TypeInt64
             2 => Type::Int64,
-            // TypeBool
             5 => Type::Bool,
-            // TypeDouble
             7 => Type::Double,
-            // TypeString
             8 => Type::String,
-            // TypeBytes
             9 => Type::Bytes,
-            // TypeDate
             10 => Type::Date,
-            // TypeTimestamp
             19 => Type::Timestamp,
-            // TypeArray
             16 => {
                 let t = typ.clone().array_type.unwrap().element_type.unwrap();
                 Type::Array(Box::from(Type::from(&t)))
             }
-            // TypeStruct
             17 => {
                 let fs = typ.clone().struct_type.unwrap().field;
                 Type::Struct(fields(fs))
             }
-            // TypeNumeric
             23 => Type::Numeric,
-            // Other types
             other => panic!("{:?} not supported", other),
+        }
+    }
+
+    pub fn type_proto(&self) -> zetasql::TypeProto {
+        match self {
+            Type::Int64 => zetasql::TypeProto {
+                type_kind: Some(2),
+                ..Default::default()
+            },
+            Type::Bool => zetasql::TypeProto {
+                type_kind: Some(5),
+                ..Default::default()
+            },
+            Type::Double => zetasql::TypeProto {
+                type_kind: Some(7),
+                ..Default::default()
+            },
+            Type::String => zetasql::TypeProto {
+                type_kind: Some(8),
+                ..Default::default()
+            },
+            Type::Bytes => zetasql::TypeProto {
+                type_kind: Some(9),
+                ..Default::default()
+            },
+            Type::Date => zetasql::TypeProto {
+                type_kind: Some(10),
+                ..Default::default()
+            },
+            Type::Timestamp => zetasql::TypeProto {
+                type_kind: Some(19),
+                ..Default::default()
+            },
+            _ => todo!(),
+        }
+    }
+
+    pub fn parse(string: &str) -> Type {
+        match string {
+            "BOOL" => Type::Bool,
+            "INT64" => Type::Int64,
+            "DOUBLE" => Type::Double,
+            "STRING" => Type::String,
+            "BYTES" => Type::Bytes,
+            "DATE" => Type::Date,
+            "TIMESTAMP" => Type::Timestamp,
+            "ENUM" => Type::Enum,
+            "NUMERIC" => Type::Numeric,
+            _ => todo!(),
         }
     }
 }
