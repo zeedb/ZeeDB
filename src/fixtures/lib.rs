@@ -1,3 +1,4 @@
+use arrow::datatypes::{DataType, Field, Schema};
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
@@ -17,7 +18,30 @@ pub fn catalog() -> SimpleCatalogProto {
     }
 }
 
-pub fn metadata() -> SimpleCatalogProto {
+pub fn bootstrap_metadata_arrow() -> Vec<Schema> {
+    let catalog_id = Field::new("catalog_id", DataType::Int64, false);
+    let table_id = Field::new("table_id", DataType::Int64, false);
+    let column_id = Field::new("column_id", DataType::Int64, false);
+    let catalog_name = Field::new("catalog_name", DataType::Binary, false);
+    let table_name = Field::new("table_name", DataType::Binary, false);
+    let column_name = Field::new("column_name", DataType::Binary, false);
+    let column_type = Field::new("column_type", DataType::Binary, false);
+    let catalog = Schema::new(vec![catalog_id.clone(), catalog_name.clone()]);
+    let table = Schema::new(vec![
+        catalog_id.clone(),
+        table_id.clone(),
+        table_name.clone(),
+    ]);
+    let column = Schema::new(vec![
+        table_id.clone(),
+        column_id.clone(),
+        column_name.clone(),
+        column_type.clone(),
+    ]);
+    vec![catalog, table, column]
+}
+
+pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;
     let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {
         let serialization_id = count;

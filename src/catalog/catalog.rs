@@ -12,10 +12,14 @@ impl CatalogProvider {
         }
     }
 
-    pub fn catalog(&mut self, name: &String) -> zetasql::SimpleCatalogProto {
+    pub fn catalog(
+        &mut self,
+        name: &String,
+        storage: &storage::Storage,
+    ) -> zetasql::SimpleCatalogProto {
         let mut root = fixtures::catalog();
         root.name = Some(name.clone());
-        root.catalog.push(fixtures::metadata());
+        root.catalog.push(fixtures::bootstrap_metadata_catalog());
         let q = "
             select catalog_id, table_id, column_id, catalog_name, table_name, column_name, column_type
             from catalog 
@@ -23,8 +27,11 @@ impl CatalogProvider {
             join column using (table_id) 
             order by catalog_id, table_id, column_id"
             .to_string();
-        let (_, expr) = self.parser.parse(&q, 0, fixtures::metadata()).unwrap();
-        let (results, _) = execute::execute(&expr).unwrap();
+        let (_, expr) = self
+            .parser
+            .parse(&q, 0, fixtures::bootstrap_metadata_catalog())
+            .unwrap();
+        let (results, _) = execute::execute(&expr, storage).unwrap();
         fn get_i64(results: &RecordBatch, column: usize, row: usize) -> i64 {
             results
                 .column(column)

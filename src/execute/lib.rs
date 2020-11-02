@@ -1,5 +1,3 @@
-use arrow::record_batch::RecordBatch;
+mod execute;
 
-pub fn execute(expr: &ast::Expr) -> Result<(RecordBatch, i32), String> {
-    todo!()
-}
+pub use execute::execute;

@@ -13,4 +13,5 @@ ast = { path = "../ast" }
 execute = { path = "../execute" }
 fixtures = { path = "../fixtures" }
 parser = { path = "../parser" }
+storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }

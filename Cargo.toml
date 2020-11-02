@@ -6,5 +6,7 @@ members = [
     "src/execute",
     "src/parser",
     "src/planner",
+    "src/scratch",
+    "src/storage",
     "src/zetasql",
 ]

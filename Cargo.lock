@@ -148,6 +148,7 @@ dependencies = [
  "execute",
  "fixtures",
  "parser",
+ "storage",
  "zetasql",
 ]
 
@@ -215,6 +216,7 @@ dependencies = [
  "fixtures",
  "parser",
  "planner",
+ "storage",
  "zetasql",
 ]
 
@@ -222,6 +224,7 @@ dependencies = [
 name = "fixtures"
 version = "0.1.0"
 dependencies = [
+ "arrow",
  "zetasql",
 ]
 
@@ -861,6 +864,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71d301d4193d031abdd79ff7e3dd721168a9572ef3fe51a1517aba235bd8f86e"
 
 [[package]]
+name = "scratch"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+]
+
+[[package]]
 name = "serde"
 version = "1.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -903,6 +913,14 @@ name = "smallvec"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fbee7696b84bbf3d89a1c2eccff0850e3047ed46bfcd2e92c29a2d074d57e252"
+
+[[package]]
+name = "storage"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "fixtures",
+]
 
 [[package]]
 name = "syn"
