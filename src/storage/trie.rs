@@ -1,9 +1,10 @@
 use std::fmt;
+use std::mem;
 use std::ops::{Bound, RangeBounds};
 use std::sync::{Arc, RwLock};
 
 pub struct Trie<V> {
-    root: RwLock<Node<V>>,
+    root: Node<V>,
 }
 
 type Key = [u8; 8];
@@ -11,50 +12,48 @@ type Key = [u8; 8];
 enum Node<V> {
     Empty,
     Leaf(Key, Arc<V>),
-    Inner(Box<[RwLock<Node<V>>; 256]>),
-}
-
-pub struct TrieIter<'a, V> {
-    parent: &'a Trie<V>,
-    next: Option<Key>,
-    end: Key,
+    Inner([Arc<Node<V>>; 256]),
 }
 
 impl<V> Trie<V> {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
+        Self { root: Node::Empty }
+    }
+
+    pub fn insert(&self, key: Key, value: V) -> Self {
         Self {
-            root: RwLock::new(Node::Empty),
+            root: self.root.insert(0, key, value),
         }
     }
 
-    pub fn insert(&self, key: Key, value: V) -> Option<Arc<V>> {
-        self.root.write().unwrap().insert(0, key, value)
+    pub fn remove(&self, key: Key) -> Option<Self> {
+        self.root.remove(0, key).map(|root| Self { root })
     }
 
-    pub fn remove(&self, key: Key) -> Option<Arc<V>> {
-        self.root.write().unwrap().remove(0, key)
-    }
-
-    pub fn range<'a>(&'a self, range: impl RangeBounds<Key>) -> TrieIter<'_, V> {
+    pub fn range<'a, R: RangeBounds<Key> + Clone>(&'a self, range: R) -> EntryIter<'_, V> {
         let start = match range.start_bound() {
             Bound::Included(key) => *key,
-            Bound::Excluded(key) if *key == [u8::MAX; 8] => return TrieIter::empty(self),
+            Bound::Excluded(key) if *key == [u8::MAX; 8] => return EntryIter::empty(self),
             Bound::Excluded(key) => (u64::from_be_bytes(*key) + 1).to_be_bytes(),
             Bound::Unbounded => [0; 8],
         };
         let end = match range.end_bound() {
             Bound::Included(key) => *key,
-            Bound::Excluded(key) if *key == [0; 8] => return TrieIter::empty(self),
+            Bound::Excluded(key) if *key == [0; 8] => return EntryIter::empty(self),
             Bound::Excluded(key) => (u64::from_be_bytes(*key) - 1).to_be_bytes(),
             Bound::Unbounded => [u8::MAX; 8],
         };
-        TrieIter::new(self, start, end)
+        EntryIter::new(self, start, end)
+    }
+
+    pub fn find(&self, start: Key) -> Option<(Key, &Arc<V>)> {
+        self.root.find(0, start)
     }
 }
 
 #[rustfmt::skip]
-fn array_256<V>() -> [RwLock<Node<V>>; 256] {
-    fn empty<V>() -> RwLock<Node<V>> { RwLock::new(Node::Empty) }
+fn array_256<V>() -> [Arc<Node<V>>; 256] {
+    fn empty<V>() -> Arc<Node<V>> { Arc::new(Node::Empty) }
     [
         empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), 
         empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), empty(), 
@@ -76,83 +75,78 @@ fn array_256<V>() -> [RwLock<Node<V>>; 256] {
 }
 
 impl<V> Node<V> {
-    fn inner() -> Self {
-        Node::Inner(Box::new(array_256()))
-    }
-
-    fn insert(&mut self, depth: usize, key: Key, value: V) -> Option<Arc<V>> {
+    fn insert(&self, depth: usize, key: Key, value: V) -> Self {
         match self {
-            Node::Empty => {
-                *self = Node::Leaf(key, Arc::new(value));
-                None
-            }
+            Node::Empty => Node::Leaf(key, Arc::new(value)),
             Node::Leaf(found_key, found_value) if key == *found_key => {
-                let new = Arc::new(value);
-                let previous = std::mem::replace(found_value, new);
-                Some(previous)
+                Node::Leaf(*found_key, Arc::new(value))
             }
             Node::Leaf(_, _) => {
                 // Split Leaf into Inner.
-                self.split(depth);
+                let inner = self.split(depth);
                 // Try again.
-                self.insert(depth, key, value)
+                inner.insert(depth, key, value)
             }
             Node::Inner(children) => {
                 let digit = key[depth] as usize;
-                children[digit]
-                    .write()
-                    .unwrap()
-                    .insert(depth + 1, key, value)
+                let mut children = children.clone();
+                children[digit] = Arc::new(children[digit].insert(depth + 1, key, value));
+                Node::Inner(children)
             }
         }
     }
 
-    fn split(&mut self, depth: usize) {
-        if let Node::Leaf(key, value) = std::mem::replace(self, Node::inner()) {
-            if let Node::Inner(children) = self {
-                let digit = key[depth] as usize;
-                *children[digit].write().unwrap() = Node::Leaf(key, value);
-                return;
-            }
+    fn split(&self, depth: usize) -> Self {
+        if let Node::Leaf(key, value) = self {
+            let mut children = array_256();
+            let digit = key[depth] as usize;
+            children[digit] = Arc::new(Node::Leaf(*key, value.clone()));
+            Node::Inner(children)
+        } else {
+            panic!()
         }
-        panic!()
     }
 
-    fn remove(&mut self, depth: usize, key: Key) -> Option<Arc<V>> {
+    fn remove(&self, depth: usize, key: Key) -> Option<Self> {
         match self {
             Node::Empty => None,
-            Node::Leaf(found_key, _) if key == *found_key => {
-                if let Node::Leaf(found_key, found_value) = std::mem::replace(self, Node::Empty) {
-                    Some(found_value)
-                } else {
-                    panic!()
-                }
-            }
-            Node::Leaf(_, _) => None,
+            Node::Leaf(found_key, _) if key == *found_key => Some(Node::Empty),
+            Node::Leaf(found_key, found_value) => None,
             Node::Inner(children) => {
                 let digit = key[depth] as usize;
-                children[digit].write().unwrap().remove(depth + 1, key)
+                children[digit].remove(depth + 1, key).map(|new_child| {
+                    let mut children = children.clone();
+                    children[digit] = Arc::new(new_child);
+                    Node::Inner(children)
+                })
             }
         }
     }
 
-    fn seek(&self, depth: usize, key: Key) -> Option<(Key, Arc<V>)> {
+    fn is_empty(&self) -> bool {
+        match self {
+            Node::Empty => true,
+            _ => false,
+        }
+    }
+
+    fn find(&self, depth: usize, start: Key) -> Option<(Key, &Arc<V>)> {
         match self {
             Node::Empty => None,
-            Node::Leaf(found_key, found_value) => {
-                if key <= *found_key {
-                    Some((*found_key, found_value.clone()))
+            Node::Leaf(key, value) => {
+                if start <= *key {
+                    Some((*key, value))
                 } else {
                     None
                 }
             }
             Node::Inner(children) => {
-                let digit = key[depth] as usize;
-                if let Some(found) = children[digit].read().unwrap().seek(depth + 1, key) {
+                let digit = start[depth] as usize;
+                if let Some(found) = children[digit].find(depth + 1, start) {
                     return Some(found);
                 }
                 for digit in (digit + 1)..children.len() {
-                    if let Some(found) = children[digit].read().unwrap().seek(depth + 1, [0; 8]) {
+                    if let Some(found) = children[digit].find(depth + 1, [0; 8]) {
                         return Some(found);
                     }
                 }
@@ -162,28 +156,30 @@ impl<V> Node<V> {
     }
 }
 
-impl<V: fmt::Debug> fmt::Debug for Trie<V> {
+impl<V: fmt::Display> fmt::Display for Trie<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let root = &*self.root.read().unwrap();
-        root.fmt(f)
+        self.root.fmt(f)
     }
 }
 
-impl<V: fmt::Debug> fmt::Debug for Node<V> {
+impl<V: fmt::Display> fmt::Display for Node<V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Node::Empty => write!(f, "∅"),
             Node::Leaf(key, value) => {
                 let strings: Vec<String> = key.iter().map(|i| i.to_string()).collect();
-                write!(f, "{}:{:?}", strings.join(":"), value)
+                write!(f, "{}:{}", strings.join(":"), value)
             }
             Node::Inner(children) => {
                 let strings: Vec<String> = children
                     .iter()
                     .enumerate()
-                    .flat_map(|(i, item)| match &*item.read().unwrap() {
-                        Node::Empty => None,
-                        child => Some(format!("{}:{:?}", i, child)),
+                    .flat_map(|(i, item)| {
+                        if item.is_empty() {
+                            None
+                        } else {
+                            Some(format!("{}:{}", i, item))
+                        }
                     })
                     .collect();
                 write!(f, "({})", strings.join(" "))
@@ -192,7 +188,13 @@ impl<V: fmt::Debug> fmt::Debug for Node<V> {
     }
 }
 
-impl<'a, V> TrieIter<'a, V> {
+pub struct EntryIter<'a, V> {
+    parent: &'a Trie<V>,
+    next: Option<Key>,
+    end: Key,
+}
+
+impl<'a, V> EntryIter<'a, V> {
     fn new(parent: &'a Trie<V>, start: Key, end: Key) -> Self {
         Self {
             parent,
@@ -210,21 +212,19 @@ impl<'a, V> TrieIter<'a, V> {
     }
 }
 
-impl<'a, V> Iterator for TrieIter<'a, V> {
-    type Item = (Key, Arc<V>);
+impl<'a, V> Iterator for EntryIter<'a, V> {
+    type Item = (Key, &'a V);
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(seek_key) = std::mem::replace(&mut self.next, None) {
-            if let Some((found_key, found_value)) =
-                self.parent.root.read().unwrap().seek(0, seek_key)
-            {
-                if found_key <= self.end {
-                    self.next = if found_key == [u8::MAX; 8] {
+        if let Some(start) = mem::replace(&mut self.next, None) {
+            if let Some((key, value)) = self.parent.root.find(0, start) {
+                if key <= self.end {
+                    self.next = if key == [u8::MAX; 8] {
                         None
                     } else {
-                        Some((u64::from_be_bytes(found_key) + 1).to_be_bytes())
+                        Some((u64::from_be_bytes(key) + 1).to_be_bytes())
                     };
-                    return Some((found_key, found_value));
+                    return Some((key, value.as_ref()));
                 }
             }
         }

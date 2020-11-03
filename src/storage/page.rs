@@ -43,10 +43,10 @@ pub struct Undo {
 }
 
 impl Page {
-    pub fn select(&self, columns: &Vec<usize>, rows: &Option<BooleanArray>) -> RecordBatch {
+    pub fn select(&self, columns: &Vec<usize>) -> RecordBatch {
         match self {
-            Page::Mutable(pax) => pax.select(columns, rows),
-            Page::Frozen(arrow) => arrow.select(columns, rows),
+            Page::Mutable(pax) => pax.select(columns),
+            Page::Frozen(arrow) => arrow.select(columns),
         }
     }
 }
@@ -61,11 +61,11 @@ impl Pax {
         todo!()
     }
 
-    pub fn select(&self, columns: &Vec<usize>, rows: &Option<BooleanArray>) -> RecordBatch {
+    pub fn select(&self, columns: &Vec<usize>) -> RecordBatch {
         todo!()
     }
 
-    fn insert(&self, rows: &Vec<RecordBatch>) -> usize {
+    fn insert(&self, values: &Vec<RecordBatch>) -> usize {
         todo!()
     }
 }
@@ -75,7 +75,7 @@ impl Arrow {
         todo!()
     }
 
-    pub fn select(&self, columns: &Vec<usize>, rows: &Option<BooleanArray>) -> RecordBatch {
+    pub fn select(&self, columns: &Vec<usize>) -> RecordBatch {
         todo!()
     }
 }
