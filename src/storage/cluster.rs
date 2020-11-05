@@ -1,195 +1,57 @@
 use crate::page::*;
-use crate::trie::*;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
-use std::mem;
-use std::ops::RangeBounds;
-use std::sync::atomic::{AtomicPtr, Ordering};
-use std::sync::Arc;
+use std::collections::BTreeMap;
+use std::ops::{Deref, RangeBounds};
+use std::sync::{Arc, RwLock};
 
 // Cluster represents a logical table as a list of heaps, clustered on a non-unique key.
 // A good cluster-by key will cluster frequently-updated rows together.
 pub struct Cluster {
     // The first column is the cluster-by key.
     schema: Arc<Schema>,
-    index: AtomicPtr<Arc<Trie<Heap>>>,
-}
-
-struct Heap {
-    pages: Vec<Page>,
+    // The clustering of the table is tracked by an immutable trie, which is under a mutable lock to permit re-organization.
+    // The leaves of the trie are usually a single page, but can be arbitrarily large when many tuples have the same cluster-by key.
+    index: RwLock<BTreeMap<Key, Vec<Arc<Page>>>>,
 }
 
 type Key = [u8; 8];
 
 impl Cluster {
     pub fn new(schema: Arc<Schema>) -> Self {
-        let mut trie = Arc::new(Trie::empty());
-        let index = AtomicPtr::new(&mut trie);
-        mem::forget(trie);
-        Self { schema, index }
+        Self {
+            schema,
+            index: RwLock::new(BTreeMap::new()),
+        }
     }
 
-    pub fn select<R: RangeBounds<Key> + Clone>(&self, range: R) -> PageIter {
-        let snapshot = self.load();
-        PageIter::new(self, snapshot)
+    pub fn select(&self, range: impl RangeBounds<Key>) -> Vec<RecordBatchRef> {
+        self.index
+            .read()
+            .unwrap()
+            .range(range)
+            .flat_map(|(_, heap)| heap)
+            .map(|page| RecordBatchRef::new(page.clone()))
+            .collect()
     }
 
-    pub fn update<R: RangeBounds<Key> + Clone>(&self, range: R) -> PaxIter {
-        // Get the current state of the index at the start of the operation.
-        let current = self.index.load(Ordering::Relaxed);
-        let snapshot = unsafe { &*current }.clone();
-        // Scan the range, checking for pages that need melting.
-        let mut new = None;
-        for (key, heap) in snapshot.range(range.clone()) {
-            if let Some(heap) = heap.melt() {
-                new = match new {
-                    None => Some(snapshot.remove(key).unwrap().insert(key, heap)),
-                    Some(new) => Some(new.remove(key).unwrap().insert(key, heap)),
+    pub fn update(&self, range: impl RangeBounds<Key>) -> Vec<PaxRef> {
+        self.index
+            .write()
+            .unwrap()
+            .range_mut(range)
+            .flat_map(|(_, heap)| heap)
+            .map(|page| {
+                if let Page::Frozen(arrow) = Arc::deref(page) {
+                    *page = Arc::new(Page::Mutable(arrow.melt()));
                 }
-            }
-        }
-        // If we had to modify the index, do a compare-and-swap.
-        let snapshot = match new {
-            Some(new) => {
-                let new = Arc::new(new);
-                if self.swap(current, new.clone()) {
-                    new
-                } else {
-                    // If another thread concurrently modified the index, start over.
-                    return self.update(range);
-                }
-            }
-            None => snapshot.clone(),
-        }
-        .clone();
-        // Now that we have guaranteed all pages are melted, fetch them.
-        todo!()
-    }
-
-    fn load(&self) -> Arc<Trie<Heap>> {
-        unsafe { &*self.index.load(Ordering::Relaxed) }.clone()
-    }
-
-    fn swap(&self, current: *mut Arc<Trie<Heap>>, mut new: Arc<Trie<Heap>>) -> bool {
-        let removed = self
-            .index
-            .compare_and_swap(current, &mut new, Ordering::Relaxed);
-        if removed == current {
-            mem::drop(current);
-            mem::forget(new);
-            true
-        } else {
-            false
-            // drop new, and its contents
-        }
+                PaxRef::new(page.clone())
+            })
+            .collect()
     }
 
     pub fn insert(&self, input: Vec<RecordBatch>) {
         todo!()
-    }
-}
-
-impl Heap {
-    fn empty(schema: &Arc<Schema>) -> Self {
-        Self { pages: vec![] }
-    }
-
-    fn melt(&self) -> Option<Heap> {
-        todo!()
-    }
-
-    fn select(&self, columns: &Vec<usize>) -> Vec<RecordBatch> {
-        self.pages
-            .iter()
-            .map(|page| match page {
-                Page::Mutable(pax) => pax.select(columns),
-                Page::Frozen(arrow) => arrow.select(columns),
-            })
-            .collect()
-    }
-}
-
-pub struct HeapIter {
-    parent: Arc<Trie<Heap>>,
-    next: Option<Key>,
-    end: Key,
-}
-
-impl HeapIter {
-    fn new(parent: Arc<Trie<Heap>>, start: Key, end: Key) -> Self {
-        Self {
-            parent,
-            next: Some(start),
-            end,
-        }
-    }
-
-    fn empty(parent: Arc<Trie<Heap>>) -> Self {
-        Self {
-            parent,
-            next: None,
-            end: [0; 8],
-        }
-    }
-}
-
-impl Iterator for HeapIter {
-    type Item = Arc<Heap>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if let Some(start) = mem::replace(&mut self.next, None) {
-            if let Some((key, value)) = self.parent.find(start) {
-                if key <= self.end {
-                    self.next = if key == [u8::MAX; 8] {
-                        None
-                    } else {
-                        Some((u64::from_be_bytes(key) + 1).to_be_bytes())
-                    };
-                    return Some(value.clone());
-                }
-            }
-        }
-        None
-    }
-}
-
-pub struct PageIter<'a> {
-    parent: &'a Cluster,
-    offset: usize,
-    head: Arc<Heap>,
-    tail: HeapIter,
-}
-
-impl<'a> PageIter<'a> {
-    fn new(parent: &'a Cluster, snapshot: Arc<Trie<Heap>>, start: Key, end: Key) -> Self {
-        let tail = HeapIter::new(snapshot, start, end);
-        if let Some(head) = tail.next() {
-            Self {
-                parent,
-                offset: 0,
-                head,
-                tail,
-            }
-        } else {
-            todo!()
-        }
-    }
-}
-
-impl<'a> Iterator for PageIter<'a> {
-    type Item = &'a Page;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.offset < self.head.pages.len() {
-            self.offset += 1;
-            Some(&self.head.pages[self.offset - 1])
-        } else if let Some(head) = self.tail.next() {
-            self.offset = 0;
-            self.head = head;
-            self.next()
-        } else {
-            None
-        }
     }
 }

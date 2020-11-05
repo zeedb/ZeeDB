@@ -2,6 +2,7 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use std::any::Any;
+use std::ops::Deref;
 use std::sync::Arc;
 
 const PAGE_SIZE: usize = 1024;
@@ -42,40 +43,68 @@ pub struct Undo {
     updated: Vec<(usize, Box<dyn Any>)>,
 }
 
-impl Page {
-    pub fn select(&self, columns: &Vec<usize>) -> RecordBatch {
-        match self {
-            Page::Mutable(pax) => pax.select(columns),
-            Page::Frozen(arrow) => arrow.select(columns),
-        }
-    }
-}
-
 impl Pax {
     // allocate a mutable page that can hold PAGE_SIZE tuples.
-    fn empty(schema: &Arc<Schema>) -> Self {
+    pub fn empty(schema: &Arc<Schema>) -> Self {
         todo!()
     }
 
-    fn freeze(&self) -> Arrow {
-        todo!()
-    }
-
-    pub fn select(&self, columns: &Vec<usize>) -> RecordBatch {
-        todo!()
-    }
-
-    fn insert(&self, values: &Vec<RecordBatch>) -> usize {
+    pub fn freeze(&self) -> Arrow {
         todo!()
     }
 }
 
 impl Arrow {
-    fn melt(&self) -> Pax {
+    pub fn melt(&self) -> Pax {
         todo!()
     }
+}
 
-    pub fn select(&self, columns: &Vec<usize>) -> RecordBatch {
-        todo!()
+// Reference to a RecordBatch that also maintains a reference to the underlying Page.
+pub struct RecordBatchRef {
+    batch: RecordBatch,
+    // Ensure that the memory referenced by batch doesn't get reclaimed.
+    _page: Arc<Page>,
+}
+
+impl RecordBatchRef {
+    pub fn new(page: Arc<Page>) -> Self {
+        Self {
+            batch: match page.deref() {
+                Page::Mutable(pax) => todo!(),
+                Page::Frozen(arrow) => todo!(),
+            },
+            _page: page,
+        }
+    }
+}
+
+impl Deref for RecordBatchRef {
+    type Target = RecordBatch;
+
+    fn deref(&self) -> &Self::Target {
+        &self.batch
+    }
+}
+
+// Reference to a Pax that delegates to an underlying Page.
+pub struct PaxRef {
+    page: Arc<Page>,
+}
+
+impl PaxRef {
+    pub fn new(page: Arc<Page>) -> Self {
+        Self { page }
+    }
+}
+
+impl Deref for PaxRef {
+    type Target = Pax;
+
+    fn deref(&self) -> &Self::Target {
+        match self.page.deref() {
+            Page::Mutable(pax) => pax,
+            Page::Frozen(_) => panic!(),
+        }
     }
 }
