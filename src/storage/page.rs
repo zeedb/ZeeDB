@@ -1,6 +1,9 @@
+use crate::isolation::*;
 use arrow::array::*;
+use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
+use std::alloc::{alloc, dealloc, Layout};
 use std::any::Any;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -26,26 +29,67 @@ pub enum Page {
 #[derive(Debug)]
 pub struct Pax {
     buffer: *mut u8,
+    // Capacity of buffer in bytes.
+    capacity: usize,
     strings: *mut u8,
+    // Capacity of strings in bytes.
+    string_capacity: usize,
+    // Length of page in rows. Capacity in rows is always PAGE_SIZE.
+    len: usize,
 }
 
 // Frozen pages are in arrow layout with strings inline.
 #[derive(Debug)]
 pub struct Arrow {
-    buffer: *const u8,
+    buffer: *mut u8,
+    // Capacity of buffer in bytes.
+    capacity: usize,
+    // Length of page in rows.
+    len: usize,
 }
 
 // Undo temporarily stores undo information for tuples that have been modified by uncommitted transactions,
 // to support snapshot-isolation queries without blocking writes.
 pub struct Undo {
     txn: u64,
-    deleted: bool,
-    updated: Vec<(usize, Box<dyn Any>)>,
+    updated: Vec<(usize, Option<Box<dyn Any>>)>,
 }
 
 impl Pax {
     // allocate a mutable page that can hold PAGE_SIZE tuples.
     pub fn empty(schema: &Arc<Schema>) -> Self {
+        let mut capacity = 0;
+        for field in schema.fields() {
+            if field.is_nullable() {
+                capacity = align(capacity + PAGE_SIZE / 8);
+            }
+            capacity = align(capacity + PAGE_SIZE * bit_width(field.data_type()) / 8);
+        }
+        let buffer = unsafe { alloc(Layout::from_size_align(capacity, 1).unwrap()) };
+        let string_capacity = schema
+            .fields()
+            .iter()
+            .map(|f| match f.data_type() {
+                DataType::Boolean
+                | DataType::Int64
+                | DataType::Float64
+                | DataType::Timestamp(_, _)
+                | DataType::Date64(_) => 0,
+                DataType::Utf8 => 32,
+                other => panic!("{:?}", other),
+            })
+            .sum();
+        let strings = unsafe { alloc(Layout::from_size_align(string_capacity, 1).unwrap()) };
+        Self {
+            buffer,
+            capacity,
+            strings,
+            string_capacity,
+            len: 0,
+        }
+    }
+
+    pub fn insert(&self, input: &Vec<RecordBatch>, offset: usize) -> usize {
         todo!()
     }
 
@@ -54,9 +98,35 @@ impl Pax {
     }
 }
 
+impl Drop for Pax {
+    fn drop(&mut self) {
+        unsafe {
+            dealloc(
+                self.buffer,
+                Layout::from_size_align(self.capacity, 1).unwrap(),
+            );
+            dealloc(
+                self.strings,
+                Layout::from_size_align(self.string_capacity, 1).unwrap(),
+            );
+        }
+    }
+}
+
 impl Arrow {
     pub fn melt(&self) -> Pax {
         todo!()
+    }
+}
+
+impl Drop for Arrow {
+    fn drop(&mut self) {
+        unsafe {
+            dealloc(
+                self.buffer,
+                Layout::from_size_align(self.capacity, 1).unwrap(),
+            );
+        }
     }
 }
 
@@ -68,11 +138,11 @@ pub struct RecordBatchRef {
 }
 
 impl RecordBatchRef {
-    pub fn new(page: Arc<Page>) -> Self {
+    pub fn new(schema: Arc<Schema>, page: Arc<Page>, isolation: Isolation) -> Self {
         Self {
             batch: match page.deref() {
-                Page::Mutable(pax) => todo!(),
-                Page::Frozen(arrow) => todo!(),
+                Page::Mutable(pax) => mutable_record_batch(schema, pax, isolation),
+                Page::Frozen(arrow) => frozen_record_batch(schema, arrow),
             },
             _page: page,
         }
@@ -107,4 +177,189 @@ impl Deref for PaxRef {
             Page::Frozen(_) => panic!(),
         }
     }
+}
+
+struct RawColumn {
+    not_null: Option<*mut u8>,
+    values: *mut u8,
+}
+
+impl RawColumn {
+    fn new(buffer: *mut u8, offset: &mut usize, len: usize, field: &Field) -> Self {
+        // If the field is nullable, add a bit mask for nulls.
+        let not_null = if field.is_nullable() {
+            let capacity = PAGE_SIZE / 8;
+            let len = len / 8;
+            let copy = copy_slice(buffer, *offset, len);
+            *offset = align(*offset + capacity);
+            Some(copy)
+        } else {
+            None
+        };
+        // Add an array of values.
+        let capacity = PAGE_SIZE * bit_width(field.data_type()) / 8;
+        let len = len * bit_width(field.data_type()) / 8;
+        let values = copy_slice(buffer, *offset, len);
+        *offset = align(*offset + capacity);
+        // Combine.
+        Self { not_null, values }
+    }
+
+    fn set_not_null(&self, i: usize, value: bool) {
+        match (self.not_null, value) {
+            (Some(not_null), true) => unsafe { set_bit(not_null, i) },
+            (Some(not_null), false) => unsafe { unset_bit(not_null, i) },
+            (None, true) => panic!(),
+            (None, false) => {}
+        }
+    }
+
+    fn set(&self, i: usize, data: &DataType, value: Option<Box<dyn Any>>) {
+        if let Some(value) = value {
+            self.set_not_null(i, true);
+            match data {
+                DataType::Boolean => todo!(),
+                DataType::Int64 => {
+                    let left = self.values as *mut i64;
+                    let right = *value.downcast_ref::<i64>().unwrap();
+                    unsafe {
+                        left.offset(i as isize).write(right);
+                    }
+                }
+                DataType::Float64 => todo!(),
+                DataType::Timestamp(_, _) => todo!(),
+                DataType::Date64(_) => todo!(),
+                DataType::Utf8 => todo!(),
+                other => panic!("{:?}", other),
+            }
+        } else {
+            self.set_not_null(i, false);
+        }
+    }
+
+    fn freeze(&self, data: &DataType, len: usize) -> Arc<dyn Array> {
+        let mut builder = ArrayData::builder(data.clone());
+        // If the field is nullable, add a bit mask for nulls.
+        if let Some(not_null) = self.not_null {
+            builder = builder.null_bit_buffer(slice(not_null, 0, len / 8));
+        }
+        // Add an array of values.
+        builder = builder.add_buffer(slice(self.values, 0, len * bit_width(data) / 8));
+        // Append bit mask and array.
+        make_array(builder.build())
+    }
+}
+
+struct UndoColumn {
+    values: *mut *const Undo,
+}
+
+impl UndoColumn {
+    fn new(buffer: *mut u8, offset: usize) -> Self {
+        unsafe {
+            let values = buffer.offset(offset as isize) as *mut *const Undo;
+            Self { values }
+        }
+    }
+
+    fn get(&self, i: usize) -> Option<Undo> {
+        unsafe {
+            let ptr = self.values.offset(i as isize);
+            if ptr.is_null() {
+                None
+            } else {
+                Some(ptr.read().read())
+            }
+        }
+    }
+}
+
+fn mutable_record_batch(schema: Arc<Schema>, pax: &Pax, isolation: Isolation) -> RecordBatch {
+    // Read latest data from columns.
+    let mut offset = 0;
+    let columns: Vec<RawColumn> = schema
+        .fields()
+        .iter()
+        .map(|field| RawColumn::new(pax.buffer, &mut offset, pax.len, field))
+        .collect();
+    // If we are reading in snapshot isolation, apply the undo logs.
+    if let Isolation::Snapshot(txn) = isolation {
+        // Read undo column.
+        let undo_column = UndoColumn::new(pax.buffer, offset);
+        // Apply undo logs.
+        for i in 0..PAGE_SIZE {
+            if let Some(undo) = undo_column.get(i) {
+                if undo.txn > txn {
+                    for (c, value) in undo.updated {
+                        columns[c].set(i, schema.field(c).data_type(), value);
+                    }
+                }
+            }
+        }
+    }
+    // Convert RawColumn to Array.
+    let arrays = (0..columns.len())
+        .map(|i| columns[i].freeze(schema.field(i).data_type(), pax.len))
+        .collect();
+    RecordBatch::try_new(schema, arrays).unwrap()
+}
+
+fn frozen_record_batch(schema: Arc<Schema>, arrow: &Arrow) -> RecordBatch {
+    let mut offset = 0;
+    let mut arrays = vec![];
+    for field in schema.fields() {
+        let mut builder = ArrayData::builder(field.data_type().clone());
+        // If the field is nullable, add a bit mask for nulls.
+        if field.is_nullable() {
+            let len = arrow.len / 8;
+            builder = builder.null_bit_buffer(slice(arrow.buffer, offset, len));
+            offset = align(offset + len);
+        }
+        // Add an array of values.
+        let len = arrow.len * bit_width(field.data_type()) / 8;
+        builder = builder.add_buffer(slice(arrow.buffer, offset, len));
+        offset = align(offset + len);
+        // Append bit mask and array.
+        arrays.push(make_array(builder.build()));
+    }
+    RecordBatch::try_new(schema, arrays).unwrap()
+}
+
+fn slice(buffer: *const u8, offset: usize, len: usize) -> Buffer {
+    unsafe { Buffer::from_unowned(buffer.offset(offset as isize), len, len) }
+}
+
+fn copy_slice(buffer: *const u8, offset: usize, len: usize) -> *mut u8 {
+    unsafe {
+        let dest = alloc(Layout::from_size_align(len, 1).unwrap());
+        let source = buffer.offset(offset as isize);
+        source.copy_to_nonoverlapping(dest, len);
+        dest
+    }
+}
+
+fn bit_width(data: &DataType) -> usize {
+    match data {
+        DataType::Boolean => 1,
+        DataType::Int64 => Int64Type::get_bit_width(),
+        DataType::Float64 => Float64Type::get_bit_width(),
+        DataType::Timestamp(_, _) => TimestampMicrosecondType::get_bit_width(),
+        DataType::Date64(_) => Date64Type::get_bit_width(),
+        DataType::Utf8 => todo!(),
+        other => panic!("{:?}", other),
+    }
+}
+
+fn align(offset: usize) -> usize {
+    (offset + 64 - 1) / 64
+}
+
+static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
+
+unsafe fn set_bit(data: *mut u8, i: usize) {
+    *data.add(i >> 3) |= BIT_MASK[i & 7];
+}
+
+unsafe fn unset_bit(data: *mut u8, i: usize) {
+    *data.add(i >> 3) ^= BIT_MASK[i & 7];
 }

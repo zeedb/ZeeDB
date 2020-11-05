@@ -1,4 +1,5 @@
 mod cluster;
+mod isolation;
 mod page;
 mod storage;
 
