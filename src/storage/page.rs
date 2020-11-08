@@ -139,12 +139,9 @@ pub struct RecordBatchRef {
 
 impl RecordBatchRef {
     pub fn new(schema: Arc<Schema>, page: Arc<Page>, isolation: Isolation) -> Self {
-        Self {
-            batch: match page.deref() {
-                Page::Mutable(pax) => mutable_record_batch(schema, pax, isolation),
-                Page::Frozen(arrow) => frozen_record_batch(schema, arrow),
-            },
-            _page: page,
+        match page.clone().deref() {
+            Page::Mutable(pax) => mutable_record_batch(schema, page, pax, isolation),
+            Page::Frozen(arrow) => frozen_record_batch(schema, page, arrow),
         }
     }
 }
@@ -188,24 +185,20 @@ impl RawColumn {
     fn new(buffer: *mut u8, offset: &mut usize, len: usize, field: &Field) -> Self {
         // If the field is nullable, add a bit mask for nulls.
         let not_null = if field.is_nullable() {
-            let capacity = PAGE_SIZE / 8;
-            let len = len / 8;
-            let copy = copy_slice(buffer, *offset, len);
-            *offset = align(*offset + capacity);
+            let copy = copy_slice(buffer, *offset, len / 8);
+            *offset = align(*offset + PAGE_SIZE / 8);
             Some(copy)
         } else {
             None
         };
         // Add an array of values.
-        let capacity = PAGE_SIZE * bit_width(field.data_type()) / 8;
-        let len = len * bit_width(field.data_type()) / 8;
-        let values = copy_slice(buffer, *offset, len);
-        *offset = align(*offset + capacity);
+        let values = copy_slice(buffer, *offset, len * bit_width(field.data_type()) / 8);
+        *offset = align(*offset + PAGE_SIZE * bit_width(field.data_type()) / 8);
         // Combine.
         Self { not_null, values }
     }
 
-    fn set_not_null(&self, i: usize, value: bool) {
+    fn set_not_null(&mut self, i: usize, value: bool) {
         match (self.not_null, value) {
             (Some(not_null), true) => unsafe { set_bit(not_null, i) },
             (Some(not_null), false) => unsafe { unset_bit(not_null, i) },
@@ -214,7 +207,7 @@ impl RawColumn {
         }
     }
 
-    fn set(&self, i: usize, data: &DataType, value: Option<Box<dyn Any>>) {
+    fn set(&mut self, i: usize, data: &DataType, value: Option<Box<dyn Any>>) {
         if let Some(value) = value {
             self.set_not_null(i, true);
             match data {
@@ -237,14 +230,22 @@ impl RawColumn {
         }
     }
 
-    fn freeze(&self, data: &DataType, len: usize) -> Arc<dyn Array> {
+    fn freeze(self, data: &DataType, len: usize) -> Arc<dyn Array> {
         let mut builder = ArrayData::builder(data.clone());
         // If the field is nullable, add a bit mask for nulls.
         if let Some(not_null) = self.not_null {
-            builder = builder.null_bit_buffer(slice(not_null, 0, len / 8));
+            let buffer = unsafe { Buffer::from_raw_parts(not_null, len / 8, PAGE_SIZE / 8) };
+            builder = builder.null_bit_buffer(buffer);
         }
         // Add an array of values.
-        builder = builder.add_buffer(slice(self.values, 0, len * bit_width(data) / 8));
+        let buffer = unsafe {
+            Buffer::from_raw_parts(
+                self.values,
+                len * bit_width(data) / 8,
+                PAGE_SIZE * bit_width(data) / 8,
+            )
+        };
+        builder = builder.add_buffer(buffer);
         // Append bit mask and array.
         make_array(builder.build())
     }
@@ -274,10 +275,15 @@ impl UndoColumn {
     }
 }
 
-fn mutable_record_batch(schema: Arc<Schema>, pax: &Pax, isolation: Isolation) -> RecordBatch {
+fn mutable_record_batch(
+    schema: Arc<Schema>,
+    page: Arc<Page>,
+    pax: &Pax,
+    isolation: Isolation,
+) -> RecordBatchRef {
     // Read latest data from columns.
     let mut offset = 0;
-    let columns: Vec<RawColumn> = schema
+    let mut columns: Vec<RawColumn> = schema
         .fields()
         .iter()
         .map(|field| RawColumn::new(pax.buffer, &mut offset, pax.len, field))
@@ -298,35 +304,43 @@ fn mutable_record_batch(schema: Arc<Schema>, pax: &Pax, isolation: Isolation) ->
         }
     }
     // Convert RawColumn to Array.
-    let arrays = (0..columns.len())
-        .map(|i| columns[i].freeze(schema.field(i).data_type(), pax.len))
+    let arrays = columns
+        .drain(..)
+        .enumerate()
+        .map(|(i, column)| column.freeze(schema.field(i).data_type(), pax.len))
         .collect();
-    RecordBatch::try_new(schema, arrays).unwrap()
+    RecordBatchRef {
+        batch: RecordBatch::try_new(schema, arrays).unwrap(),
+        _page: page.clone(),
+    }
 }
 
-fn frozen_record_batch(schema: Arc<Schema>, arrow: &Arrow) -> RecordBatch {
+fn frozen_record_batch(schema: Arc<Schema>, page: Arc<Page>, arrow: &Arrow) -> RecordBatchRef {
     let mut offset = 0;
     let mut arrays = vec![];
     for field in schema.fields() {
         let mut builder = ArrayData::builder(field.data_type().clone());
         // If the field is nullable, add a bit mask for nulls.
         if field.is_nullable() {
-            let len = arrow.len / 8;
-            builder = builder.null_bit_buffer(slice(arrow.buffer, offset, len));
-            offset = align(offset + len);
+            let bytes = arrow.len / 8;
+            let buffer =
+                unsafe { Buffer::from_unowned(arrow.buffer.offset(offset as isize), bytes, bytes) };
+            builder = builder.null_bit_buffer(buffer);
+            offset = align(offset + bytes);
         }
         // Add an array of values.
-        let len = arrow.len * bit_width(field.data_type()) / 8;
-        builder = builder.add_buffer(slice(arrow.buffer, offset, len));
-        offset = align(offset + len);
+        let bytes = arrow.len * bit_width(field.data_type()) / 8;
+        let buffer =
+            unsafe { Buffer::from_unowned(arrow.buffer.offset(offset as isize), bytes, bytes) };
+        builder = builder.add_buffer(buffer);
+        offset = align(offset + bytes);
         // Append bit mask and array.
         arrays.push(make_array(builder.build()));
     }
-    RecordBatch::try_new(schema, arrays).unwrap()
-}
-
-fn slice(buffer: *const u8, offset: usize, len: usize) -> Buffer {
-    unsafe { Buffer::from_unowned(buffer.offset(offset as isize), len, len) }
+    RecordBatchRef {
+        batch: RecordBatch::try_new(schema, arrays).unwrap(),
+        _page: page.clone(),
+    }
 }
 
 fn copy_slice(buffer: *const u8, offset: usize, len: usize) -> *mut u8 {
