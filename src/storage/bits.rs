@@ -17,8 +17,12 @@ impl Bits {
     }
 
     pub fn set(&mut self, i: usize, value: bool) {
-        self.bytes[i >> 3] |= BIT_MASK[i & 7];
+        if value {
+            self.bytes[i >> 3] |= BIT_MASK[i & 7];
+        } else {
+            self.bytes[i >> 3] ^= BIT_MASK[i & 7];
+        }
     }
 }
 
-static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];
+pub static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];

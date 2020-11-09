@@ -147,7 +147,7 @@ impl Pax {
         }
         // Write the new row in the reserved slot.
         for (i, value) in tuple.drain(..).enumerate() {
-            set(num_rows, self.schema.field(i), self.columns[i], value);
+            set(self.schema.field(i), self.columns[i], num_rows, value);
         }
         // Write the visibility system column
         unsafe {
@@ -220,22 +220,35 @@ fn select_column(field: &Field, column: *mut u8, num_rows: usize) -> Arc<dyn Arr
     make_array(array.build())
 }
 
-fn set(row: usize, field: &Field, column: *mut u8, value: Option<Box<dyn Any>>) {
-    match (field.data_type(), value) {
-        (_, None) => todo!(),
-        (DataType::Boolean, Some(value)) => todo!(),
-        (DataType::Int64, Some(value)) => {
-            let column = column as *mut i64;
-            let value = value.downcast_ref::<i64>().unwrap();
-            unsafe {
-                *column.offset(row as isize) = *value;
+fn set(field: &Field, column: *mut u8, row: usize, value: Option<Box<dyn Any>>) {
+    let values_offset = if field.is_nullable() {
+        align(PAGE_SIZE / 8) as isize
+    } else {
+        0
+    };
+    let values_column = unsafe { column.offset(values_offset) };
+    match field.data_type() {
+        DataType::Boolean => {
+            if let Some(value) = value {
+                set_bit(values_column, row, *value.downcast::<bool>().unwrap())
             }
         }
-        (DataType::Float64, Some(value)) => todo!(),
-        (DataType::Timestamp(_, _), Some(value)) => todo!(),
-        (DataType::Date64(_), Some(value)) => todo!(),
-        (DataType::Utf8, Some(value)) => todo!(),
-        (other, _) => panic!("{:?}", other),
+        DataType::Int64 => set_typed::<i64>(values_column, row, &value),
+        DataType::Float64 => set_typed::<f64>(values_column, row, &value),
+        DataType::Timestamp(TimeUnit::Microsecond, None) => {
+            set_typed::<i64>(values_column, row, &value)
+        }
+        DataType::Date32(DateUnit::Day) => set_typed::<i32>(values_column, row, &value),
+        DataType::Utf8 => todo!(),
+        other => panic!("{:?}", other),
+    }
+}
+
+fn set_typed<T: 'static + Copy>(column: *mut u8, row: usize, value: &Option<Box<dyn Any>>) {
+    if let Some(value) = value {
+        unsafe {
+            *(column as *mut T).offset(row as isize) = *value.as_ref().downcast_ref::<T>().unwrap();
+        }
     }
 }
 
@@ -290,9 +303,25 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
         DataType::Int64 => Int64Type::get_bit_width() / 8 * num_rows,
         DataType::UInt64 => UInt64Type::get_bit_width() / 8 * num_rows,
         DataType::Float64 => Float64Type::get_bit_width() / 8 * num_rows,
-        DataType::Timestamp(_, _) => TimestampMicrosecondType::get_bit_width() / 8 * num_rows,
-        DataType::Date64(_) => Date64Type::get_bit_width() / 8 * num_rows,
+        DataType::Timestamp(TimeUnit::Microsecond, None) => {
+            TimestampMicrosecondType::get_bit_width() / 8 * num_rows
+        }
+        DataType::Date32(DateUnit::Day) => Date32Type::get_bit_width() / 8 * num_rows,
         DataType::Utf8 => 4, // offset width
         other => panic!("{:?}", other),
+    }
+}
+
+fn get_bit(data: *mut u8, i: usize) -> bool {
+    unsafe { (*data.add(i >> 3) & crate::bits::BIT_MASK[i & 7]) != 0 }
+}
+
+fn set_bit(data: *mut u8, i: usize, value: bool) {
+    unsafe {
+        if value {
+            *data.add(i >> 3) |= crate::bits::BIT_MASK[i & 7];
+        } else {
+            *data.add(i >> 3) ^= crate::bits::BIT_MASK[i & 7];
+        }
     }
 }
