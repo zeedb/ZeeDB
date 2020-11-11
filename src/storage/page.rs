@@ -2,16 +2,20 @@ use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
-use std::alloc::{alloc, dealloc, Layout};
 use std::any::Any;
 use std::fmt::Display;
 use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::atomic::*;
 use std::sync::Arc;
+use std::{
+    alloc::{alloc, dealloc, Layout},
+    fmt::Debug,
+};
 
 const PAGE_SIZE: usize = 1024;
 
+#[derive(Clone)]
 pub enum Page {
     Mutable(Pax),
     Frozen(Arrow),
@@ -39,6 +43,7 @@ pub struct Pax {
 }
 
 // Frozen pages are in arrow layout with strings inline.
+#[derive(Clone)]
 pub struct Arrow {
     schema: Arc<Schema>,
     columns: Vec<Arc<dyn Array>>,
@@ -69,7 +74,7 @@ impl Page {
 
 impl Pax {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
-    pub fn empty(schema: &Arc<Schema>) -> Self {
+    pub fn empty(schema: Arc<Schema>) -> Self {
         let mut column_capacity = 0;
         let mut column_offsets = vec![];
         for field in schema.fields() {
@@ -92,7 +97,7 @@ impl Pax {
         // Allocate memory.
         let buffer = RawBuffer::new(column_capacity);
         Self {
-            schema: schema.clone(),
+            schema,
             columns: column_offsets
                 .iter()
                 .map(|offset| unsafe { buffer.bytes.offset(*offset as isize) })
@@ -130,7 +135,7 @@ impl Pax {
         }
     }
 
-    pub fn insert(&self, mut tuple: Vec<Option<Box<dyn Any>>>, txn: u64) -> bool {
+    pub fn insert(&self, mut tuple: Vec<Box<dyn Any>>, txn: u64) -> bool {
         let num_rows = self.num_rows.load(Ordering::Relaxed);
         // If there is no room left in the page, fail.
         if num_rows == PAGE_SIZE {
@@ -169,6 +174,14 @@ impl Pax {
         } else {
             true
         }
+    }
+}
+
+impl Debug for Pax {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let schema = self.schema.to_string();
+        let num_rows = self.num_rows.load(Ordering::Relaxed);
+        write!(f, "Pax {{ [{}] #{} }}", schema, num_rows)
     }
 }
 
@@ -220,7 +233,7 @@ fn select_column(field: &Field, column: *mut u8, num_rows: usize) -> Arc<dyn Arr
     make_array(array.build())
 }
 
-fn set(field: &Field, column: *mut u8, row: usize, value: Option<Box<dyn Any>>) {
+fn set(field: &Field, column: *mut u8, row: usize, value: Box<dyn Any>) {
     let values_offset = if field.is_nullable() {
         align(PAGE_SIZE / 8) as isize
     } else {
@@ -228,11 +241,7 @@ fn set(field: &Field, column: *mut u8, row: usize, value: Option<Box<dyn Any>>) 
     };
     let values_column = unsafe { column.offset(values_offset) };
     match field.data_type() {
-        DataType::Boolean => {
-            if let Some(value) = value {
-                set_bit(values_column, row, *value.downcast::<bool>().unwrap())
-            }
-        }
+        DataType::Boolean => set_bit(values_column, row, *value.downcast::<bool>().unwrap()),
         DataType::Int64 => set_typed::<i64>(values_column, row, &value),
         DataType::Float64 => set_typed::<f64>(values_column, row, &value),
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
@@ -244,11 +253,9 @@ fn set(field: &Field, column: *mut u8, row: usize, value: Option<Box<dyn Any>>) 
     }
 }
 
-fn set_typed<T: 'static + Copy>(column: *mut u8, row: usize, value: &Option<Box<dyn Any>>) {
-    if let Some(value) = value {
-        unsafe {
-            *(column as *mut T).offset(row as isize) = *value.as_ref().downcast_ref::<T>().unwrap();
-        }
+fn set_typed<T: 'static + Copy>(column: *mut u8, row: usize, value: &Box<dyn Any>) {
+    unsafe {
+        *(column as *mut T).offset(row as isize) = *value.as_ref().downcast_ref::<T>().unwrap();
     }
 }
 
@@ -313,15 +320,17 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
 }
 
 fn get_bit(data: *mut u8, i: usize) -> bool {
-    unsafe { (*data.add(i >> 3) & crate::bits::BIT_MASK[i & 7]) != 0 }
+    unsafe { (*data.add(i >> 3) & BIT_MASK[i & 7]) != 0 }
 }
 
 fn set_bit(data: *mut u8, i: usize, value: bool) {
     unsafe {
         if value {
-            *data.add(i >> 3) |= crate::bits::BIT_MASK[i & 7];
+            *data.add(i >> 3) |= BIT_MASK[i & 7];
         } else {
-            *data.add(i >> 3) ^= crate::bits::BIT_MASK[i & 7];
+            *data.add(i >> 3) ^= BIT_MASK[i & 7];
         }
     }
 }
+
+static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];

@@ -7,10 +7,11 @@ pub struct Storage {
 
 impl Storage {
     pub fn new() -> Self {
+        // Initialize system tables catalog, table, column
         Self {
             tables: fixtures::bootstrap_metadata_arrow()
                 .drain(..)
-                .map(|schema| Cluster::new(Arc::new(schema)))
+                .map(|schema| Cluster::empty(Arc::new(schema)))
                 .collect(),
         }
     }

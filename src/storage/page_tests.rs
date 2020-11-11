@@ -15,14 +15,14 @@ fn test_fixed_types() {
             false,
         ),
     ]));
-    let pax = Pax::empty(&schema);
+    let pax = Pax::empty(schema);
     assert!(pax.insert(
         vec![
-            Some(Box::new(true)),
-            Some(Box::new(1i64)),
-            Some(Box::new(1.1f64)),
-            Some(Box::new(1i32)),
-            Some(Box::new(1i64)),
+            Box::new(true),
+            Box::new(1i64),
+            Box::new(1.1f64),
+            Box::new(1i32),
+            Box::new(1i64),
         ],
         1000
     ));
@@ -38,9 +38,9 @@ fn test_insert_delete() {
         Field::new("a", DataType::Int64, false),
         Field::new("b", DataType::Int64, false),
     ]));
-    let pax = Pax::empty(&schema);
-    assert!(pax.insert(vec![Some(Box::new(1i64)), Some(Box::new(10i64))], 1000));
-    assert!(pax.insert(vec![Some(Box::new(2i64)), Some(Box::new(20i64))], 1001));
+    let pax = Pax::empty(schema);
+    assert!(pax.insert(vec![Box::new(1i64), Box::new(10i64)], 1000));
+    assert!(pax.insert(vec![Box::new(2i64), Box::new(20i64)], 1001));
     assert!(pax.delete(1, 2000));
     assert!(!pax.delete(1, 2001));
     assert_eq!(
