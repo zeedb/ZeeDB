@@ -1,5 +1,6 @@
 use arrow::array::*;
 use arrow::record_batch::*;
+use ast::data_type;
 
 pub struct CatalogProvider {
     parser: parser::ParseProvider,
@@ -68,7 +69,7 @@ impl CatalogProvider {
                     let column_type = get_string(&results, 6, row);
                     table.column.push(zetasql::SimpleColumnProto {
                         name: Some(column_name.to_string()),
-                        r#type: Some(ast::Type::parse(column_type).type_proto()),
+                        r#type: Some(data_type::to_proto(&data_type::from_string(column_type))),
                         ..Default::default()
                     });
                     row += 1;

@@ -314,7 +314,8 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
             TimestampMicrosecondType::get_bit_width() / 8 * num_rows
         }
         DataType::Date32(DateUnit::Day) => Date32Type::get_bit_width() / 8 * num_rows,
-        DataType::Utf8 => 4, // offset width
+        DataType::Utf8 => 4,   // offset width
+        DataType::Binary => 4, // offset width
         other => panic!("{:?}", other),
     }
 }

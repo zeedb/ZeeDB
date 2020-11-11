@@ -1,3 +1,4 @@
+use arrow::datatypes::*;
 use ast::*;
 use encoding::varint128;
 use std::borrow::Borrow;
@@ -397,7 +398,7 @@ impl Converter {
             let column = self.create_column(
                 String::from("$proj"),
                 function_name(&function),
-                argument.typ(),
+                argument.data(),
             );
             project.push((argument, column.clone()));
             Some(column.clone())
@@ -518,7 +519,7 @@ impl Converter {
     fn column_definitions(
         &mut self,
         cs: &Vec<ResolvedColumnDefinitionProto>,
-    ) -> Vec<(String, Type)> {
+    ) -> Vec<(String, DataType)> {
         let mut columns = Vec::with_capacity(cs.len());
         for c in cs {
             columns.push(self.column_definition(c))
@@ -526,8 +527,8 @@ impl Converter {
         columns
     }
 
-    fn column_definition(&mut self, c: &ResolvedColumnDefinitionProto) -> (String, Type) {
-        (c.name.get().clone(), Type::from(c.r#type.get()))
+    fn column_definition(&mut self, c: &ResolvedColumnDefinitionProto) -> (String, DataType) {
+        (c.name.get().clone(), data_type::from_proto(c.r#type.get()))
     }
 
     fn drop(&mut self, q: &ResolvedDropStmtProto) -> Expr {
@@ -642,7 +643,7 @@ impl Converter {
                     let fake = self.create_column(
                         "$update".to_string(),
                         "$expr".to_string(),
-                        scalar.typ(),
+                        scalar.data(),
                     );
                     projects.push((scalar, fake.clone()));
                     Some(fake)
@@ -707,8 +708,8 @@ impl Converter {
         match action.node.get() {
             ResolvedSetOptionsActionNode(_) => panic!("{:?}", action),
             ResolvedAddColumnActionNode(add) => {
-                let (name, typ) = self.column_definition(add.column_definition.get());
-                Alter::AddColumn { name, typ }
+                let (name, data) = self.column_definition(add.column_definition.get());
+                Alter::AddColumn { name, data }
             }
             ResolvedDropColumnActionNode(drop) => {
                 let name = drop.column_reference.get().column.get().name.get().clone();
@@ -733,8 +734,8 @@ impl Converter {
         match x.node.get() {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
-                let typ = x.value.get().r#type.get();
-                Scalar::Literal(literal(value, typ), Type::from(typ))
+                let data = x.value.get().r#type.get();
+                Scalar::Literal(literal(value, data), data_type::from_proto(data))
             }
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
@@ -774,7 +775,7 @@ impl Converter {
         };
         let function = Function::from(function.clone());
         let arguments = self.exprs(arguments, outer);
-        let returns = Type::from(returns);
+        let returns = data_type::from_proto(returns);
         Scalar::Call(function, arguments, returns)
     }
 
@@ -790,7 +791,7 @@ impl Converter {
             } => (expr, ty),
             other => panic!("{:?}", other),
         };
-        Scalar::Cast(Box::new(self.expr(expr, outer)), Type::from(ty))
+        Scalar::Cast(Box::new(self.expr(expr, outer)), data_type::from_proto(ty))
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {
@@ -811,15 +812,19 @@ impl Converter {
             1 => unimplemented!(),
             // Exists
             2 => {
-                let mark =
-                    self.create_column("$mark".to_string(), "$exists".to_string(), Type::Bool);
+                let mark = self.create_column(
+                    "$mark".to_string(),
+                    "$exists".to_string(),
+                    DataType::Boolean,
+                );
                 let join = Join::Mark(mark.clone(), vec![]);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
             }
             // In
             3 => {
-                let mark = self.create_column("$mark".to_string(), "$in".to_string(), Type::Bool);
+                let mark =
+                    self.create_column("$mark".to_string(), "$in".to_string(), DataType::Boolean);
                 let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
@@ -827,8 +832,11 @@ impl Converter {
                     other => panic!("{:?}", other),
                 };
                 let check = single_column(x.subquery.get());
-                let join_filter =
-                    vec![Scalar::Call(Function::Equal, vec![find, check], Type::Bool)];
+                let join_filter = vec![Scalar::Call(
+                    Function::Equal,
+                    vec![find, check],
+                    DataType::Boolean,
+                )];
                 let join = Join::Mark(mark.clone(), join_filter);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
@@ -841,13 +849,13 @@ impl Converter {
         scalar
     }
 
-    fn create_column(&mut self, table: String, name: String, typ: Type) -> Column {
+    fn create_column(&mut self, table: String, name: String, data: DataType) -> Column {
         let column = Column {
             created: Phase::Convert,
             id: self.next_column_id,
             name,
             table: Some(table),
-            typ,
+            data,
         };
         self.next_column_id += 1;
         column
@@ -919,7 +927,7 @@ fn create_dependent_join(
             id: fresh_column + i as i64,
             name: subquery_parameters[i].name.clone(),
             table: subquery_parameters[i].table.clone(),
-            typ: subquery_parameters[i].typ.clone(),
+            data: subquery_parameters[i].data.clone(),
         })
         .collect();
     let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
@@ -949,7 +957,7 @@ fn create_dependent_join(
                     Scalar::Column(subquery_parameters[i].clone()),
                     Scalar::Column(rename_subquery_parameters[i].clone()),
                 ],
-                Type::Bool,
+                DataType::Boolean,
             )
         })
         .collect();
@@ -1011,7 +1019,7 @@ fn function_name(name: &String) -> String {
     format!("${}", name.trim_start_matches("ZetaSQL:"))
 }
 
-fn literal(value: &ValueProto, typ: &TypeProto) -> Value {
+fn literal(value: &ValueProto, data: &TypeProto) -> Value {
     let value = match value {
         ValueProto { value: Some(value) } => value,
         other => panic!("{:?}", other),
@@ -1024,8 +1032,8 @@ fn literal(value: &ValueProto, typ: &TypeProto) -> Value {
         BytesValue(x) => Value::Bytes(x.clone()),
         DateValue(x) => Value::Date(date_value(*x)),
         TimestampValue(x) => Value::Timestamp(timestamp_value(x)),
-        ArrayValue(x) => Value::Array(array_value(&x.element, element_type(typ))),
-        StructValue(x) => Value::Struct(struct_value(&x.field, field_types(typ))),
+        ArrayValue(x) => Value::Array(array_value(&x.element, element_type(data))),
+        StructValue(x) => Value::Struct(struct_value(&x.field, field_types(data))),
         NumericValue(buf) => {
             let mut x = 0i128;
             varint128::write(&mut x, buf);
@@ -1035,24 +1043,24 @@ fn literal(value: &ValueProto, typ: &TypeProto) -> Value {
     }
 }
 
-fn element_type(typ: &TypeProto) -> &TypeProto {
-    let typ = match typ {
+fn element_type(data: &TypeProto) -> &TypeProto {
+    let data = match data {
         TypeProto {
-            array_type: Some(typ),
+            array_type: Some(data),
             ..
-        } => typ,
+        } => data,
         other => panic!("{:?}", other),
     };
-    match typ.borrow() {
+    match data.borrow() {
         ArrayTypeProto {
-            element_type: Some(typ),
-        } => &*typ,
+            element_type: Some(data),
+        } => &*data,
         other => panic!("{:?}", other),
     }
 }
 
-fn field_types(typ: &TypeProto) -> &Vec<StructFieldProto> {
-    match typ {
+fn field_types(data: &TypeProto) -> &Vec<StructFieldProto> {
+    match data {
         TypeProto {
             struct_type: Some(StructTypeProto { field }),
             ..
@@ -1072,10 +1080,10 @@ fn timestamp_value(time: &prost_types::Timestamp) -> chrono::DateTime<chrono::Ut
     )
 }
 
-fn array_value(values: &Vec<ValueProto>, typ: &TypeProto) -> Vec<Value> {
+fn array_value(values: &Vec<ValueProto>, data: &TypeProto) -> Vec<Value> {
     let mut list = vec![];
     for v in values {
-        list.push(literal(&v, &typ));
+        list.push(literal(&v, &data));
     }
     list
 }
@@ -1088,8 +1096,8 @@ fn struct_value(values: &Vec<ValueProto>, types: &Vec<StructFieldProto>) -> Vec<
     list
 }
 
-fn struct_field(value: &ValueProto, typ: &StructFieldProto) -> Value {
-    literal(value, typ.field_type.as_ref().unwrap())
+fn struct_field(value: &ValueProto, data: &StructFieldProto) -> Value {
+    literal(value, data.field_type.as_ref().unwrap())
 }
 
 trait Getter<T> {

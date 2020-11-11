@@ -1,4 +1,5 @@
 use crate::search_space::*;
+use arrow::datatypes::*;
 use ast::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -691,7 +692,7 @@ fn hash_join(
                 remaining_predicates.push(Scalar::Call(
                     Function::Equal,
                     vec![left_side, right_side],
-                    Type::Bool,
+                    DataType::Boolean,
                 ));
             }
         } else {

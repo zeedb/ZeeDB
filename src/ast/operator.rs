@@ -1,5 +1,6 @@
-use crate::types::*;
+use crate::data_type;
 use crate::values::*;
+use arrow::datatypes::*;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -77,7 +78,7 @@ pub enum Operator<T> {
     // LogicalCreateTable implements the CREATE TABLE operation.
     LogicalCreateTable {
         name: Name,
-        columns: Vec<(String, Type)>,
+        columns: Vec<(String, DataType)>,
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
@@ -160,7 +161,7 @@ pub enum Operator<T> {
     CreateDatabase(Name),
     CreateTable {
         name: Name,
-        columns: Vec<(String, Type)>,
+        columns: Vec<(String, DataType)>,
         partition_by: Vec<i64>,
         cluster_by: Vec<i64>,
         primary_key: Vec<i64>,
@@ -1015,7 +1016,7 @@ pub struct Column {
     pub id: i64,
     pub name: String,
     pub table: Option<String>,
-    pub typ: Type,
+    pub data: DataType,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -1032,7 +1033,7 @@ impl Column {
             id: column.column_id.unwrap(),
             name: column.name.clone().unwrap(),
             table: column.table_name.clone(),
-            typ: Type::from(column.r#type.as_ref().unwrap()),
+            data: data_type::from_proto(column.r#type.as_ref().unwrap()),
         }
     }
 }
@@ -1128,14 +1129,16 @@ impl fmt::Display for OrderBy {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Alter {
-    AddColumn { name: String, typ: Type },
+    AddColumn { name: String, data: DataType },
     DropColumn { name: String },
 }
 
 impl fmt::Display for Alter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Alter::AddColumn { name, typ } => write!(f, "(AddColumn {}:{})", name, typ),
+            Alter::AddColumn { name, data } => {
+                write!(f, "(AddColumn {}:{})", name, data_type::to_string(data))
+            }
             Alter::DropColumn { name } => write!(f, "(DropColumn {})", name),
         }
     }
@@ -1143,19 +1146,19 @@ impl fmt::Display for Alter {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Scalar {
-    Literal(Value, Type),
+    Literal(Value, DataType),
     Column(Column),
-    Call(Function, Vec<Scalar>, Type),
-    Cast(Box<Scalar>, Type),
+    Call(Function, Vec<Scalar>, DataType),
+    Cast(Box<Scalar>, DataType),
 }
 
 impl Scalar {
-    pub fn typ(&self) -> Type {
+    pub fn data(&self) -> DataType {
         match self {
-            Scalar::Literal(_, typ) => typ.clone(),
-            Scalar::Column(column) => column.typ.clone(),
+            Scalar::Literal(_, data) => data.clone(),
+            Scalar::Column(column) => column.data.clone(),
             Scalar::Call(_, _, returns) => returns.clone(),
-            Scalar::Cast(_, typ) => typ.clone(),
+            Scalar::Cast(_, data) => data.clone(),
         }
     }
 
@@ -1201,8 +1204,8 @@ impl Scalar {
                 }
                 Scalar::Call(f.clone(), inline_arguments, returns.clone())
             }
-            Scalar::Cast(uncast, typ) => {
-                Scalar::Cast(Box::new(uncast.inline(expr, column)), typ.clone())
+            Scalar::Cast(uncast, data) => {
+                Scalar::Cast(Box::new(uncast.inline(expr, column)), data.clone())
             }
             _ => self.clone(),
         }

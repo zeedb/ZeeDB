@@ -1,3 +1,4 @@
+use crate::data_type;
 use crate::operator::*;
 use std::fmt;
 
@@ -205,8 +206,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input,
             } => {
                 write!(f, "{} {}", self.name(), name)?;
-                for (name, typ) in columns {
-                    write!(f, " {}:{}", name, typ)?;
+                for (name, data) in columns {
+                    write!(f, " {}:{}", name, data_type::to_string(data))?;
                 }
                 if !partition_by.is_empty() {
                     write!(f, " (PartitionBy")?;
@@ -412,8 +413,8 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 input,
             } => {
                 write!(f, "{} {}", self.name(), name)?;
-                for (name, typ) in columns {
-                    write!(f, " {}:{}", name, typ)?;
+                for (name, data) in columns {
+                    write!(f, " {}:{}", name, data_type::to_string(data))?;
                 }
                 if !partition_by.is_empty() {
                     write!(f, " (PartitionBy")?;
@@ -559,7 +560,9 @@ impl fmt::Display for Scalar {
                     write!(f, "({:?} {})", function, join_scalars(arguments))
                 }
             }
-            Scalar::Cast(value, typ) => write!(f, "(Cast {} {})", value, typ),
+            Scalar::Cast(value, data) => {
+                write!(f, "(Cast {} {})", value, data_type::to_string(data))
+            }
         }
     }
 }

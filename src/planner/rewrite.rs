@@ -1,5 +1,5 @@
+use arrow::datatypes::*;
 use ast::*;
-use std::collections::HashMap;
 
 #[derive(Debug)]
 enum RewriteRule {
@@ -314,7 +314,8 @@ impl RewriteRule {
                     {
                         let mut filter_predicates = filter_predicates.clone();
                         let semi = Scalar::Column(mark.clone());
-                        let anti = Scalar::Call(Function::Not, vec![semi.clone()], Type::Bool);
+                        let anti =
+                            Scalar::Call(Function::Not, vec![semi.clone()], DataType::Boolean);
                         let mut combined_attributes = vec![];
                         for c in left.attributes() {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
@@ -322,8 +323,10 @@ impl RewriteRule {
                         for c in right.attributes() {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
                         }
-                        combined_attributes
-                            .push((Scalar::Literal(Value::Bool(true), Type::Bool), mark.clone()));
+                        combined_attributes.push((
+                            Scalar::Literal(Value::Bool(true), DataType::Boolean),
+                            mark.clone(),
+                        ));
                         combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));
                         for i in 0..filter_predicates.len() {
                             if filter_predicates[i] == semi {
