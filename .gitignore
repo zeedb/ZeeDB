@@ -1,3 +1,5 @@
 /target
 .idea
 src/scratch
+src/zetasql/local_service.rs
+src/zetasql/zetasql.rs

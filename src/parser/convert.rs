@@ -458,16 +458,28 @@ impl Converter {
             projects,
             input,
         });
-        self.create_table_base(q.parent.get(), Some(input))
+        self.create_table_base(
+            q.parent.get(),
+            &q.partition_by_list,
+            &q.cluster_by_list,
+            Some(input),
+        )
     }
 
     fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Expr {
-        self.create_table_base(q.parent.get(), None)
+        self.create_table_base(
+            q.parent.get(),
+            &q.partition_by_list,
+            &q.cluster_by_list,
+            None,
+        )
     }
 
     fn create_table_base(
         &mut self,
         q: &ResolvedCreateTableStmtBaseProto,
+        partition_by_list: &Vec<AnyResolvedExprProto>,
+        cluster_by_list: &Vec<AnyResolvedExprProto>,
         input: Option<Expr>,
     ) -> Expr {
         // TODO fail on unsupported options
@@ -499,11 +511,11 @@ impl Converter {
             panic!("{:?}", target)
         };
         let mut partition_by = vec![];
-        for expr in &q.partition_by_list {
+        for expr in partition_by_list {
             partition_by.push(index_of(expr));
         }
         let mut cluster_by = vec![];
-        for expr in &q.cluster_by_list {
+        for expr in cluster_by_list {
             cluster_by.push(index_of(expr));
         }
         Expr::new(LogicalCreateTable {
@@ -719,6 +731,7 @@ impl Converter {
             ResolvedFilterUsingActionNode(_) => panic!("{:?}", action),
             ResolvedRevokeFromActionNode(_) => panic!("{:?}", action),
             ResolvedRenameToActionNode(_) => panic!("{:?}", action),
+            ResolvedSetAsActionNode(_) => panic!("{:?}", action),
         }
     }
 
@@ -788,6 +801,7 @@ impl Converter {
                     }),
                 expr: Some(expr),
                 return_null_on_error: Some(false),
+                extended_cast: None,
             } => (expr, ty),
             other => panic!("{:?}", other),
         };
@@ -1001,6 +1015,9 @@ fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
         ResolvedTvfscanNode(q) => q.parent.get(),
         ResolvedRelationArgumentScanNode(q) => q.parent.get(),
         ResolvedAggregateScanBaseNode(q) => single_column_aggregate(q),
+        ResolvedRecursiveRefScanNode(_) | ResolvedRecursiveScanNode(_) => {
+            panic!("recursive queries not supported")
+        }
     };
     &q.column_list
 }

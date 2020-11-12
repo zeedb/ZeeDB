@@ -4,9 +4,8 @@ use ast::Expr;
 use tokio::runtime::Runtime;
 use tonic::transport::channel::Channel;
 use tonic::{Response, Status};
-use zetasql::local_service::analyze_response::Result::*;
-use zetasql::local_service::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
-use zetasql::local_service::*;
+use zetasql::analyze_response::Result::*;
+use zetasql::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
 use zetasql::*;
 
 pub struct ParseProvider {
