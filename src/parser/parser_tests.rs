@@ -51,3 +51,11 @@ fn test_metadata() {
         .unwrap();
     assert!(offset > 0);
 }
+
+#[test]
+fn test_format() {
+    let mut parser = ParseProvider::new();
+    let q = "select 1 as foo from bar";
+    let format = parser.format(&q.to_string()).unwrap();
+    assert_eq!("SELECT\n  1 AS foo\nFROM\n  bar;", format);
+}
