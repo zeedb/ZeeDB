@@ -2,7 +2,7 @@ use crate::cluster::*;
 use std::sync::Arc;
 
 pub struct Storage {
-    tables: Vec<Cluster>,
+    tables: Vec<Heap>,
 }
 
 impl Storage {
@@ -11,12 +11,12 @@ impl Storage {
         Self {
             tables: fixtures::bootstrap_metadata_arrow()
                 .drain(..)
-                .map(|schema| Cluster::empty(Arc::new(schema)))
+                .map(|schema| Heap::empty(Arc::new(schema)))
                 .collect(),
         }
     }
 
-    pub fn table(&self, id: usize) -> &Cluster {
+    pub fn table(&self, id: usize) -> &Heap {
         &self.tables[id]
     }
 }

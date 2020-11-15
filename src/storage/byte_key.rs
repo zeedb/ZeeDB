@@ -1,33 +1,45 @@
 // Key serialization strategies from "The Adaptive Radix Tree: ARTful Indexing for Main-Memory Databases"
 // https://db.in.tum.de/~leis/papers/ART.pdf
 
-pub fn bool_key(value: bool) -> [u8; 8] {
-    if value {
-        1u64.to_be_bytes()
-    } else {
-        0u64.to_be_bytes()
+pub trait ByteKey {
+    fn key(self) -> [u8; 8];
+}
+
+impl ByteKey for bool {
+    fn key(self) -> [u8; 8] {
+        if self {
+            1u64.to_be_bytes()
+        } else {
+            0u64.to_be_bytes()
+        }
     }
 }
 
-pub fn i64_key(value: i64) -> [u8; 8] {
-    let flip_sign_bit = value ^ (1 << 63);
-    flip_sign_bit.to_be_bytes()
+impl ByteKey for i64 {
+    fn key(self) -> [u8; 8] {
+        let flip_sign_bit = self ^ (1 << 63);
+        flip_sign_bit.to_be_bytes()
+    }
 }
 
-pub fn i32_key(value: i32) -> [u8; 8] {
-    let flip_sign_bit = value ^ (1 << 31);
-    let last4 = flip_sign_bit.to_be_bytes();
-    [0, 0, 0, 0, last4[0], last4[1], last4[2], last4[3]]
+impl ByteKey for i32 {
+    fn key(self) -> [u8; 8] {
+        let flip_sign_bit = self ^ (1 << 31);
+        let last4 = flip_sign_bit.to_be_bytes();
+        [0, 0, 0, 0, last4[0], last4[1], last4[2], last4[3]]
+    }
 }
 
-pub fn f64_key(value: f64) -> [u8; 8] {
-    let bits = value.to_bits();
-    let bits = if bits & (1 << 63) != 0 {
-        bits ^ !0
-    } else {
-        bits ^ (1 << 63)
-    };
-    bits.to_be_bytes()
+impl ByteKey for f64 {
+    fn key(self) -> [u8; 8] {
+        let bits = self.to_bits();
+        let bits = if bits & (1 << 63) != 0 {
+            bits ^ !0
+        } else {
+            bits ^ (1 << 63)
+        };
+        bits.to_be_bytes()
+    }
 }
 
 // 0111111111111000000000000000000000000000000000000000000000000000        1111111111111000000000000000000000000000000000000000000000000000        f64::NAN                nan
@@ -102,9 +114,9 @@ pub fn f64_key(value: f64) -> [u8; 8] {
 //     bits ^ SIGN_MASK
 // }
 
-// pub fn f64_to_bytes(value: f64) -> u64 {
+// pub fn f64_to_bytes(self: f64) -> u64 {
 //     const SIGN_MASK: u64 = 0x8000_0000_0000_0000;
-//     let bits = value.to_bits();
+//     let bits = self.to_bits();
 //     if bits & SIGN_MASK == SIGN_MASK {
 //         bits ^ !0
 //     } else {

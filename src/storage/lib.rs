@@ -1,6 +1,6 @@
-mod bytes;
+mod byte_key;
 #[cfg(test)]
-mod bytes_tests;
+mod byte_key_tests;
 mod cluster;
 #[cfg(test)]
 mod cluster_tests;
