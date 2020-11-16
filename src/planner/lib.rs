@@ -7,3 +7,5 @@ mod optimize_tests;
 mod rewrite;
 mod rule;
 mod search_space;
+
+pub use optimize::optimize;

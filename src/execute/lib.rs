@@ -1,3 +1,5 @@
+mod eval;
 mod execute;
 
-pub use execute::execute;
+pub use eval::*;
+pub use execute::*;

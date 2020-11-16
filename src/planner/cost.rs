@@ -22,7 +22,7 @@ const COST_HASH_BUILD: Cost = COST_HASH_PROBE * 2.0;
 // at every node of the tree and add up the local costs.
 pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
     let parent = ss[mid].parent;
-    match &ss[mid].op {
+    match &ss[mid].expr {
         TableFreeScan { .. } => 0.0,
         SeqScan {
             predicates, table, ..
@@ -39,7 +39,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
                 + count_predicates * index_cardinality * COST_CPU_PRED
         }
         Filter(predicates, input) => {
-            let input = ss[*input].props.cardinality as f64;
+            let input = ss[leaf(input)].props.cardinality as f64;
             let columns = predicates.len() as f64;
             input * columns * COST_CPU_PRED
         }
@@ -49,8 +49,8 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             count_exprs * output_cardinality * COST_CPU_EVAL
         }
         NestedLoop(join, left, right) => {
-            let build = ss[*left].props.cardinality as f64;
-            let probe = ss[*right].props.cardinality as f64;
+            let build = ss[leaf(left)].props.cardinality as f64;
+            let probe = ss[leaf(right)].props.cardinality as f64;
             let iterations = build * probe;
             let count_predicates = join.predicates().len() as f64;
             build * COST_ARRAY_BUILD
@@ -60,21 +60,21 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
         HashJoin {
             join, left, right, ..
         } => {
-            let build = ss[*left].props.cardinality as f64;
-            let probe = ss[*right].props.cardinality as f64;
+            let build = ss[leaf(left)].props.cardinality as f64;
+            let probe = ss[leaf(right)].props.cardinality as f64;
             let count_predicates = join.predicates().len() as f64;
             build * COST_HASH_BUILD
                 + probe * COST_HASH_PROBE
                 + probe * count_predicates * COST_CPU_PRED
         }
         LookupJoin { join, input, .. } => {
-            let index_cardinality = ss[*input].props.cardinality as f64;
+            let index_cardinality = ss[leaf(input)].props.cardinality as f64;
             let count_predicates = join.predicates().len() as f64;
             index_cardinality * COST_READ_BLOCK
                 + count_predicates * index_cardinality * COST_CPU_PRED
         }
         CreateTempTable(_, _, left, _) => {
-            let output = ss[*left].props.cardinality as f64;
+            let output = ss[leaf(left)].props.cardinality as f64;
             let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
@@ -88,7 +88,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             aggregate,
             input,
         } => {
-            let n = ss[*input].props.cardinality as f64;
+            let n = ss[leaf(input)].props.cardinality as f64;
             let n_group_by = n * group_by.len() as f64;
             let n_aggregate = n * aggregate.len() as f64;
             n_group_by * COST_HASH_BUILD + n_aggregate * COST_CPU_APPLY
@@ -107,7 +107,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
         | CreateTable {
             input: Some(input), ..
         } => {
-            let length = ss[*input].props.cardinality as f64;
+            let length = ss[leaf(input)].props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }

@@ -508,6 +508,16 @@ fn test_optimize() {
         errors
     );
     ok!(
+        "examples/join/two_inner_joins.txt",
+        r#"
+            select *
+            from person
+            join customer using (person_id)
+            join store using (store_id)
+        "#,
+        errors
+    );
+    ok!(
         "examples/limit/limit_offset.txt",
         r#"
             select customer_id

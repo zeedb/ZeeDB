@@ -79,7 +79,7 @@ impl Rule {
 
     // Quickly check if rule matches expression *without* exploring the inputs to the expression.
     pub fn matches_fast(&self, mexpr: &MultiExpr) -> bool {
-        match (self, &mexpr.op) {
+        match (self, &mexpr.expr) {
             (
                 Rule::InnerJoinCommutivity,
                 LogicalJoin {
@@ -134,7 +134,7 @@ impl Rule {
         }
     }
 
-    pub fn bind(&self, ss: &SearchSpace, mid: MultiExprID) -> Vec<Operator<Bind>> {
+    pub fn bind(&self, ss: &SearchSpace, mid: MultiExprID) -> Vec<Expr> {
         let mut binds = vec![];
         match self {
             Rule::InnerJoinAssociativity => {
@@ -142,57 +142,61 @@ impl Rule {
                     join: Join::Inner(parent_predicates),
                     left,
                     right,
-                } = &ss[mid].op
+                } = &ss[mid].expr
                 {
-                    for left in &ss[*left].logical {
-                        if let LogicalJoin {
-                            join: Join::Inner(left_predicates),
-                            left: left_left,
-                            right: left_middle,
-                            ..
-                        } = &ss[*left].op
-                        {
-                            binds.push(LogicalJoin {
-                                join: Join::Inner(parent_predicates.clone()),
-                                left: Bind::Operator(Box::new(LogicalJoin {
-                                    join: Join::Inner(left_predicates.clone()),
-                                    left: Bind::Group(*left_left),
-                                    right: Bind::Group(*left_middle),
-                                })),
-                                right: Bind::Group(*right),
-                            })
+                    if let Leaf(left) = left.as_ref() {
+                        for left in &ss[GroupID(*left)].logical {
+                            if let LogicalJoin {
+                                join: Join::Inner(left_predicates),
+                                left: left_left,
+                                right: left_middle,
+                                ..
+                            } = &ss[*left].expr
+                            {
+                                binds.push(LogicalJoin {
+                                    join: Join::Inner(parent_predicates.clone()),
+                                    left: Box::new(LogicalJoin {
+                                        join: Join::Inner(left_predicates.clone()),
+                                        left: left_left.clone(),
+                                        right: left_middle.clone(),
+                                    }),
+                                    right: right.clone(),
+                                })
+                            }
                         }
                     }
                 }
             }
             Rule::LogicalJoinToLookupJoin => {
-                if let LogicalJoin { join, left, right } = &ss[mid].op {
-                    for left in &ss[*left].logical {
-                        if let LogicalGet {
-                            predicates,
-                            projects,
-                            table,
-                        } = &ss[*left].op
-                        {
-                            binds.push(LogicalJoin {
-                                join: join.clone(),
-                                left: Bind::Operator(Box::new(LogicalGet {
-                                    predicates: predicates.clone(),
-                                    projects: projects.clone(),
-                                    table: table.clone(),
-                                })),
-                                right: Bind::Group(*right),
-                            })
+                if let LogicalJoin { join, left, right } = &ss[mid].expr {
+                    if let Leaf(left) = left.as_ref() {
+                        for left in &ss[GroupID(*left)].logical {
+                            if let LogicalGet {
+                                predicates,
+                                projects,
+                                table,
+                            } = &ss[*left].expr
+                            {
+                                binds.push(LogicalJoin {
+                                    join: join.clone(),
+                                    left: Box::new(LogicalGet {
+                                        predicates: predicates.clone(),
+                                        projects: projects.clone(),
+                                        table: table.clone(),
+                                    }),
+                                    right: right.clone(),
+                                })
+                            }
                         }
                     }
                 }
             }
-            _ => binds.push(ss[mid].op.clone().map(|group| Bind::Group(group))),
+            _ => binds.push(ss[mid].expr.clone().map(|group| group)),
         }
         binds
     }
 
-    pub fn apply(&self, ss: &SearchSpace, bind: Operator<Bind>) -> Option<Operator<Bind>> {
+    pub fn apply(&self, ss: &SearchSpace, bind: Expr) -> Option<Expr> {
         match self {
             Rule::InnerJoinCommutivity => {
                 if let LogicalJoin {
@@ -228,46 +232,54 @@ impl Rule {
             Rule::InnerJoinAssociativity => {
                 if let LogicalJoin {
                     join: Join::Inner(parent_predicates),
-                    left: Bind::Operator(left),
-                    right: Bind::Group(right),
+                    left,
+                    right,
                     ..
                 } = bind
                 {
-                    if let LogicalJoin {
-                        join: Join::Inner(left_predicates),
-                        left: Bind::Group(left_left),
-                        right: Bind::Group(left_middle),
-                        ..
-                    } = *left
-                    {
-                        let mut new_parent_predicates = vec![];
-                        let mut new_right_predicates = vec![];
-                        let middle_scope = &ss[left_middle].props.column_unique_cardinality;
-                        let right_scope = &ss[right].props.column_unique_cardinality;
-                        let mut redistribute_predicate = |p: Scalar| {
-                            if p.references().iter().all(|c| {
-                                middle_scope.contains_key(c) || right_scope.contains_key(c)
-                            }) {
-                                new_right_predicates.push(p);
-                            } else {
-                                new_parent_predicates.push(p);
+                    if let Leaf(right) = right.as_ref() {
+                        if let LogicalJoin {
+                            join: Join::Inner(left_predicates),
+                            left: left_left,
+                            right: left_middle,
+                            ..
+                        } = *left
+                        {
+                            if let (Leaf(left_left), Leaf(left_middle)) =
+                                (left_left.as_ref(), left_middle.as_ref())
+                            {
+                                let mut new_parent_predicates = vec![];
+                                let mut new_right_predicates = vec![];
+                                let middle_scope =
+                                    &ss[GroupID(*left_middle)].props.column_unique_cardinality;
+                                let right_scope =
+                                    &ss[GroupID(*right)].props.column_unique_cardinality;
+                                let mut redistribute_predicate = |p: Scalar| {
+                                    if p.references().iter().all(|c| {
+                                        middle_scope.contains_key(c) || right_scope.contains_key(c)
+                                    }) {
+                                        new_right_predicates.push(p);
+                                    } else {
+                                        new_parent_predicates.push(p);
+                                    }
+                                };
+                                for p in parent_predicates {
+                                    redistribute_predicate(p);
+                                }
+                                for p in left_predicates {
+                                    redistribute_predicate(p);
+                                }
+                                return Some(LogicalJoin {
+                                    join: Join::Inner(new_parent_predicates),
+                                    left: Box::new(Leaf(*left_left)),
+                                    right: Box::new(LogicalJoin {
+                                        join: Join::Inner(new_right_predicates),
+                                        left: Box::new(Leaf(*left_middle)),
+                                        right: Box::new(Leaf(*right)),
+                                    }),
+                                });
                             }
-                        };
-                        for p in parent_predicates {
-                            redistribute_predicate(p);
                         }
-                        for p in left_predicates {
-                            redistribute_predicate(p);
-                        }
-                        return Some(LogicalJoin {
-                            join: Join::Inner(new_parent_predicates),
-                            left: Bind::Group(left_left),
-                            right: Bind::Operator(Box::new(LogicalJoin {
-                                join: Join::Inner(new_right_predicates),
-                                left: Bind::Group(left_middle),
-                                right: Bind::Group(right),
-                            })),
-                        });
                     }
                 }
             }
@@ -275,63 +287,66 @@ impl Rule {
                 if let LogicalDependentJoin {
                     parameters,
                     predicates,
-                    subquery: Bind::Group(subquery),
+                    subquery,
                     ..
                 } = bind
                 {
                     debug_assert!(!parameters.is_empty());
-                    // Check if predicates contains subquery.a = domain.b for every b in domain.
-                    let subquery_scope = &ss[subquery].props.column_unique_cardinality;
-                    let match_equals = |x: &Scalar| {
-                        if let Scalar::Call(Function::Equal, args, _) = x {
-                            if let Scalar::Column(left) = &args[0] {
-                                if let Scalar::Column(right) = &args[1] {
-                                    if subquery_scope.contains_key(&left)
-                                        && parameters.contains(&right)
-                                    {
-                                        return Some((left.clone(), right.clone()));
-                                    } else if subquery_scope.contains_key(&right)
-                                        && parameters.contains(&left)
-                                    {
-                                        return Some((right.clone(), left.clone()));
+                    if let Leaf(subquery) = subquery.as_ref() {
+                        // Check if predicates contains subquery.a = domain.b for every b in domain.
+                        let subquery_scope =
+                            &ss[GroupID(*subquery)].props.column_unique_cardinality;
+                        let match_equals = |x: &Scalar| {
+                            if let Scalar::Call(Function::Equal, args, _) = x {
+                                if let Scalar::Column(left) = &args[0] {
+                                    if let Scalar::Column(right) = &args[1] {
+                                        if subquery_scope.contains_key(&left)
+                                            && parameters.contains(&right)
+                                        {
+                                            return Some((left.clone(), right.clone()));
+                                        } else if subquery_scope.contains_key(&right)
+                                            && parameters.contains(&left)
+                                        {
+                                            return Some((right.clone(), left.clone()));
+                                        }
                                     }
                                 }
                             }
+                            None
+                        };
+                        let mut equiv_predicates = HashMap::new();
+                        let mut filter_predicates = vec![];
+                        for p in predicates {
+                            if let Some((subquery_column, domain_column)) = match_equals(&p) {
+                                equiv_predicates.insert(domain_column, subquery_column);
+                            } else {
+                                filter_predicates.push(p.clone())
+                            }
                         }
-                        None
-                    };
-                    let mut equiv_predicates = HashMap::new();
-                    let mut filter_predicates = vec![];
-                    for p in predicates {
-                        if let Some((subquery_column, domain_column)) = match_equals(&p) {
-                            equiv_predicates.insert(domain_column, subquery_column);
-                        } else {
-                            filter_predicates.push(p.clone())
+                        if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
+                            return None;
                         }
-                    }
-                    if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
-                        return None;
-                    }
-                    // Infer domain from subquery using equivalences from the join condition.
-                    let project_domain: Vec<(Scalar, Column)> = parameters
-                        .iter()
-                        .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
-                        .collect();
-                    if filter_predicates.is_empty() {
-                        return Some(LogicalMap {
-                            include_existing: true,
-                            projects: project_domain,
-                            input: Bind::Group(subquery),
-                        });
-                    } else {
-                        return Some(LogicalFilter(
-                            filter_predicates,
-                            Bind::Operator(Box::new(LogicalMap {
+                        // Infer domain from subquery using equivalences from the join condition.
+                        let project_domain: Vec<(Scalar, Column)> = parameters
+                            .iter()
+                            .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
+                            .collect();
+                        if filter_predicates.is_empty() {
+                            return Some(LogicalMap {
                                 include_existing: true,
                                 projects: project_domain,
-                                input: Bind::Group(subquery),
-                            })),
-                        ));
+                                input: Box::new(Leaf(*subquery)),
+                            });
+                        } else {
+                            return Some(LogicalFilter(
+                                filter_predicates,
+                                Box::new(LogicalMap {
+                                    include_existing: true,
+                                    projects: project_domain,
+                                    input: Box::new(Leaf(*subquery)),
+                                }),
+                            ));
+                        }
                     }
                 }
             }
@@ -346,11 +361,11 @@ impl Rule {
                     return Some(LogicalJoin {
                         join: Join::Inner(predicates),
                         left: subquery,
-                        right: Bind::Operator(Box::new(LogicalAggregate {
+                        right: Box::new(LogicalAggregate {
                             group_by: parameters,
                             aggregate: vec![],
                             input: domain,
-                        })),
+                        }),
                     });
                 }
             }
@@ -420,32 +435,28 @@ impl Rule {
                 }
             }
             Rule::LogicalJoinToHashJoin => {
-                if let LogicalJoin {
-                    join,
-                    left: Bind::Group(left),
-                    right: Bind::Group(right),
-                } = bind
-                {
-                    let (equi_predicates, remaining_predicates) =
-                        hash_join(ss, join.predicates().clone(), left, right);
-                    let join = join.replace(remaining_predicates);
-                    if !equi_predicates.is_empty() {
-                        return Some(HashJoin {
-                            join,
-                            equi_predicates,
-                            left: Bind::Group(left),
-                            right: Bind::Group(right),
-                        });
+                if let LogicalJoin { join, left, right } = bind {
+                    if let (Leaf(left), Leaf(right)) = (left.as_ref(), right.as_ref()) {
+                        let (equi_predicates, remaining_predicates) = hash_join(
+                            ss,
+                            join.predicates().clone(),
+                            GroupID(*left),
+                            GroupID(*right),
+                        );
+                        let join = join.replace(remaining_predicates);
+                        if !equi_predicates.is_empty() {
+                            return Some(HashJoin {
+                                join,
+                                equi_predicates,
+                                left: Box::new(Leaf(*left)),
+                                right: Box::new(Leaf(*right)),
+                            });
+                        }
                     }
                 }
             }
             Rule::LogicalJoinToLookupJoin => {
-                if let LogicalJoin {
-                    join,
-                    left: Bind::Operator(left),
-                    right: Bind::Group(right),
-                } = bind
-                {
+                if let LogicalJoin { join, left, right } = bind {
                     if let LogicalGet {
                         predicates: table_predicates,
                         projects,
@@ -461,7 +472,7 @@ impl Rule {
                                 projects,
                                 table,
                                 index_predicates: vec![(c, x)],
-                                input: Bind::Group(right),
+                                input: right,
                             });
                         }
                     }
@@ -629,21 +640,6 @@ impl Rule {
         ]
     }
 }
-
-pub enum Bind {
-    Group(GroupID),
-    Operator(Box<Operator<Bind>>),
-}
-
-impl IndentPrint for Bind {
-    fn indent_print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        match self {
-            Bind::Group(id) => write!(f, "{}", id.0),
-            Bind::Operator(op) => op.indent_print(f, indent),
-        }
-    }
-}
-
 fn find_index_scan(predicates: &Vec<Scalar>, table: &Table) -> Option<usize> {
     for i in 0..predicates.len() {
         if unpack_index_lookup(predicates[i].clone(), table).is_some() {

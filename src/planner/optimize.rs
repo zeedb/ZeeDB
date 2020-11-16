@@ -11,7 +11,7 @@ use std::collections::{HashMap, HashSet};
 pub fn optimize(expr: Expr) -> Expr {
     let mut ss = SearchSpace::new();
     let expr = crate::rewrite::rewrite(expr);
-    let gid = group_from_expr(&mut ss, expr);
+    let gid = copy_in_new(&mut ss, expr);
     optimize_group(&mut ss, gid);
     winner(&mut ss, gid)
 }
@@ -42,10 +42,10 @@ fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool) {
         // Does the pattern match the multi-expression?
         if rule.matches_fast(&ss[mid]) {
             // Explore inputs recursively:
-            for i in 0..ss[mid].op.len() {
+            for i in 0..ss[mid].expr.len() {
                 // If the i'th child of the LHS of the rule is not a leaf node, explore it recursively:
                 if rule.non_leaf(i) {
-                    explore_group(ss, ss[mid].op[i])
+                    explore_group(ss, leaf(&ss[mid].expr[i]))
                 }
             }
             // Apply the rule, potentially adding another MultiExpr to the Group:
@@ -59,11 +59,13 @@ fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool) {
 // If the result is a logical expr, optimize it recursively.
 // If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
 fn apply_rule(ss: &mut SearchSpace, rule: Rule, mid: MultiExprID, explore: bool) {
-    for bind in rule.bind(ss, mid) {
-        if let Some(bind) = rule.apply(ss, bind) {
-            // Add mexpr if it isn't already present in the group:
-            if let Some(mid) = add_binding_to_group(ss, ss[mid].parent, bind) {
-                if !ss[mid].op.is_logical() {
+    for expr in rule.bind(ss, mid) {
+        let before = expr.to_string();
+        if let Some(expr) = rule.apply(ss, expr) {
+            let after = expr.to_string();
+            // Add mexpr if it isn't already present in the group.
+            if let Some(mid) = copy_in(ss, expr, ss[mid].parent) {
+                if !ss[mid].expr.is_logical() {
                     // If rule produced a physical implementation, cost the implementation:
                     optimize_inputs(ss, mid);
                 } else {
@@ -95,8 +97,8 @@ fn optimize_inputs(ss: &mut SearchSpace, mid: MultiExprID) {
     // Thus, physicalCost + sum(inputCosts) = a lower-bound for the total cost of the best strategy for this group.
     let physical_cost = physical_cost(ss, mid);
     let mut input_costs = init_costs_using_lower_bound(ss, mid);
-    for i in 0..ss[mid].op.len() {
-        let input = ss[mid].op[i];
+    for i in 0..ss[mid].expr.len() {
+        let input = leaf(&ss[mid].expr[i]);
         // If we can prove the cost of this MultiExpr exceeds the upper_bound of the Group, give up:
         if stop_early(ss, ss[mid].parent, physical_cost, &input_costs) {
             return;
@@ -107,7 +109,7 @@ fn optimize_inputs(ss: &mut SearchSpace, mid: MultiExprID) {
         let input_upper_bound = ss[ss[mid].parent].upper_bound - (total_cost - input_costs[i]);
         ss[input].upper_bound = input_upper_bound;
         // Optimize input group:
-        optimize_group(ss, ss[mid].op[i]);
+        optimize_group(ss, leaf(&ss[mid].expr[i]));
         // If we failed to declare a winner, give up:
         if ss[input].winner.is_none() {
             return;
@@ -132,8 +134,8 @@ fn stop_early(
 
 fn try_to_declare_winner(ss: &mut SearchSpace, mid: MultiExprID, physical_cost: Cost) {
     let mut total_cost = physical_cost;
-    for i in 0..ss[mid].op.len() {
-        let input = ss[mid].op[i];
+    for i in 0..ss[mid].expr.len() {
+        let input = leaf(&ss[mid].expr[i]);
         match ss[input].winner.as_ref() {
             Some(winner) => {
                 total_cost += winner.cost;
@@ -153,33 +155,13 @@ fn try_to_declare_winner(ss: &mut SearchSpace, mid: MultiExprID, physical_cost: 
     }
 }
 
-fn group_from_expr(ss: &mut SearchSpace, expr: Expr) -> GroupID {
-    // recursively create new groups for each input to expr
-    let mexpr = MultiExpr {
-        parent: UNLINKED,
-        op: expr.0.map(|child| group_from_expr(ss, child)),
-        fired: HashSet::new(),
-    };
-    group_from_unlinked_mexpr(ss, mexpr)
-}
-
-fn add_binding_to_group(
-    ss: &mut SearchSpace,
-    gid: GroupID,
-    bind: Operator<Bind>,
-) -> Option<MultiExprID> {
-    let visitor = |child| match child {
-        Bind::Group(group) => group,
-        Bind::Operator(bind) => group_from_bind(ss, *bind),
-    };
-    let op = bind.map(visitor);
-    let mexpr = MultiExpr {
-        parent: gid,
-        op,
-        fired: HashSet::new(),
-    };
-    if let Some(mid) = ss.intern(mexpr) {
-        if ss[mid].op.is_logical() {
+fn copy_in(ss: &mut SearchSpace, expr: Expr, gid: GroupID) -> Option<MultiExprID> {
+    // Recursively copy in the children.
+    let expr = expr.map(|child| Leaf(copy_in_new(ss, child).0));
+    // If this is the first time we observe expr as a member of gid, add it to the group.
+    if let Some(mid) = ss.add_mexpr(MultiExpr::new(gid, expr)) {
+        // Add expr to group.
+        if ss[mid].expr.is_logical() {
             ss[gid].logical.push(mid);
         } else {
             ss[gid].physical.push(mid);
@@ -189,47 +171,39 @@ fn add_binding_to_group(
         None
     }
 }
-
-fn group_from_bind(ss: &mut SearchSpace, bind: Operator<Bind>) -> GroupID {
-    let visitor = |child| match child {
-        Bind::Group(group) => group,
-        Bind::Operator(bind) => group_from_bind(ss, *bind),
-    };
-    let mexpr = MultiExpr {
-        parent: UNLINKED,
-        op: bind.map(visitor),
-        fired: HashSet::new(),
-    };
-    group_from_unlinked_mexpr(ss, mexpr)
-}
-
-fn group_from_unlinked_mexpr(ss: &mut SearchSpace, mut mexpr: MultiExpr) -> GroupID {
-    if mexpr.parent != UNLINKED {
-        panic!("mexpr is already linked to group {}", mexpr.parent.0);
+fn copy_in_new(ss: &mut SearchSpace, expr: Expr) -> GroupID {
+    if let Leaf(gid) = expr {
+        GroupID(gid)
+    } else if let Some(mid) = ss.find_dup(&expr) {
+        ss[mid].parent
+    } else {
+        let gid = ss.reserve();
+        // Recursively copy in the children.
+        let expr = expr.map(|child| Leaf(copy_in_new(ss, child).0));
+        // Initialize a new MultiExpr.
+        let mexpr = MultiExpr::new(gid, expr);
+        let mid = ss.add_mexpr(mexpr).unwrap();
+        // Initialize a new Group.
+        let props = compute_logical_props(ss, &ss[mid]);
+        let lower_bound = compute_lower_bound(&props.column_unique_cardinality);
+        let group = Group {
+            logical: vec![mid],
+            physical: vec![],
+            props,
+            lower_bound,
+            upper_bound: f64::MAX,
+            winner: None,
+            explored: false,
+        };
+        ss.add_group(gid, group);
+        gid
     }
-    // link mexpr to the new group
-    let gid = GroupID(ss.groups.len());
-    mexpr.parent = gid;
-    // initialize a new group
-    let props = compute_logical_props(ss, &mexpr);
-    let lower_bound = compute_lower_bound(&props.column_unique_cardinality);
-    let mid = ss.intern(mexpr).unwrap();
-    ss.groups.push(Group {
-        logical: vec![mid],
-        physical: vec![],
-        props,
-        lower_bound,
-        upper_bound: f64::MAX,
-        winner: None,
-        explored: false,
-    });
-    gid
 }
 
 fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
     let mut cardinality = 0 as usize;
     let mut column_unique_cardinality: HashMap<Column, usize> = HashMap::new();
-    match &mexpr.op {
+    match &mexpr.expr {
         LogicalSingleGet => cardinality = 1,
         LogicalGet {
             projects,
@@ -253,10 +227,10 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             }
         }
         LogicalFilter(predicates, input) => {
-            let scope = &ss[*input].props.column_unique_cardinality;
+            let scope = &ss[leaf(input)].props.column_unique_cardinality;
             let selectivity = total_selectivity(predicates, scope);
-            cardinality = apply_selectivity(ss[*input].props.cardinality, selectivity);
-            for (c, n) in &ss[*input].props.column_unique_cardinality {
+            cardinality = apply_selectivity(ss[leaf(input)].props.cardinality, selectivity);
+            for (c, n) in &ss[leaf(input)].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), cardinality.min(*n));
             }
         }
@@ -265,25 +239,26 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             projects,
             input,
         } => {
-            cardinality = ss[*input].props.cardinality;
+            cardinality = ss[leaf(input)].props.cardinality;
             if *include_existing {
-                for (c, n) in &ss[*input].props.column_unique_cardinality {
+                for (c, n) in &ss[leaf(input)].props.column_unique_cardinality {
                     column_unique_cardinality.insert(c.clone(), *n);
                 }
             }
             for (x, c) in projects {
-                let n = scalar_unique_cardinality(&x, &ss[*input].props.column_unique_cardinality);
+                let n =
+                    scalar_unique_cardinality(&x, &ss[leaf(input)].props.column_unique_cardinality);
                 column_unique_cardinality.insert(c.clone(), n);
             }
         }
         LogicalJoin {
             join, left, right, ..
         } => {
-            cardinality = ss[*left].props.cardinality * ss[*right].props.cardinality;
-            for (c, n) in &ss[*left].props.column_unique_cardinality {
+            cardinality = ss[leaf(left)].props.cardinality * ss[leaf(right)].props.cardinality;
+            for (c, n) in &ss[leaf(left)].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
-            for (c, n) in &ss[*right].props.column_unique_cardinality {
+            for (c, n) in &ss[leaf(right)].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
             // Mark join projects the $mark attribute
@@ -312,14 +287,14 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             // Figure out the cardinality of domain after projection.
             let mut domain_cardinality = 1;
             for c in parameters {
-                let n = ss[*domain].props.column_unique_cardinality[c];
+                let n = ss[leaf(domain)].props.column_unique_cardinality[c];
                 column_unique_cardinality.insert(c.clone(), n);
                 domain_cardinality *= n;
             }
-            domain_cardinality = ss[*domain].props.cardinality.min(domain_cardinality);
+            domain_cardinality = ss[leaf(domain)].props.cardinality.min(domain_cardinality);
             // Figure out the cardinality of the join before filtering.
-            cardinality = ss[*subquery].props.cardinality * domain_cardinality;
-            for (c, n) in &ss[*subquery].props.column_unique_cardinality {
+            cardinality = ss[leaf(subquery)].props.cardinality * domain_cardinality;
+            for (c, n) in &ss[leaf(subquery)].props.column_unique_cardinality {
                 column_unique_cardinality.insert(c.clone(), *n);
             }
             // Apply predicates
@@ -329,8 +304,8 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             }
         }
         LogicalWith(_, _, _, right) => {
-            cardinality = ss[*right].props.cardinality;
-            column_unique_cardinality = ss[*right].props.column_unique_cardinality.clone();
+            cardinality = ss[leaf(right)].props.cardinality;
+            column_unique_cardinality = ss[leaf(right)].props.column_unique_cardinality.clone();
         }
         LogicalGetWith(_, columns) => {
             cardinality = 1000; // TODO get from catalog somehow
@@ -345,18 +320,18 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         } => {
             cardinality = 1;
             for c in group_by {
-                let n = ss[*input].props.column_unique_cardinality[c];
+                let n = ss[leaf(input)].props.column_unique_cardinality[c];
                 column_unique_cardinality.insert(c.clone(), n);
                 cardinality *= n;
             }
-            cardinality = ss[*input].props.cardinality.min(cardinality);
+            cardinality = ss[leaf(input)].props.cardinality.min(cardinality);
             for (_, c) in aggregate {
                 column_unique_cardinality.insert(c.clone(), cardinality);
             }
         }
         LogicalLimit { limit, input, .. } => {
             cardinality = *limit;
-            for (c, n) in &ss[*input].props.column_unique_cardinality {
+            for (c, n) in &ss[leaf(input)].props.column_unique_cardinality {
                 if *limit < *n {
                     column_unique_cardinality.insert(c.clone(), *limit);
                 } else {
@@ -365,20 +340,20 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
             }
         }
         LogicalSort(_, input) => {
-            cardinality = ss[*input].props.cardinality;
-            column_unique_cardinality = ss[*input].props.column_unique_cardinality.clone();
+            cardinality = ss[leaf(input)].props.cardinality;
+            column_unique_cardinality = ss[leaf(input)].props.column_unique_cardinality.clone();
         }
         LogicalUnion(left, right) => {
-            cardinality = ss[*left].props.cardinality + ss[*right].props.cardinality;
+            cardinality = ss[leaf(left)].props.cardinality + ss[leaf(right)].props.cardinality;
             column_unique_cardinality = max_cuc(
-                &ss[*left].props.column_unique_cardinality,
-                &ss[*right].props.column_unique_cardinality,
+                &ss[leaf(left)].props.column_unique_cardinality,
+                &ss[leaf(right)].props.column_unique_cardinality,
             );
         }
         LogicalIntersect(left, right) => todo!("intersect"),
         LogicalExcept(left, _) => {
-            cardinality = ss[*left].props.cardinality;
-            column_unique_cardinality = ss[*left].props.column_unique_cardinality.clone();
+            cardinality = ss[leaf(left)].props.cardinality;
+            column_unique_cardinality = ss[leaf(left)].props.column_unique_cardinality.clone();
         }
         LogicalInsert(_, _, _)
         | LogicalValues(_, _, _)
@@ -412,9 +387,9 @@ pub fn table_cardinality(table: &Table) -> usize {
 }
 
 fn init_costs_using_lower_bound(ss: &SearchSpace, mid: MultiExprID) -> Vec<Cost> {
-    let mut costs = Vec::with_capacity(ss[mid].op.len());
-    for i in 0..ss[mid].op.len() {
-        let input = ss[mid].op[i];
+    let mut costs = Vec::with_capacity(ss[mid].expr.len());
+    for i in 0..ss[mid].expr.len() {
+        let input = leaf(&ss[mid].expr[i]);
         let cost = match ss[input].winner.as_ref() {
             Some(winner) => winner.cost,
             None => ss[input].lower_bound,
@@ -429,7 +404,7 @@ fn winner(ss: &SearchSpace, gid: GroupID) -> Expr {
         .winner
         .unwrap_or_else(|| panic!("group {} has no winner {:?}", gid.0, ss))
         .plan;
-    Expr(Box::new(ss[mid].op.clone().map(|gid| winner(ss, gid))))
+    ss[mid].expr.clone().map(|expr| winner(ss, leaf(&expr)))
 }
 
 fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -> f64 {

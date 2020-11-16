@@ -7,7 +7,7 @@ fn test_analyze() {
     let (_, expr) = parser
         .parse(&"select 1".to_string(), 0, empty_catalog())
         .unwrap();
-    match expr.as_ref() {
+    match expr {
         LogicalMap { .. } => (),
         other => panic!("{:?}", other),
     }

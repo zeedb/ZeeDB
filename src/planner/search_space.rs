@@ -5,19 +5,20 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops;
 
+// TODO make fields private, moving some functions to the file.
+
 // SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
 pub struct SearchSpace {
-    pub groups: Vec<Group>,
+    pub groups: Vec<Option<Group>>,
     pub mexprs: Vec<MultiExpr>,
-    pub memo: HashSet<(GroupID, Operator<GroupID>)>,
+    pub memo_first: HashMap<Expr, MultiExprID>,
+    pub memo_all: HashMap<(GroupID, Expr), MultiExprID>,
 }
 
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq)]
 pub struct GroupID(pub usize);
 
-pub const UNLINKED: GroupID = GroupID(usize::MAX);
-
-#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq)]
 pub struct MultiExprID(pub usize);
 
 // Group represents a single logical query, which can be realized by many
@@ -57,7 +58,7 @@ pub struct MultiExpr {
     // The top operator in this query.
     // Inputs are represented using Group,
     // so they represent a class of equivalent plans rather than a single plan.
-    pub op: Operator<GroupID>,
+    pub expr: Expr,
     // As we try different *logical* transformation rules,
     // we will record the fact that we've already tried this rule on this multi-expression
     // so we can avoid checking it agin. It's safe to mark transformations as complete,
@@ -84,24 +85,62 @@ impl SearchSpace {
         Self {
             groups: vec![],
             mexprs: vec![],
-            memo: HashSet::new(),
+            memo_first: HashMap::new(),
+            memo_all: HashMap::new(),
         }
     }
 
-    pub fn add(&mut self, group: Group) -> GroupID {
-        self.groups.push(group);
+    pub fn reserve(&mut self) -> GroupID {
+        self.groups.push(None);
         GroupID(self.groups.len() - 1)
     }
 
-    pub fn intern(&mut self, mexpr: MultiExpr) -> Option<MultiExprID> {
-        let fingerprint = (mexpr.parent.clone(), mexpr.op.clone());
-        if self.memo.contains(&fingerprint) {
-            None
-        } else {
-            self.mexprs.push(mexpr);
-            self.memo.insert(fingerprint);
-            Some(MultiExprID(self.mexprs.len() - 1))
+    pub fn add_group(&mut self, gid: GroupID, group: Group) {
+        self.groups[gid.0] = Some(group);
+    }
+
+    pub fn add_mexpr(&mut self, mexpr: MultiExpr) -> Option<MultiExprID> {
+        let mid = MultiExprID(self.mexprs.len());
+        // Record the first instance of each logical expression.
+        if self.find_dup(&mexpr.expr).is_none() {
+            self.memo_first.insert(mexpr.expr.clone(), mid);
         }
+        // Only add each logical expression to each group once.
+        if self.find_dup_in(&mexpr.expr, mexpr.parent).is_some() {
+            return None;
+        }
+        self.memo_all
+            .insert((mexpr.parent, mexpr.expr.clone()), mid);
+        self.mexprs.push(mexpr);
+        Some(mid)
+    }
+
+    pub fn find_dup(&mut self, expr: &Expr) -> Option<MultiExprID> {
+        if expr.is_logical() {
+            self.memo_first.get(expr).map(|id| *id)
+        } else {
+            None
+        }
+    }
+
+    pub fn find_dup_in(&mut self, expr: &Expr, parent: GroupID) -> Option<MultiExprID> {
+        if expr.is_logical() {
+            self.memo_all.get(&(parent, expr.clone())).map(|id| *id)
+        } else {
+            None
+        }
+    }
+}
+
+impl fmt::Display for GroupID {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl IndentPrint for GroupID {
+    fn indent_print(&self, f: &mut fmt::Formatter<'_>, _indent: usize) -> fmt::Result {
+        write!(f, "{}", self)
     }
 }
 
@@ -109,7 +148,7 @@ impl ops::Index<GroupID> for SearchSpace {
     type Output = Group;
 
     fn index(&self, index: GroupID) -> &Self::Output {
-        &self.groups[index.0]
+        self.groups[index.0].as_ref().unwrap()
     }
 }
 
@@ -123,7 +162,7 @@ impl ops::Index<MultiExprID> for SearchSpace {
 
 impl ops::IndexMut<GroupID> for SearchSpace {
     fn index_mut(&mut self, index: GroupID) -> &mut Self::Output {
-        &mut self.groups[index.0]
+        self.groups[index.0].as_mut().unwrap()
     }
 }
 
@@ -136,19 +175,15 @@ impl ops::IndexMut<MultiExprID> for SearchSpace {
 impl fmt::Debug for SearchSpace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for i in 0..self.groups.len() {
-            writeln!(
-                f,
-                "{} #{} ${}",
-                i,
-                self.groups[i].props.cardinality,
-                self.groups[i].winner.map(|w| w.cost).unwrap_or(f64::MAX)
-            )?;
-            for j in 0..self.groups[i].logical.len() {
-                writeln!(f, "\t{:?}", self[self.groups[i].logical[j]])?;
+            let card = self[GroupID(i)].props.cardinality;
+            let cost = self[GroupID(i)].winner.map(|w| w.cost).unwrap_or(f64::NAN);
+            writeln!(f, "{} #{} ${}", i, card, cost)?;
+            for j in 0..self[GroupID(i)].logical.len() {
+                writeln!(f, "\t{:?}", self[self[GroupID(i)].logical[j]])?;
             }
-            for j in 0..self.groups[i].physical.len() {
-                write!(f, "\t{:?}", self[self.groups[i].physical[j]])?;
-                if self.groups[i].winner.map(|w| w.plan) == Some(self.groups[i].physical[j]) {
+            for j in 0..self[GroupID(i)].physical.len() {
+                write!(f, "\t{:?}", self[self[GroupID(i)].physical[j]])?;
+                if self[GroupID(i)].winner.map(|w| w.plan) == Some(self[GroupID(i)].physical[j]) {
                     write!(f, " *")?;
                 }
                 writeln!(f, "")?;
@@ -158,12 +193,32 @@ impl fmt::Debug for SearchSpace {
     }
 }
 
+impl Group {}
+
+impl MultiExpr {
+    pub fn new(parent: GroupID, expr: Expr) -> Self {
+        Self {
+            parent,
+            expr,
+            fired: HashSet::new(),
+        }
+    }
+}
+
 impl fmt::Debug for MultiExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.op.name())?;
-        for i in 0..self.op.len() {
-            write!(f, " {}", self.op[i].0)?;
+        write!(f, "{}", self.expr.name())?;
+        for i in 0..self.expr.len() {
+            write!(f, " {}", self.expr[i])?;
         }
         Ok(())
+    }
+}
+
+pub(crate) fn leaf(expr: &Expr) -> GroupID {
+    if let Leaf(gid) = expr {
+        GroupID(*gid)
+    } else {
+        panic!("{} is not Leaf", expr.name())
     }
 }

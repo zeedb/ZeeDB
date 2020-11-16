@@ -1,18 +1,18 @@
 use crate::data_type;
-use crate::operator::*;
+use crate::expr::*;
 use std::fmt;
 
 pub trait IndentPrint {
     fn indent_print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result;
 }
 
-impl<T: IndentPrint> fmt::Display for Operator<T> {
+impl fmt::Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.indent_print(f, 0)
     }
 }
 
-impl<T: IndentPrint> IndentPrint for Operator<T> {
+impl IndentPrint for Expr {
     fn indent_print(&self, f: &mut fmt::Formatter<'_>, mut indent: usize) -> fmt::Result {
         let newline = |f: &mut fmt::Formatter<'_>, indent: usize| -> fmt::Result {
             write!(f, "\n")?;
@@ -22,13 +22,14 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
             Ok(())
         };
         match self {
-            Operator::LogicalSingleGet => write!(f, "{}", self.name()),
-            Operator::LogicalGet {
+            Expr::Leaf(id) => write!(f, "@{}", id),
+            Expr::LogicalSingleGet => write!(f, "{}", self.name()),
+            Expr::LogicalGet {
                 projects,
                 predicates,
                 table,
             }
-            | Operator::SeqScan {
+            | Expr::SeqScan {
                 projects,
                 predicates,
                 table,
@@ -43,17 +44,17 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 write!(f, "{} {}", self.name(), table.name)?;
                 Ok(())
             }
-            Operator::LogicalFilter(predicates, input) => {
+            Expr::LogicalFilter(predicates, input) => {
                 write!(f, "{} {}", self.name(), join_scalars(predicates))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalMap {
+            Expr::LogicalMap {
                 include_existing,
                 projects,
                 input,
             }
-            | Operator::Map {
+            | Expr::Map {
                 include_existing,
                 projects,
                 input,
@@ -65,14 +66,14 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalJoin { join, left, right } => {
+            Expr::LogicalJoin { join, left, right } => {
                 write!(f, "{} {}", self.name(), join)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalDependentJoin {
+            Expr::LogicalDependentJoin {
                 parameters,
                 predicates,
                 subquery,
@@ -92,25 +93,25 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 domain.indent_print(f, indent + 1)
             }
-            Operator::NestedLoop(join, left, right) => {
+            Expr::NestedLoop(join, left, right) => {
                 write!(f, "{} {}", self.name(), join)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalWith(name, _, left, right)
-            | Operator::CreateTempTable(name, _, left, right) => {
+            Expr::LogicalWith(name, _, left, right)
+            | Expr::CreateTempTable(name, _, left, right) => {
                 write!(f, "{} {}", self.name(), name)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LogicalGetWith(name, _) | Operator::GetTempTable(name, _) => {
+            Expr::LogicalGetWith(name, _) | Expr::GetTempTable(name, _) => {
                 write!(f, "{} {}", self.name(), name)
             }
-            Operator::LogicalAggregate {
+            Expr::LogicalAggregate {
                 group_by,
                 aggregate,
                 input,
@@ -125,7 +126,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalLimit {
+            Expr::LogicalLimit {
                 limit,
                 offset,
                 input,
@@ -134,10 +135,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalSort(order_by, input) => {
+            Expr::LogicalSort(order_by, input) => {
                 write!(f, "{}", self.name())?;
                 for sort in order_by {
-                    if sort.desc {
+                    if sort.descending {
                         write!(f, " (Desc {})", sort.column)?;
                     } else {
                         write!(f, " {}", sort.column)?;
@@ -146,12 +147,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalUnion(left, right)
-            | Operator::LogicalIntersect(left, right)
-            | Operator::LogicalExcept(left, right)
-            | Operator::Union(left, right)
-            | Operator::Intersect(left, right)
-            | Operator::Except(left, right) => {
+            Expr::LogicalUnion(left, right)
+            | Expr::LogicalIntersect(left, right)
+            | Expr::LogicalExcept(left, right)
+            | Expr::Union(left, right)
+            | Expr::Intersect(left, right)
+            | Expr::Except(left, right) => {
                 write!(f, "{}", self.name())?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
@@ -159,7 +160,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Operator::LogicalInsert(table, columns, input) => {
+            Expr::LogicalInsert(table, columns, input) => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 for c in columns {
                     write!(f, " {}", c)?;
@@ -167,7 +168,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalValues(columns, rows, input) => {
+            Expr::LogicalValues(columns, rows, input) => {
                 write!(f, "{}", self.name())?;
                 for column in columns {
                     write!(f, " {}", column)?;
@@ -178,7 +179,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalUpdate(updates, input) => {
+            Expr::LogicalUpdate(updates, input) => {
                 write!(f, "{}", self.name())?;
                 for (target, value) in updates {
                     match value {
@@ -189,15 +190,15 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalDelete(table, input) => {
+            Expr::LogicalDelete(table, input) => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::LogicalCreateDatabase(name) => {
+            Expr::LogicalCreateDatabase(name) => {
                 write!(f, "{} {}", self.name(), name.path.join("."))
             }
-            Operator::LogicalCreateTable {
+            Expr::LogicalCreateTable {
                 name,
                 columns,
                 partition_by,
@@ -236,7 +237,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 }
                 Ok(())
             }
-            Operator::LogicalCreateIndex {
+            Expr::LogicalCreateIndex {
                 name,
                 table,
                 columns,
@@ -248,21 +249,21 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 table,
                 columns.join(" ")
             ),
-            Operator::LogicalAlterTable { name, actions } => {
+            Expr::LogicalAlterTable { name, actions } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for a in actions {
                     write!(f, " {}", a)?;
                 }
                 Ok(())
             }
-            Operator::LogicalDrop { object, name } => {
+            Expr::LogicalDrop { object, name } => {
                 write!(f, "{} {:?} {}", self.name(), object, name)
             }
-            Operator::LogicalRename { object, from, to } => {
+            Expr::LogicalRename { object, from, to } => {
                 write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
-            Operator::TableFreeScan => write!(f, "{}", self.name()),
-            Operator::IndexScan {
+            Expr::TableFreeScan => write!(f, "{}", self.name()),
+            Expr::IndexScan {
                 projects,
                 predicates,
                 table,
@@ -284,12 +285,12 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 )?;
                 Ok(())
             }
-            Operator::Filter(predicates, input) => {
+            Expr::Filter(predicates, input) => {
                 write!(f, "{} {}", self.name(), join_scalars(predicates))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::HashJoin {
+            Expr::HashJoin {
                 join,
                 equi_predicates,
                 left,
@@ -304,7 +305,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Operator::LookupJoin {
+            Expr::LookupJoin {
                 join,
                 projects,
                 table,
@@ -332,7 +333,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Aggregate {
+            Expr::Aggregate {
                 group_by,
                 aggregate,
                 input,
@@ -347,7 +348,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Limit {
+            Expr::Limit {
                 limit,
                 offset,
                 input,
@@ -356,10 +357,10 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Sort(order_by, input) => {
+            Expr::Sort(order_by, input) => {
                 write!(f, "{}", self.name())?;
                 for sort in order_by {
-                    if sort.desc {
+                    if sort.descending {
                         write!(f, " (Desc {})", sort.column)?;
                     } else {
                         write!(f, " {}", sort.column)?;
@@ -368,7 +369,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Insert(table, columns, input) => {
+            Expr::Insert(table, columns, input) => {
                 write!(
                     f,
                     "{} {} {}",
@@ -379,7 +380,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Values(columns, rows, input) => {
+            Expr::Values(columns, rows, input) => {
                 write!(f, "{} {}", self.name(), join_columns(columns))?;
                 for row in rows {
                     write!(f, " [{}]", join_scalars(row))?;
@@ -387,7 +388,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Update(updates, input) => {
+            Expr::Update(updates, input) => {
                 write!(f, "{}", self.name())?;
                 for (target, value) in updates {
                     match value {
@@ -398,13 +399,13 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::Delete(table, input) => {
+            Expr::Delete(table, input) => {
                 write!(f, "{} {}", self.name(), table)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Operator::CreateDatabase(name) => write!(f, "{} {}", self.name(), name),
-            Operator::CreateTable {
+            Expr::CreateDatabase(name) => write!(f, "{} {}", self.name(), name),
+            Expr::CreateTable {
                 name,
                 columns,
                 partition_by,
@@ -443,7 +444,7 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 }
                 Ok(())
             }
-            Operator::CreateIndex {
+            Expr::CreateIndex {
                 name,
                 table,
                 columns,
@@ -455,74 +456,75 @@ impl<T: IndentPrint> IndentPrint for Operator<T> {
                 table,
                 columns.join(" ")
             ),
-            Operator::AlterTable { name, actions } => {
+            Expr::AlterTable { name, actions } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for a in actions {
                     write!(f, " {}", a)?;
                 }
                 Ok(())
             }
-            Operator::Drop { object, name } => write!(f, "Drop {:?} {}", object, name),
-            Operator::Rename { object, from, to } => {
+            Expr::Drop { object, name } => write!(f, "Drop {:?} {}", object, name),
+            Expr::Rename { object, from, to } => {
                 write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
         }
     }
 }
 
-impl<T> Operator<T> {
+impl Expr {
     pub fn name(&self) -> String {
         match self {
-            Operator::LogicalSingleGet { .. } => "LogicalSingleGet".to_string(),
-            Operator::LogicalGet { .. } => "LogicalGet".to_string(),
-            Operator::LogicalFilter { .. } => "LogicalFilter".to_string(),
-            Operator::LogicalMap { .. } => "LogicalMap".to_string(),
-            Operator::LogicalJoin { .. } => "LogicalJoin".to_string(),
-            Operator::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
-            Operator::LogicalWith { .. } => "LogicalWith".to_string(),
-            Operator::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
-            Operator::LogicalAggregate { .. } => "LogicalAggregate".to_string(),
-            Operator::LogicalLimit { .. } => "LogicalLimit".to_string(),
-            Operator::LogicalSort { .. } => "LogicalSort".to_string(),
-            Operator::LogicalUnion { .. } => "LogicalUnion".to_string(),
-            Operator::LogicalIntersect { .. } => "LogicalIntersect".to_string(),
-            Operator::LogicalExcept { .. } => "LogicalExcept".to_string(),
-            Operator::LogicalInsert { .. } => "LogicalInsert".to_string(),
-            Operator::LogicalValues { .. } => "LogicalValues".to_string(),
-            Operator::LogicalUpdate { .. } => "LogicalUpdate".to_string(),
-            Operator::LogicalDelete { .. } => "LogicalDelete".to_string(),
-            Operator::LogicalCreateDatabase { .. } => "LogicalCreateDatabase".to_string(),
-            Operator::LogicalCreateTable { .. } => "LogicalCreateTable".to_string(),
-            Operator::LogicalCreateIndex { .. } => "LogicalCreateIndex".to_string(),
-            Operator::LogicalAlterTable { .. } => "LogicalAlterTable".to_string(),
-            Operator::LogicalDrop { .. } => "LogicalDrop".to_string(),
-            Operator::LogicalRename { .. } => "LogicalRename".to_string(),
-            Operator::TableFreeScan { .. } => "TableFreeScan".to_string(),
-            Operator::SeqScan { .. } => "SeqScan".to_string(),
-            Operator::IndexScan { .. } => "IndexScan".to_string(),
-            Operator::Filter { .. } => "Filter".to_string(),
-            Operator::Map { .. } => "Map".to_string(),
-            Operator::NestedLoop { .. } => "NestedLoop".to_string(),
-            Operator::HashJoin { .. } => "HashJoin".to_string(),
-            Operator::LookupJoin { .. } => "LookupJoin".to_string(),
-            Operator::CreateTempTable { .. } => "CreateTempTable".to_string(),
-            Operator::GetTempTable { .. } => "GetTempTable".to_string(),
-            Operator::Aggregate { .. } => "Aggregate".to_string(),
-            Operator::Limit { .. } => "Limit".to_string(),
-            Operator::Sort { .. } => "Sort".to_string(),
-            Operator::Union { .. } => "Union".to_string(),
-            Operator::Intersect { .. } => "Intersect".to_string(),
-            Operator::Except { .. } => "Except".to_string(),
-            Operator::Insert { .. } => "Insert".to_string(),
-            Operator::Values { .. } => "Values".to_string(),
-            Operator::Update { .. } => "Update".to_string(),
-            Operator::Delete { .. } => "Delete".to_string(),
-            Operator::CreateDatabase { .. } => "CreateDatabase".to_string(),
-            Operator::CreateTable { .. } => "CreateTable".to_string(),
-            Operator::CreateIndex { .. } => "CreateIndex".to_string(),
-            Operator::AlterTable { .. } => "AlterTable".to_string(),
-            Operator::Drop { .. } => "Drop".to_string(),
-            Operator::Rename { .. } => "Rename".to_string(),
+            Expr::Leaf(_) => "Leaf".to_string(),
+            Expr::LogicalSingleGet { .. } => "LogicalSingleGet".to_string(),
+            Expr::LogicalGet { .. } => "LogicalGet".to_string(),
+            Expr::LogicalFilter { .. } => "LogicalFilter".to_string(),
+            Expr::LogicalMap { .. } => "LogicalMap".to_string(),
+            Expr::LogicalJoin { .. } => "LogicalJoin".to_string(),
+            Expr::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
+            Expr::LogicalWith { .. } => "LogicalWith".to_string(),
+            Expr::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
+            Expr::LogicalAggregate { .. } => "LogicalAggregate".to_string(),
+            Expr::LogicalLimit { .. } => "LogicalLimit".to_string(),
+            Expr::LogicalSort { .. } => "LogicalSort".to_string(),
+            Expr::LogicalUnion { .. } => "LogicalUnion".to_string(),
+            Expr::LogicalIntersect { .. } => "LogicalIntersect".to_string(),
+            Expr::LogicalExcept { .. } => "LogicalExcept".to_string(),
+            Expr::LogicalInsert { .. } => "LogicalInsert".to_string(),
+            Expr::LogicalValues { .. } => "LogicalValues".to_string(),
+            Expr::LogicalUpdate { .. } => "LogicalUpdate".to_string(),
+            Expr::LogicalDelete { .. } => "LogicalDelete".to_string(),
+            Expr::LogicalCreateDatabase { .. } => "LogicalCreateDatabase".to_string(),
+            Expr::LogicalCreateTable { .. } => "LogicalCreateTable".to_string(),
+            Expr::LogicalCreateIndex { .. } => "LogicalCreateIndex".to_string(),
+            Expr::LogicalAlterTable { .. } => "LogicalAlterTable".to_string(),
+            Expr::LogicalDrop { .. } => "LogicalDrop".to_string(),
+            Expr::LogicalRename { .. } => "LogicalRename".to_string(),
+            Expr::TableFreeScan { .. } => "TableFreeScan".to_string(),
+            Expr::SeqScan { .. } => "SeqScan".to_string(),
+            Expr::IndexScan { .. } => "IndexScan".to_string(),
+            Expr::Filter { .. } => "Filter".to_string(),
+            Expr::Map { .. } => "Map".to_string(),
+            Expr::NestedLoop { .. } => "NestedLoop".to_string(),
+            Expr::HashJoin { .. } => "HashJoin".to_string(),
+            Expr::LookupJoin { .. } => "LookupJoin".to_string(),
+            Expr::CreateTempTable { .. } => "CreateTempTable".to_string(),
+            Expr::GetTempTable { .. } => "GetTempTable".to_string(),
+            Expr::Aggregate { .. } => "Aggregate".to_string(),
+            Expr::Limit { .. } => "Limit".to_string(),
+            Expr::Sort { .. } => "Sort".to_string(),
+            Expr::Union { .. } => "Union".to_string(),
+            Expr::Intersect { .. } => "Intersect".to_string(),
+            Expr::Except { .. } => "Except".to_string(),
+            Expr::Insert { .. } => "Insert".to_string(),
+            Expr::Values { .. } => "Values".to_string(),
+            Expr::Update { .. } => "Update".to_string(),
+            Expr::Delete { .. } => "Delete".to_string(),
+            Expr::CreateDatabase { .. } => "CreateDatabase".to_string(),
+            Expr::CreateTable { .. } => "CreateTable".to_string(),
+            Expr::CreateIndex { .. } => "CreateIndex".to_string(),
+            Expr::AlterTable { .. } => "AlterTable".to_string(),
+            Expr::Drop { .. } => "Drop".to_string(),
+            Expr::Rename { .. } => "Rename".to_string(),
         }
     }
 }

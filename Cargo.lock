@@ -146,6 +146,7 @@ dependencies = [
  "execute",
  "fixtures",
  "parser",
+ "planner",
  "storage",
  "zetasql",
 ]
