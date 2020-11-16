@@ -401,7 +401,7 @@ impl RewriteRule {
             RewriteRule::RemoveWith => {
                 if let LogicalWith(name, columns, left, right) = expr {
                     match count_get_with(name, right) {
-                        0 if !has_side_effects(left) => return Some(right.as_ref().clone()),
+                        0 if !left.has_side_effects() => return Some(right.as_ref().clone()),
                         1 => return Some(inline_with(name, columns, left, right.as_ref().clone())),
                         _ => (),
                     }
@@ -703,15 +703,17 @@ fn remove_inner_join_left(left: &Expr, right: &Expr) -> Option<Expr> {
 }
 
 fn count_get_with(name: &String, expr: &Expr) -> usize {
-    let mut count = 0;
-    for e in expr.iter() {
-        if let LogicalGetWith(get_name, _) = e {
+    match expr {
+        LogicalGetWith(get_name, _) => {
             if name == get_name {
-                count += 1
+                1
+            } else {
+                0
             }
         }
+        _ if expr.is_logical() => expr.iter().map(|expr| count_get_with(name, expr)).sum(),
+        _ => panic!("{} is not logical", expr),
     }
-    count
 }
 
 fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -> Expr {
@@ -729,10 +731,6 @@ fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -
         }
         expr => expr.map(|child| inline_with(name, columns, left, child)),
     }
-}
-
-fn has_side_effects(expr: &Expr) -> bool {
-    expr.iter().any(|e| e.has_side_effects())
 }
 
 fn maybe_filter(predicates: &Vec<Scalar>, input: &Expr) -> Expr {

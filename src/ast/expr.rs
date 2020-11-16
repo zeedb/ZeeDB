@@ -263,11 +263,8 @@ impl Expr {
             | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
             | Expr::LogicalRename { .. } => true,
-            _ if self.is_logical() => false,
-            _ => panic!(
-                "has_side_effecs is not implemented for physical operator {}",
-                self.name()
-            ),
+            _ if self.is_logical() => self.iter().any(|expr| expr.has_side_effects()),
+            _ => panic!("{} is not logical", self.name()),
         }
     }
 
@@ -614,7 +611,10 @@ impl Expr {
     }
 
     pub fn iter(&self) -> ExprIterator {
-        ExprIterator { stack: vec![self] }
+        ExprIterator {
+            parent: self,
+            offset: 0,
+        }
     }
 }
 
@@ -1621,80 +1621,17 @@ pub struct Distinct(bool);
 pub struct IgnoreNulls(bool);
 
 pub struct ExprIterator<'it> {
-    stack: Vec<&'it Expr>,
+    parent: &'it Expr,
+    offset: usize,
 }
 
 impl<'it> Iterator for ExprIterator<'it> {
     type Item = &'it Expr;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(next) = self.stack.pop() {
-            match next {
-                Expr::LogicalUnion(left, right)
-                | Expr::LogicalIntersect(left, right)
-                | Expr::LogicalExcept(left, right)
-                | Expr::Union(left, right)
-                | Expr::Intersect(left, right)
-                | Expr::Except(left, right)
-                | Expr::LogicalJoin { left, right, .. }
-                | Expr::LogicalDependentJoin {
-                    subquery: left,
-                    domain: right,
-                    ..
-                }
-                | Expr::LogicalWith(_, _, left, right)
-                | Expr::NestedLoop(_, left, right)
-                | Expr::HashJoin { left, right, .. }
-                | Expr::CreateTempTable(_, _, left, right) => {
-                    self.stack.push(left);
-                    self.stack.push(right);
-                }
-                Expr::LogicalFilter(_, input)
-                | Expr::LogicalMap { input, .. }
-                | Expr::LogicalAggregate { input, .. }
-                | Expr::LogicalLimit { input, .. }
-                | Expr::LogicalSort(_, input)
-                | Expr::LogicalInsert(_, _, input)
-                | Expr::LogicalValues(_, _, input)
-                | Expr::LogicalUpdate(_, input)
-                | Expr::LogicalDelete(_, input)
-                | Expr::LogicalCreateTable {
-                    input: Some(input), ..
-                }
-                | Expr::Filter(_, input)
-                | Expr::Map { input, .. }
-                | Expr::LookupJoin { input, .. }
-                | Expr::Aggregate { input, .. }
-                | Expr::Limit { input, .. }
-                | Expr::Sort(_, input)
-                | Expr::Insert(_, _, input)
-                | Expr::Update(_, input)
-                | Expr::Delete(_, input) => {
-                    self.stack.push(&*input);
-                }
-                Expr::Leaf(_)
-                | Expr::LogicalSingleGet { .. }
-                | Expr::LogicalGet { .. }
-                | Expr::LogicalGetWith { .. }
-                | Expr::LogicalCreateDatabase { .. }
-                | Expr::LogicalCreateTable { .. }
-                | Expr::LogicalCreateIndex { .. }
-                | Expr::LogicalAlterTable { .. }
-                | Expr::LogicalDrop { .. }
-                | Expr::LogicalRename { .. }
-                | Expr::TableFreeScan { .. }
-                | Expr::SeqScan { .. }
-                | Expr::IndexScan { .. }
-                | Expr::GetTempTable { .. }
-                | Expr::Values { .. }
-                | Expr::CreateDatabase { .. }
-                | Expr::CreateTable { .. }
-                | Expr::CreateIndex { .. }
-                | Expr::AlterTable { .. }
-                | Expr::Drop { .. }
-                | Expr::Rename { .. } => {}
-            }
-            Some(next)
+        if self.offset < self.parent.len() {
+            self.offset += 1;
+            Some(&self.parent[self.offset - 1])
         } else {
             None
         }
