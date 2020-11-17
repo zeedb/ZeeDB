@@ -22,10 +22,10 @@ pub fn bootstrap_metadata_arrow() -> Vec<Schema> {
     let catalog_id = Field::new("catalog_id", DataType::Int64, false);
     let table_id = Field::new("table_id", DataType::Int64, false);
     let column_id = Field::new("column_id", DataType::Int64, false);
-    let catalog_name = Field::new("catalog_name", DataType::Binary, false);
-    let table_name = Field::new("table_name", DataType::Binary, false);
-    let column_name = Field::new("column_name", DataType::Binary, false);
-    let column_type = Field::new("column_type", DataType::Binary, false);
+    let catalog_name = Field::new("catalog_name", DataType::Utf8, false);
+    let table_name = Field::new("table_name", DataType::Utf8, false);
+    let column_name = Field::new("column_name", DataType::Utf8, false);
+    let column_type = Field::new("column_type", DataType::Utf8, false);
     let catalog = Schema::new(vec![catalog_id.clone(), catalog_name.clone()]);
     let table = Schema::new(vec![
         catalog_id.clone(),

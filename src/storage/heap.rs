@@ -2,9 +2,8 @@ use crate::page::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use std::fmt::Display;
-use std::ops::Deref;
 use std::ops::{Bound, RangeBounds, RangeInclusive};
-use std::sync::{Arc, RwLock, RwLockReadGuard};
+use std::sync::{Arc, RwLock};
 
 // Heap represents a logical table as a list of pages.
 // New tuples are added to the end of the heap.
@@ -12,9 +11,7 @@ use std::sync::{Arc, RwLock, RwLockReadGuard};
 // During the GC process, the heap is partially sorted on the cluster-by key.
 // A good cluster-by key will cluster frequently-updated rows together.
 pub struct Heap {
-    // The clustering of the table is tracked by an immutable trie, which is under a mutable lock to permit re-organization.
-    // The leaves of the trie are usually a single page, but can be arbitrarily large when many tuples have the same cluster-by key.
-    pages: RwLock<Vec<Page>>,
+    pages: RwLock<Vec<Arc<Page>>>,
 }
 
 type Key = [u8; 8];
@@ -22,15 +19,21 @@ type Key = [u8; 8];
 impl Heap {
     pub fn empty(schema: Arc<Schema>) -> Self {
         Self {
-            pages: RwLock::new(vec![Page::empty(schema)]),
+            pages: RwLock::new(vec![Arc::new(Page::empty(schema))]),
         }
     }
 
-    pub fn range(&self, range: impl RangeBounds<Key>) -> Range {
-        Range {
-            lock: self.pages.read().unwrap(),
-            offset: 0,
-            range: range_inclusive(range).unwrap_or([u8::MAX; 8]..=[0; 8]),
+    pub fn scan(&self, range: impl RangeBounds<Key>) -> Vec<Arc<Page>> {
+        if let Some(range) = range_inclusive(range) {
+            self.pages
+                .read()
+                .unwrap()
+                .iter()
+                .filter(|page| overlaps(&range, &page.range()))
+                .map(|page| page.clone())
+                .collect()
+        } else {
+            vec![]
         }
     }
 
@@ -48,7 +51,7 @@ impl Heap {
             self.pages
                 .write()
                 .unwrap()
-                .push(Page::empty(records.schema().clone()));
+                .push(Arc::new(Page::empty(records.schema().clone())));
             self.insert(&slice(records, offset, records.num_rows() - offset), txn);
         }
     }
@@ -57,56 +60,13 @@ impl Heap {
 impl Display for Heap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut csv_bytes = vec![];
-        for page in self.range(..).iter() {
+        for page in self.scan(..).iter() {
             arrow::csv::Writer::new(&mut csv_bytes)
-                .write(&*page.select())
+                .write(&page.select())
                 .unwrap();
         }
         let csv = String::from_utf8(csv_bytes).unwrap();
         f.write_str(csv.as_str())
-    }
-}
-
-pub struct Range<'a> {
-    lock: RwLockReadGuard<'a, Vec<Page>>,
-    offset: usize,
-    range: RangeInclusive<Key>,
-}
-
-pub struct RangeIter<'a> {
-    lock: &'a RwLockReadGuard<'a, Vec<Page>>,
-    offset: usize,
-    range: &'a RangeInclusive<Key>,
-}
-
-impl<'a> Range<'a> {
-    pub fn iter(&'a self) -> RangeIter<'a> {
-        RangeIter {
-            lock: &self.lock,
-            offset: self.offset,
-            range: &self.range,
-        }
-    }
-}
-
-impl<'a> Iterator for RangeIter<'a> {
-    type Item = &'a Page;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if let Some(page) = self.lock.deref().get(self.offset) {
-                let (x1, x2) = (*self.range.start(), *self.range.end());
-                let (y1, y2) = page.range().into_inner();
-                if x1 <= y2 && y1 <= x2 {
-                    self.offset += 1;
-                    return Some(page);
-                } else {
-                    self.offset += 1;
-                }
-            } else {
-                return None;
-            }
-        }
     }
 }
 
@@ -143,6 +103,12 @@ fn range_inclusive(range: impl RangeBounds<Key>) -> Option<RangeInclusive<Key>> 
         Bound::Unbounded => [u8::MAX; 8],
     };
     Some(range_start..=range_end)
+}
+
+fn overlaps(xrange: &RangeInclusive<Key>, yrange: &RangeInclusive<Key>) -> bool {
+    let (x1, x2) = (*xrange.start(), *xrange.end());
+    let (y1, y2) = (*yrange.start(), *yrange.end());
+    x1 <= y2 && y1 <= x2
 }
 
 fn inc(key: Key) -> Option<Key> {

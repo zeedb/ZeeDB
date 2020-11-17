@@ -1070,6 +1070,10 @@ impl Column {
             data: data_type::from_proto(column.r#type.as_ref().unwrap()),
         }
     }
+
+    pub fn canonical_name(&self) -> String {
+        format!("{}#{}", self.name, self.id).to_string()
+    }
 }
 
 impl cmp::PartialOrd for Column {

@@ -1,5 +1,5 @@
 use crate::catalog::CatalogProvider;
-use execute::Execute;
+use execute::*;
 
 #[test]
 fn test_catalog() {
@@ -12,7 +12,7 @@ fn test_catalog() {
             catalog.catalog(&"".to_string(), &mut storage),
         )
         .unwrap();
-    expr.next(&mut storage).unwrap();
+    expr.start(&mut storage).unwrap().next().unwrap();
     let root = catalog.catalog(&"".to_string(), &mut storage);
     assert_eq!(format!("{:?}", root), "");
 }

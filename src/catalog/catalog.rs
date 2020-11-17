@@ -1,7 +1,7 @@
 use arrow::array::*;
 use arrow::record_batch::*;
 use ast::data_type;
-use execute::Execute;
+use execute::*;
 
 pub struct CatalogProvider {
     parser: parser::ParseProvider,
@@ -34,7 +34,7 @@ impl CatalogProvider {
             .parse(&q, 0, fixtures::bootstrap_metadata_catalog())
             .unwrap();
         let expr = planner::optimize(expr);
-        let results = expr.next(storage).unwrap();
+        let results = expr.start(storage).unwrap().next().unwrap();
         fn get_i64(results: &RecordBatch, column: usize, row: usize) -> i64 {
             results
                 .column(column)

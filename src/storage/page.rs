@@ -29,9 +29,15 @@ pub const PAGE_SIZE: usize = 1024;
 pub struct Page {
     schema: Arc<Schema>,
     columns: Vec<*mut u8>,
+    strings: Vec<Option<StringPage>>,
     xmin: *mut AtomicU64,
     xmax: *mut AtomicU64,
     stats: *mut u8,
+    buffer: *mut u8,
+    capacity: usize,
+}
+
+struct StringPage {
     buffer: *mut u8,
     capacity: usize,
 }
@@ -40,12 +46,7 @@ const OFFSET_NUM_ROWS: isize = 0;
 const OFFSET_MIN_CLUSTER_BY: isize = size_of::<usize>() as isize;
 const OFFSET_MAX_CLUSTER_BY: isize = OFFSET_MIN_CLUSTER_BY + size_of::<u64>() as isize;
 const STATS_LENGTH: usize = OFFSET_MAX_CLUSTER_BY as usize + size_of::<u64>();
-
-// Reference to a page that ensures it doesn't go out of memory.
-pub struct Reference<'a> {
-    value: RecordBatch,
-    _page: &'a Page,
-}
+const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
 
 impl Page {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
@@ -59,11 +60,7 @@ impl Page {
                 capacity = align(capacity + PAGE_SIZE / 8);
             }
             // Allocate space for the values in their pax representation.
-            if let DataType::Utf8 = field.data_type() {
-                capacity = align(capacity + pax_length(field.data_type(), PAGE_SIZE));
-            } else {
-                capacity = align(capacity + pax_length(field.data_type(), PAGE_SIZE));
-            }
+            capacity = align(capacity + pax_length(field.data_type(), PAGE_SIZE));
         }
         let xmin_offset = capacity;
         capacity = align(capacity + PAGE_SIZE * size_of::<u64>());
@@ -74,10 +71,15 @@ impl Page {
         // Allocate memory.
         let buffer = unsafe { alloc(Layout::from_size_align(capacity, 1).unwrap()) };
         Self {
-            schema,
+            schema: schema.clone(),
             columns: column_offsets
                 .iter()
                 .map(|offset| unsafe { buffer.offset(*offset as isize) })
+                .collect(),
+            strings: schema
+                .fields()
+                .iter()
+                .map(|field| StringPage::maybe_new(field.data_type()))
                 .collect(),
             xmin: unsafe { buffer.offset(xmin_offset as isize) as *mut AtomicU64 },
             xmax: unsafe { buffer.offset(xmax_offset as isize) as *mut AtomicU64 },
@@ -87,33 +89,43 @@ impl Page {
         }
     }
 
-    pub fn select(&self) -> Reference {
+    pub fn select(&self) -> RecordBatch {
         let num_rows = self.num_rows().load(Ordering::Relaxed);
         // View data columns as arrow format.
         let mut columns: Vec<Arc<dyn Array>> = (0..self.columns.len())
-            .map(|i| head(self.schema.field(i), self.columns[i], num_rows))
+            .map(|i| {
+                head(
+                    self.schema.field(i),
+                    self.columns[i],
+                    &self.strings[i],
+                    num_rows,
+                )
+            })
             .collect();
         // Add system columns.
         let xmin = xcolumn("$xmin");
-        columns.push(head(&xmin, self.xmin as *mut u8, num_rows));
+        columns.push(head(&xmin, self.xmin as *mut u8, &None, num_rows));
         let xmax = xcolumn("$xmax");
-        columns.push(head(&xmax, self.xmax as *mut u8, num_rows));
+        columns.push(head(&xmax, self.xmax as *mut u8, &None, num_rows));
         // Add system columns to schema.
         let mut fields = self.schema.fields().clone();
         fields.push(xmin);
         fields.push(xmax);
         // Wrap RecordBatch in a reference that ensures the underlying buffer doesn't get destroyed.
-        Reference {
-            value: RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap(),
-            _page: self,
-        }
+        RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
     }
 
     pub fn insert(&self, records: &RecordBatch, txn: u64) -> usize {
         let (start, end) = self.reserve(records.num_rows());
         // Write the new row in the reserved slot.
         for i in 0..records.num_columns() {
-            extend(self.columns[i], start, end, records.column(i).deref())
+            extend(
+                self.columns[i],
+                &self.strings[i],
+                start,
+                end,
+                records.column(i).deref(),
+            )
         }
         // Update the stats.
         let (min, max) = min_max(records.column(0).deref());
@@ -121,14 +133,14 @@ impl Page {
         self.max_cluster_by().fetch_max(max, Ordering::Relaxed);
         // Make the rows visible to subsequent transactions.
         unsafe {
-            for i in 0..records.num_rows() {
+            for i in start..end {
                 let xmin = &*self.xmin.offset(i as isize);
                 let xmax = &*self.xmax.offset(i as isize);
                 xmin.store(txn, Ordering::Relaxed);
                 xmax.store(u64::MAX, Ordering::Relaxed);
             }
         }
-        end
+        end - start
     }
 
     pub fn delete(&self, row: usize, txn: u64) -> bool {
@@ -192,10 +204,10 @@ impl Debug for Page {
 
 impl Display for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let record_batch = &*self.select();
+        let record_batch = self.select();
         let mut csv_bytes = vec![];
         arrow::csv::Writer::new(&mut csv_bytes)
-            .write(record_batch)
+            .write(&record_batch)
             .unwrap();
         let csv = String::from_utf8(csv_bytes).unwrap();
         f.write_str(csv.as_str())
@@ -213,11 +225,28 @@ impl Drop for Page {
     }
 }
 
-impl<'a> Deref for Reference<'a> {
-    type Target = RecordBatch;
+impl StringPage {
+    fn maybe_new(data: &DataType) -> Option<Self> {
+        match data {
+            DataType::Utf8 => Some(StringPage {
+                buffer: unsafe {
+                    alloc(Layout::from_size_align(INITIAL_STRING_CAPACITY, 1).unwrap())
+                },
+                capacity: INITIAL_STRING_CAPACITY,
+            }),
+            _ => None,
+        }
+    }
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.value
+impl Drop for StringPage {
+    fn drop(&mut self) {
+        unsafe {
+            dealloc(
+                self.buffer,
+                Layout::from_size_align(self.capacity, 1).unwrap(),
+            );
+        }
     }
 }
 
@@ -225,7 +254,12 @@ fn xcolumn(name: &str) -> Field {
     Field::new(name, DataType::UInt64, false)
 }
 
-fn head(field: &Field, column: *mut u8, num_rows: usize) -> Arc<dyn Array> {
+fn head(
+    field: &Field,
+    column: *mut u8,
+    strings: &Option<StringPage>,
+    num_rows: usize,
+) -> Arc<dyn Array> {
     let mut array = ArrayDataBuilder::new(field.data_type().clone()).len(num_rows);
     // If column is nullable, add a null buffer and offset the values buffer.
     let values_offset = if field.is_nullable() {
@@ -251,10 +285,22 @@ fn head(field: &Field, column: *mut u8, num_rows: usize) -> Arc<dyn Array> {
     };
     array = array.add_buffer(values_buffer);
     // If column is a string, add a string buffer.
-    if let DataType::Utf8 = field.data_type() {
-        todo!()
+    if let Some(strings) = strings {
+        let strings_buffer = unsafe {
+            Buffer::from_unowned(
+                strings.buffer,
+                strings_len(column, num_rows) as usize,
+                strings.capacity,
+            )
+        };
+        array = array.add_buffer(strings_buffer);
     }
     make_array(array.build())
+}
+
+fn strings_len(column: *mut u8, num_rows: usize) -> u32 {
+    let offsets = column as *mut u32;
+    unsafe { *offsets.offset(num_rows as isize) }
 }
 
 fn min_max(cluster_by: &dyn Array) -> (u64, u64) {
@@ -266,7 +312,7 @@ fn min_max(cluster_by: &dyn Array) -> (u64, u64) {
             min_max_primitive::<TimestampMicrosecondType>(cluster_by)
         }
         DataType::Date32(DateUnit::Day) => min_max_primitive::<Date32Type>(cluster_by),
-        DataType::Utf8 => todo!(),
+        DataType::Utf8 => panic!("STRING is not supported as a CLUSTER BY key"),
         other => panic!("{:?}", other),
     }
 }
@@ -290,7 +336,13 @@ where
     (u64::from_be_bytes(min), u64::from_be_bytes(max))
 }
 
-fn extend(column: *mut u8, start: usize, end: usize, values: &dyn Array) {
+fn extend(
+    column: *mut u8,
+    strings: &Option<StringPage>,
+    start: usize,
+    end: usize,
+    values: &dyn Array,
+) {
     match values.data_type() {
         DataType::Boolean => extend_boolean(column, start, end, values),
         DataType::Int64 => extend_primitive::<Int64Type>(column, start, end, values),
@@ -301,7 +353,7 @@ fn extend(column: *mut u8, start: usize, end: usize, values: &dyn Array) {
         DataType::Date32(DateUnit::Day) => {
             extend_primitive::<Date32Type>(column, start, end, values)
         }
-        DataType::Utf8 => todo!(),
+        DataType::Utf8 => extend_string(column, strings.as_ref().unwrap(), start, end, values),
         other => panic!("{:?}", other),
     }
 }
@@ -325,6 +377,41 @@ fn extend_boolean(dst: *mut u8, start: usize, end: usize, src: &dyn Array) {
     }
 }
 
+fn extend_string(
+    dst_offsets: *mut u8,
+    dst_data: &StringPage,
+    start: usize,
+    end: usize,
+    src: &dyn Array,
+) {
+    let dst_offsets = dst_offsets as *mut i32;
+    let src: &StringArray = src.as_any().downcast_ref::<StringArray>().unwrap();
+    let src_data = src.value_data().raw_data();
+    // Copy offsets.
+    for i in start..end {
+        unsafe {
+            *dst_offsets.offset((i + 1) as isize) =
+                *dst_offsets.offset(i as isize) + src.value_length(i - start);
+        }
+    }
+    // Start position in dst_data is given by the offset of the end of the last string, dst_offsets[start].
+    let dst_data_start = if start == 0 {
+        0
+    } else {
+        unsafe { *dst_offsets.offset(start as isize) }
+    };
+    // Length in dst_data is given by the total length of all strings in src.
+    let src_data_len = src.value_offset(src.len());
+    // Copy value bytes from src to dest.
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            src_data,
+            dst_data.buffer.offset(dst_data_start as isize),
+            src_data_len as usize,
+        );
+    }
+}
+
 fn align(offset: usize) -> usize {
     ((offset + arrow::memory::ALIGNMENT - 1) / arrow::memory::ALIGNMENT) * arrow::memory::ALIGNMENT
 }
@@ -339,8 +426,7 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
             TimestampMicrosecondType::get_bit_width() / 8 * num_rows
         }
         DataType::Date32(DateUnit::Day) => Date32Type::get_bit_width() / 8 * num_rows,
-        DataType::Utf8 => 4,   // offset width
-        DataType::Binary => 4, // offset width
+        DataType::Utf8 => 4 * (num_rows + 1), // offset width
         other => panic!("{:?}", other),
     }
 }

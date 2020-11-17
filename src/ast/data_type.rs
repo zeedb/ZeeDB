@@ -18,10 +18,6 @@ pub fn to_proto(data: &DataType) -> zetasql::TypeProto {
             type_kind: Some(8),
             ..Default::default()
         },
-        DataType::Binary => zetasql::TypeProto {
-            type_kind: Some(9),
-            ..Default::default()
-        },
         DataType::Date32(DateUnit::Day) => zetasql::TypeProto {
             type_kind: Some(10),
             ..Default::default()
@@ -46,7 +42,6 @@ pub fn from_proto(column_type: &zetasql::TypeProto) -> DataType {
         5 => DataType::Boolean,
         7 => DataType::Float64,
         8 => DataType::Utf8,
-        9 => DataType::Binary,
         10 => DataType::Date32(DateUnit::Day),
         19 => DataType::Timestamp(TimeUnit::Microsecond, None),
         16 => {
@@ -85,7 +80,6 @@ pub fn to_string(data: &DataType) -> String {
         DataType::Int64 => "INT64".to_string(),
         DataType::Float64 => "DOUBLE".to_string(),
         DataType::Utf8 => "STRING".to_string(),
-        DataType::Binary => "BYTES".to_string(),
         DataType::Date32(DateUnit::Day) => "DATE".to_string(),
         DataType::Timestamp(TimeUnit::Microsecond, None) => "TIMESTAMP".to_string(),
         DataType::FixedSizeBinary(16) => "NUMERIC".to_string(),
@@ -107,7 +101,6 @@ pub fn from_string(string: &str) -> DataType {
         "INT64" => DataType::Int64,
         "DOUBLE" => DataType::Float64,
         "STRING" => DataType::Utf8,
-        "BYTES" => DataType::Binary,
         "DATE" => DataType::Date32(DateUnit::Day),
         "TIMESTAMP" => DataType::Timestamp(TimeUnit::Microsecond, None),
         "NUMERIC" => DataType::FixedSizeBinary(16),

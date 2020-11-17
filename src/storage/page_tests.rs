@@ -37,6 +37,33 @@ fn test_fixed_types() {
 }
 
 #[test]
+fn test_var_types() {
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("int64", DataType::Int64, false),
+        Field::new("string", DataType::Utf8, false),
+    ]));
+    let pax = Page::empty(schema.clone());
+    let input = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(Int64Array::from(vec![Some(1i64), Some(2i64)])),
+            Arc::new(StringArray::from(vec![Some("foo"), Some("bar")])),
+        ],
+    )
+    .unwrap();
+    assert_eq!(2, pax.insert(&input, 1000));
+    assert_eq!(
+        "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n",
+        format!("{}", pax)
+    );
+    assert_eq!(2, pax.insert(&input, 2000));
+    assert_eq!(
+        "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n1,foo,2000,18446744073709551615\n2,bar,2000,18446744073709551615\n",
+        format!("{}", pax)
+    );
+}
+
+#[test]
 fn test_insert_delete() {
     let schema = Arc::new(Schema::new(vec![
         Field::new("a", DataType::Int64, false),
