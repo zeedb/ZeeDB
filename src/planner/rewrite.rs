@@ -73,16 +73,20 @@ impl RewriteRule {
                     if free_parameters(parameters, subquery).is_empty() {
                         return None;
                     }
-                    if let LogicalFilter(filter_predicates, subquery) = subquery.as_ref() {
-                        return Some(LogicalFilter(
-                            filter_predicates.clone(),
-                            Box::new(LogicalDependentJoin {
+                    if let LogicalFilter {
+                        predicates: filter_predicates,
+                        input: subquery,
+                    } = subquery.as_ref()
+                    {
+                        return Some(LogicalFilter {
+                            predicates: filter_predicates.clone(),
+                            input: Box::new(LogicalDependentJoin {
                                 parameters: parameters.clone(),
                                 predicates: join_predicates.clone(),
                                 subquery: subquery.clone(),
                                 domain: domain.clone(),
                             }),
-                        ));
+                        });
                     }
                 }
             }
@@ -209,7 +213,13 @@ impl RewriteRule {
                     if free_parameters(parameters, subquery).is_empty() {
                         return None;
                     }
-                    if let LogicalWith(name, columns, left_left, left_right) = subquery.as_ref() {
+                    if let LogicalWith {
+                        name,
+                        columns,
+                        left: left_left,
+                        right: left_right,
+                    } = subquery.as_ref()
+                    {
                         todo!()
                     }
                 }
@@ -280,7 +290,11 @@ impl RewriteRule {
                     if free_parameters(parameters, subquery).is_empty() {
                         return None;
                     }
-                    if let LogicalSort(order_by, subquery) = subquery.as_ref() {
+                    if let LogicalSort {
+                        order_by,
+                        input: subquery,
+                    } = subquery.as_ref()
+                    {
                         todo!()
                     }
                 }
@@ -297,15 +311,28 @@ impl RewriteRule {
                         return None;
                     }
                     match subquery.as_ref() {
-                        LogicalUnion(left_subquery, right_subquery) => todo!(),
-                        LogicalIntersect(left_subquery, right_subquery) => todo!(),
-                        LogicalExcept(left_subquery, right_subquery) => todo!(),
+                        LogicalUnion {
+                            left: left_subquery,
+                            right: right_subquery,
+                        } => todo!(),
+                        LogicalIntersect {
+                            left: left_subquery,
+                            right: right_subquery,
+                        } => todo!(),
+                        LogicalExcept {
+                            left: left_subquery,
+                            right: right_subquery,
+                        } => todo!(),
                         _ => {}
                     }
                 }
             }
             RewriteRule::MarkJoinToSemiJoin => {
-                if let LogicalFilter(filter_predicates, input) = expr {
+                if let LogicalFilter {
+                    predicates: filter_predicates,
+                    input,
+                } = expr
+                {
                     if let LogicalJoin {
                         join: Join::Mark(mark, join_predicates),
                         left,
@@ -399,7 +426,13 @@ impl RewriteRule {
                 }
             }
             RewriteRule::RemoveWith => {
-                if let LogicalWith(name, columns, left, right) = expr {
+                if let LogicalWith {
+                    name,
+                    columns,
+                    left,
+                    right,
+                } = expr
+                {
                     match count_get_with(name, right) {
                         0 if !left.has_side_effects() => return Some(right.as_ref().clone()),
                         1 => return Some(inline_with(name, columns, left, right.as_ref().clone())),
@@ -408,7 +441,11 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushExplicitFilterIntoInnerJoin => {
-                if let LogicalFilter(filter_predicates, input) = expr {
+                if let LogicalFilter {
+                    predicates: filter_predicates,
+                    input,
+                } = expr
+                {
                     if let LogicalJoin { join, left, right } = input.as_ref() {
                         if let Join::Inner(join_predicates) | Join::Semi(join_predicates) = join {
                             let mut combined = join_predicates.clone();
@@ -450,7 +487,10 @@ impl RewriteRule {
                         if !uncorrelated.is_empty() {
                             return Some(LogicalJoin {
                                 join: join.replace(correlated),
-                                left: Box::new(LogicalFilter(uncorrelated, left.clone())),
+                                left: Box::new(LogicalFilter {
+                                    predicates: uncorrelated,
+                                    input: left.clone(),
+                                }),
                                 right: right.clone(),
                             });
                         }
@@ -461,7 +501,10 @@ impl RewriteRule {
                             return Some(LogicalJoin {
                                 join: join.replace(correlated),
                                 left: left.clone(),
-                                right: Box::new(LogicalFilter(uncorrelated, right.clone())),
+                                right: Box::new(LogicalFilter {
+                                    predicates: uncorrelated,
+                                    input: right.clone(),
+                                }),
                             });
                         }
                     }
@@ -479,7 +522,10 @@ impl RewriteRule {
                         return Some(LogicalDependentJoin {
                             parameters: parameters.clone(),
                             predicates: correlated,
-                            subquery: Box::new(LogicalFilter(uncorrelated, subquery.clone())),
+                            subquery: Box::new(LogicalFilter {
+                                predicates: uncorrelated,
+                                input: subquery.clone(),
+                            }),
                             domain: domain.clone(),
                         });
                     }
@@ -490,13 +536,20 @@ impl RewriteRule {
                             parameters: parameters.clone(),
                             predicates: correlated,
                             subquery: subquery.clone(),
-                            domain: Box::new(LogicalFilter(uncorrelated, domain.clone())),
+                            domain: Box::new(LogicalFilter {
+                                predicates: uncorrelated,
+                                input: domain.clone(),
+                            }),
                         });
                     }
                 }
             }
             RewriteRule::PushExplicitFilterThroughOuterJoin => {
-                if let LogicalFilter(filter_predicates, input) = expr {
+                if let LogicalFilter {
+                    predicates: filter_predicates,
+                    input,
+                } = expr
+                {
                     if let LogicalJoin { join, left, right } = input.as_ref() {
                         let (correlated, uncorrelated) =
                             correlated_predicates(filter_predicates, right);
@@ -506,7 +559,10 @@ impl RewriteRule {
                                 &LogicalJoin {
                                     join: join.clone(),
                                     left: left.clone(),
-                                    right: Box::new(LogicalFilter(uncorrelated, right.clone())),
+                                    right: Box::new(LogicalFilter {
+                                        predicates: uncorrelated,
+                                        input: right.clone(),
+                                    }),
                                 },
                             ));
                         }
@@ -514,7 +570,7 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushFilterThroughMap => {
-                if let LogicalFilter(predicates, input) = expr {
+                if let LogicalFilter { predicates, input } = expr {
                     if let LogicalMap {
                         include_existing,
                         projects,
@@ -528,7 +584,10 @@ impl RewriteRule {
                                 &LogicalMap {
                                     include_existing: *include_existing,
                                     projects: projects.clone(),
-                                    input: Box::new(LogicalFilter(uncorrelated, input.clone())),
+                                    input: Box::new(LogicalFilter {
+                                        predicates: uncorrelated,
+                                        input: input.clone(),
+                                    }),
                                 },
                             ));
                         }
@@ -536,14 +595,26 @@ impl RewriteRule {
                 }
             }
             RewriteRule::CombineConsecutiveFilters => {
-                if let LogicalFilter(outer, input) = expr {
-                    if let LogicalFilter(inner, input) = input.as_ref() {
+                if let LogicalFilter {
+                    predicates: outer,
+                    input,
+                } = expr
+                {
+                    if let LogicalFilter {
+                        predicates: inner,
+                        input,
+                    } = input.as_ref()
+                    {
                         return combine_consecutive_filters(outer, inner, input);
                     }
                 }
             }
             RewriteRule::EmbedFilterIntoGet => {
-                if let LogicalFilter(filter_predicates, input) = expr {
+                if let LogicalFilter {
+                    predicates: filter_predicates,
+                    input,
+                } = expr
+                {
                     if let LogicalGet {
                         projects,
                         predicates,
@@ -704,7 +775,7 @@ fn remove_inner_join_left(left: &Expr, right: &Expr) -> Option<Expr> {
 
 fn count_get_with(name: &String, expr: &Expr) -> usize {
     match expr {
-        LogicalGetWith(get_name, _) => {
+        LogicalGetWith { name: get_name, .. } => {
             if name == get_name {
                 1
             } else {
@@ -718,7 +789,10 @@ fn count_get_with(name: &String, expr: &Expr) -> usize {
 
 fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -> Expr {
     match right {
-        LogicalGetWith(get_name, get_columns) if name == &get_name => {
+        LogicalGetWith {
+            name: get_name,
+            columns: get_columns,
+        } if name == &get_name => {
             let mut projects = vec![];
             for i in 0..columns.len() {
                 projects.push((Scalar::Column(columns[i].clone()), get_columns[i].clone()))
@@ -737,7 +811,10 @@ fn maybe_filter(predicates: &Vec<Scalar>, input: &Expr) -> Expr {
     if predicates.is_empty() {
         input.clone()
     } else {
-        LogicalFilter(predicates.clone(), Box::new(input.clone()))
+        LogicalFilter {
+            predicates: predicates.clone(),
+            input: Box::new(input.clone()),
+        }
     }
 }
 
@@ -753,7 +830,10 @@ fn combine_consecutive_filters(
     for p in inner {
         combined.push(p.clone());
     }
-    Some(LogicalFilter(combined, Box::new(input.clone())))
+    Some(LogicalFilter {
+        predicates: combined,
+        input: Box::new(input.clone()),
+    })
 }
 
 fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {

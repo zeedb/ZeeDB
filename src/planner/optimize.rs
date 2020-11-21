@@ -155,7 +155,9 @@ fn try_to_declare_winner(ss: &mut SearchSpace, mid: MultiExprID, physical_cost: 
 
 fn copy_in(ss: &mut SearchSpace, expr: Expr, gid: GroupID) -> Option<MultiExprID> {
     // Recursively copy in the children.
-    let expr = expr.map(|child| Leaf(copy_in_new(ss, child).0));
+    let expr = expr.map(|child| Leaf {
+        gid: copy_in_new(ss, child).0,
+    });
     // If this is the first time we observe expr as a member of gid, add it to the group.
     if let Some(mid) = ss.add_mexpr(MultiExpr::new(gid, expr)) {
         // Add expr to group.
@@ -170,14 +172,16 @@ fn copy_in(ss: &mut SearchSpace, expr: Expr, gid: GroupID) -> Option<MultiExprID
     }
 }
 fn copy_in_new(ss: &mut SearchSpace, expr: Expr) -> GroupID {
-    if let Leaf(gid) = expr {
+    if let Leaf { gid } = expr {
         GroupID(gid)
     } else if let Some(mid) = ss.find_dup(&expr) {
         ss[mid].parent
     } else {
         let gid = ss.reserve();
         // Recursively copy in the children.
-        let expr = expr.map(|child| Leaf(copy_in_new(ss, child).0));
+        let expr = expr.map(|child| Leaf {
+            gid: copy_in_new(ss, child).0,
+        });
         // Initialize a new MultiExpr.
         let mexpr = MultiExpr::new(gid, expr);
         let mid = ss.add_mexpr(mexpr).unwrap();
@@ -224,7 +228,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 *n = cardinality.min(*n);
             }
         }
-        LogicalFilter(predicates, input) => {
+        LogicalFilter { predicates, input } => {
             let scope = &ss[leaf(input)].props.column_unique_cardinality;
             let selectivity = total_selectivity(predicates, scope);
             cardinality = apply_selectivity(ss[leaf(input)].props.cardinality, selectivity);
@@ -301,11 +305,11 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 cardinality = apply_selectivity(cardinality, selectivity);
             }
         }
-        LogicalWith(_, _, _, right) => {
+        LogicalWith { right, .. } => {
             cardinality = ss[leaf(right)].props.cardinality;
             column_unique_cardinality = ss[leaf(right)].props.column_unique_cardinality.clone();
         }
-        LogicalGetWith(_, columns) => {
+        LogicalGetWith { columns, .. } => {
             cardinality = 1000; // TODO get from catalog somehow
             for c in columns {
                 column_unique_cardinality.insert(c.clone(), cardinality);
@@ -337,27 +341,27 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
                 }
             }
         }
-        LogicalSort(_, input) => {
+        LogicalSort { input, .. } => {
             cardinality = ss[leaf(input)].props.cardinality;
             column_unique_cardinality = ss[leaf(input)].props.column_unique_cardinality.clone();
         }
-        LogicalUnion(left, right) => {
+        LogicalUnion { left, right } => {
             cardinality = ss[leaf(left)].props.cardinality + ss[leaf(right)].props.cardinality;
             column_unique_cardinality = max_cuc(
                 &ss[leaf(left)].props.column_unique_cardinality,
                 &ss[leaf(right)].props.column_unique_cardinality,
             );
         }
-        LogicalIntersect(left, right) => todo!("intersect"),
-        LogicalExcept(left, _) => {
+        LogicalIntersect { left, right } => todo!("intersect"),
+        LogicalExcept { left, .. } => {
             cardinality = ss[leaf(left)].props.cardinality;
             column_unique_cardinality = ss[leaf(left)].props.column_unique_cardinality.clone();
         }
-        LogicalInsert(_, _, _)
-        | LogicalValues(_, _, _)
-        | LogicalUpdate(_, _)
-        | LogicalDelete(_, _)
-        | LogicalCreateDatabase(_)
+        LogicalInsert { .. }
+        | LogicalValues { .. }
+        | LogicalUpdate { .. }
+        | LogicalDelete { .. }
+        | LogicalCreateDatabase { .. }
         | LogicalCreateTable { .. }
         | LogicalCreateIndex { .. }
         | LogicalAlterTable { .. }

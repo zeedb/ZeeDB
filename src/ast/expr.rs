@@ -9,18 +9,23 @@ use std::ops;
 // Expr plan nodes combine inputs in a Plan tree.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Expr {
-    Leaf(usize),
+    Leaf {
+        gid: usize,
+    },
     // LogicalSingleGet acts as the input to a SELECT with no FROM clause.
     LogicalSingleGet,
-    // LogicalGet(table) implements the FROM clause.
+    // LogicalGet { table } implements the FROM clause.
     LogicalGet {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
         table: Table,
     },
-    // LogicalFilter(predicates) implements the WHERE/HAVING clauses.
-    LogicalFilter(Vec<Scalar>, Box<Expr>),
-    // LogicalMap(columns) implements the SELECT clause.
+    // LogicalFilter { predicates } implements the WHERE/HAVING clauses.
+    LogicalFilter {
+        predicates: Vec<Scalar>,
+        input: Box<Expr>,
+    },
+    // LogicalMap { columns } implements the SELECT clause.
     LogicalMap {
         include_existing: bool,
         projects: Vec<(Scalar, Column)>,
@@ -40,42 +45,78 @@ pub enum Expr {
         subquery: Box<Expr>,
         domain: Box<Expr>,
     },
-    // LogicalWith(table) implements with subquery as  _.
+    // LogicalWith { table } implements with subquery as  _.
     // The with-subquery is always on the left.
-    LogicalWith(String, Vec<Column>, Box<Expr>, Box<Expr>),
-    // LogicalGetWith(table) reads the subquery that was created by With.
-    LogicalGetWith(String, Vec<Column>),
-    // LogicalAggregate(group_by, aggregate) implements the GROUP BY clause.
+    LogicalWith {
+        name: String,
+        columns: Vec<Column>,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    // LogicalGetWith { table } reads the subquery that was created by With.
+    LogicalGetWith {
+        name: String,
+        columns: Vec<Column>,
+    },
+    // LogicalAggregate { group_by, aggregate } implements the GROUP BY clause.
     LogicalAggregate {
         group_by: Vec<Column>,
         aggregate: Vec<(AggregateFn, Column)>,
         input: Box<Expr>,
     },
-    // LogicalLimit(n) implements the LIMIT / OFFSET / TOP clause.
+    // LogicalLimit { n } implements the LIMIT / OFFSET / TOP clause.
     LogicalLimit {
         limit: usize,
         offset: usize,
         input: Box<Expr>,
     },
-    // LogicalSort(columns) implements the ORDER BY clause.
-    LogicalSort(Vec<OrderBy>, Box<Expr>),
+    // LogicalSort { columns } implements the ORDER BY clause.
+    LogicalSort {
+        order_by: Vec<OrderBy>,
+        input: Box<Expr>,
+    },
     // LogicalUnion implements SELECT _ UNION ALL SELECT _.
-    LogicalUnion(Box<Expr>, Box<Expr>),
+    LogicalUnion {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     // LogicalIntersect implements SELECT _ INTERSECT SELECT _.
-    LogicalIntersect(Box<Expr>, Box<Expr>),
+    LogicalIntersect {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     // LogicalExcept implements SELECT _ EXCEPT SELECT _.
-    LogicalExcept(Box<Expr>, Box<Expr>),
-    // LogicalInsert(table, columns) implements the INSERT operation.
-    LogicalInsert(Table, Vec<Column>, Box<Expr>),
-    // LogicalValues(rows, columns) implements VALUES expressions.
-    LogicalValues(Vec<Column>, Vec<Vec<Scalar>>, Box<Expr>),
-    // LogicalUpdate(sets) implements the UPDATE operation.
+    LogicalExcept {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    // LogicalInsert { table, columns } implements the INSERT operation.
+    LogicalInsert {
+        table: Table,
+        columns: Vec<Column>,
+        input: Box<Expr>,
+    },
+    // LogicalValues { rows, columns } implements VALUES expressions.
+    LogicalValues {
+        columns: Vec<Column>,
+        rows: Vec<Vec<Scalar>>,
+        input: Box<Expr>,
+    },
+    // LogicalUpdate { sets } implements the UPDATE operation.
     // (column, None) indicates set column to default value.
-    LogicalUpdate(Vec<(Column, Option<Column>)>, Box<Expr>),
-    // LogicalDelete(table) implements the DELETE operation.
-    LogicalDelete(Table, Box<Expr>),
-    // LogicalCreateDatabase(database) implements the CREATE DATABASE operation.
-    LogicalCreateDatabase(Name),
+    LogicalUpdate {
+        updates: Vec<(Column, Option<Column>)>,
+        input: Box<Expr>,
+    },
+    // LogicalDelete { table } implements the DELETE operation.
+    LogicalDelete {
+        table: Table,
+        input: Box<Expr>,
+    },
+    // LogicalCreateDatabase { database } implements the CREATE DATABASE operation.
+    LogicalCreateDatabase {
+        name: Name,
+    },
     // LogicalCreateTable implements the CREATE TABLE operation.
     LogicalCreateTable {
         name: Name,
@@ -119,13 +160,20 @@ pub enum Expr {
         index_predicates: Vec<(Column, Scalar)>,
         table: Table,
     },
-    Filter(Vec<Scalar>, Box<Expr>),
+    Filter {
+        predicates: Vec<Scalar>,
+        input: Box<Expr>,
+    },
     Map {
         include_existing: bool,
         projects: Vec<(Scalar, Column)>,
         input: Box<Expr>,
     },
-    NestedLoop(Join, Box<Expr>, Box<Expr>),
+    NestedLoop {
+        join: Join,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
     HashJoin {
         join: Join,
         equi_predicates: Vec<(Scalar, Scalar)>,
@@ -139,8 +187,16 @@ pub enum Expr {
         table: Table,
         input: Box<Expr>,
     },
-    CreateTempTable(String, Vec<Column>, Box<Expr>, Box<Expr>),
-    GetTempTable(String, Vec<Column>),
+    CreateTempTable {
+        name: String,
+        columns: Vec<Column>,
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    GetTempTable {
+        name: String,
+        columns: Vec<Column>,
+    },
     Aggregate {
         group_by: Vec<Column>,
         aggregate: Vec<(AggregateFn, Column)>,
@@ -151,15 +207,43 @@ pub enum Expr {
         offset: usize,
         input: Box<Expr>,
     },
-    Sort(Vec<OrderBy>, Box<Expr>),
-    Union(Box<Expr>, Box<Expr>),
-    Intersect(Box<Expr>, Box<Expr>),
-    Except(Box<Expr>, Box<Expr>),
-    Insert(Table, Vec<Column>, Box<Expr>),
-    Values(Vec<Column>, Vec<Vec<Scalar>>, Box<Expr>),
-    Update(Vec<(Column, Option<Column>)>, Box<Expr>),
-    Delete(Table, Box<Expr>),
-    CreateDatabase(Name),
+    Sort {
+        order_by: Vec<OrderBy>,
+        input: Box<Expr>,
+    },
+    Union {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Intersect {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Except {
+        left: Box<Expr>,
+        right: Box<Expr>,
+    },
+    Insert {
+        table: Table,
+        columns: Vec<Column>,
+        input: Box<Expr>,
+    },
+    Values {
+        columns: Vec<Column>,
+        rows: Vec<Vec<Scalar>>,
+        input: Box<Expr>,
+    },
+    Update {
+        updates: Vec<(Column, Option<Column>)>,
+        input: Box<Expr>,
+    },
+    Delete {
+        table: Table,
+        input: Box<Expr>,
+    },
+    CreateDatabase {
+        name: Name,
+    },
     CreateTable {
         name: Name,
         columns: Vec<(String, DataType)>,
@@ -193,29 +277,29 @@ impl Expr {
         match self {
             Expr::LogicalJoin { .. }
             | Expr::LogicalDependentJoin { .. }
-            | Expr::LogicalWith(_, _, _, _)
-            | Expr::LogicalUnion(_, _)
-            | Expr::LogicalIntersect(_, _)
-            | Expr::LogicalExcept(_, _)
-            | Expr::LogicalFilter(_, _)
+            | Expr::LogicalWith { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalIntersect { .. }
+            | Expr::LogicalExcept { .. }
+            | Expr::LogicalFilter { .. }
             | Expr::LogicalMap { .. }
             | Expr::LogicalAggregate { .. }
             | Expr::LogicalLimit { .. }
-            | Expr::LogicalSort(_, _)
-            | Expr::LogicalInsert(_, _, _)
-            | Expr::LogicalValues(_, _, _)
-            | Expr::LogicalUpdate(_, _)
-            | Expr::LogicalDelete(_, _)
+            | Expr::LogicalSort { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalValues { .. }
+            | Expr::LogicalUpdate { .. }
+            | Expr::LogicalDelete { .. }
             | Expr::LogicalSingleGet
             | Expr::LogicalGet { .. }
-            | Expr::LogicalGetWith(_, _)
-            | Expr::LogicalCreateDatabase(_)
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalCreateDatabase { .. }
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
             | Expr::LogicalRename { .. } => true,
-            Expr::Leaf(_)
+            Expr::Leaf { .. }
             | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
@@ -247,7 +331,7 @@ impl Expr {
 
     pub fn is_leaf(&self) -> bool {
         match self {
-            Expr::Leaf(_) => true,
+            Expr::Leaf { .. } => true,
             _ => false,
         }
     }
@@ -272,26 +356,28 @@ impl Expr {
         match self {
             Expr::LogicalJoin { .. }
             | Expr::LogicalDependentJoin { .. }
-            | Expr::LogicalWith(_, _, _, _)
-            | Expr::LogicalUnion(_, _)
-            | Expr::LogicalIntersect(_, _)
-            | Expr::LogicalExcept(_, _)
+            | Expr::LogicalWith { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalIntersect { .. }
+            | Expr::LogicalExcept { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::Union { .. }
             | Expr::Intersect { .. }
             | Expr::Except { .. } => 2,
-            Expr::LogicalFilter(_, _)
+            Expr::LogicalFilter { .. }
             | Expr::LogicalMap { .. }
             | Expr::LogicalAggregate { .. }
             | Expr::LogicalLimit { .. }
-            | Expr::LogicalSort(_, _)
-            | Expr::LogicalInsert(_, _, _)
-            | Expr::LogicalValues(_, _, _)
-            | Expr::LogicalUpdate(_, _)
-            | Expr::LogicalDelete(_, _)
-            | Expr::LogicalCreateTable { input: Some(_), .. }
+            | Expr::LogicalSort { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalValues { .. }
+            | Expr::LogicalUpdate { .. }
+            | Expr::LogicalDelete { .. }
+            | Expr::LogicalCreateTable {
+                input: Some { .. }, ..
+            }
             | Expr::Filter { .. }
             | Expr::Map { .. }
             | Expr::LookupJoin { .. }
@@ -302,12 +388,14 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Update { .. }
             | Expr::Delete { .. }
-            | Expr::CreateTable { input: Some(_), .. } => 1,
-            Expr::Leaf(_)
+            | Expr::CreateTable {
+                input: Some { .. }, ..
+            } => 1,
+            Expr::Leaf { .. }
             | Expr::LogicalSingleGet
             | Expr::LogicalGet { .. }
-            | Expr::LogicalGetWith(_, _)
-            | Expr::LogicalCreateDatabase(_)
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalCreateDatabase { .. }
             | Expr::LogicalCreateTable { input: None, .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalAlterTable { .. }
@@ -328,9 +416,9 @@ impl Expr {
 
     pub fn map(self, mut visitor: impl FnMut(Expr) -> Expr) -> Expr {
         match self {
-            Expr::LogicalFilter(predicates, input) => {
+            Expr::LogicalFilter { predicates, input } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalFilter(predicates, input)
+                Expr::LogicalFilter { predicates, input }
             }
             Expr::LogicalMap {
                 include_existing,
@@ -364,10 +452,20 @@ impl Expr {
                     domain,
                 }
             }
-            Expr::LogicalWith(name, columns, left, right) => {
+            Expr::LogicalWith {
+                name,
+                columns,
+                left,
+                right,
+            } => {
                 let left = Box::new(visitor(*left));
                 let right = Box::new(visitor(*right));
-                Expr::LogicalWith(name, columns, left, right)
+                Expr::LogicalWith {
+                    name,
+                    columns,
+                    left,
+                    right,
+                }
             }
             Expr::LogicalAggregate {
                 group_by,
@@ -393,40 +491,56 @@ impl Expr {
                     input,
                 }
             }
-            Expr::LogicalSort(sorts, input) => {
+            Expr::LogicalSort { order_by, input } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalSort(sorts, input)
+                Expr::LogicalSort { order_by, input }
             }
-            Expr::LogicalUnion(left, right) => {
+            Expr::LogicalUnion { left, right } => {
                 let left = Box::new(visitor(*left));
                 let right = Box::new(visitor(*right));
-                Expr::LogicalUnion(left, right)
+                Expr::LogicalUnion { left, right }
             }
-            Expr::LogicalIntersect(left, right) => {
+            Expr::LogicalIntersect { left, right } => {
                 let left = Box::new(visitor(*left));
                 let right = Box::new(visitor(*right));
-                Expr::LogicalIntersect(left, right)
+                Expr::LogicalIntersect { left, right }
             }
-            Expr::LogicalExcept(left, right) => {
+            Expr::LogicalExcept { left, right } => {
                 let left = Box::new(visitor(*left));
                 let right = Box::new(visitor(*right));
-                Expr::LogicalExcept(left, right)
+                Expr::LogicalExcept { left, right }
             }
-            Expr::LogicalInsert(table, columns, input) => {
+            Expr::LogicalInsert {
+                table,
+                columns,
+                input,
+            } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalInsert(table, columns, input)
+                Expr::LogicalInsert {
+                    table,
+                    columns,
+                    input,
+                }
             }
-            Expr::LogicalValues(columns, rows, input) => {
+            Expr::LogicalValues {
+                columns,
+                rows,
+                input,
+            } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalValues(columns, rows, input)
+                Expr::LogicalValues {
+                    columns,
+                    rows,
+                    input,
+                }
             }
-            Expr::LogicalUpdate(updates, input) => {
+            Expr::LogicalUpdate { updates, input } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalUpdate(updates, input)
+                Expr::LogicalUpdate { updates, input }
             }
-            Expr::LogicalDelete(table, input) => {
+            Expr::LogicalDelete { table, input } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalDelete(table, input)
+                Expr::LogicalDelete { table, input }
             }
             Expr::LogicalSingleGet => Expr::LogicalSingleGet,
             Expr::LogicalGet {
@@ -438,8 +552,8 @@ impl Expr {
                 predicates,
                 table,
             },
-            Expr::LogicalGetWith(name, columns) => Expr::LogicalGetWith(name, columns),
-            Expr::LogicalCreateDatabase(name) => Expr::LogicalCreateDatabase(name),
+            Expr::LogicalGetWith { name, columns } => Expr::LogicalGetWith { name, columns },
+            Expr::LogicalCreateDatabase { name } => Expr::LogicalCreateDatabase { name },
             Expr::LogicalCreateTable {
                 name,
                 columns,
@@ -488,7 +602,10 @@ impl Expr {
                 table,
                 index_predicates,
             },
-            Expr::Filter(predicates, input) => Expr::Filter(predicates, Box::new(visitor(*input))),
+            Expr::Filter { predicates, input } => Expr::Filter {
+                predicates,
+                input: Box::new(visitor(*input)),
+            },
             Expr::Map {
                 include_existing,
                 projects,
@@ -498,9 +615,11 @@ impl Expr {
                 projects,
                 input: Box::new(visitor(*input)),
             },
-            Expr::NestedLoop(join, left, right) => {
-                Expr::NestedLoop(join, Box::new(visitor(*left)), Box::new(visitor(*right)))
-            }
+            Expr::NestedLoop { join, left, right } => Expr::NestedLoop {
+                join,
+                left: Box::new(visitor(*left)),
+                right: Box::new(visitor(*right)),
+            },
             Expr::HashJoin {
                 join,
                 equi_predicates,
@@ -512,13 +631,18 @@ impl Expr {
                 left: Box::new(visitor(*left)),
                 right: Box::new(visitor(*right)),
             },
-            Expr::CreateTempTable(name, columns, left, right) => Expr::CreateTempTable(
+            Expr::CreateTempTable {
                 name,
                 columns,
-                Box::new(visitor(*left)),
-                Box::new(visitor(*right)),
-            ),
-            Expr::GetTempTable(name, columns) => Expr::GetTempTable(name, columns),
+                left,
+                right,
+            } => Expr::CreateTempTable {
+                name,
+                columns,
+                left: Box::new(visitor(*left)),
+                right: Box::new(visitor(*right)),
+            },
+            Expr::GetTempTable { name, columns } => Expr::GetTempTable { name, columns },
             Expr::LookupJoin {
                 join,
                 projects,
@@ -550,25 +674,49 @@ impl Expr {
                 offset,
                 input: Box::new(visitor(*input)),
             },
-            Expr::Sort(order_by, input) => Expr::Sort(order_by, Box::new(visitor(*input))),
-            Expr::Union(left, right) => {
-                Expr::Union(Box::new(visitor(*left)), Box::new(visitor(*right)))
-            }
-            Expr::Intersect(left, right) => {
-                Expr::Intersect(Box::new(visitor(*left)), Box::new(visitor(*right)))
-            }
-            Expr::Except(left, right) => {
-                Expr::Except(Box::new(visitor(*left)), Box::new(visitor(*right)))
-            }
-            Expr::Insert(table, columns, input) => {
-                Expr::Insert(table, columns, Box::new(visitor(*input)))
-            }
-            Expr::Values(columns, rows, input) => {
-                Expr::Values(columns, rows, Box::new(visitor(*input)))
-            }
-            Expr::Update(updates, input) => Expr::Update(updates, Box::new(visitor(*input))),
-            Expr::Delete(table, input) => Expr::Delete(table, Box::new(visitor(*input))),
-            Expr::CreateDatabase(name) => Expr::CreateDatabase(name),
+            Expr::Sort { order_by, input } => Expr::Sort {
+                order_by,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Union { left, right } => Expr::Union {
+                left: Box::new(visitor(*left)),
+                right: Box::new(visitor(*right)),
+            },
+            Expr::Intersect { left, right } => Expr::Intersect {
+                left: Box::new(visitor(*left)),
+                right: Box::new(visitor(*right)),
+            },
+            Expr::Except { left, right } => Expr::Except {
+                left: Box::new(visitor(*left)),
+                right: Box::new(visitor(*right)),
+            },
+            Expr::Insert {
+                table,
+                columns,
+                input,
+            } => Expr::Insert {
+                table,
+                columns,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Values {
+                columns,
+                rows,
+                input,
+            } => Expr::Values {
+                columns,
+                rows,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Update { updates, input } => Expr::Update {
+                updates,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Delete { table, input } => Expr::Delete {
+                table,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::CreateDatabase { name } => Expr::CreateDatabase { name },
             Expr::CreateTable {
                 name,
                 columns,
@@ -596,7 +744,7 @@ impl Expr {
             Expr::AlterTable { name, actions } => Expr::AlterTable { name, actions },
             Expr::Drop { object, name } => Expr::Drop { object, name },
             Expr::Rename { object, from, to } => Expr::Rename { object, from, to },
-            Expr::Leaf(id) => Expr::Leaf(id),
+            Expr::Leaf { gid } => Expr::Leaf { gid },
         }
     }
 
@@ -629,49 +777,49 @@ impl ops::Index<usize> for Expr {
                 domain: right,
                 ..
             }
-            | Expr::LogicalWith(_, _, left, right)
-            | Expr::LogicalUnion(left, right)
-            | Expr::LogicalIntersect(left, right)
-            | Expr::LogicalExcept(left, right)
-            | Expr::NestedLoop(_, left, right)
+            | Expr::LogicalWith { left, right, .. }
+            | Expr::LogicalUnion { left, right }
+            | Expr::LogicalIntersect { left, right }
+            | Expr::LogicalExcept { left, right }
+            | Expr::NestedLoop { left, right, .. }
             | Expr::HashJoin { left, right, .. }
-            | Expr::CreateTempTable(_, _, left, right)
-            | Expr::Union(left, right)
-            | Expr::Intersect(left, right)
-            | Expr::Except(left, right) => match index {
+            | Expr::CreateTempTable { left, right, .. }
+            | Expr::Union { left, right }
+            | Expr::Intersect { left, right }
+            | Expr::Except { left, right } => match index {
                 0 => left,
                 1 => right,
                 _ => panic!("{} is out of bounds [0,2)", index),
             },
-            Expr::LogicalFilter(_, input)
+            Expr::LogicalFilter { input, .. }
             | Expr::LogicalMap { input, .. }
             | Expr::LogicalAggregate { input, .. }
             | Expr::LogicalLimit { input, .. }
-            | Expr::LogicalSort(_, input)
-            | Expr::LogicalInsert(_, _, input)
-            | Expr::LogicalValues(_, _, input)
-            | Expr::LogicalUpdate(_, input)
-            | Expr::LogicalDelete(_, input)
+            | Expr::LogicalSort { input, .. }
+            | Expr::LogicalInsert { input, .. }
+            | Expr::LogicalValues { input, .. }
+            | Expr::LogicalUpdate { input, .. }
+            | Expr::LogicalDelete { input, .. }
             | Expr::LogicalCreateTable {
                 input: Some(input), ..
             }
-            | Expr::Filter(_, input)
+            | Expr::Filter { input, .. }
             | Expr::Map { input, .. }
             | Expr::LookupJoin { input, .. }
             | Expr::Aggregate { input, .. }
             | Expr::Limit { input, .. }
-            | Expr::Sort(_, input)
-            | Expr::Insert(_, _, input)
-            | Expr::Values(_, _, input)
-            | Expr::Update(_, input)
-            | Expr::Delete(_, input)
+            | Expr::Sort { input, .. }
+            | Expr::Insert { input, .. }
+            | Expr::Values { input, .. }
+            | Expr::Update { input, .. }
+            | Expr::Delete { input, .. }
             | Expr::CreateTable {
                 input: Some(input), ..
             } => match index {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },
-            Expr::Leaf(_)
+            Expr::Leaf { .. }
             | Expr::LogicalSingleGet { .. }
             | Expr::LogicalGet { .. }
             | Expr::LogicalGetWith { .. }
@@ -720,25 +868,25 @@ impl Scope for Expr {
                 }
                 set
             }
-            Expr::LogicalFilter(_, input)
-            | Expr::LogicalWith(_, _, _, input)
+            Expr::LogicalFilter { input, .. }
+            | Expr::LogicalWith { right: input, .. }
             | Expr::LogicalLimit { input, .. }
-            | Expr::LogicalSort(_, input)
-            | Expr::LogicalUnion(_, input)
-            | Expr::LogicalIntersect(_, input)
-            | Expr::LogicalExcept(_, input)
+            | Expr::LogicalSort { input, .. }
+            | Expr::LogicalUnion { right: input, .. }
+            | Expr::LogicalIntersect { right: input, .. }
+            | Expr::LogicalExcept { right: input, .. }
             | Expr::LogicalJoin {
-                join: Join::Semi(_),
+                join: Join::Semi { .. },
                 right: input,
                 ..
             }
             | Expr::LogicalJoin {
-                join: Join::Anti(_),
+                join: Join::Anti { .. },
                 right: input,
                 ..
             }
             | Expr::LogicalJoin {
-                join: Join::Single(_),
+                join: Join::Single { .. },
                 right: input,
                 ..
             } => input.attributes(),
@@ -752,19 +900,19 @@ impl Scope for Expr {
                 set
             }
             Expr::LogicalJoin {
-                join: Join::Inner(_),
+                join: Join::Inner { .. },
                 left,
                 right,
                 ..
             }
             | Expr::LogicalJoin {
-                join: Join::Right(_),
+                join: Join::Right { .. },
                 left,
                 right,
                 ..
             }
             | Expr::LogicalJoin {
-                join: Join::Outer(_),
+                join: Join::Outer { .. },
                 left,
                 right,
                 ..
@@ -778,7 +926,7 @@ impl Scope for Expr {
                 set.extend(right.attributes());
                 set
             }
-            Expr::LogicalGetWith(_, columns) | Expr::LogicalValues(columns, _, _) => {
+            Expr::LogicalGetWith { columns, .. } | Expr::LogicalValues { columns, .. } => {
                 columns.iter().map(|c| c.clone()).collect()
             }
             Expr::LogicalAggregate {
@@ -804,7 +952,7 @@ impl Scope for Expr {
     fn references(&self) -> HashSet<Column> {
         let mut set = HashSet::new();
         match self {
-            Expr::LogicalGet { predicates, .. } | Expr::LogicalFilter(predicates, _) => {
+            Expr::LogicalGet { predicates, .. } | Expr::LogicalFilter { predicates, .. } => {
                 for p in predicates {
                     set.extend(p.references());
                 }
@@ -824,7 +972,7 @@ impl Scope for Expr {
                     set.extend(p.references());
                 }
             }
-            Expr::LogicalWith(_, columns, _, _) | Expr::LogicalGetWith(_, columns) => {
+            Expr::LogicalWith { columns, .. } | Expr::LogicalGetWith { columns, .. } => {
                 set.extend(columns.clone());
             }
             Expr::LogicalAggregate {
@@ -837,12 +985,12 @@ impl Scope for Expr {
                     set.extend(f.references());
                 }
             }
-            Expr::LogicalSort(order_by, _) => {
+            Expr::LogicalSort { order_by, .. } => {
                 for o in order_by {
                     set.insert(o.column.clone());
                 }
             }
-            Expr::LogicalValues(columns, rows, _) => {
+            Expr::LogicalValues { columns, rows, .. } => {
                 set.extend(columns.clone());
                 for row in rows {
                     for x in row {
@@ -880,10 +1028,10 @@ impl Scope for Expr {
                 predicates: predicates.iter().map(subst_x).collect(),
                 table: table.clone(),
             },
-            Expr::LogicalFilter(predicates, input) => Expr::LogicalFilter(
-                predicates.iter().map(subst_x).collect(),
-                Box::new(input.subst(map)),
-            ),
+            Expr::LogicalFilter { predicates, input } => Expr::LogicalFilter {
+                predicates: predicates.iter().map(subst_x).collect(),
+                input: Box::new(input.subst(map)),
+            },
             Expr::LogicalMap {
                 include_existing,
                 projects,
@@ -912,15 +1060,21 @@ impl Scope for Expr {
                 subquery: Box::new(subquery.subst(map)),
                 domain: Box::new(domain.subst(map)),
             },
-            Expr::LogicalWith(name, columns, left, right) => Expr::LogicalWith(
-                name.clone(),
-                columns.iter().map(subst_c).collect(),
-                Box::new(left.subst(map)),
-                Box::new(right.subst(map)),
-            ),
-            Expr::LogicalGetWith(name, columns) => {
-                Expr::LogicalGetWith(name.clone(), columns.iter().map(subst_c).collect())
-            }
+            Expr::LogicalWith {
+                name,
+                columns,
+                left,
+                right,
+            } => Expr::LogicalWith {
+                name: name.clone(),
+                columns: columns.iter().map(subst_c).collect(),
+                left: Box::new(left.subst(map)),
+                right: Box::new(right.subst(map)),
+            },
+            Expr::LogicalGetWith { name, columns } => Expr::LogicalGetWith {
+                name: name.clone(),
+                columns: columns.iter().map(subst_c).collect(),
+            },
             Expr::LogicalAggregate {
                 group_by,
                 aggregate,
@@ -933,17 +1087,22 @@ impl Scope for Expr {
                     .collect(),
                 input: Box::new(input.subst(map)),
             },
-            Expr::LogicalSort(order_by, input) => Expr::LogicalSort(
-                order_by.iter().map(subst_o).collect(),
-                Box::new(input.subst(map)),
-            ),
-            Expr::LogicalValues(columns, rows, input) => Expr::LogicalValues(
-                columns.iter().map(subst_c).collect(),
-                rows.iter()
+            Expr::LogicalSort { order_by, input } => Expr::LogicalSort {
+                order_by: order_by.iter().map(subst_o).collect(),
+                input: Box::new(input.subst(map)),
+            },
+            Expr::LogicalValues {
+                columns,
+                rows,
+                input,
+            } => Expr::LogicalValues {
+                columns: columns.iter().map(subst_c).collect(),
+                rows: rows
+                    .iter()
                     .map(|row| row.iter().map(subst_x).collect())
                     .collect(),
-                Box::new(input.subst(map)),
-            ),
+                input: Box::new(input.subst(map)),
+            },
             any if any.is_logical() => any.map(|child| child.subst(map)),
             any => unimplemented!(
                 "subst is not implemented for physical operator {}",
@@ -992,12 +1151,12 @@ impl Join {
 
     pub fn replace(&self, predicates: Vec<Scalar>) -> Self {
         match self {
-            Join::Inner(_) => Join::Inner(predicates),
-            Join::Right(_) => Join::Right(predicates),
-            Join::Outer(_) => Join::Outer(predicates),
-            Join::Semi(_) => Join::Semi(predicates),
-            Join::Anti(_) => Join::Anti(predicates),
-            Join::Single(_) => Join::Single(predicates),
+            Join::Inner { .. } => Join::Inner(predicates),
+            Join::Right { .. } => Join::Right(predicates),
+            Join::Outer { .. } => Join::Outer(predicates),
+            Join::Semi { .. } => Join::Semi(predicates),
+            Join::Anti { .. } => Join::Anti(predicates),
+            Join::Single { .. } => Join::Single(predicates),
             Join::Mark(mark, _) => Join::Mark(mark.clone(), predicates),
         }
     }
@@ -1209,7 +1368,7 @@ impl Scalar {
 
     fn collect_references(&self, free: &mut HashSet<Column>) {
         match self {
-            Scalar::Literal(_, _) => {}
+            Scalar::Literal { .. } => {}
             Scalar::Column(column) => {
                 free.insert(column.clone());
             }

@@ -99,24 +99,24 @@ impl Rule {
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
-            | (Rule::LogicalFilterToFilter, LogicalFilter(_, _))
+            | (Rule::LogicalFilterToFilter, LogicalFilter { .. })
             | (Rule::LogicalMapToMap, LogicalMap { .. })
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
             | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
             | (Rule::LogicalJoinToLookupJoin, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
-            | (Rule::LogicalSortToSort, LogicalSort(_, _))
-            | (Rule::LogicallUnionToUnion, LogicalUnion(_, _))
-            | (Rule::LogicalIntersectToIntersect, LogicalIntersect(_, _))
-            | (Rule::LogicalExceptToExcept, LogicalExcept(_, _))
-            | (Rule::LogicalWithToCreateTempTable, LogicalWith(_, _, _, _))
-            | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith(_, _))
-            | (Rule::LogicalInsertToInsert, LogicalInsert(_, _, _))
-            | (Rule::LogicalValuesToValues, LogicalValues(_, _, _))
-            | (Rule::LogicalUpdateToUpdate, LogicalUpdate(_, _))
-            | (Rule::LogicalDeleteToDelete, LogicalDelete(_, _))
-            | (Rule::LogicalCreateDatabaseToCreateDatabase, LogicalCreateDatabase(_))
+            | (Rule::LogicalSortToSort, LogicalSort { .. })
+            | (Rule::LogicallUnionToUnion, LogicalUnion { .. })
+            | (Rule::LogicalIntersectToIntersect, LogicalIntersect { .. })
+            | (Rule::LogicalExceptToExcept, LogicalExcept { .. })
+            | (Rule::LogicalWithToCreateTempTable, LogicalWith { .. })
+            | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith { .. })
+            | (Rule::LogicalInsertToInsert, LogicalInsert { .. })
+            | (Rule::LogicalValuesToValues, LogicalValues { .. })
+            | (Rule::LogicalUpdateToUpdate, LogicalUpdate { .. })
+            | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
+            | (Rule::LogicalCreateDatabaseToCreateDatabase, LogicalCreateDatabase { .. })
             | (Rule::LogicalCreateTableToCreateTable, LogicalCreateTable { .. })
             | (Rule::LogicalCreateIndexToCreateIndex, LogicalCreateIndex { .. })
             | (Rule::LogicalAlterTableToAlterTable, LogicalAlterTable { .. })
@@ -144,7 +144,7 @@ impl Rule {
                     right,
                 } = &ss[mid].expr
                 {
-                    if let Leaf(left) = left.as_ref() {
+                    if let Leaf { gid: left } = left.as_ref() {
                         for left in &ss[GroupID(*left)].logical {
                             if let LogicalJoin {
                                 join: Join::Inner(left_predicates),
@@ -169,7 +169,7 @@ impl Rule {
             }
             Rule::LogicalJoinToLookupJoin => {
                 if let LogicalJoin { join, left, right } = &ss[mid].expr {
-                    if let Leaf(left) = left.as_ref() {
+                    if let Leaf { gid: left } = left.as_ref() {
                         for left in &ss[GroupID(*left)].logical {
                             if let LogicalGet {
                                 predicates,
@@ -237,7 +237,7 @@ impl Rule {
                     ..
                 } = bind
                 {
-                    if let Leaf(right) = right.as_ref() {
+                    if let Leaf { gid: right } = right.as_ref() {
                         if let LogicalJoin {
                             join: Join::Inner(left_predicates),
                             left: left_left,
@@ -245,7 +245,7 @@ impl Rule {
                             ..
                         } = *left
                         {
-                            if let (Leaf(left_left), Leaf(left_middle)) =
+                            if let (Leaf { gid: left_left }, Leaf { gid: left_middle }) =
                                 (left_left.as_ref(), left_middle.as_ref())
                             {
                                 let mut new_parent_predicates = vec![];
@@ -271,11 +271,11 @@ impl Rule {
                                 }
                                 return Some(LogicalJoin {
                                     join: Join::Inner(new_parent_predicates),
-                                    left: Box::new(Leaf(*left_left)),
+                                    left: Box::new(Leaf { gid: *left_left }),
                                     right: Box::new(LogicalJoin {
                                         join: Join::Inner(new_right_predicates),
-                                        left: Box::new(Leaf(*left_middle)),
-                                        right: Box::new(Leaf(*right)),
+                                        left: Box::new(Leaf { gid: *left_middle }),
+                                        right: Box::new(Leaf { gid: *right }),
                                     }),
                                 });
                             }
@@ -292,7 +292,7 @@ impl Rule {
                 } = bind
                 {
                     debug_assert!(!parameters.is_empty());
-                    if let Leaf(subquery) = subquery.as_ref() {
+                    if let Leaf { gid: subquery } = subquery.as_ref() {
                         // Check if predicates contains subquery.a = domain.b for every b in domain.
                         let subquery_scope =
                             &ss[GroupID(*subquery)].props.column_unique_cardinality;
@@ -335,17 +335,17 @@ impl Rule {
                             return Some(LogicalMap {
                                 include_existing: true,
                                 projects: project_domain,
-                                input: Box::new(Leaf(*subquery)),
+                                input: Box::new(Leaf { gid: *subquery }),
                             });
                         } else {
-                            return Some(LogicalFilter(
-                                filter_predicates,
-                                Box::new(LogicalMap {
+                            return Some(LogicalFilter {
+                                predicates: filter_predicates,
+                                input: Box::new(LogicalMap {
                                     include_existing: true,
                                     projects: project_domain,
-                                    input: Box::new(Leaf(*subquery)),
+                                    input: Box::new(Leaf { gid: *subquery }),
                                 }),
-                            ));
+                            });
                         }
                     }
                 }
@@ -408,8 +408,8 @@ impl Rule {
                 }
             }
             Rule::LogicalFilterToFilter => {
-                if let LogicalFilter(predicates, input) = bind {
-                    return Some(Filter(predicates, input));
+                if let LogicalFilter { predicates, input } = bind {
+                    return Some(Filter { predicates, input });
                 }
             }
             Rule::LogicalMapToMap => {
@@ -431,12 +431,14 @@ impl Rule {
                     join, left, right, ..
                 } = bind
                 {
-                    return Some(NestedLoop(join, left, right));
+                    return Some(NestedLoop { join, left, right });
                 }
             }
             Rule::LogicalJoinToHashJoin => {
                 if let LogicalJoin { join, left, right } = bind {
-                    if let (Leaf(left), Leaf(right)) = (left.as_ref(), right.as_ref()) {
+                    if let (Leaf { gid: left }, Leaf { gid: right }) =
+                        (left.as_ref(), right.as_ref())
+                    {
                         let (equi_predicates, remaining_predicates) = hash_join(
                             ss,
                             join.predicates().clone(),
@@ -448,8 +450,8 @@ impl Rule {
                             return Some(HashJoin {
                                 join,
                                 equi_predicates,
-                                left: Box::new(Leaf(*left)),
-                                right: Box::new(Leaf(*right)),
+                                left: Box::new(Leaf { gid: *left }),
+                                right: Box::new(Leaf { gid: *right }),
                             });
                         }
                     }
@@ -507,53 +509,82 @@ impl Rule {
                 }
             }
             Rule::LogicalSortToSort => {
-                if let LogicalSort(order_by, input) = bind {
-                    return Some(Sort(order_by, input));
+                if let LogicalSort { order_by, input } = bind {
+                    return Some(Sort { order_by, input });
                 }
             }
             Rule::LogicallUnionToUnion => {
-                if let LogicalUnion(outputs, inputs) = bind {
-                    return Some(Union(outputs, inputs));
+                if let LogicalUnion { left, right } = bind {
+                    return Some(Union { left, right });
                 }
             }
             Rule::LogicalIntersectToIntersect => {
-                if let LogicalIntersect(outputs, inputs) = bind {
-                    return Some(Intersect(outputs, inputs));
+                if let LogicalIntersect { left, right } = bind {
+                    return Some(Intersect { left, right });
                 }
             }
             Rule::LogicalExceptToExcept => {
-                if let LogicalExcept(outputs, inputs) = bind {
-                    return Some(Except(outputs, inputs));
+                if let LogicalExcept { left, right } = bind {
+                    return Some(Except { left, right });
                 }
             }
             Rule::LogicalWithToCreateTempTable => {
-                if let LogicalWith(name, columns, left, right) = bind {
-                    return Some(CreateTempTable(name, columns, left, right));
+                if let LogicalWith {
+                    name,
+                    columns,
+                    left,
+                    right,
+                } = bind
+                {
+                    return Some(CreateTempTable {
+                        name,
+                        columns,
+                        left,
+                        right,
+                    });
                 }
             }
             Rule::LogicalGetWithToGetTempTable => {
-                if let LogicalGetWith(name, columns) = bind {
-                    return Some(GetTempTable(name, columns));
+                if let LogicalGetWith { name, columns } = bind {
+                    return Some(GetTempTable { name, columns });
                 }
             }
             Rule::LogicalInsertToInsert => {
-                if let LogicalInsert(table, columns, input) = bind {
-                    return Some(Insert(table, columns, input));
+                if let LogicalInsert {
+                    table,
+                    columns,
+                    input,
+                } = bind
+                {
+                    return Some(Insert {
+                        table,
+                        columns,
+                        input,
+                    });
                 }
             }
             Rule::LogicalValuesToValues => {
-                if let LogicalValues(columns, rows, input) = bind {
-                    return Some(Values(columns, rows, input));
+                if let LogicalValues {
+                    columns,
+                    rows,
+                    input,
+                } = bind
+                {
+                    return Some(Values {
+                        columns,
+                        rows,
+                        input,
+                    });
                 }
             }
             Rule::LogicalUpdateToUpdate => {
-                if let LogicalUpdate(updates, input) = bind {
-                    return Some(Update(updates, input));
+                if let LogicalUpdate { updates, input } = bind {
+                    return Some(Update { updates, input });
                 }
             }
             Rule::LogicalDeleteToDelete => {
-                if let LogicalDelete(table, input) = bind {
-                    return Some(Delete(table, input));
+                if let LogicalDelete { table, input } = bind {
+                    return Some(Delete { table, input });
                 }
             }
             Rule::LogicalCreateDatabaseToCreateDatabase => {

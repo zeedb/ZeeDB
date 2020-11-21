@@ -165,7 +165,7 @@ impl ExecuteProvider for Expr {
                 index_predicates,
                 table,
             } => todo!(),
-            Filter(predicates, input) => Ok(Program::Filter {
+            Filter { predicates, input } => Ok(Program::Filter {
                 predicates,
                 input: Box::new(input.start(storage)?),
             }),
@@ -174,7 +174,7 @@ impl ExecuteProvider for Expr {
                 projects,
                 input,
             } => todo!(),
-            NestedLoop(_, _, _) => todo!(),
+            NestedLoop { .. } => todo!(),
             HashJoin {
                 join,
                 equi_predicates,
@@ -205,8 +205,8 @@ impl ExecuteProvider for Expr {
                 table,
                 input,
             } => todo!(),
-            CreateTempTable(_, _, _, _) => todo!(),
-            GetTempTable(_, _) => todo!(),
+            CreateTempTable { .. } => todo!(),
+            GetTempTable { .. } => todo!(),
             Aggregate {
                 group_by,
                 aggregate,
@@ -217,18 +217,18 @@ impl ExecuteProvider for Expr {
                 offset,
                 input,
             } => todo!(),
-            Sort(order_by, input) => Ok(Program::Sort {
+            Sort { order_by, input } => Ok(Program::Sort {
                 order_by,
                 input: Box::new(input.start(storage)?),
             }),
-            Union(_, _) => todo!(),
-            Intersect(_, _) => todo!(),
-            Except(_, _) => todo!(),
-            Insert(_, _, _) => todo!(),
-            Values(_, _, _) => todo!(),
-            Update(_, _) => todo!(),
-            Delete(_, _) => todo!(),
-            CreateDatabase(_) => todo!(),
+            Union { .. } => todo!(),
+            Intersect { .. } => todo!(),
+            Except { .. } => todo!(),
+            Insert { .. } => todo!(),
+            Values { .. } => todo!(),
+            Update { .. } => todo!(),
+            Delete { .. } => todo!(),
+            CreateDatabase { .. } => todo!(),
             CreateTable {
                 name,
                 columns,
@@ -245,26 +245,26 @@ impl ExecuteProvider for Expr {
             AlterTable { name, actions } => todo!(),
             Drop { object, name } => todo!(),
             Rename { object, from, to } => todo!(),
-            Leaf(_)
+            Leaf { .. }
             | LogicalSingleGet
             | LogicalGet { .. }
-            | LogicalFilter(_, _)
+            | LogicalFilter { .. }
             | LogicalMap { .. }
             | LogicalJoin { .. }
             | LogicalDependentJoin { .. }
-            | LogicalWith(_, _, _, _)
-            | LogicalGetWith(_, _)
+            | LogicalWith { .. }
+            | LogicalGetWith { .. }
             | LogicalAggregate { .. }
             | LogicalLimit { .. }
-            | LogicalSort(_, _)
-            | LogicalUnion(_, _)
-            | LogicalIntersect(_, _)
-            | LogicalExcept(_, _)
-            | LogicalInsert(_, _, _)
-            | LogicalValues(_, _, _)
-            | LogicalUpdate(_, _)
-            | LogicalDelete(_, _)
-            | LogicalCreateDatabase(_)
+            | LogicalSort { .. }
+            | LogicalUnion { .. }
+            | LogicalIntersect { .. }
+            | LogicalExcept { .. }
+            | LogicalInsert { .. }
+            | LogicalValues { .. }
+            | LogicalUpdate { .. }
+            | LogicalDelete { .. }
+            | LogicalCreateDatabase { .. }
             | LogicalCreateTable { .. }
             | LogicalCreateIndex { .. }
             | LogicalAlterTable { .. }

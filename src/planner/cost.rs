@@ -38,7 +38,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             index_cardinality * COST_READ_BLOCK
                 + count_predicates * index_cardinality * COST_CPU_PRED
         }
-        Filter(predicates, input) => {
+        Filter { predicates, input } => {
             let input = ss[leaf(input)].props.cardinality as f64;
             let columns = predicates.len() as f64;
             input * columns * COST_CPU_PRED
@@ -48,7 +48,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let count_exprs = projects.iter().filter(|(x, c)| !x.is_just(c)).count() as f64;
             count_exprs * output_cardinality * COST_CPU_EVAL
         }
-        NestedLoop(join, left, right) => {
+        NestedLoop { join, left, right } => {
             let build = ss[leaf(left)].props.cardinality as f64;
             let probe = ss[leaf(right)].props.cardinality as f64;
             let iterations = build * probe;
@@ -73,12 +73,12 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             index_cardinality * COST_READ_BLOCK
                 + count_predicates * index_cardinality * COST_CPU_PRED
         }
-        CreateTempTable(_, _, left, _) => {
+        CreateTempTable { left, .. } => {
             let output = ss[leaf(left)].props.cardinality as f64;
             let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
-        GetTempTable(_, _) => {
+        GetTempTable { .. } => {
             let output = ss[parent].props.cardinality as f64;
             let blocks = f64::max(1.0, output * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_READ_BLOCK
@@ -99,11 +99,11 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let log = 2.0 * card * f64::log2(card);
             log * COST_CPU_COMP_MOVE
         }
-        Union(_, _) | Intersect(_, _) | Except(_, _) => 0.0,
-        Values(_, _, _) => 0.0,
-        Insert(_, _, input)
-        | Update(_, input)
-        | Delete(_, input)
+        Union { .. } | Intersect { .. } | Except { .. } => 0.0,
+        Values { .. } => 0.0,
+        Insert { input, .. }
+        | Update { input, .. }
+        | Delete { input, .. }
         | CreateTable {
             input: Some(input), ..
         } => {

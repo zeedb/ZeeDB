@@ -216,7 +216,7 @@ impl fmt::Debug for MultiExpr {
 }
 
 pub(crate) fn leaf(expr: &Expr) -> GroupID {
-    if let Leaf(gid) = expr {
+    if let Leaf { gid } = expr {
         GroupID(*gid)
     } else {
         panic!("{} is not Leaf", expr.name())

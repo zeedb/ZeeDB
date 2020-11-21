@@ -22,7 +22,7 @@ impl IndentPrint for Expr {
             Ok(())
         };
         match self {
-            Expr::Leaf(id) => write!(f, "@{}", id),
+            Expr::Leaf { gid } => write!(f, "@{}", gid),
             Expr::LogicalSingleGet => write!(f, "{}", self.name()),
             Expr::LogicalGet {
                 projects,
@@ -44,7 +44,7 @@ impl IndentPrint for Expr {
                 write!(f, "{} {}", self.name(), table.name)?;
                 Ok(())
             }
-            Expr::LogicalFilter(predicates, input) => {
+            Expr::LogicalFilter { predicates, input } => {
                 write!(f, "{} {}", self.name(), join_scalars(predicates))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -93,22 +93,26 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 domain.indent_print(f, indent + 1)
             }
-            Expr::NestedLoop(join, left, right) => {
+            Expr::NestedLoop { join, left, right } => {
                 write!(f, "{} {}", self.name(), join)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Expr::LogicalWith(name, _, left, right)
-            | Expr::CreateTempTable(name, _, left, right) => {
+            Expr::LogicalWith {
+                name, left, right, ..
+            }
+            | Expr::CreateTempTable {
+                name, left, right, ..
+            } => {
                 write!(f, "{} {}", self.name(), name)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Expr::LogicalGetWith(name, _) | Expr::GetTempTable(name, _) => {
+            Expr::LogicalGetWith { name, .. } | Expr::GetTempTable { name, .. } => {
                 write!(f, "{} {}", self.name(), name)
             }
             Expr::LogicalAggregate {
@@ -135,7 +139,7 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalSort(order_by, input) => {
+            Expr::LogicalSort { order_by, input } => {
                 write!(f, "{}", self.name())?;
                 for sort in order_by {
                     if sort.descending {
@@ -147,12 +151,12 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalUnion(left, right)
-            | Expr::LogicalIntersect(left, right)
-            | Expr::LogicalExcept(left, right)
-            | Expr::Union(left, right)
-            | Expr::Intersect(left, right)
-            | Expr::Except(left, right) => {
+            Expr::LogicalUnion { left, right }
+            | Expr::LogicalIntersect { left, right }
+            | Expr::LogicalExcept { left, right }
+            | Expr::Union { left, right }
+            | Expr::Intersect { left, right }
+            | Expr::Except { left, right } => {
                 write!(f, "{}", self.name())?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
@@ -160,7 +164,11 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::LogicalInsert(table, columns, input) => {
+            Expr::LogicalInsert {
+                table,
+                columns,
+                input,
+            } => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 for c in columns {
                     write!(f, " {}", c)?;
@@ -168,7 +176,11 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalValues(columns, rows, input) => {
+            Expr::LogicalValues {
+                columns,
+                rows,
+                input,
+            } => {
                 write!(f, "{}", self.name())?;
                 for column in columns {
                     write!(f, " {}", column)?;
@@ -179,7 +191,7 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalUpdate(updates, input) => {
+            Expr::LogicalUpdate { updates, input } => {
                 write!(f, "{}", self.name())?;
                 for (target, value) in updates {
                     match value {
@@ -190,12 +202,12 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalDelete(table, input) => {
+            Expr::LogicalDelete { table, input } => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalCreateDatabase(name) => {
+            Expr::LogicalCreateDatabase { name } => {
                 write!(f, "{} {}", self.name(), name.path.join("."))
             }
             Expr::LogicalCreateTable {
@@ -285,7 +297,7 @@ impl IndentPrint for Expr {
                 )?;
                 Ok(())
             }
-            Expr::Filter(predicates, input) => {
+            Expr::Filter { predicates, input } => {
                 write!(f, "{} {}", self.name(), join_scalars(predicates))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -357,7 +369,7 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Sort(order_by, input) => {
+            Expr::Sort { order_by, input } => {
                 write!(f, "{}", self.name())?;
                 for sort in order_by {
                     if sort.descending {
@@ -369,7 +381,11 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Insert(table, columns, input) => {
+            Expr::Insert {
+                table,
+                columns,
+                input,
+            } => {
                 write!(
                     f,
                     "{} {} {}",
@@ -380,7 +396,11 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Values(columns, rows, input) => {
+            Expr::Values {
+                columns,
+                rows,
+                input,
+            } => {
                 write!(f, "{} {}", self.name(), join_columns(columns))?;
                 for row in rows {
                     write!(f, " [{}]", join_scalars(row))?;
@@ -388,7 +408,7 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Update(updates, input) => {
+            Expr::Update { updates, input } => {
                 write!(f, "{}", self.name())?;
                 for (target, value) in updates {
                     match value {
@@ -399,12 +419,12 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Delete(table, input) => {
+            Expr::Delete { table, input } => {
                 write!(f, "{} {}", self.name(), table)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::CreateDatabase(name) => write!(f, "{} {}", self.name(), name),
+            Expr::CreateDatabase { name } => write!(f, "{} {}", self.name(), name),
             Expr::CreateTable {
                 name,
                 columns,
@@ -474,7 +494,7 @@ impl IndentPrint for Expr {
 impl Expr {
     pub fn name(&self) -> String {
         match self {
-            Expr::Leaf(_) => "Leaf".to_string(),
+            Expr::Leaf { .. } => "Leaf".to_string(),
             Expr::LogicalSingleGet { .. } => "LogicalSingleGet".to_string(),
             Expr::LogicalGet { .. } => "LogicalGet".to_string(),
             Expr::LogicalFilter { .. } => "LogicalFilter".to_string(),
