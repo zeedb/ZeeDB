@@ -59,14 +59,10 @@ impl Heap {
 
 impl Display for Heap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut csv_bytes = vec![];
         for page in self.scan(..).iter() {
-            arrow::csv::Writer::new(&mut csv_bytes)
-                .write(&page.select())
-                .unwrap();
+            page.fmt(f)?;
         }
-        let csv = String::from_utf8(csv_bytes).unwrap();
-        f.write_str(csv.as_str())
+        Ok(())
     }
 }
 

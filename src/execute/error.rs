@@ -3,7 +3,6 @@ use arrow::error::ArrowError;
 #[derive(Debug)]
 pub enum Error {
     Arrow(ArrowError),
-    Finished,
 }
 
 impl From<ArrowError> for Error {

@@ -32,7 +32,7 @@ pub fn to_proto(data: &DataType) -> zetasql::TypeProto {
         },
         DataType::Struct(fields) => todo!(),
         DataType::List(element) => todo!(),
-        _ => todo!(),
+        other => panic!("{:?} not supported", other),
     }
 }
 

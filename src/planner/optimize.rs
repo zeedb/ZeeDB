@@ -60,9 +60,7 @@ fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool) {
 // If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
 fn apply_rule(ss: &mut SearchSpace, rule: Rule, mid: MultiExprID, explore: bool) {
     for expr in rule.bind(ss, mid) {
-        let before = expr.to_string();
         if let Some(expr) = rule.apply(ss, expr) {
-            let after = expr.to_string();
             // Add mexpr if it isn't already present in the group.
             if let Some(mid) = copy_in(ss, expr, ss[mid].parent) {
                 if !ss[mid].expr.is_logical() {

@@ -9,6 +9,8 @@ path = "lib.rs"
 
 [dependencies]
 arrow = "2.0.0"
+fnv = "1.0.3"
+num-traits = "0.2.14"
 ast = { path = "../ast" }
 fixtures = { path = "../fixtures" }
 parser = { path = "../parser" }

@@ -3,6 +3,7 @@ use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
+use ast::Column;
 use std::alloc::{alloc, dealloc, Layout};
 use std::fmt::{Debug, Display};
 use std::mem::size_of;
@@ -80,20 +81,34 @@ impl Page {
         }
     }
 
-    pub fn select(&self) -> RecordBatch {
+    pub fn select(&self, projects: &Vec<Column>) -> RecordBatch {
         let num_rows = self.num_rows().load(Ordering::Relaxed);
         // View data columns as arrow format.
-        let mut columns: Vec<Arc<dyn Array>> = (0..self.columns.len())
-            .map(|i| {
-                head(
-                    self.schema.field(i),
-                    self.columns[i],
-                    &self.columns_buffer,
-                    &self.string_buffers[i],
-                    num_rows,
-                )
-            })
-            .collect();
+        let mut columns = vec![];
+        let mut fields = vec![];
+        for column in projects {
+            let (i, field) = self
+                .schema
+                .fields()
+                .iter()
+                .enumerate()
+                .find(|(_, field)| field.name() == &column.name)
+                .unwrap();
+            let field = Field::new(
+                column.canonical_name().as_str(),
+                field.data_type().clone(),
+                field.is_nullable(),
+            );
+            let column = head(
+                &field,
+                self.columns[i],
+                &self.columns_buffer,
+                &self.string_buffers[i],
+                num_rows,
+            );
+            columns.push(column);
+            fields.push(field);
+        }
         // Add system columns.
         let xmin = xcolumn("$xmin");
         columns.push(head(
@@ -103,6 +118,7 @@ impl Page {
             &None,
             num_rows,
         ));
+        fields.push(xmin);
         let xmax = xcolumn("$xmax");
         columns.push(head(
             &xmax,
@@ -111,9 +127,6 @@ impl Page {
             &None,
             num_rows,
         ));
-        // Add system columns to schema.
-        let mut fields = self.schema.fields().clone();
-        fields.push(xmin);
         fields.push(xmax);
         // Wrap RecordBatch in a reference that ensures the underlying buffer doesn't get destroyed.
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
@@ -237,7 +250,7 @@ impl Debug for Page {
 
 impl Display for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let record_batch = self.select();
+        let record_batch = self.select(&all_columns(self.schema.as_ref()));
         let mut csv_bytes = vec![];
         arrow::csv::Writer::new(&mut csv_bytes)
             .write(&record_batch)
@@ -245,6 +258,20 @@ impl Display for Page {
         let csv = String::from_utf8(csv_bytes).unwrap();
         f.write_str(csv.as_str())
     }
+}
+
+fn all_columns(schema: &Schema) -> Vec<Column> {
+    schema
+        .fields()
+        .iter()
+        .map(|field| Column {
+            created: ast::Phase::Plan,
+            id: 0,
+            name: field.name().clone(),
+            table: None,
+            data: field.data_type().clone(),
+        })
+        .collect()
 }
 
 fn string_buffer(data: &DataType) -> Option<Buffer> {
@@ -286,11 +313,6 @@ fn head(
         array = array.add_buffer(string_buffer.clone());
     }
     make_array(array.build())
-}
-
-fn strings_len(column: *mut u8, num_rows: usize) -> u32 {
-    let offsets = column as *mut u32;
-    unsafe { *offsets.offset(num_rows as isize) }
 }
 
 fn min_max(cluster_by: &dyn Array) -> (u64, u64) {

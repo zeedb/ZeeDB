@@ -1,8 +1,7 @@
 use crate::error::*;
 use crate::eval::Eval;
+use crate::hash_table::HashTable;
 use arrow::array::*;
-use arrow::buffer::*;
-use arrow::compute::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
@@ -25,7 +24,6 @@ pub enum Program {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
         scan: Vec<Arc<Page>>,
-        offset: usize,
     },
     IndexScan {
         projects: Vec<Column>,
@@ -49,8 +47,9 @@ pub enum Program {
     },
     HashJoin {
         join: Join,
+        equi_left: Vec<Scalar>,
         equi_right: Vec<Scalar>,
-        left: RecordBatch,
+        left: HashTable,
         right: Box<Program>,
     },
     LookupJoin {
@@ -159,7 +158,6 @@ impl ExecuteProvider for Expr {
                 projects,
                 predicates,
                 scan: storage.table(table.id as usize).scan(..),
-                offset: 0,
             }),
             IndexScan {
                 projects,
@@ -189,11 +187,15 @@ impl ExecuteProvider for Expr {
                     equi_left.push(l);
                     equi_right.push(r);
                 }
+                let left = build(left.start(storage)?)?;
+                let left = HashTable::new(&equi_left, &left)?;
+                let right = Box::new(right.start(storage)?);
                 Ok(Program::HashJoin {
                     join,
+                    equi_left,
                     equi_right,
-                    left: hash_build(equi_left, left.start(storage)?)?,
-                    right: Box::new(right.start(storage)?),
+                    left,
+                    right,
                 })
             }
             LookupJoin {
@@ -272,59 +274,72 @@ impl ExecuteProvider for Expr {
     }
 }
 
-impl Execute for Program {
-    fn next(&mut self) -> Result<RecordBatch, Error> {
+impl Program {
+    fn schema(&self) -> Schema {
         match self {
-            Program::TableFreeScan => todo!(),
-            Program::SeqScan {
-                projects,
-                predicates,
-                scan,
-                offset,
-            } => {
-                if *offset == scan.len() {
-                    return Err(Error::Finished);
-                }
-                *offset += 1;
-                Ok(scan[*offset - 1].select())
-            }
-            Program::IndexScan {
-                projects,
-                predicates,
-                index_predicates,
-                table,
-            } => todo!(),
-            Program::Filter { predicates, input } => {
-                let input = input.next()?;
-                let mut mask = predicates[0].eval(&input)?;
-                for p in &predicates[1..] {
-                    let next = p.eval(&input)?;
-                    mask = Arc::new(and(
-                        mask.as_any().downcast_ref::<BooleanArray>().unwrap(),
-                        next.as_any().downcast_ref::<BooleanArray>().unwrap(),
-                    )?);
-                }
-                let mut columns = vec![];
-                for c in input.columns() {
-                    columns.push(filter(
-                        c.as_ref(),
-                        mask.as_any().downcast_ref::<BooleanArray>().unwrap(),
-                    )?)
-                }
-                Ok(RecordBatch::try_new(input.schema().clone(), columns).unwrap())
+            Program::TableFreeScan => Schema::new(vec![]),
+            Program::Filter { input, .. }
+            | Program::Limit { input, .. }
+            | Program::Sort { input, .. } => input.schema(),
+            Program::SeqScan { projects, .. } | Program::IndexScan { projects, .. } => {
+                let fields = projects
+                    .iter()
+                    .map(|column| {
+                        Field::new(column.canonical_name().as_str(), column.data.clone(), false)
+                        // TODO allow columns to be nullable
+                    })
+                    .collect();
+                Schema::new(fields)
             }
             Program::Map {
                 include_existing,
                 projects,
                 input,
-            } => todo!(),
-            Program::NestedLoop { join, left, right } => todo!(),
+            } => {
+                let mut fields = vec![];
+                if *include_existing {
+                    fields.extend_from_slice(input.schema().fields());
+                }
+                for (_, column) in projects {
+                    fields.push(Field::new(
+                        column.canonical_name().as_str(),
+                        column.data.clone(),
+                        false,
+                    ))
+                    // TODO allow columns to be nullable
+                }
+                Schema::new(fields)
+            }
+            Program::NestedLoop { join, left, right } => {
+                let mut fields = vec![];
+                fields.extend_from_slice(left.schema().fields());
+                fields.extend_from_slice(right.schema().fields());
+                if let Join::Mark(column, _) = join {
+                    fields.push(Field::new(
+                        column.canonical_name().as_str(),
+                        column.data.clone(),
+                        false,
+                    ))
+                    // TODO allow columns to be nullable
+                }
+                Schema::new(fields)
+            }
             Program::HashJoin {
-                join,
-                equi_right,
-                left,
-                right,
-            } => todo!(),
+                join, left, right, ..
+            } => {
+                let mut fields = vec![];
+                fields.extend_from_slice(left.schema().fields());
+                fields.extend_from_slice(right.schema().fields());
+                if let Join::Mark(column, _) = join {
+                    fields.push(Field::new(
+                        column.canonical_name().as_str(),
+                        column.data.clone(),
+                        false,
+                    ))
+                    // TODO allow columns to be nullable
+                }
+                Schema::new(fields)
+            }
             Program::LookupJoin {
                 join,
                 projects,
@@ -344,30 +359,6 @@ impl Execute for Program {
                 aggregate,
                 input,
             } => todo!(),
-            Program::Limit {
-                limit,
-                offset,
-                input,
-            } => todo!(),
-            Program::Sort { order_by, input } => {
-                let input = input.next()?;
-                let sort_options = |order_by: &OrderBy| SortOptions {
-                    descending: order_by.descending,
-                    nulls_first: order_by.nulls_first,
-                };
-                let sort_column = |order_by: &OrderBy| SortColumn {
-                    options: Some(sort_options(order_by)),
-                    values: find(&input, &order_by.column),
-                };
-                let order_by: Vec<SortColumn> = order_by.iter().map(sort_column).collect();
-                let indices = lexsort_to_indices(order_by.as_slice())?;
-                let columns: Vec<Arc<dyn Array>> = input
-                    .columns()
-                    .iter()
-                    .map(|column| take(column, &indices, None).unwrap())
-                    .collect();
-                Ok(RecordBatch::try_new(input.schema().clone(), columns).unwrap())
-            }
             Program::Union { left, right } => todo!(),
             Program::Intersect { left, right } => todo!(),
             Program::Except { left, right } => todo!(),
@@ -404,44 +395,225 @@ impl Execute for Program {
     }
 }
 
+impl Execute for Program {
+    fn next(&mut self) -> Result<RecordBatch, Error> {
+        match self {
+            Program::TableFreeScan => todo!(),
+            Program::SeqScan {
+                projects,
+                predicates,
+                scan,
+            } => {
+                if scan.is_empty() {
+                    return Ok(empty(self.schema()));
+                }
+                seq_scan(scan, projects, predicates)
+            }
+            Program::IndexScan {
+                projects,
+                predicates,
+                index_predicates,
+                table,
+            } => todo!(),
+            Program::Filter { predicates, input } => filter(input.next()?, predicates),
+            Program::Map {
+                include_existing,
+                projects,
+                input,
+            } => todo!(),
+            Program::NestedLoop { join, left, right } => todo!(),
+            Program::HashJoin {
+                join,
+                equi_left,
+                equi_right,
+                left,
+                right,
+            } => {
+                let right = right.next()?;
+                if right.num_rows() == 0 {
+                    return Ok(empty(self.schema()));
+                }
+                hash_join(left, equi_left, right, equi_right, join)
+            }
+            Program::LookupJoin {
+                join,
+                projects,
+                index_predicates,
+                table,
+                input,
+            } => todo!(),
+            Program::CreateTempTable {
+                name,
+                columns,
+                left,
+                right,
+            } => todo!(),
+            Program::GetTempTable { name, columns } => todo!(),
+            Program::Aggregate {
+                group_by,
+                aggregate,
+                input,
+            } => todo!(),
+            Program::Limit {
+                limit,
+                offset,
+                input,
+            } => todo!(),
+            Program::Sort { order_by, input } => sort(input.next()?, order_by),
+            Program::Union { left, right } => todo!(),
+            Program::Intersect { left, right } => todo!(),
+            Program::Except { left, right } => todo!(),
+            Program::Insert {
+                table,
+                columns,
+                input,
+            } => todo!(),
+            Program::Values {
+                columns,
+                rows,
+                input,
+            } => todo!(),
+            Program::Update { updates, input } => todo!(),
+            Program::Delete { table, input } => todo!(),
+            Program::CreateDatabase { name } => todo!(),
+            Program::CreateTable {
+                name,
+                columns,
+                partition_by,
+                cluster_by,
+                primary_key,
+                input,
+            } => todo!(),
+            Program::CreateIndex {
+                name,
+                table,
+                columns,
+            } => todo!(),
+            Program::AlterTable { name, actions } => todo!(),
+            Program::Drop { object, name } => todo!(),
+            Program::Rename { object, from, to } => todo!(),
+        }
+    }
+}
+
+fn seq_scan(
+    table: &mut Vec<Arc<Page>>,
+    projects: &Vec<Column>,
+    predicates: &Vec<Scalar>,
+) -> Result<RecordBatch, Error> {
+    Ok(table.pop().unwrap().select(projects))
+}
+
+fn filter(input: RecordBatch, predicates: &Vec<Scalar>) -> Result<RecordBatch, Error> {
+    let mut mask = predicates[0].eval(&input)?;
+    for p in &predicates[1..] {
+        let next = p.eval(&input)?;
+        mask = Arc::new(arrow::compute::and(
+            mask.as_any().downcast_ref::<BooleanArray>().unwrap(),
+            next.as_any().downcast_ref::<BooleanArray>().unwrap(),
+        )?);
+    }
+    let mut columns = vec![];
+    for c in input.columns() {
+        columns.push(arrow::compute::filter(
+            c.as_ref(),
+            mask.as_any().downcast_ref::<BooleanArray>().unwrap(),
+        )?)
+    }
+    Ok(RecordBatch::try_new(input.schema().clone(), columns).unwrap())
+}
+
+fn sort(input: RecordBatch, order_by: &Vec<OrderBy>) -> Result<RecordBatch, Error> {
+    let sort_options = |order_by: &OrderBy| arrow::compute::SortOptions {
+        descending: order_by.descending,
+        nulls_first: order_by.nulls_first,
+    };
+    let sort_column = |order_by: &OrderBy| arrow::compute::SortColumn {
+        options: Some(sort_options(order_by)),
+        values: find(&input, &order_by.column),
+    };
+    let order_by: Vec<arrow::compute::SortColumn> = order_by.iter().map(sort_column).collect();
+    let indices = arrow::compute::lexsort_to_indices(order_by.as_slice())?;
+    let columns: Vec<Arc<dyn Array>> = input
+        .columns()
+        .iter()
+        .map(|column| arrow::compute::take(column, &indices, None).unwrap())
+        .collect();
+    Ok(RecordBatch::try_new(input.schema().clone(), columns).unwrap())
+}
+
+fn hash_join(
+    left: &HashTable,
+    equi_left: &Vec<Scalar>,
+    right: RecordBatch,
+    equi_right: &Vec<Scalar>,
+    join: &Join,
+) -> Result<RecordBatch, Error> {
+    let buckets = left.hash(equi_right, &right)?;
+    for i in 0..right.num_rows() {
+        todo!()
+    }
+    todo!()
+}
+
+fn empty(schema: Schema) -> RecordBatch {
+    let columns = schema
+        .fields()
+        .iter()
+        .map(|column| match column.data_type() {
+            DataType::Boolean => empty_bool_array(),
+            DataType::Int64 => empty_primitive_array::<Int64Type>(),
+            DataType::UInt64 => empty_primitive_array::<UInt64Type>(),
+            DataType::Float64 => empty_primitive_array::<Float64Type>(),
+            DataType::Date32(DateUnit::Day) => empty_primitive_array::<Date32Type>(),
+            DataType::Timestamp(TimeUnit::Microsecond, None) => empty_timestamp_array(),
+            DataType::FixedSizeBinary(16) => todo!(),
+            DataType::Utf8 => empty_string_array(),
+            DataType::Struct(fields) => todo!(),
+            DataType::List(element) => todo!(),
+            other => panic!("{:?} not supported", other),
+        })
+        .collect();
+    RecordBatch::try_new(Arc::new(schema), columns).unwrap()
+}
+
+fn empty_bool_array() -> Arc<dyn Array> {
+    let array = BooleanArray::builder(0).finish();
+    Arc::new(array)
+}
+
+fn empty_primitive_array<T: ArrowNumericType>() -> Arc<dyn Array> {
+    let array = PrimitiveArray::<T>::builder(0).finish();
+    Arc::new(array)
+}
+
+fn empty_timestamp_array() -> Arc<dyn Array> {
+    let array = TimestampMicrosecondArray::builder(0).finish();
+    Arc::new(array)
+}
+
+fn empty_string_array() -> Arc<dyn Array> {
+    let array = StringBuilder::new(0).finish();
+    Arc::new(array)
+}
+
+fn build(mut input: Program) -> Result<Vec<RecordBatch>, Error> {
+    let mut acc = vec![];
+    loop {
+        let next = input.next()?;
+        let empty = next.num_rows() == 0;
+        acc.push(next);
+        if empty {
+            return Ok(acc);
+        }
+    }
+}
+
 fn find(input: &RecordBatch, column: &Column) -> Arc<dyn Array> {
     for i in 0..input.num_columns() {
         if input.schema().field(i).name() == &column.canonical_name() {
             return input.column(i).clone();
         }
     }
-    panic!()
-}
-
-fn hash_build(equi_left: Vec<Scalar>, mut input: Program) -> Result<RecordBatch, Error> {
-    loop {
-        let page = input.next()?;
-        let hash_left = hash(equi_left, &page)?;
-        let index = sort_to_indices(&hash_left, None)?;
-        todo!()
-    }
-}
-
-fn hash(equi_left: Vec<Scalar>, input: &RecordBatch) -> Result<Arc<dyn Array>, Error> {
-    let mut acc = MutableBuffer::new(input.num_rows() * std::mem::size_of::<u64>());
-    for scalar in equi_left {
-        let next = scalar.eval(input)?;
-        bit_xor(
-            &mut acc,
-            &next.as_any().downcast_ref::<UInt64Array>().unwrap(),
-        );
-    }
-    let data = ArrayDataBuilder::new(DataType::UInt64)
-        .add_buffer(acc.freeze())
-        .len(input.num_rows())
-        .build();
-    Ok(make_array(data))
-}
-
-fn bit_xor(acc: &mut MutableBuffer, next: &UInt64Array) {
-    let acc_raw = acc.raw_data_mut();
-    let next_raw = next.raw_values() as *const u8;
-    for i in 0..acc.len() {
-        unsafe { *acc_raw.offset(i as isize) ^= *next_raw.offset(i as isize) }
-    }
+    panic!("{} is not in {}", column.name, input.schema())
 }

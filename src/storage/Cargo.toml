@@ -9,4 +9,5 @@ path = "lib.rs"
 
 [dependencies]
 arrow = "2.0.0"
+ast = { path = "../ast" }
 fixtures = { path = "../fixtures" }
