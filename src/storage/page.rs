@@ -4,6 +4,7 @@ use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use ast::Column;
+use regex::Regex;
 use std::alloc::{alloc, dealloc, Layout};
 use std::fmt::{Debug, Display};
 use std::mem::size_of;
@@ -251,8 +252,25 @@ impl Debug for Page {
 impl Display for Page {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let record_batch = self.select(&all_columns(self.schema.as_ref()));
+        let trim = |field: &String| {
+            if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
+                captures.get(1).unwrap().as_str().to_string()
+            } else {
+                field.clone()
+            }
+        };
+        let header: Vec<String> = record_batch
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| trim(field.name()))
+            .collect();
         let mut csv_bytes = vec![];
-        arrow::csv::Writer::new(&mut csv_bytes)
+        csv_bytes.extend_from_slice(header.join(",").as_bytes());
+        csv_bytes.extend_from_slice("\n".as_bytes());
+        arrow::csv::WriterBuilder::new()
+            .has_headers(false)
+            .build(&mut csv_bytes)
             .write(&record_batch)
             .unwrap();
         let csv = String::from_utf8(csv_bytes).unwrap();
