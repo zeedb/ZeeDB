@@ -14,7 +14,6 @@ use zetasql::any_resolved_non_scalar_function_call_base_proto::Node::*;
 use zetasql::any_resolved_scan_proto::Node::*;
 use zetasql::any_resolved_statement_proto::Node::*;
 use zetasql::resolved_insert_stmt_enums::*;
-use zetasql::resolved_order_by_item_enums::NullOrderMode;
 use zetasql::value_proto::Value::*;
 use zetasql::*;
 
@@ -803,37 +802,25 @@ impl Converter {
     }
 
     fn function_call(&mut self, x: &AnyResolvedFunctionCallBaseProto, outer: &mut Expr) -> Scalar {
-        let (function, arguments, returns) = match x {
+        match x {
             AnyResolvedFunctionCallBaseProto {
                 node:
                     Some(ResolvedFunctionCallNode(ResolvedFunctionCallProto {
                         parent:
                             Some(ResolvedFunctionCallBaseProto {
-                                function:
-                                    Some(FunctionRefProto {
-                                        name: Some(function),
-                                    }),
+                                function: Some(function),
                                 argument_list,
-                                signature:
-                                    Some(FunctionSignatureProto {
-                                        return_type:
-                                            Some(FunctionArgumentTypeProto {
-                                                r#type: Some(returns),
-                                                ..
-                                            }),
-                                        ..
-                                    }),
+                                signature: Some(signature),
                                 ..
                             }),
                         ..
                     })),
-            } => (function, argument_list, returns),
+            } => {
+                let arguments = self.exprs(argument_list, outer);
+                Scalar::Call(Box::new(Function::from(function, signature, arguments)))
+            }
             other => panic!("{:?}", other),
-        };
-        let function = Function::from(function.clone());
-        let arguments = self.exprs(arguments, outer);
-        let returns = data_type::from_proto(returns);
-        Scalar::Call(function, arguments, returns)
+        }
     }
 
     fn cast(&mut self, x: &ResolvedCastProto, outer: &mut Expr) -> Scalar {
@@ -890,11 +877,7 @@ impl Converter {
                     other => panic!("{:?}", other),
                 };
                 let check = single_column(x.subquery.get());
-                let join_filter = vec![Scalar::Call(
-                    Function::Equal,
-                    vec![find, check],
-                    DataType::Boolean,
-                )];
+                let join_filter = vec![Scalar::Call(Box::new(Function::Equal(find, check)))];
                 let join = Join::Mark(mark.clone(), join_filter);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
@@ -1009,14 +992,10 @@ fn create_dependent_join(
     //    +         +
     let mut join_predicates: Vec<Scalar> = (0..subquery_parameters.len())
         .map(|i| {
-            Scalar::Call(
-                Function::Equal,
-                vec![
-                    Scalar::Column(subquery_parameters[i].clone()),
-                    Scalar::Column(rename_subquery_parameters[i].clone()),
-                ],
-                DataType::Boolean,
-            )
+            Scalar::Call(Box::new(Function::Equal(
+                Scalar::Column(subquery_parameters[i].clone()),
+                Scalar::Column(rename_subquery_parameters[i].clone()),
+            )))
         })
         .collect();
     let join = match join {

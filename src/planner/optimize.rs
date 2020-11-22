@@ -2,7 +2,8 @@ use crate::cost::*;
 use crate::rule::*;
 use crate::search_space::*;
 use ast::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::ops::Deref;
 
 // Our implementation of tasks differs from Columbia/Cascades:
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
@@ -171,6 +172,7 @@ fn copy_in(ss: &mut SearchSpace, expr: Expr, gid: GroupID) -> Option<MultiExprID
         None
     }
 }
+
 fn copy_in_new(ss: &mut SearchSpace, expr: Expr) -> GroupID {
     if let Leaf { gid } = expr {
         GroupID(gid)
@@ -423,23 +425,38 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
         Scalar::Literal(Value::Bool(false), _) => 0.0,
         Scalar::Literal(value, _) => panic!("{} is not bool", value),
         Scalar::Column(_) => 0.5,
-        Scalar::Call(Function::Equal, args, _) => {
-            let left = scalar_unique_cardinality(&args[0], scope) as f64;
-            let right = scalar_unique_cardinality(&args[1], scope) as f64;
-            1.0 / left.max(right).max(1.0)
-        }
-        Scalar::Call(Function::Or, args, _) => {
-            let left = predicate_selectivity(&args[0], scope);
-            let right = predicate_selectivity(&args[1], scope);
-            1.0 - (1.0 - left) * (1.0 - right)
-        }
-        Scalar::Call(Function::NotEqual, _, _)
-        | Scalar::Call(Function::Less, _, _)
-        | Scalar::Call(Function::LessOrEqual, _, _)
-        | Scalar::Call(Function::Greater, _, _)
-        | Scalar::Call(Function::GreaterOrEqual, _, _) => 1.0,
-        Scalar::Call(Function::Like, _, _) => 0.5,
-        Scalar::Call(_, _, _) => todo!("{}", predicate),
+        Scalar::Call(function) => match function.deref() {
+            Function::Not(argument) => 1.0 - predicate_selectivity(argument, scope),
+            Function::Equal(left, right) => {
+                let left = scalar_unique_cardinality(left, scope) as f64;
+                let right = scalar_unique_cardinality(right, scope) as f64;
+                1.0 / left.max(right).max(1.0)
+            }
+            Function::And(left, right) => {
+                let left = predicate_selectivity(left, scope);
+                let right = predicate_selectivity(right, scope);
+                left * right
+            }
+            Function::Or(left, right) => {
+                let left = predicate_selectivity(left, scope);
+                let right = predicate_selectivity(right, scope);
+                1.0 - (1.0 - left) * (1.0 - right)
+            }
+            Function::NotEqual(_, _)
+            | Function::Less(_, _)
+            | Function::LessOrEqual(_, _)
+            | Function::Greater(_, _)
+            | Function::GreaterOrEqual(_, _) => 1.0,
+            Function::Like(_, _) => 0.5,
+            Function::CurrentDate
+            | Function::CurrentTimestamp
+            | Function::Rand
+            | Function::UnaryMinus(_)
+            | Function::Add(_, _, _)
+            | Function::Divide(_, _, _)
+            | Function::Multiply(_, _, _)
+            | Function::Subtract(_, _, _) => panic!("{:?} is not a logical function", function),
+        },
         Scalar::Cast(_, _) => 0.5,
     }
 }
@@ -470,7 +487,7 @@ fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> u
         Scalar::Column(column) => *scope
             .get(column)
             .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),
-        Scalar::Call(_, _, _) => 1, // TODO
+        Scalar::Call(_) => 1, // TODO
         Scalar::Cast(value, _) => scalar_unique_cardinality(value, scope),
     }
 }

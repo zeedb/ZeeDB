@@ -1,8 +1,7 @@
 use crate::search_space::*;
-use arrow::datatypes::*;
 use ast::*;
 use std::collections::{HashMap, HashSet};
-use std::fmt;
+use std::ops::Deref;
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Rule {
@@ -297,18 +296,20 @@ impl Rule {
                         let subquery_scope =
                             &ss[GroupID(*subquery)].props.column_unique_cardinality;
                         let match_equals = |x: &Scalar| {
-                            if let Scalar::Call(Function::Equal, args, _) = x {
-                                if let Scalar::Column(left) = &args[0] {
-                                    if let Scalar::Column(right) = &args[1] {
-                                        if subquery_scope.contains_key(&left)
-                                            && parameters.contains(&right)
-                                        {
-                                            return Some((left.clone(), right.clone()));
-                                        } else if subquery_scope.contains_key(&right)
-                                            && parameters.contains(&left)
-                                        {
-                                            return Some((right.clone(), left.clone()));
-                                        }
+                            if let Scalar::Call(function) = x {
+                                if let Function::Equal(
+                                    Scalar::Column(left),
+                                    Scalar::Column(right),
+                                ) = function.deref()
+                                {
+                                    if subquery_scope.contains_key(&left)
+                                        && parameters.contains(&right)
+                                    {
+                                        return Some((left.clone(), right.clone()));
+                                    } else if subquery_scope.contains_key(&right)
+                                        && parameters.contains(&left)
+                                    {
+                                        return Some((right.clone(), left.clone()));
                                     }
                                 }
                             }
@@ -681,13 +682,13 @@ fn find_index_scan(predicates: &Vec<Scalar>, table: &Table) -> Option<usize> {
 }
 
 fn unpack_index_lookup(predicate: Scalar, table: &Table) -> Option<(Column, Scalar)> {
-    if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
-        match (arguments.pop().unwrap(), arguments.pop().unwrap()) {
-            (Scalar::Column(column), index_predicates)
-            | (index_predicates, Scalar::Column(column))
+    if let Scalar::Call(function) = predicate {
+        match *function {
+            Function::Equal(Scalar::Column(column), lookup)
+            | Function::Equal(lookup, Scalar::Column(column))
                 if column.name.ends_with("_id") && column.table.as_ref() == Some(&table.name) =>
             {
-                return Some((column, index_predicates))
+                return Some((column, lookup));
             }
             _ => {}
         }
@@ -704,23 +705,23 @@ fn hash_join(
     let mut equi_predicates = vec![];
     let mut remaining_predicates = vec![];
     for predicate in join_predicates.drain(0..) {
-        if let Scalar::Call(Function::Equal, mut arguments, _) = predicate {
-            let right_side = arguments.pop().unwrap();
-            let left_side = arguments.pop().unwrap();
-            if contains_all(&ss[left], left_side.references())
-                && contains_all(&ss[right], right_side.references())
-            {
-                equi_predicates.push((left_side, right_side))
-            } else if contains_all(&ss[right], left_side.references())
-                && contains_all(&ss[left], right_side.references())
-            {
-                equi_predicates.push((right_side, left_side))
+        if let Scalar::Call(function) = predicate {
+            if let Function::Equal(left_side, right_side) = *function {
+                if contains_all(&ss[left], left_side.references())
+                    && contains_all(&ss[right], right_side.references())
+                {
+                    equi_predicates.push((left_side, right_side));
+                } else if contains_all(&ss[right], left_side.references())
+                    && contains_all(&ss[left], right_side.references())
+                {
+                    equi_predicates.push((right_side, left_side));
+                } else {
+                    remaining_predicates.push(Scalar::Call(Box::new(Function::Equal(
+                        left_side, right_side,
+                    ))));
+                }
             } else {
-                remaining_predicates.push(Scalar::Call(
-                    Function::Equal,
-                    vec![left_side, right_side],
-                    DataType::Boolean,
-                ));
+                remaining_predicates.push(Scalar::Call(function));
             }
         } else {
             remaining_predicates.push(predicate);

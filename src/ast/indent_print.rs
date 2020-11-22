@@ -575,11 +575,16 @@ impl fmt::Display for Scalar {
         match self {
             Scalar::Literal(value, _) => write!(f, "{}", value),
             Scalar::Column(column) => write!(f, "{}", column),
-            Scalar::Call(function, arguments, _) => {
-                if arguments.is_empty() {
+            Scalar::Call(function) => {
+                if function.arguments().is_empty() {
                     write!(f, "({:?})", function)
                 } else {
-                    write!(f, "({:?} {})", function, join_scalars(arguments))
+                    let arguments: Vec<String> = function
+                        .arguments()
+                        .iter()
+                        .map(|argument| argument.to_string())
+                        .collect();
+                    write!(f, "({} {})", function.name(), arguments.join(" "))
                 }
             }
             Scalar::Cast(value, data) => {

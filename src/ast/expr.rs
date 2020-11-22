@@ -1346,7 +1346,7 @@ impl fmt::Display for Alter {
 pub enum Scalar {
     Literal(Value, DataType),
     Column(Column),
-    Call(Function, Vec<Scalar>, DataType),
+    Call(Box<Function>),
     Cast(Box<Scalar>, DataType),
 }
 
@@ -1355,7 +1355,7 @@ impl Scalar {
         match self {
             Scalar::Literal(_, data) => data.clone(),
             Scalar::Column(column) => column.data.clone(),
-            Scalar::Call(_, _, returns) => returns.clone(),
+            Scalar::Call(function) => function.returns().clone(),
             Scalar::Cast(_, data) => data.clone(),
         }
     }
@@ -1372,9 +1372,9 @@ impl Scalar {
             Scalar::Column(column) => {
                 free.insert(column.clone());
             }
-            Scalar::Call(_, arguments, _) => {
-                for a in arguments {
-                    a.collect_references(free);
+            Scalar::Call(function) => {
+                for scalar in function.arguments() {
+                    scalar.collect_references(free)
                 }
             }
             Scalar::Cast(scalar, _) => scalar.collect_references(free),
@@ -1384,24 +1384,16 @@ impl Scalar {
     pub fn subst(self, map: &HashMap<Column, Column>) -> Self {
         match self {
             Scalar::Column(c) if map.contains_key(&c) => Scalar::Column(map[&c].clone()),
-            Scalar::Call(f, args, t) => {
-                Scalar::Call(f, args.iter().map(|x| x.clone().subst(map)).collect(), t)
-            }
+            Scalar::Call(f) => Scalar::Call(Box::new(f.map(|scalar| scalar.subst(map)))),
             Scalar::Cast(x, t) => Scalar::Cast(Box::new(x.subst(map)), t),
             _ => self,
         }
     }
 
-    pub fn inline(&self, expr: &Scalar, column: &Column) -> Scalar {
+    pub fn inline(self, expr: &Scalar, column: &Column) -> Self {
         match self {
-            Scalar::Column(c) if c == column => expr.clone(),
-            Scalar::Call(f, arguments, returns) => {
-                let mut inline_arguments = Vec::with_capacity(arguments.len());
-                for a in arguments {
-                    inline_arguments.push(a.inline(expr, column));
-                }
-                Scalar::Call(f.clone(), inline_arguments, returns.clone())
-            }
+            Scalar::Column(c) if &c == column => expr.clone(),
+            Scalar::Call(f) => Scalar::Call(Box::new(f.map(|scalar| scalar.inline(expr, column)))),
             Scalar::Cast(uncast, data) => {
                 Scalar::Cast(Box::new(uncast.inline(expr, column)), data.clone())
             }
@@ -1420,239 +1412,268 @@ impl Scalar {
 // Functions appear in scalar expressions.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Function {
-    Abs,
-    Acos,
-    Acosh,
-    Add,
-    And,
-    Asin,
-    Asinh,
-    Atan,
-    Atan2,
-    Atanh,
-    Between,
-    BitCount,
-    BitwiseAnd,
-    BitwiseLeftShift,
-    BitwiseNot,
-    BitwiseOr,
-    BitwiseRightShift,
-    BitwiseXor,
-    ByteLength,
-    CaseNoValue,
-    CaseWithValue,
-    Ceil,
-    CharLength,
-    Coalesce,
-    Concat,
-    Cos,
-    Cosh,
     CurrentDate,
     CurrentTimestamp,
-    Date,
-    DateAdd,
-    DateDiff,
-    DateFromUnixDate,
-    DateSub,
-    DateTrunc,
-    Div,
-    Divide,
-    EndsWith,
-    Equal,
-    Exp,
-    Extract,
-    ExtractDate,
-    Floor,
-    FromBase64,
-    FromHex,
-    Greater,
-    GreaterOrEqual,
-    Greatest,
-    If,
-    Ifnull,
-    In,
-    IsInf,
-    IsNan,
-    IsNull,
-    Least,
-    Length,
-    Less,
-    LessOrEqual,
-    Like,
-    Ln,
-    Log,
-    Log10,
-    Lower,
-    Lpad,
-    Ltrim,
-    Mod,
-    Multiply,
-    Not,
-    NotEqual,
-    Or,
-    Pow,
     Rand,
-    RegexpContains,
-    RegexpExtract,
-    RegexpExtractAll,
-    RegexpReplace,
-    Repeat,
-    Replace,
-    Reverse,
-    Round,
-    Rpad,
-    Rtrim,
-    Sign,
-    Sin,
-    Sinh,
-    Split,
-    Sqrt,
-    StartsWith,
-    Strpos,
-    Substr,
-    Subtract,
-    Tan,
-    Tanh,
-    Timestamp,
-    TimestampAdd,
-    TimestampDiff,
-    TimestampFromUnixMicros,
-    TimestampFromUnixMillis,
-    TimestampFromUnixSeconds,
-    TimestampMicros,
-    TimestampMillis,
-    TimestampSeconds,
-    TimestampSub,
-    TimestampTrunc,
-    ToBase64,
-    ToHex,
-    Trim,
-    Trunc,
-    UnaryMinus,
-    UnixDate,
-    UnixMicrosFromTimestamp,
-    UnixMillisFromTimestamp,
-    UnixSecondsFromTimestamp,
-    Upper,
+    // Unary logical functions.
+    Not(Scalar),
+    // Unary mathematical functions.
+    UnaryMinus(Scalar),
+    // Binary logical functions.
+    And(Scalar, Scalar),
+    Equal(Scalar, Scalar),
+    Greater(Scalar, Scalar),
+    GreaterOrEqual(Scalar, Scalar),
+    Less(Scalar, Scalar),
+    LessOrEqual(Scalar, Scalar),
+    Like(Scalar, Scalar),
+    NotEqual(Scalar, Scalar),
+    Or(Scalar, Scalar),
+    // Binary mathematical functions.
+    Add(Scalar, Scalar, DataType),
+    Divide(Scalar, Scalar, DataType),
+    Multiply(Scalar, Scalar, DataType),
+    Subtract(Scalar, Scalar, DataType),
 }
 
 impl Function {
-    pub fn from(name: String) -> Self {
-        match name.as_str() {
-            "ZetaSQL:abs" => Function::Abs,
-            "ZetaSQL:acos" => Function::Acos,
-            "ZetaSQL:acosh" => Function::Acosh,
-            "ZetaSQL:$add" => Function::Add,
-            "ZetaSQL:$and" => Function::And,
-            "ZetaSQL:asin" => Function::Asin,
-            "ZetaSQL:asinh" => Function::Asinh,
-            "ZetaSQL:atan" => Function::Atan,
-            "ZetaSQL:atan2" => Function::Atan2,
-            "ZetaSQL:atanh" => Function::Atanh,
-            "ZetaSQL:$between" => Function::Between,
-            "ZetaSQL:$bitwise_and" => Function::BitwiseAnd,
-            "ZetaSQL:$bitwise_left_shift" => Function::BitwiseLeftShift,
-            "ZetaSQL:$bitwise_not" => Function::BitwiseNot,
-            "ZetaSQL:$bitwise_or" => Function::BitwiseOr,
-            "ZetaSQL:$bitwise_right_shift" => Function::BitwiseRightShift,
-            "ZetaSQL:$bitwise_xor" => Function::BitwiseXor,
-            "ZetaSQL:byte_length" => Function::ByteLength,
-            "ZetaSQL:$case_no_value" => Function::CaseNoValue,
-            "ZetaSQL:$case_with_value" => Function::CaseWithValue,
-            "ZetaSQL:ceil" => Function::Ceil,
-            "ZetaSQL:char_length" => Function::CharLength,
-            "ZetaSQL:coalesce" => Function::Coalesce,
-            "ZetaSQL:concat" => Function::Concat,
-            "ZetaSQL:cos" => Function::Cos,
-            "ZetaSQL:cosh" => Function::Cosh,
-            "ZetaSQL:current_date" => Function::CurrentDate,
-            "ZetaSQL:current_timestamp" => Function::CurrentTimestamp,
-            "ZetaSQL:date" => Function::Date,
-            "ZetaSQL:date_add" => Function::DateAdd,
-            "ZetaSQL:date_diff" => Function::DateDiff,
-            "ZetaSQL:date_from_unix_date" => Function::DateFromUnixDate,
-            "ZetaSQL:date_sub" => Function::DateSub,
-            "ZetaSQL:date_trunc" => Function::DateTrunc,
-            "ZetaSQL:div" => Function::Div,
-            "ZetaSQL:$divide" => Function::Divide,
-            "ZetaSQL:ends_with" => Function::EndsWith,
-            "ZetaSQL:$equal" => Function::Equal,
-            "ZetaSQL:exp" => Function::Exp,
-            "ZetaSQL:$extract" => Function::Extract,
-            "ZetaSQL:$extract_date" => Function::ExtractDate,
-            "ZetaSQL:floor" => Function::Floor,
-            "ZetaSQL:from_base64" => Function::FromBase64,
-            "ZetaSQL:from_hex" => Function::FromHex,
-            "ZetaSQL:$greater" => Function::Greater,
-            "ZetaSQL:$greater_or_equal" => Function::GreaterOrEqual,
-            "ZetaSQL:greatest" => Function::Greatest,
-            "ZetaSQL:if" => Function::If,
-            "ZetaSQL:ifnull" => Function::Ifnull,
-            "ZetaSQL:$in" => Function::In,
-            "ZetaSQL:is_inf" => Function::IsInf,
-            "ZetaSQL:is_nan" => Function::IsNan,
-            "ZetaSQL:$is_null" => Function::IsNull,
-            "ZetaSQL:least" => Function::Least,
-            "ZetaSQL:length" => Function::Length,
-            "ZetaSQL:$less" => Function::Less,
-            "ZetaSQL:$less_or_equal" => Function::LessOrEqual,
-            "ZetaSQL:$like" => Function::Like,
-            "ZetaSQL:ln" => Function::Ln,
-            "ZetaSQL:log" => Function::Log,
-            "ZetaSQL:log10" => Function::Log10,
-            "ZetaSQL:lower" => Function::Lower,
-            "ZetaSQL:lpad" => Function::Lpad,
-            "ZetaSQL:ltrim" => Function::Ltrim,
-            "ZetaSQL:mod" => Function::Mod,
-            "ZetaSQL:$multiply" => Function::Multiply,
-            "ZetaSQL:$not" => Function::Not,
-            "ZetaSQL:$not_equal" => Function::NotEqual,
-            "ZetaSQL:$or" => Function::Or,
-            "ZetaSQL:pow" => Function::Pow,
-            "ZetaSQL:rand" => Function::Rand,
-            "ZetaSQL:regexp_contains" => Function::RegexpContains,
-            "ZetaSQL:regexp_extract" => Function::RegexpExtract,
-            "ZetaSQL:regexp_extract_all" => Function::RegexpExtractAll,
-            "ZetaSQL:regexp_replace" => Function::RegexpReplace,
-            "ZetaSQL:repeat" => Function::Repeat,
-            "ZetaSQL:replace" => Function::Replace,
-            "ZetaSQL:reverse" => Function::Reverse,
-            "ZetaSQL:round" => Function::Round,
-            "ZetaSQL:rpad" => Function::Rpad,
-            "ZetaSQL:rtrim" => Function::Rtrim,
-            "ZetaSQL:sign" => Function::Sign,
-            "ZetaSQL:sin" => Function::Sin,
-            "ZetaSQL:sinh" => Function::Sinh,
-            "ZetaSQL:split" => Function::Split,
-            "ZetaSQL:sqrt" => Function::Sqrt,
-            "ZetaSQL:starts_with" => Function::StartsWith,
-            "ZetaSQL:strpos" => Function::Strpos,
-            "ZetaSQL:substr" => Function::Substr,
-            "ZetaSQL:$subtract" => Function::Subtract,
-            "ZetaSQL:tan" => Function::Tan,
-            "ZetaSQL:tanh" => Function::Tanh,
-            "ZetaSQL:timestamp" => Function::Timestamp,
-            "ZetaSQL:timestamp_add" => Function::TimestampAdd,
-            "ZetaSQL:timestamp_diff" => Function::TimestampDiff,
-            "ZetaSQL:timestamp_from_unix_micros" => Function::TimestampFromUnixMicros,
-            "ZetaSQL:timestamp_from_unix_millis" => Function::TimestampFromUnixMillis,
-            "ZetaSQL:timestamp_from_unix_seconds" => Function::TimestampFromUnixSeconds,
-            "ZetaSQL:timestamp_micros" => Function::TimestampMicros,
-            "ZetaSQL:timestamp_millis" => Function::TimestampMillis,
-            "ZetaSQL:timestamp_seconds" => Function::TimestampSeconds,
-            "ZetaSQL:timestamp_sub" => Function::TimestampSub,
-            "ZetaSQL:timestamp_trunc" => Function::TimestampTrunc,
-            "ZetaSQL:to_base64" => Function::ToBase64,
-            "ZetaSQL:to_hex" => Function::ToHex,
-            "ZetaSQL:trim" => Function::Trim,
-            "ZetaSQL:trunc" => Function::Trunc,
-            "ZetaSQL:$unary_minus" => Function::UnaryMinus,
-            "ZetaSQL:unix_date" => Function::UnixDate,
-            "ZetaSQL:unix_seconds" => Function::UnixSecondsFromTimestamp,
-            "ZetaSQL:unix_millis" => Function::UnixMillisFromTimestamp,
-            "ZetaSQL:unix_micros" => Function::UnixMicrosFromTimestamp,
-            "ZetaSQL:upper" => Function::Upper,
-            other => panic!("{} is not supported", other),
+    pub fn from(
+        function: &zetasql::FunctionRefProto,
+        signature: &zetasql::FunctionSignatureProto,
+        mut arguments: Vec<Scalar>,
+    ) -> Self {
+        let name = function.name.as_ref().unwrap().as_str();
+        match arguments.len() {
+            0 => match name {
+                "ZetaSQL:current_date" => Function::CurrentDate,
+                "ZetaSQL:current_timestamp" => Function::CurrentTimestamp,
+                "ZetaSQL:rand" => Function::Rand,
+                other => panic!("{} is not a no-arg function", other),
+            },
+            1 => {
+                let argument = arguments.pop().unwrap();
+                match name {
+                    "ZetaSQL:$not" => Function::Not(argument),
+                    "ZetaSQL:$unary_minus" => Function::UnaryMinus(argument),
+                    other => panic!("{} is not a unary function", other),
+                }
+            }
+            2 => {
+                let right = arguments.pop().unwrap();
+                let left = arguments.pop().unwrap();
+                let returns = crate::data_type::from_proto(
+                    signature
+                        .return_type
+                        .as_ref()
+                        .unwrap()
+                        .r#type
+                        .as_ref()
+                        .unwrap(),
+                );
+                match name {
+                    "ZetaSQL:$and" => Function::And(left, right),
+                    "ZetaSQL:$equal" => Function::Equal(left, right),
+                    "ZetaSQL:$greater" => Function::Greater(left, right),
+                    "ZetaSQL:$greater_or_equal" => Function::GreaterOrEqual(left, right),
+                    "ZetaSQL:$less" => Function::Less(left, right),
+                    "ZetaSQL:$less_or_equal" => Function::LessOrEqual(left, right),
+                    "ZetaSQL:$like" => Function::Like(left, right),
+                    "ZetaSQL:$not_equal" => Function::NotEqual(left, right),
+                    "ZetaSQL:$or" => Function::Or(left, right),
+                    "ZetaSQL:$add" => Function::Add(left, right, returns),
+                    "ZetaSQL:$divide" => Function::Divide(left, right, returns),
+                    "ZetaSQL:$multiply" => Function::Multiply(left, right, returns),
+                    "ZetaSQL:$subtract" => Function::Subtract(left, right, returns),
+                    other => panic!("{} is not a binary function", other),
+                }
+            }
+            other => panic!("function {} has arity {}", name, other),
+        }
+        // "ZetaSQL:abs" => Function::Abs,
+        // "ZetaSQL:acos" => Function::Acos,
+        // "ZetaSQL:acosh" => Function::Acosh,
+        // "ZetaSQL:asin" => Function::Asin,
+        // "ZetaSQL:asinh" => Function::Asinh,
+        // "ZetaSQL:atan" => Function::Atan,
+        // "ZetaSQL:atan2" => Function::Atan2,
+        // "ZetaSQL:atanh" => Function::Atanh,
+        // "ZetaSQL:$between" => Function::Between,
+        // "ZetaSQL:$bitwise_and" => Function::BitwiseAnd,
+        // "ZetaSQL:$bitwise_left_shift" => Function::BitwiseLeftShift,
+        // "ZetaSQL:$bitwise_not" => Function::BitwiseNot,
+        // "ZetaSQL:$bitwise_or" => Function::BitwiseOr,
+        // "ZetaSQL:$bitwise_right_shift" => Function::BitwiseRightShift,
+        // "ZetaSQL:$bitwise_xor" => Function::BitwiseXor,
+        // "ZetaSQL:byte_length" => Function::ByteLength,
+        // "ZetaSQL:$case_no_value" => Function::CaseNoValue,
+        // "ZetaSQL:$case_with_value" => Function::CaseWithValue,
+        // "ZetaSQL:ceil" => Function::Ceil,
+        // "ZetaSQL:char_length" => Function::CharLength,
+        // "ZetaSQL:coalesce" => Function::Coalesce,
+        // "ZetaSQL:concat" => Function::Concat,
+        // "ZetaSQL:cos" => Function::Cos,
+        // "ZetaSQL:cosh" => Function::Cosh,
+        // "ZetaSQL:date" => Function::Date,
+        // "ZetaSQL:date_add" => Function::DateAdd,
+        // "ZetaSQL:date_diff" => Function::DateDiff,
+        // "ZetaSQL:date_from_unix_date" => Function::DateFromUnixDate,
+        // "ZetaSQL:date_sub" => Function::DateSub,
+        // "ZetaSQL:date_trunc" => Function::DateTrunc,
+        // "ZetaSQL:div" => Function::Div,
+        // "ZetaSQL:ends_with" => Function::EndsWith,
+        // "ZetaSQL:exp" => Function::Exp,
+        // "ZetaSQL:$extract" => Function::Extract,
+        // "ZetaSQL:$extract_date" => Function::ExtractDate,
+        // "ZetaSQL:floor" => Function::Floor,
+        // "ZetaSQL:from_base64" => Function::FromBase64,
+        // "ZetaSQL:from_hex" => Function::FromHex,
+        // "ZetaSQL:greatest" => Function::Greatest,
+        // "ZetaSQL:if" => Function::If,
+        // "ZetaSQL:ifnull" => Function::Ifnull,
+        // "ZetaSQL:$in" => Function::In,
+        // "ZetaSQL:is_inf" => Function::IsInf,
+        // "ZetaSQL:is_nan" => Function::IsNan,
+        // "ZetaSQL:$is_null" => Function::IsNull,
+        // "ZetaSQL:least" => Function::Least,
+        // "ZetaSQL:length" => Function::Length,
+        // "ZetaSQL:ln" => Function::Ln,
+        // "ZetaSQL:log" => Function::Log,
+        // "ZetaSQL:log10" => Function::Log10,
+        // "ZetaSQL:lower" => Function::Lower,
+        // "ZetaSQL:lpad" => Function::Lpad,
+        // "ZetaSQL:ltrim" => Function::Ltrim,
+        // "ZetaSQL:mod" => Function::Mod,
+        // "ZetaSQL:pow" => Function::Pow,
+        // "ZetaSQL:regexp_contains" => Function::RegexpContains,
+        // "ZetaSQL:regexp_extract" => Function::RegexpExtract,
+        // "ZetaSQL:regexp_extract_all" => Function::RegexpExtractAll,
+        // "ZetaSQL:regexp_replace" => Function::RegexpReplace,
+        // "ZetaSQL:repeat" => Function::Repeat,
+        // "ZetaSQL:replace" => Function::Replace,
+        // "ZetaSQL:reverse" => Function::Reverse,
+        // "ZetaSQL:round" => Function::Round,
+        // "ZetaSQL:rpad" => Function::Rpad,
+        // "ZetaSQL:rtrim" => Function::Rtrim,
+        // "ZetaSQL:sign" => Function::Sign,
+        // "ZetaSQL:sin" => Function::Sin,
+        // "ZetaSQL:sinh" => Function::Sinh,
+        // "ZetaSQL:split" => Function::Split,
+        // "ZetaSQL:sqrt" => Function::Sqrt,
+        // "ZetaSQL:starts_with" => Function::StartsWith,
+        // "ZetaSQL:strpos" => Function::Strpos,
+        // "ZetaSQL:substr" => Function::Substr,
+        // "ZetaSQL:tan" => Function::Tan,
+        // "ZetaSQL:tanh" => Function::Tanh,
+        // "ZetaSQL:timestamp" => Function::Timestamp,
+        // "ZetaSQL:timestamp_add" => Function::TimestampAdd,
+        // "ZetaSQL:timestamp_diff" => Function::TimestampDiff,
+        // "ZetaSQL:timestamp_from_unix_micros" => Function::TimestampFromUnixMicros,
+        // "ZetaSQL:timestamp_from_unix_millis" => Function::TimestampFromUnixMillis,
+        // "ZetaSQL:timestamp_from_unix_seconds" => Function::TimestampFromUnixSeconds,
+        // "ZetaSQL:timestamp_micros" => Function::TimestampMicros,
+        // "ZetaSQL:timestamp_millis" => Function::TimestampMillis,
+        // "ZetaSQL:timestamp_seconds" => Function::TimestampSeconds,
+        // "ZetaSQL:timestamp_sub" => Function::TimestampSub,
+        // "ZetaSQL:timestamp_trunc" => Function::TimestampTrunc,
+        // "ZetaSQL:to_base64" => Function::ToBase64,
+        // "ZetaSQL:to_hex" => Function::ToHex,
+        // "ZetaSQL:trim" => Function::Trim,
+        // "ZetaSQL:trunc" => Function::Trunc,
+        // "ZetaSQL:unix_date" => Function::UnixDate,
+        // "ZetaSQL:unix_seconds" => Function::UnixSecondsFromTimestamp,
+        // "ZetaSQL:unix_millis" => Function::UnixMillisFromTimestamp,
+        // "ZetaSQL:unix_micros" => Function::UnixMicrosFromTimestamp,
+        // "ZetaSQL:upper" => Function::Upper,
+    }
+
+    pub fn name(&self) -> &str {
+        match self {
+            Function::CurrentDate => "CurrentDate",
+            Function::CurrentTimestamp => "CurrentTimestamp",
+            Function::Rand => "Rand",
+            Function::Not(_) => "Not",
+            Function::UnaryMinus(_) => "UnaryMinus",
+            Function::And(_, _) => "And",
+            Function::Equal(_, _) => "Equal",
+            Function::Greater(_, _) => "Greater",
+            Function::GreaterOrEqual(_, _) => "GreaterOrEqual",
+            Function::Less(_, _) => "Less",
+            Function::LessOrEqual(_, _) => "LessOrEqual",
+            Function::Like(_, _) => "Like",
+            Function::NotEqual(_, _) => "NotEqual",
+            Function::Or(_, _) => "Or",
+            Function::Add(_, _, _) => "Add",
+            Function::Divide(_, _, _) => "Divide",
+            Function::Multiply(_, _, _) => "Multiply",
+            Function::Subtract(_, _, _) => "Subtract",
+        }
+    }
+
+    pub fn arguments(&self) -> Vec<&Scalar> {
+        match self {
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand => vec![],
+            Function::Not(argument) | Function::UnaryMinus(argument) => vec![argument],
+            Function::Equal(left, right)
+            | Function::Greater(left, right)
+            | Function::GreaterOrEqual(left, right)
+            | Function::Less(left, right)
+            | Function::LessOrEqual(left, right)
+            | Function::Like(left, right)
+            | Function::NotEqual(left, right)
+            | Function::Or(left, right)
+            | Function::And(left, right)
+            | Function::Add(left, right, _)
+            | Function::Divide(left, right, _)
+            | Function::Multiply(left, right, _)
+            | Function::Subtract(left, right, _) => vec![left, right],
+        }
+    }
+
+    pub fn returns(&self) -> DataType {
+        match self {
+            Function::CurrentDate => DataType::Date32(DateUnit::Day),
+            Function::CurrentTimestamp => DataType::Timestamp(TimeUnit::Microsecond, None),
+            Function::Rand => DataType::Float64,
+            Function::Not(_)
+            | Function::And(_, _)
+            | Function::Equal(_, _)
+            | Function::Greater(_, _)
+            | Function::GreaterOrEqual(_, _)
+            | Function::Less(_, _)
+            | Function::LessOrEqual(_, _)
+            | Function::Like(_, _)
+            | Function::NotEqual(_, _)
+            | Function::Or(_, _) => DataType::Boolean,
+            Function::UnaryMinus(argument) => argument.data(),
+            Function::Add(_, _, returns)
+            | Function::Multiply(_, _, returns)
+            | Function::Subtract(_, _, returns)
+            | Function::Divide(_, _, returns) => returns.clone(),
+        }
+    }
+
+    pub fn map(self, f: impl Fn(Scalar) -> Scalar) -> Self {
+        match self {
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand => self,
+            Function::Not(argument) => Function::Not(f(argument)),
+            Function::And(left, right) => Function::And(f(left), f(right)),
+            Function::Equal(left, right) => Function::Equal(f(left), f(right)),
+            Function::Greater(left, right) => Function::Greater(f(left), f(right)),
+            Function::GreaterOrEqual(left, right) => Function::GreaterOrEqual(f(left), f(right)),
+            Function::Less(left, right) => Function::Less(f(left), f(right)),
+            Function::LessOrEqual(left, right) => Function::LessOrEqual(f(left), f(right)),
+            Function::Like(left, right) => Function::Like(f(left), f(right)),
+            Function::NotEqual(left, right) => Function::NotEqual(f(left), f(right)),
+            Function::Or(left, right) => Function::Or(f(left), f(right)),
+            Function::UnaryMinus(argument) => Function::UnaryMinus(f(argument)),
+            Function::Add(left, right, returns) => Function::Add(f(left), f(right), returns),
+            Function::Divide(left, right, returns) => Function::Divide(f(left), f(right), returns),
+            Function::Multiply(left, right, returns) => {
+                Function::Multiply(f(left), f(right), returns)
+            }
+            Function::Subtract(left, right, returns) => {
+                Function::Subtract(f(left), f(right), returns)
+            }
         }
     }
 }

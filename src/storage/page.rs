@@ -5,7 +5,6 @@ use arrow::datatypes::*;
 use arrow::record_batch::*;
 use ast::Column;
 use regex::Regex;
-use std::alloc::{alloc, dealloc, Layout};
 use std::fmt::{Debug, Display};
 use std::mem::size_of;
 use std::ops::Deref;

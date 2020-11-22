@@ -341,8 +341,7 @@ impl RewriteRule {
                     {
                         let mut filter_predicates = filter_predicates.clone();
                         let semi = Scalar::Column(mark.clone());
-                        let anti =
-                            Scalar::Call(Function::Not, vec![semi.clone()], DataType::Boolean);
+                        let anti = Scalar::Call(Box::new(Function::Not(semi.clone())));
                         let mut combined_attributes = vec![];
                         for c in left.attributes() {
                             combined_attributes.push((Scalar::Column(c.clone()), c));

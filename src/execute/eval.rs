@@ -1,6 +1,5 @@
 use crate::error::Error;
 use arrow::array::*;
-use arrow::compute::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
 use std::sync::Arc;
@@ -26,7 +25,7 @@ impl Eval for Scalar {
                     );
                 Ok(input.column(i).clone())
             }
-            Scalar::Call(function, arguments, result_type) => todo!(),
+            Scalar::Call(function) => todo!(),
             Scalar::Cast(scalar, as_type) => todo!(),
         }
     }
