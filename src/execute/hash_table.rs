@@ -180,14 +180,14 @@ fn gather_strings(indices: &Vec<usize>, input: &Vec<&dyn Array>) -> Arc<dyn Arra
     }
     // Compute offsets in the new order.
     let mut offsets_buffer = MutableBuffer::new(std::mem::size_of::<i32>() * (indices.len() + 1));
-    offsets_buffer.resize(offsets_buffer.capacity());
+    offsets_buffer.resize(offsets_buffer.capacity()).unwrap();
     let offsets = offsets_buffer.typed_data_mut::<i32>();
     for i in 0..lengths.len() {
         offsets[i + 1] = offsets[i] + lengths[i];
     }
     // Gather values.
     let mut values_buffer = MutableBuffer::new(*offsets.last().unwrap() as usize);
-    values_buffer.resize(values_buffer.capacity());
+    values_buffer.resize(values_buffer.capacity()).unwrap();
     let values = values_buffer.data_mut();
     let mut next_index = 0;
     for array in input {

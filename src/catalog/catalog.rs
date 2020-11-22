@@ -23,7 +23,7 @@ impl CatalogProvider {
         root.name = Some(name.clone());
         root.catalog.push(fixtures::bootstrap_metadata_catalog());
         let q = "
-            select catalog_id, table_id, column_id, catalog_name, table_name, column_name, column_type
+            select catalog_id, table_id, column_id, catalog_name, table_name, column_name, column_type, partition_by, cluster_by, primary_key
             from catalog 
             join table using (catalog_id) 
             join column using (table_id) 
@@ -69,6 +69,13 @@ impl CatalogProvider {
                     let _column_id = get_i64(&results, 2, row);
                     let column_name = get_string(&results, 5, row);
                     let column_type = get_string(&results, 6, row);
+                    let _partition_by = get_i64(&results, 7, row);
+                    let _cluster_by = get_i64(&results, 8, row);
+                    let primary_key = get_i64(&results, 9, row);
+                    if primary_key != -1 {
+                        table.primary_key_column_index[primary_key as usize] =
+                            table.column.len() as i32;
+                    }
                     table.column.push(zetasql::SimpleColumnProto {
                         name: Some(column_name.to_string()),
                         r#type: Some(data_type::to_proto(&data_type::from_string(column_type))),

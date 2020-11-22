@@ -26,6 +26,9 @@ pub fn bootstrap_metadata_arrow() -> Vec<Schema> {
     let table_name = Field::new("table_name", DataType::Utf8, false);
     let column_name = Field::new("column_name", DataType::Utf8, false);
     let column_type = Field::new("column_type", DataType::Utf8, false);
+    let partition_by = Field::new("partition_by", DataType::Int64, false);
+    let cluster_by = Field::new("cluster_by", DataType::Int64, false);
+    let primary_key = Field::new("primary_key", DataType::Int64, false);
     let catalog = Schema::new(vec![catalog_id.clone(), catalog_name.clone()]);
     let table = Schema::new(vec![
         catalog_id.clone(),
@@ -37,6 +40,9 @@ pub fn bootstrap_metadata_arrow() -> Vec<Schema> {
         column_id.clone(),
         column_name.clone(),
         column_type.clone(),
+        partition_by.clone(),
+        cluster_by.clone(),
+        primary_key.clone(),
     ]);
     vec![catalog, table, column]
 }
@@ -96,6 +102,9 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
                     column("column_id", TypeKind::TypeInt64),
                     column("column_name", TypeKind::TypeString),
                     column("column_type", TypeKind::TypeString),
+                    column("partition_by", TypeKind::TypeInt64),
+                    column("cluster_by", TypeKind::TypeInt64),
+                    column("primary_key", TypeKind::TypeInt64),
                 ],
             ),
         ],
