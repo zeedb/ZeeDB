@@ -1,4 +1,3 @@
-use crate::byte_key::*;
 use crate::heap::*;
 use arrow::array::*;
 use arrow::datatypes::*;
@@ -21,7 +20,7 @@ fn test_insert_delete() {
         "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,18446744073709551615\n",
         format!("{}", cluster)
     );
-    for page in cluster.scan(ByteKey::key(1)..=ByteKey::key(10)).iter() {
+    for page in cluster.scan().iter() {
         page.delete(1, 2000);
     }
     assert_eq!(

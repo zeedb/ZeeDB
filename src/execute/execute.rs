@@ -157,7 +157,7 @@ impl ExecuteProvider for Expr {
             } => Ok(Program::SeqScan {
                 projects,
                 predicates,
-                scan: storage.table(table.id as usize).scan(..),
+                scan: storage.table(table.id as usize).scan(),
             }),
             IndexScan {
                 projects,

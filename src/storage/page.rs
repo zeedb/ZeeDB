@@ -1,4 +1,3 @@
-use crate::byte_key::*;
 use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
@@ -13,6 +12,7 @@ use std::sync::atomic::*;
 use std::sync::Arc;
 
 pub const PAGE_SIZE: usize = 1024;
+const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
 
 // Mutable pages are in PAX layout with string values stored separately.
 //
@@ -32,16 +32,10 @@ pub struct Page {
     columns: Vec<usize>,
     xmin: usize,
     xmax: usize,
-    stats: usize,
+    num_rows: usize,
     columns_buffer: Buffer,
     string_buffers: Vec<Option<Buffer>>,
 }
-
-const OFFSET_NUM_ROWS: usize = 0;
-const OFFSET_MIN_CLUSTER_BY: usize = size_of::<usize>();
-const OFFSET_MAX_CLUSTER_BY: usize = OFFSET_MIN_CLUSTER_BY + size_of::<u64>();
-const STATS_LENGTH: usize = OFFSET_MAX_CLUSTER_BY as usize + size_of::<u64>();
-const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
 
 impl Page {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
@@ -61,8 +55,8 @@ impl Page {
         capacity = align(capacity + PAGE_SIZE * size_of::<u64>());
         let xmax = capacity;
         capacity = align(capacity + PAGE_SIZE * size_of::<u64>());
-        let stats = capacity;
-        capacity = capacity + STATS_LENGTH;
+        let num_rows = capacity;
+        capacity = capacity + size_of::<u64>();
         // Allocate memory.
         let columns_buffer = zeros(capacity);
         let string_buffers: Vec<Option<Buffer>> = schema
@@ -76,7 +70,7 @@ impl Page {
             string_buffers,
             xmin,
             xmax,
-            stats,
+            num_rows,
             columns_buffer,
         }
     }
@@ -145,24 +139,10 @@ impl Page {
                 records.column(i).deref(),
             )
         }
-        // Update the stats.
-        let (min, max) = min_max(records.column(0).deref());
-        self.min_cluster_by().fetch_min(min, Ordering::Relaxed);
-        self.max_cluster_by().fetch_max(max, Ordering::Relaxed);
         // Make the rows visible to subsequent transactions.
-        unsafe {
-            let xmin = self.columns_buffer.slice(self.xmin).raw_data() as *const AtomicU64;
-            let xmax = self.columns_buffer.slice(self.xmax).raw_data() as *const AtomicU64;
-            for i in start..end {
-                xmin.offset(i as isize)
-                    .as_ref()
-                    .unwrap()
-                    .store(txn, Ordering::Relaxed);
-                xmax.offset(i as isize)
-                    .as_ref()
-                    .unwrap()
-                    .store(u64::MAX, Ordering::Relaxed);
-            }
+        for i in start..end {
+            self.xmin(i).store(txn, Ordering::Relaxed);
+            self.xmax(i).store(u64::MAX, Ordering::Relaxed);
         }
         end - start
     }
@@ -200,15 +180,7 @@ impl Page {
     }
 
     fn num_rows(&self) -> &AtomicUsize {
-        self.stat::<AtomicUsize>(self.stats + OFFSET_NUM_ROWS)
-    }
-
-    fn min_cluster_by(&self) -> &AtomicU64 {
-        self.stat::<AtomicU64>(self.stats + OFFSET_MIN_CLUSTER_BY)
-    }
-
-    fn max_cluster_by(&self) -> &AtomicU64 {
-        self.stat::<AtomicU64>(self.stats + OFFSET_MAX_CLUSTER_BY)
+        self.stat::<AtomicUsize>(self.num_rows)
     }
 
     fn xmin(&self, row: usize) -> &AtomicU64 {
@@ -231,12 +203,6 @@ impl Page {
             let ptr = self.columns_buffer.raw_data().offset(offset as isize) as *const T;
             ptr.offset(row as isize).as_ref().unwrap()
         }
-    }
-
-    pub fn range(&self) -> RangeInclusive<[u8; 8]> {
-        let min = self.min_cluster_by().load(Ordering::Relaxed).to_be_bytes();
-        let max = self.max_cluster_by().load(Ordering::Relaxed).to_be_bytes();
-        min..=max
     }
 }
 
@@ -330,39 +296,6 @@ fn head(
         array = array.add_buffer(string_buffer.clone());
     }
     make_array(array.build())
-}
-
-fn min_max(cluster_by: &dyn Array) -> (u64, u64) {
-    match cluster_by.data_type() {
-        DataType::Boolean => min_max_primitive::<BooleanType>(cluster_by),
-        DataType::Int64 => min_max_primitive::<Int64Type>(cluster_by),
-        DataType::Float64 => min_max_primitive::<Float64Type>(cluster_by),
-        DataType::Timestamp(TimeUnit::Microsecond, None) => {
-            min_max_primitive::<TimestampMicrosecondType>(cluster_by)
-        }
-        DataType::Date32(DateUnit::Day) => min_max_primitive::<Date32Type>(cluster_by),
-        DataType::Utf8 => panic!("STRING is not supported as a CLUSTER BY key"),
-        other => panic!("{:?}", other),
-    }
-}
-
-fn min_max_primitive<T>(cluster_by: &dyn Array) -> (u64, u64)
-where
-    T: ArrowPrimitiveType,
-    T::Native: ByteKey,
-{
-    let cluster_by = cluster_by
-        .as_any()
-        .downcast_ref::<PrimitiveArray<T>>()
-        .unwrap();
-    let mut min = [0; 8];
-    let mut max = [u8::MAX; 8];
-    for i in 1..cluster_by.len() {
-        let key = ByteKey::key(cluster_by.value(i));
-        min = min.min(key);
-        max = max.max(key);
-    }
-    (u64::from_be_bytes(min), u64::from_be_bytes(max))
 }
 
 fn extend(
@@ -493,10 +426,6 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
         DataType::Utf8 => 4 * (num_rows + 1), // offset width
         other => panic!("{:?}", other),
     }
-}
-
-fn get_bit(data: *const u8, i: usize) -> bool {
-    unsafe { (*data.add(i >> 3) & BIT_MASK[i & 7]) != 0 }
 }
 
 fn set_bit(data: *mut u8, i: usize, value: bool) {

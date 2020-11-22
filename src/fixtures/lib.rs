@@ -105,7 +105,6 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
 
 fn enabled_features() -> Vec<i32> {
     vec![
-        LanguageFeature::FeatureTimestampNanos as i32,
         LanguageFeature::FeatureDmlUpdateWithJoin as i32,
         LanguageFeature::FeatureCreateTablePartitionBy as i32,
         LanguageFeature::FeatureCreateTableClusterBy as i32,
