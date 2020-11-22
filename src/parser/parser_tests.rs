@@ -14,8 +14,8 @@ fn test_analyze() {
 }
 
 fn empty_catalog() -> zetasql::SimpleCatalogProto {
-    let mut cat = fixtures::catalog();
-    cat.catalog.push(fixtures::bootstrap_metadata_catalog());
+    let mut cat = bootstrap::catalog();
+    cat.catalog.push(bootstrap::metadata_zetasql());
     cat
 }
 
@@ -47,7 +47,7 @@ fn test_metadata() {
         join table using (table_id) 
         join catalog using (catalog_id)";
     let (offset, _) = parser
-        .parse(&q.to_string(), 0, fixtures::bootstrap_metadata_catalog())
+        .parse(&q.to_string(), 0, bootstrap::metadata_zetasql())
         .unwrap();
     assert!(offset > 0);
 }

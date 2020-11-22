@@ -9,9 +9,11 @@ path = "lib.rs"
 
 [dependencies]
 arrow = "2.0.0"
+regex = "1"
 ast = { path = "../ast" }
 encoding = { path = "../encoding" }
-fixtures = { path = "../fixtures" }
 parser = { path = "../parser" }
-regex = "1"
 zetasql = { path = "../zetasql" }
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }

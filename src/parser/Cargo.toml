@@ -11,12 +11,15 @@ path = "lib.rs"
 arrow = "2.0.0"
 ast = { path = "../ast" }
 chrono = "0.4.11"
-encoding = { path = "../encoding" }
-fixtures = { path = "../fixtures" }
 futures = "0.3.4"
 prost-types = "0.6.1"
 time = "0.1.39"
 tokio = { version = "0.2", features = ["macros"] }
 tonic = "0.2.0"
-zetasql = { path = "../zetasql" }
 regex = "1"
+bootstrap = { path = "../bootstrap" }
+encoding = { path = "../encoding" }
+zetasql = { path = "../zetasql" }
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }

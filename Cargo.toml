@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "src/ast",
+    "src/bootstrap",
     "src/catalog",
     "src/encoding",
     "src/execute",

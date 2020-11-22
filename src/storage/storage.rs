@@ -9,7 +9,7 @@ impl Storage {
     pub fn new() -> Self {
         // Initialize system tables catalog, table, column
         Self {
-            tables: fixtures::bootstrap_metadata_arrow()
+            tables: bootstrap::metadata_arrow()
                 .drain(..)
                 .map(|schema| Heap::empty(Arc::new(schema)))
                 .collect(),

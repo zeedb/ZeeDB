@@ -105,6 +105,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf1de2fe8c75bc145a2f577add951f8134889b4795d47466a54a5c846d691693"
 
 [[package]]
+name = "bootstrap"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "zetasql",
+]
+
+[[package]]
 name = "bstr"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -143,8 +151,8 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "ast",
+ "bootstrap",
  "execute",
- "fixtures",
  "parser",
  "planner",
  "storage",
@@ -212,7 +220,6 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "ast",
- "fixtures",
  "fnv",
  "num-traits",
  "parser",
@@ -232,6 +239,7 @@ name = "fixtures"
 version = "0.1.0"
 dependencies = [
  "arrow",
+ "bootstrap",
  "zetasql",
 ]
 
@@ -667,6 +675,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "ast",
+ "bootstrap",
  "chrono",
  "encoding",
  "fixtures",
@@ -1021,7 +1030,7 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "ast",
- "fixtures",
+ "bootstrap",
  "regex",
 ]
 

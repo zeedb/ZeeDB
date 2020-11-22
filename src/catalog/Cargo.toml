@@ -10,8 +10,8 @@ path = "lib.rs"
 [dependencies]
 arrow = "2.0.0"
 ast = { path = "../ast" }
+bootstrap = { path = "../bootstrap" }
 execute = { path = "../execute" }
-fixtures = { path = "../fixtures" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 storage = { path = "../storage" }

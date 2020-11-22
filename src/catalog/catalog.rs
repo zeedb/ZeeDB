@@ -19,9 +19,9 @@ impl CatalogProvider {
         name: &String,
         storage: &storage::Storage,
     ) -> zetasql::SimpleCatalogProto {
-        let mut root = fixtures::catalog();
+        let mut root = bootstrap::catalog();
         root.name = Some(name.clone());
-        root.catalog.push(fixtures::bootstrap_metadata_catalog());
+        root.catalog.push(bootstrap::metadata_zetasql());
         let q = "
             select catalog_id, table_id, column_id, catalog_name, table_name, column_name, column_type, partition_by, cluster_by, primary_key
             from catalog 
@@ -31,7 +31,7 @@ impl CatalogProvider {
             .to_string();
         let (_, expr) = self
             .parser
-            .parse(&q, 0, fixtures::bootstrap_metadata_catalog())
+            .parse(&q, 0, bootstrap::metadata_zetasql())
             .unwrap();
         let expr = planner::optimize(expr);
         let results = expr.start(storage).unwrap().next().unwrap();
@@ -55,7 +55,7 @@ impl CatalogProvider {
         while row < results.num_rows() {
             let catalog_id = get_i64(&results, 0, row);
             let catalog_name = get_string(&results, 3, row);
-            let mut catalog = fixtures::catalog();
+            let mut catalog = bootstrap::catalog();
             catalog.name = Some(catalog_name.to_string());
             while row < results.num_rows() && catalog_id == get_i64(&results, 0, row) {
                 let table_id = get_i64(&results, 1, row);
