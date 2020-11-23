@@ -4,8 +4,8 @@ use ast::*;
 #[test]
 fn test_analyze() {
     let mut parser = ParseProvider::new();
-    let (_, expr) = parser
-        .parse(&"select 1".to_string(), 0, empty_catalog())
+    let expr = parser
+        .analyze(&"select 1".to_string(), empty_catalog())
         .unwrap();
     match expr {
         LogicalMap { .. } => (),
@@ -23,16 +23,13 @@ fn empty_catalog() -> zetasql::SimpleCatalogProto {
 fn test_split() {
     let mut parser = ParseProvider::new();
     let sql = "select 1; select 2".to_string();
-    let (select1, _) = parser.parse(&sql, 0, empty_catalog()).unwrap();
-    assert!(select1 > 0);
-    let (select2, _) = parser.parse(&sql, select1, empty_catalog()).unwrap();
-    assert_eq!(select2 as usize, sql.len());
+    parser.analyze(&sql, empty_catalog()).unwrap();
 }
 
 #[test]
 fn test_not_available_fn() {
     let mut parser = ParseProvider::new();
-    match parser.parse(&"select to_proto(true)".to_string(), 0, empty_catalog()) {
+    match parser.analyze(&"select to_proto(true)".to_string(), empty_catalog()) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
     }
@@ -46,10 +43,9 @@ fn test_metadata() {
         from column 
         join table using (table_id) 
         join catalog using (catalog_id)";
-    let (offset, _) = parser
-        .parse(&q.to_string(), 0, bootstrap::metadata_zetasql())
+    parser
+        .analyze(&q.to_string(), bootstrap::metadata_zetasql())
         .unwrap();
-    assert!(offset > 0);
 }
 
 #[test]
@@ -58,4 +54,11 @@ fn test_format() {
     let q = "select 1 as foo from bar";
     let format = parser.format(&q.to_string()).unwrap();
     assert_eq!("SELECT\n  1 AS foo\nFROM\n  bar;", format);
+}
+
+#[test]
+fn test_script() {
+    let mut parser = ParseProvider::new();
+    let sql = "set x = 1;".to_string();
+    parser.analyze(&sql, empty_catalog()).unwrap();
 }

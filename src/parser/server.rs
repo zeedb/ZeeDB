@@ -18,7 +18,7 @@ docker run \
     --publish 127.0.0.1:50051:50051 \
     --name test-zetasql-server \
     --detach \
-    gcr.io/analog-delight-604/zetasql-server@sha256:ba14c7407e47d8d5ea195568ed3fe4a1d01cf93883b1182f23ab5f544a2bbf4d
+    gcr.io/analog-delight-604/zetasql-server@sha256:b77f3abcd958695f92367b63afbf048c8a058073f1db4e8b1175e21c646018cc
 
 until nc -z 127.0.0.1 50051
 do

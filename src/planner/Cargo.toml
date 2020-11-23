@@ -11,6 +11,7 @@ path = "lib.rs"
 arrow = "2.0.0"
 regex = "1"
 ast = { path = "../ast" }
+bootstrap = { path = "../bootstrap" }
 encoding = { path = "../encoding" }
 parser = { path = "../parser" }
 zetasql = { path = "../zetasql" }

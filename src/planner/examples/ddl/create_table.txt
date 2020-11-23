@@ -1,3 +1,19 @@
 create table foo (person_id int64 primary key, store_id int64)
 
-CreateTable foo person_id:INT64 store_id:INT64 (PrimaryKey 0)
+Script
+	Assign next_table_id $aggregate.$agg1
+		NestedLoop Single
+			Aggregate $aggregate.$agg1:(Max $proj.$max)
+				Map $proj.$max:table.table_id
+					Map* table.table_id
+						SeqScan table
+			TableFreeScan
+	Insert table table.catalog_id table.table_id table.table_name
+		Values table.catalog_id table.table_id table.table_name [0 @next_table_id foo]
+			TableFreeScan
+	Insert column column.table_id column.column_id column.column_name column.column_type column.partition_by column.cluster_by column.primary_key
+		Values column.table_id column.column_id column.column_name column.column_type column.partition_by column.cluster_by column.primary_key [@next_table_id 0 person_id INT64 -1 -1 -1]
+			TableFreeScan
+	Insert column column.table_id column.column_id column.column_name column.column_type column.partition_by column.cluster_by column.primary_key
+		Values column.table_id column.column_id column.column_name column.column_type column.partition_by column.cluster_by column.primary_key [@next_table_id 1 store_id INT64 -1 -1 -1]
+			TableFreeScan

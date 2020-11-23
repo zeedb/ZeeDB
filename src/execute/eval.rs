@@ -25,6 +25,7 @@ impl Eval for Scalar {
                     );
                 Ok(input.column(i).clone())
             }
+            Scalar::Parameter(name, as_type) => todo!(),
             Scalar::Call(function) => todo!(),
             Scalar::Cast(scalar, as_type) => todo!(),
         }

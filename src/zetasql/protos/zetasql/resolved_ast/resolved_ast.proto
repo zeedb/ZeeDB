@@ -1410,6 +1410,7 @@ message AnyResolvedStatementProto {
     ResolvedExecuteImmediateStmtProto resolved_execute_immediate_stmt_node = 140;
     ResolvedAssignmentStmtProto resolved_assignment_stmt_node = 142;
     ResolvedExportModelStmtProto resolved_export_model_stmt_node = 152;
+    ResolvedSingleAssignmentStmtProto resolved_single_assignment_stmt_node = 160;
   }
 }
 
@@ -3518,6 +3519,16 @@ message ResolvedAssignmentStmtProto {
   // Target of the assignment.  Currently, this will be either ResolvedSystemVariable, or a chain of ResolveGetField operations around it.
   optional AnyResolvedExprProto target = 2;
   // Value to assign into the target.  This will always be the same type as the target.
+  optional AnyResolvedExprProto expr = 3;
+}
+
+// An assignment of a value to another value.
+message ResolvedSingleAssignmentStmtProto {
+  optional ResolvedStatementProto parent = 1;
+
+  // Target of the assignment.
+  optional string variable = 2;
+  // Value to assign into the target.
   optional AnyResolvedExprProto expr = 3;
 }
 

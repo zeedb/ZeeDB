@@ -29,11 +29,11 @@ impl CatalogProvider {
             join column using (table_id) 
             order by catalog_id, table_id, column_id"
             .to_string();
-        let (_, expr) = self
+        let expr = self
             .parser
-            .parse(&q, 0, bootstrap::metadata_zetasql())
+            .analyze(&q, bootstrap::metadata_zetasql())
             .unwrap();
-        let expr = planner::optimize(expr);
+        let expr = planner::optimize(expr, &mut self.parser);
         let results = expr.start(storage).unwrap().next().unwrap();
         fn get_i64(results: &RecordBatch, column: usize, row: usize) -> i64 {
             results

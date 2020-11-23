@@ -7,7 +7,7 @@ macro_rules! ok {
         let mut parser = ParseProvider::new();
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
-        let (_, found) = parser.parse(&sql, 0, adventure_works()).unwrap();
+        let found = parser.analyze(&sql, adventure_works()).unwrap();
         let found = format!("{}\n\n{}", &sql, found);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
@@ -103,7 +103,7 @@ fn test_convert() {
     //         left join store on person.person_id in (select person_id from customer where customer.store_id = store.store_id)
     //     "#,
     //     errors
-    // ); TODO error handling.
+    // ); TODO error handling
     ok!(
         "examples/correlated/subquery.txt",
         r#"
@@ -554,7 +554,38 @@ fn test_convert() {
         "#,
         errors
     );
+    ok!(
+        "examples/script/set.txt",
+        r#"
+            set x = (select 1);
+        "#,
+        errors
+    );
+    ok!(
+        "examples/script/select_variable.txt",
+        r#"
+            set x = 1;
+            select @x;
+        "#,
+        errors
+    );
     if !errors.is_empty() {
         panic!("{:#?}", errors);
     }
 }
+
+// #[test]
+// fn test_single() {
+//     let mut errors = vec![];
+//     ok!(
+//         "examples/script/select_variable.txt",
+//         r#"
+//             set x = 1;
+//             select @x;
+//         "#,
+//         errors
+//     );
+//     if !errors.is_empty() {
+//         panic!("{:#?}", errors);
+//     }
+// }

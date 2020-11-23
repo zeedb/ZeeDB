@@ -2,6 +2,7 @@ use crate::cost::*;
 use crate::rule::*;
 use crate::search_space::*;
 use ast::*;
+use parser::ParseProvider;
 use std::collections::HashMap;
 use std::ops::Deref;
 
@@ -9,9 +10,9 @@ use std::ops::Deref;
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
 // However, the logic and the order of invocation should be exactly the same.
 
-pub fn optimize(expr: Expr) -> Expr {
+pub fn optimize(expr: Expr, parser: &mut ParseProvider) -> Expr {
     let mut ss = SearchSpace::new();
-    let expr = crate::rewrite::rewrite(expr);
+    let expr = crate::rewrite::rewrite(expr, parser);
     let gid = copy_in_new(&mut ss, expr);
     optimize_group(&mut ss, gid);
     winner(&mut ss, gid)
@@ -368,7 +369,9 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         | LogicalCreateIndex { .. }
         | LogicalAlterTable { .. }
         | LogicalDrop { .. }
-        | LogicalRename { .. } => {}
+        | LogicalRename { .. }
+        | LogicalScript { .. }
+        | LogicalAssign { .. } => {}
         op if !op.is_logical() => panic!(
             "tried to compute logical props of physical operator {}",
             op.name()
@@ -425,6 +428,7 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
         Scalar::Literal(Value::Bool(false), _) => 0.0,
         Scalar::Literal(value, _) => panic!("{} is not bool", value),
         Scalar::Column(_) => 0.5,
+        Scalar::Parameter(_, _) => 0.5,
         Scalar::Call(function) => match function.deref() {
             Function::Not(argument) => 1.0 - predicate_selectivity(argument, scope),
             Function::Equal(left, right) => {
@@ -487,6 +491,7 @@ fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> u
         Scalar::Column(column) => *scope
             .get(column)
             .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),
+        Scalar::Parameter(_, _) => 1,
         Scalar::Call(_) => 1, // TODO
         Scalar::Cast(value, _) => scalar_unique_cardinality(value, scope),
     }

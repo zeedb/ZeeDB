@@ -41,6 +41,7 @@ impl Converter {
             ResolvedRenameStmtNode(q) => self.rename(q),
             ResolvedCreateDatabaseStmtNode(q) => self.create_database(q),
             ResolvedAlterObjectStmtNode(q) => self.alter(q),
+            ResolvedSingleAssignmentStmtNode(q) => self.assign(q),
             other => panic!("{:?}", other),
         }
     }
@@ -110,7 +111,7 @@ impl Converter {
             };
         }
         // Convert outer join using join condition.
-        let dummy = TableFreeScan;
+        let dummy = LogicalSingleGet;
         let mut input = dummy.clone();
         let predicates = match &q.join_expr {
             Some(expr) => self.predicate(expr.borrow(), &mut input),
@@ -778,6 +779,15 @@ impl Converter {
         }
     }
 
+    fn assign(&mut self, q: &ResolvedSingleAssignmentStmtProto) -> Expr {
+        let mut input = LogicalSingleGet;
+        LogicalAssign {
+            variable: q.variable.get().clone(),
+            value: self.expr(q.expr.get(), &mut input),
+            input: Box::new(input),
+        }
+    }
+
     fn exprs(&mut self, xs: &Vec<AnyResolvedExprProto>, outer: &mut Expr) -> Vec<Scalar> {
         let mut list = vec![];
         for x in xs {
@@ -796,6 +806,7 @@ impl Converter {
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
             ResolvedCastNode(x) => self.cast(x, outer),
+            ResolvedParameterNode(x) => self.parameter(x, outer),
             ResolvedSubqueryExprNode(x) => self.subquery_expr(x, outer),
             other => panic!("{:?}", other),
         }
@@ -837,6 +848,13 @@ impl Converter {
             other => panic!("{:?}", other),
         };
         Scalar::Cast(Box::new(self.expr(expr, outer)), data_type::from_proto(ty))
+    }
+
+    fn parameter(&mut self, x: &ResolvedParameterProto, outer: &mut Expr) -> Scalar {
+        Scalar::Parameter(
+            x.name.get().clone(),
+            data_type::from_proto(x.parent.get().r#type.get()),
+        )
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {

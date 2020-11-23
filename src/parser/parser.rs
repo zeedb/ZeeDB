@@ -1,10 +1,11 @@
 use crate::convert::convert;
 use crate::server::create_zetasql_server;
+use arrow::datatypes::DataType;
 use ast::Expr;
 use tokio::runtime::Runtime;
 use tonic::transport::channel::Channel;
-use tonic::{Response, Status};
 use zetasql::analyze_response::Result::*;
+use zetasql::analyzer_options_proto::QueryParameterProto;
 use zetasql::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
 use zetasql::*;
 
@@ -33,50 +34,58 @@ impl ParseProvider {
         }
     }
 
-    pub fn parse(
-        &mut self,
-        sql: &String,
-        offset: i32,
-        catalog: SimpleCatalogProto,
-    ) -> Result<(i32, Expr), String> {
-        match self.analyze(sql, offset, catalog) {
-            Ok(response) => {
-                let response = response.into_inner();
-                let offset = response.resume_byte_position.unwrap();
-                let expr = match response.result.unwrap() {
-                    ResolvedStatement(stmt) => convert(&stmt),
-                    ResolvedExpression(_) => panic!("expected statement but found expression"),
-                };
-                Ok((offset, expr))
+    pub fn analyze(&mut self, sql: &String, catalog: SimpleCatalogProto) -> Result<Expr, String> {
+        let mut offset = 0;
+        let mut exprs = vec![];
+        let mut variables = vec![];
+        loop {
+            let (next_offset, next_expr) =
+                self.analyze_next(sql, offset, catalog.clone(), &variables)?;
+            // If we detected a SET _ = _ statement, add it to the query scope.
+            if let Expr::LogicalAssign {
+                variable, value, ..
+            } = &next_expr
+            {
+                variables.push((variable.clone(), value.data()))
             }
-            Err(status) => Err(String::from(status.message())),
+            // Add next_expr to list and prepare to continue parsing.
+            offset = next_offset;
+            exprs.push(next_expr);
+            // If we've parsed the entire expression, return.
+            if offset as usize == sql.as_bytes().len() {
+                if exprs.len() == 1 {
+                    return Ok(exprs.pop().unwrap());
+                } else {
+                    return Ok(Expr::LogicalScript { statements: exprs });
+                }
+            }
         }
     }
 
-    fn analyze(
+    fn analyze_next(
         &mut self,
         sql: &String,
         offset: i32,
         catalog: SimpleCatalogProto,
-    ) -> Result<Response<AnalyzeResponse>, Status> {
-        let enabled_language_features = catalog
-            .builtin_function_options
-            .as_ref()
-            .unwrap()
-            .language_options
-            .as_ref()
-            .unwrap()
-            .enabled_language_features
-            .clone();
+        variables: &Vec<(String, DataType)>,
+    ) -> Result<(i32, Expr), String> {
         let request = tonic::Request::new(AnalyzeRequest {
             simple_catalog: Some(catalog),
             options: Some(AnalyzerOptionsProto {
                 default_timezone: Some("UTC".to_string()),
                 language_options: Some(LanguageOptionsProto {
-                    enabled_language_features,
+                    enabled_language_features: bootstrap::enabled_language_features(),
+                    supported_statement_kinds: bootstrap::supported_statement_kinds(),
                     ..Default::default()
                 }),
                 prune_unused_columns: Some(true),
+                query_parameters: variables
+                    .iter()
+                    .map(|(name, data)| QueryParameterProto {
+                        name: Some(name.clone()),
+                        r#type: Some(ast::data_type::to_proto(data)),
+                    })
+                    .collect(),
                 ..Default::default()
             }),
             target: Some(analyze_request::Target::ParseResumeLocation(
@@ -88,6 +97,17 @@ impl ParseProvider {
             )),
             ..Default::default()
         });
-        self.runtime.block_on(self.client.analyze(request))
+        match self.runtime.block_on(self.client.analyze(request)) {
+            Ok(response) => {
+                let response = response.into_inner();
+                let offset = response.resume_byte_position.unwrap();
+                let expr = match response.result.unwrap() {
+                    ResolvedStatement(stmt) => convert(&stmt),
+                    ResolvedExpression(_) => panic!("expected statement but found expression"),
+                };
+                Ok((offset, expr))
+            }
+            Err(status) => Err(String::from(status.message())),
+        }
     }
 }

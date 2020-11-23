@@ -113,22 +113,6 @@ pub enum Program {
         table: Table,
         input: Box<Program>,
     },
-    CreateDatabase {
-        name: Name,
-    },
-    CreateTable {
-        name: Name,
-        columns: Vec<(String, DataType)>,
-        partition_by: Vec<i64>,
-        cluster_by: Vec<i64>,
-        primary_key: Vec<i64>,
-        input: Option<Box<Program>>,
-    },
-    CreateIndex {
-        name: Name,
-        table: Name,
-        columns: Vec<String>,
-    },
     AlterTable {
         name: Name,
         actions: Vec<Alter>,
@@ -228,23 +212,15 @@ impl ExecuteProvider for Expr {
             Values { .. } => todo!(),
             Update { .. } => todo!(),
             Delete { .. } => todo!(),
-            CreateDatabase { .. } => todo!(),
-            CreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input,
-            } => todo!(),
-            CreateIndex {
-                name,
-                table,
-                columns,
-            } => todo!(),
             AlterTable { name, actions } => todo!(),
             Drop { object, name } => todo!(),
             Rename { object, from, to } => todo!(),
+            Script { statements } => todo!(),
+            Assign {
+                variable,
+                value,
+                input,
+            } => todo!(),
             Leaf { .. }
             | LogicalSingleGet
             | LogicalGet { .. }
@@ -269,7 +245,10 @@ impl ExecuteProvider for Expr {
             | LogicalCreateIndex { .. }
             | LogicalAlterTable { .. }
             | LogicalDrop { .. }
-            | LogicalRename { .. } => panic!("logical operation"),
+            | LogicalRename { .. }
+            | LogicalScript { .. }
+            | LogicalRewrite { .. }
+            | LogicalAssign { .. } => panic!("logical operation"),
         }
     }
 }
@@ -374,20 +353,6 @@ impl Program {
             } => todo!(),
             Program::Update { updates, input } => todo!(),
             Program::Delete { table, input } => todo!(),
-            Program::CreateDatabase { name } => todo!(),
-            Program::CreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input,
-            } => todo!(),
-            Program::CreateIndex {
-                name,
-                table,
-                columns,
-            } => todo!(),
             Program::AlterTable { name, actions } => todo!(),
             Program::Drop { object, name } => todo!(),
             Program::Rename { object, from, to } => todo!(),
@@ -475,20 +440,6 @@ impl Execute for Program {
             } => todo!(),
             Program::Update { updates, input } => todo!(),
             Program::Delete { table, input } => todo!(),
-            Program::CreateDatabase { name } => todo!(),
-            Program::CreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input,
-            } => todo!(),
-            Program::CreateIndex {
-                name,
-                table,
-                columns,
-            } => todo!(),
             Program::AlterTable { name, actions } => todo!(),
             Program::Drop { object, name } => todo!(),
             Program::Rename { object, from, to } => todo!(),

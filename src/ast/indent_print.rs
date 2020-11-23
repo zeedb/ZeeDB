@@ -274,6 +274,7 @@ impl IndentPrint for Expr {
             Expr::LogicalRename { object, from, to } => {
                 write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
+            Expr::LogicalRewrite { sql } => write!(f, "{} {:?}", self.name(), sql),
             Expr::TableFreeScan => write!(f, "{}", self.name()),
             Expr::IndexScan {
                 projects,
@@ -424,58 +425,6 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::CreateDatabase { name } => write!(f, "{} {}", self.name(), name),
-            Expr::CreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input,
-            } => {
-                write!(f, "{} {}", self.name(), name)?;
-                for (name, data) in columns {
-                    write!(f, " {}:{}", name, data_type::to_string(data))?;
-                }
-                if !partition_by.is_empty() {
-                    write!(f, " (PartitionBy")?;
-                    for p in partition_by {
-                        write!(f, " {}", p)?;
-                    }
-                    write!(f, ")")?;
-                }
-                if !cluster_by.is_empty() {
-                    write!(f, " (ClusterBy")?;
-                    for p in cluster_by {
-                        write!(f, " {}", p)?;
-                    }
-                    write!(f, ")")?;
-                }
-                if !primary_key.is_empty() {
-                    write!(f, " (PrimaryKey")?;
-                    for p in primary_key {
-                        write!(f, " {}", p)?;
-                    }
-                    write!(f, ")")?;
-                }
-                if let Some(input) = input {
-                    newline(f, indent)?;
-                    input.indent_print(f, indent + 1)?;
-                }
-                Ok(())
-            }
-            Expr::CreateIndex {
-                name,
-                table,
-                columns,
-            } => write!(
-                f,
-                "{} {} {} {}",
-                self.name(),
-                name,
-                table,
-                columns.join(" ")
-            ),
             Expr::AlterTable { name, actions } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for a in actions {
@@ -487,64 +436,88 @@ impl IndentPrint for Expr {
             Expr::Rename { object, from, to } => {
                 write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
+            Expr::LogicalScript { statements } | Expr::Script { statements } => {
+                write!(f, "{}", self.name())?;
+                for expr in statements {
+                    newline(f, indent)?;
+                    expr.indent_print(f, indent + 1)?;
+                }
+                Ok(())
+            }
+            Expr::LogicalAssign {
+                variable,
+                value,
+                input,
+            }
+            | Expr::Assign {
+                variable,
+                value,
+                input,
+            } => {
+                write!(f, "{} {} {}", self.name(), variable, value)?;
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
+            }
         }
     }
 }
 
 impl Expr {
-    pub fn name(&self) -> String {
+    pub fn name(&self) -> &str {
         match self {
-            Expr::Leaf { .. } => "Leaf".to_string(),
-            Expr::LogicalSingleGet { .. } => "LogicalSingleGet".to_string(),
-            Expr::LogicalGet { .. } => "LogicalGet".to_string(),
-            Expr::LogicalFilter { .. } => "LogicalFilter".to_string(),
-            Expr::LogicalMap { .. } => "LogicalMap".to_string(),
-            Expr::LogicalJoin { .. } => "LogicalJoin".to_string(),
-            Expr::LogicalDependentJoin { .. } => "LogicalDependentJoin".to_string(),
-            Expr::LogicalWith { .. } => "LogicalWith".to_string(),
-            Expr::LogicalGetWith { .. } => "LogicalGetWith".to_string(),
-            Expr::LogicalAggregate { .. } => "LogicalAggregate".to_string(),
-            Expr::LogicalLimit { .. } => "LogicalLimit".to_string(),
-            Expr::LogicalSort { .. } => "LogicalSort".to_string(),
-            Expr::LogicalUnion { .. } => "LogicalUnion".to_string(),
-            Expr::LogicalIntersect { .. } => "LogicalIntersect".to_string(),
-            Expr::LogicalExcept { .. } => "LogicalExcept".to_string(),
-            Expr::LogicalInsert { .. } => "LogicalInsert".to_string(),
-            Expr::LogicalValues { .. } => "LogicalValues".to_string(),
-            Expr::LogicalUpdate { .. } => "LogicalUpdate".to_string(),
-            Expr::LogicalDelete { .. } => "LogicalDelete".to_string(),
-            Expr::LogicalCreateDatabase { .. } => "LogicalCreateDatabase".to_string(),
-            Expr::LogicalCreateTable { .. } => "LogicalCreateTable".to_string(),
-            Expr::LogicalCreateIndex { .. } => "LogicalCreateIndex".to_string(),
-            Expr::LogicalAlterTable { .. } => "LogicalAlterTable".to_string(),
-            Expr::LogicalDrop { .. } => "LogicalDrop".to_string(),
-            Expr::LogicalRename { .. } => "LogicalRename".to_string(),
-            Expr::TableFreeScan { .. } => "TableFreeScan".to_string(),
-            Expr::SeqScan { .. } => "SeqScan".to_string(),
-            Expr::IndexScan { .. } => "IndexScan".to_string(),
-            Expr::Filter { .. } => "Filter".to_string(),
-            Expr::Map { .. } => "Map".to_string(),
-            Expr::NestedLoop { .. } => "NestedLoop".to_string(),
-            Expr::HashJoin { .. } => "HashJoin".to_string(),
-            Expr::LookupJoin { .. } => "LookupJoin".to_string(),
-            Expr::CreateTempTable { .. } => "CreateTempTable".to_string(),
-            Expr::GetTempTable { .. } => "GetTempTable".to_string(),
-            Expr::Aggregate { .. } => "Aggregate".to_string(),
-            Expr::Limit { .. } => "Limit".to_string(),
-            Expr::Sort { .. } => "Sort".to_string(),
-            Expr::Union { .. } => "Union".to_string(),
-            Expr::Intersect { .. } => "Intersect".to_string(),
-            Expr::Except { .. } => "Except".to_string(),
-            Expr::Insert { .. } => "Insert".to_string(),
-            Expr::Values { .. } => "Values".to_string(),
-            Expr::Update { .. } => "Update".to_string(),
-            Expr::Delete { .. } => "Delete".to_string(),
-            Expr::CreateDatabase { .. } => "CreateDatabase".to_string(),
-            Expr::CreateTable { .. } => "CreateTable".to_string(),
-            Expr::CreateIndex { .. } => "CreateIndex".to_string(),
-            Expr::AlterTable { .. } => "AlterTable".to_string(),
-            Expr::Drop { .. } => "Drop".to_string(),
-            Expr::Rename { .. } => "Rename".to_string(),
+            Expr::Leaf { .. } => "Leaf",
+            Expr::LogicalSingleGet { .. } => "LogicalSingleGet",
+            Expr::LogicalGet { .. } => "LogicalGet",
+            Expr::LogicalFilter { .. } => "LogicalFilter",
+            Expr::LogicalMap { .. } => "LogicalMap",
+            Expr::LogicalJoin { .. } => "LogicalJoin",
+            Expr::LogicalDependentJoin { .. } => "LogicalDependentJoin",
+            Expr::LogicalWith { .. } => "LogicalWith",
+            Expr::LogicalGetWith { .. } => "LogicalGetWith",
+            Expr::LogicalAggregate { .. } => "LogicalAggregate",
+            Expr::LogicalLimit { .. } => "LogicalLimit",
+            Expr::LogicalSort { .. } => "LogicalSort",
+            Expr::LogicalUnion { .. } => "LogicalUnion",
+            Expr::LogicalIntersect { .. } => "LogicalIntersect",
+            Expr::LogicalExcept { .. } => "LogicalExcept",
+            Expr::LogicalInsert { .. } => "LogicalInsert",
+            Expr::LogicalValues { .. } => "LogicalValues",
+            Expr::LogicalUpdate { .. } => "LogicalUpdate",
+            Expr::LogicalDelete { .. } => "LogicalDelete",
+            Expr::LogicalCreateDatabase { .. } => "LogicalCreateDatabase",
+            Expr::LogicalCreateTable { .. } => "LogicalCreateTable",
+            Expr::LogicalCreateIndex { .. } => "LogicalCreateIndex",
+            Expr::LogicalAlterTable { .. } => "LogicalAlterTable",
+            Expr::LogicalDrop { .. } => "LogicalDrop",
+            Expr::LogicalRename { .. } => "LogicalRename",
+            Expr::LogicalScript { .. } => "LogicalScript",
+            Expr::LogicalAssign { .. } => "LogicalAssign",
+            Expr::LogicalRewrite { .. } => "LogicalRewrite",
+            Expr::TableFreeScan { .. } => "TableFreeScan",
+            Expr::SeqScan { .. } => "SeqScan",
+            Expr::IndexScan { .. } => "IndexScan",
+            Expr::Filter { .. } => "Filter",
+            Expr::Map { .. } => "Map",
+            Expr::NestedLoop { .. } => "NestedLoop",
+            Expr::HashJoin { .. } => "HashJoin",
+            Expr::LookupJoin { .. } => "LookupJoin",
+            Expr::CreateTempTable { .. } => "CreateTempTable",
+            Expr::GetTempTable { .. } => "GetTempTable",
+            Expr::Aggregate { .. } => "Aggregate",
+            Expr::Limit { .. } => "Limit",
+            Expr::Sort { .. } => "Sort",
+            Expr::Union { .. } => "Union",
+            Expr::Intersect { .. } => "Intersect",
+            Expr::Except { .. } => "Except",
+            Expr::Insert { .. } => "Insert",
+            Expr::Values { .. } => "Values",
+            Expr::Update { .. } => "Update",
+            Expr::Delete { .. } => "Delete",
+            Expr::AlterTable { .. } => "AlterTable",
+            Expr::Drop { .. } => "Drop",
+            Expr::Rename { .. } => "Rename",
+            Expr::Script { .. } => "Script",
+            Expr::Assign { .. } => "Assign",
         }
     }
 }
@@ -575,6 +548,7 @@ impl fmt::Display for Scalar {
         match self {
             Scalar::Literal(value, _) => write!(f, "{}", value),
             Scalar::Column(column) => write!(f, "{}", column),
+            Scalar::Parameter(name, _) => write!(f, "@{}", name),
             Scalar::Call(function) => {
                 if function.arguments().is_empty() {
                     write!(f, "({:?})", function)

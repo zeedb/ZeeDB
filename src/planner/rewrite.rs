@@ -1,8 +1,13 @@
 use arrow::datatypes::*;
 use ast::*;
+use parser::ParseProvider;
 
 #[derive(Debug)]
 enum RewriteRule {
+    // Rewrite DDL:
+    CreateDatabaseToScript,
+    CreateTableToScript,
+    CreateIndexToScript,
     // Unnest meta rule:
     PushDependentJoin,
     // Unnesting implementation rules:
@@ -19,6 +24,7 @@ enum RewriteRule {
     SingleJoinToInnerJoin,
     RemoveInnerJoin,
     RemoveWith,
+    RemoveTableFreeScan,
     // Predicate pushdown:
     PushExplicitFilterIntoInnerJoin,
     PushImplicitFilterThroughInnerJoin,
@@ -35,6 +41,47 @@ enum RewriteRule {
 impl RewriteRule {
     fn apply(&self, expr: &Expr) -> Option<Expr> {
         match self {
+            RewriteRule::CreateDatabaseToScript => {
+                if let LogicalCreateDatabase { name } = expr {
+                    todo!()
+                }
+            }
+            RewriteRule::CreateTableToScript => {
+                if let LogicalCreateTable {
+                    name,
+                    columns,
+                    partition_by,
+                    cluster_by,
+                    primary_key,
+                    input: None,
+                } = expr
+                {
+                    let mut lines = vec![];
+                    lines
+                        .push("set next_table_id = (select max(table_id) from table);".to_string());
+                    lines.push(format!("insert into table (catalog_id, table_id, table_name) values (0, @next_table_id, {:?});", name.path.last().unwrap()));
+                    for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
+                        let column_type = data_type::to_string(column_type);
+                        let partition_by = -1; // TODO
+                        let cluster_by = -1; // TODO
+                        let primary_key = -1; // TODO
+                        lines.push(format!("insert into column (table_id, column_id, column_name, column_type, partition_by, cluster_by, primary_key) values (@next_table_id, {:?}, {:?}, {:?}, {:?}, {:?}, {:?});", column_id, column_name, column_type, partition_by, cluster_by, primary_key));
+                    }
+                    return Some(LogicalRewrite {
+                        sql: lines.join("\n"),
+                    });
+                }
+            }
+            RewriteRule::CreateIndexToScript => {
+                if let LogicalCreateIndex {
+                    name,
+                    table,
+                    columns,
+                } = expr
+                {
+                    todo!()
+                }
+            }
             RewriteRule::PushDependentJoin => {
                 if let LogicalDependentJoin {
                     parameters,
@@ -45,7 +92,7 @@ impl RewriteRule {
                     if free_parameters(parameters, subquery).is_empty() {
                         return None;
                     }
-                    return Some(expr.clone().top_down_rewrite(&|expr| {
+                    return Some(expr.clone().top_down_rewrite(&mut |expr| {
                         apply_all(
                             expr,
                             &vec![
@@ -439,6 +486,15 @@ impl RewriteRule {
                     }
                 }
             }
+            RewriteRule::RemoveTableFreeScan => {
+                if let LogicalJoin { join, left, right } = expr {
+                    if let Join::Inner(join_predicates) = join {
+                        if let TableFreeScan = right.as_ref() {
+                            return Some(maybe_filter(join_predicates, left));
+                        }
+                    }
+                }
+            }
             RewriteRule::PushExplicitFilterIntoInnerJoin => {
                 if let LogicalFilter {
                     predicates: filter_predicates,
@@ -756,6 +812,23 @@ fn prove_non_empty(expr: &Expr) -> bool {
     }
 }
 
+fn prove_at_most_one(expr: &Expr) -> bool {
+    match expr {
+        LogicalMap { input, .. } => prove_at_most_one(input),
+        LogicalAggregate {
+            group_by, input, ..
+        } => {
+            if group_by.is_empty() {
+                true
+            } else {
+                prove_at_most_one(input)
+            }
+        }
+        LogicalSingleGet => true,
+        _ => false,
+    }
+}
+
 fn remove_inner_join_left(left: &Expr, right: &Expr) -> Option<Expr> {
     match left {
         LogicalMap {
@@ -858,26 +931,47 @@ fn apply_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
     }
     expr
 }
-pub fn rewrite(expr: Expr) -> Expr {
-    // println!("start:\n{}", &expr);
+pub fn rewrite(expr: Expr, parser: &mut ParseProvider) -> Expr {
+    let expr = rewrite_ddl(expr);
     let expr = general_unnest(expr);
-    // println!("general_unnest:\n{}", &expr);
     let expr = predicate_push_down(expr);
-    // println!("predicate_push_down:\n{}", &expr);
     let expr = optimize_join_type(expr);
-    // println!("optimize_join_type:\n{}", &expr);
     let expr = projection_push_down(expr);
-    // println!("projection_push_down:\n{}", &expr);
+    let expr = rewrite_logical_rewrite(expr, parser);
     expr
+}
+
+fn rewrite_ddl(expr: Expr) -> Expr {
+    expr.top_down_rewrite(&mut |expr| {
+        apply_all(
+            expr,
+            &vec![
+                RewriteRule::CreateDatabaseToScript,
+                RewriteRule::CreateTableToScript,
+                RewriteRule::CreateIndexToScript,
+            ],
+        )
+    })
 }
 
 // Unnest all dependent joins, and simplify joins where possible.
 fn general_unnest(expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&|expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
+    expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
+}
+
+fn rewrite_logical_rewrite(expr: Expr, parser: &mut ParseProvider) -> Expr {
+    expr.bottom_up_rewrite(&mut |expr| match expr {
+        LogicalRewrite { sql } => {
+            let catalog = bootstrap::metadata_zetasql();
+            let expr = parser.analyze(&sql, catalog).unwrap(); // TODO parse multiple statements
+            rewrite(expr, parser)
+        }
+        other => other,
+    })
 }
 
 fn optimize_join_type(expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&|expr| {
+    expr.bottom_up_rewrite(&mut |expr| {
         apply_all(
             expr,
             &vec![
@@ -885,6 +979,7 @@ fn optimize_join_type(expr: Expr) -> Expr {
                 RewriteRule::SingleJoinToInnerJoin,
                 RewriteRule::RemoveInnerJoin,
                 RewriteRule::RemoveWith,
+                RewriteRule::RemoveTableFreeScan,
             ],
         )
     })
@@ -892,7 +987,7 @@ fn optimize_join_type(expr: Expr) -> Expr {
 
 // Push predicates into joins and scans.
 fn predicate_push_down(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&|expr| {
+    expr.top_down_rewrite(&mut |expr| {
         apply_all(
             expr,
             &vec![
@@ -908,7 +1003,7 @@ fn predicate_push_down(expr: Expr) -> Expr {
 }
 
 fn projection_push_down(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&|expr| {
+    expr.top_down_rewrite(&mut |expr| {
         apply_all(
             expr,
             &vec![

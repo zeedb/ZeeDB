@@ -31,12 +31,11 @@ pub enum Rule {
     LogicalValuesToValues,
     LogicalUpdateToUpdate,
     LogicalDeleteToDelete,
-    LogicalCreateDatabaseToCreateDatabase,
-    LogicalCreateTableToCreateTable,
-    LogicalCreateIndexToCreateIndex,
     LogicalAlterTableToAlterTable,
     LogicalDropToDrop,
     LogicalRenameToRename,
+    LogicalAssignToAssign,
+    LogicalScriptToScript,
 }
 
 impl Rule {
@@ -62,12 +61,11 @@ impl Rule {
             | Rule::LogicalValuesToValues
             | Rule::LogicalUpdateToUpdate
             | Rule::LogicalDeleteToDelete
-            | Rule::LogicalCreateDatabaseToCreateDatabase
-            | Rule::LogicalCreateTableToCreateTable
-            | Rule::LogicalCreateIndexToCreateIndex
             | Rule::LogicalAlterTableToAlterTable
             | Rule::LogicalDropToDrop
-            | Rule::LogicalRenameToRename => true,
+            | Rule::LogicalRenameToRename
+            | Rule::LogicalAssignToAssign
+            | Rule::LogicalScriptToScript => true,
             _ => false,
         }
     }
@@ -115,12 +113,11 @@ impl Rule {
             | (Rule::LogicalValuesToValues, LogicalValues { .. })
             | (Rule::LogicalUpdateToUpdate, LogicalUpdate { .. })
             | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
-            | (Rule::LogicalCreateDatabaseToCreateDatabase, LogicalCreateDatabase { .. })
-            | (Rule::LogicalCreateTableToCreateTable, LogicalCreateTable { .. })
-            | (Rule::LogicalCreateIndexToCreateIndex, LogicalCreateIndex { .. })
             | (Rule::LogicalAlterTableToAlterTable, LogicalAlterTable { .. })
             | (Rule::LogicalDropToDrop, LogicalDrop { .. })
-            | (Rule::LogicalRenameToRename, LogicalRename { .. }) => true,
+            | (Rule::LogicalRenameToRename, LogicalRename { .. })
+            | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
+            | (Rule::LogicalScriptToScript, LogicalScript { .. }) => true,
             _ => false,
         }
     }
@@ -588,36 +585,6 @@ impl Rule {
                     return Some(Delete { table, input });
                 }
             }
-            Rule::LogicalCreateDatabaseToCreateDatabase => {
-                if let LogicalCreateDatabase { .. } = bind {
-                    todo!()
-                }
-            }
-            Rule::LogicalCreateTableToCreateTable => {
-                if let LogicalCreateTable {
-                    name,
-                    columns,
-                    partition_by,
-                    cluster_by,
-                    primary_key,
-                    input,
-                } = bind
-                {
-                    return Some(CreateTable {
-                        name,
-                        columns,
-                        partition_by,
-                        cluster_by,
-                        primary_key,
-                        input,
-                    });
-                }
-            }
-            Rule::LogicalCreateIndexToCreateIndex => {
-                if let LogicalCreateIndex { .. } = bind {
-                    todo!()
-                }
-            }
             Rule::LogicalAlterTableToAlterTable => {
                 if let LogicalAlterTable { .. } = bind {
                     todo!()
@@ -631,6 +598,25 @@ impl Rule {
             Rule::LogicalRenameToRename => {
                 if let LogicalRename { .. } = bind {
                     todo!()
+                }
+            }
+            Rule::LogicalAssignToAssign => {
+                if let LogicalAssign {
+                    variable,
+                    value,
+                    input,
+                } = bind
+                {
+                    return Some(Assign {
+                        variable,
+                        value,
+                        input,
+                    });
+                }
+            }
+            Rule::LogicalScriptToScript => {
+                if let LogicalScript { statements } = bind {
+                    return Some(Script { statements });
                 }
             }
         }
@@ -663,12 +649,11 @@ impl Rule {
             Rule::LogicalValuesToValues,
             Rule::LogicalUpdateToUpdate,
             Rule::LogicalDeleteToDelete,
-            Rule::LogicalCreateDatabaseToCreateDatabase,
-            Rule::LogicalCreateTableToCreateTable,
-            Rule::LogicalCreateIndexToCreateIndex,
             Rule::LogicalAlterTableToAlterTable,
             Rule::LogicalDropToDrop,
             Rule::LogicalRenameToRename,
+            Rule::LogicalAssignToAssign,
+            Rule::LogicalScriptToScript,
         ]
     }
 }

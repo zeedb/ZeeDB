@@ -148,6 +148,17 @@ pub enum Expr {
         from: Name,
         to: Name,
     },
+    LogicalScript {
+        statements: Vec<Expr>,
+    },
+    LogicalAssign {
+        variable: String,
+        value: Scalar,
+        input: Box<Expr>,
+    },
+    LogicalRewrite {
+        sql: String,
+    },
     TableFreeScan,
     SeqScan {
         projects: Vec<Column>,
@@ -241,22 +252,6 @@ pub enum Expr {
         table: Table,
         input: Box<Expr>,
     },
-    CreateDatabase {
-        name: Name,
-    },
-    CreateTable {
-        name: Name,
-        columns: Vec<(String, DataType)>,
-        partition_by: Vec<i64>,
-        cluster_by: Vec<i64>,
-        primary_key: Vec<i64>,
-        input: Option<Box<Expr>>,
-    },
-    CreateIndex {
-        name: Name,
-        table: Name,
-        columns: Vec<String>,
-    },
     AlterTable {
         name: Name,
         actions: Vec<Alter>,
@@ -269,6 +264,14 @@ pub enum Expr {
         object: ObjectType,
         from: Name,
         to: Name,
+    },
+    Script {
+        statements: Vec<Expr>,
+    },
+    Assign {
+        variable: String,
+        value: Scalar,
+        input: Box<Expr>,
     },
 }
 
@@ -298,7 +301,10 @@ impl Expr {
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
-            | Expr::LogicalRename { .. } => true,
+            | Expr::LogicalRename { .. }
+            | Expr::LogicalRewrite { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalAssign { .. } => true,
             Expr::Leaf { .. }
             | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
@@ -320,12 +326,11 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Update { .. }
             | Expr::Delete { .. }
-            | Expr::CreateDatabase { .. }
-            | Expr::CreateTable { .. }
-            | Expr::CreateIndex { .. }
             | Expr::AlterTable { .. }
             | Expr::Drop { .. }
-            | Expr::Rename { .. } => false,
+            | Expr::Rename { .. }
+            | Expr::Script { .. }
+            | Expr::Assign { .. } => false,
         }
     }
 
@@ -347,6 +352,10 @@ impl Expr {
             | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
             | Expr::LogicalRename { .. } => true,
+            Expr::LogicalScript { statements } => {
+                statements.iter().any(|expr| expr.has_side_effects())
+            }
+            Expr::LogicalAssign { input, .. } => input.has_side_effects(),
             _ if self.is_logical() => self.iter().any(|expr| expr.has_side_effects()),
             _ => panic!("{} is not logical", self.name()),
         }
@@ -388,9 +397,8 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Update { .. }
             | Expr::Delete { .. }
-            | Expr::CreateTable {
-                input: Some { .. }, ..
-            } => 1,
+            | Expr::LogicalAssign { .. }
+            | Expr::Assign { .. } => 1,
             Expr::Leaf { .. }
             | Expr::LogicalSingleGet
             | Expr::LogicalGet { .. }
@@ -405,12 +413,11 @@ impl Expr {
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
-            | Expr::CreateDatabase { .. }
-            | Expr::CreateTable { input: None, .. }
-            | Expr::CreateIndex { .. }
             | Expr::AlterTable { .. }
             | Expr::Drop { .. }
-            | Expr::Rename { .. } => 0,
+            | Expr::Rename { .. }
+            | Expr::LogicalRewrite { .. } => 0,
+            Expr::LogicalScript { statements } | Expr::Script { statements } => statements.len(),
         }
     }
 
@@ -542,18 +549,6 @@ impl Expr {
                 let input = Box::new(visitor(*input));
                 Expr::LogicalDelete { table, input }
             }
-            Expr::LogicalSingleGet => Expr::LogicalSingleGet,
-            Expr::LogicalGet {
-                projects,
-                predicates,
-                table,
-            } => Expr::LogicalGet {
-                projects,
-                predicates,
-                table,
-            },
-            Expr::LogicalGetWith { name, columns } => Expr::LogicalGetWith { name, columns },
-            Expr::LogicalCreateDatabase { name } => Expr::LogicalCreateDatabase { name },
             Expr::LogicalCreateTable {
                 name,
                 columns,
@@ -568,39 +563,6 @@ impl Expr {
                 cluster_by,
                 primary_key,
                 input: input.map(|input| Box::new(visitor(*input))),
-            },
-            Expr::LogicalCreateIndex {
-                name,
-                table,
-                columns,
-            } => Expr::LogicalCreateIndex {
-                name,
-                table,
-                columns,
-            },
-            Expr::LogicalAlterTable { name, actions } => Expr::LogicalAlterTable { name, actions },
-            Expr::LogicalDrop { object, name } => Expr::LogicalDrop { object, name },
-            Expr::LogicalRename { object, from, to } => Expr::LogicalRename { object, from, to },
-            Expr::TableFreeScan => Expr::TableFreeScan,
-            Expr::SeqScan {
-                projects,
-                predicates,
-                table,
-            } => Expr::SeqScan {
-                projects,
-                predicates,
-                table,
-            },
-            Expr::IndexScan {
-                projects,
-                predicates,
-                table,
-                index_predicates,
-            } => Expr::IndexScan {
-                projects,
-                predicates,
-                table,
-                index_predicates,
             },
             Expr::Filter { predicates, input } => Expr::Filter {
                 predicates,
@@ -716,44 +678,41 @@ impl Expr {
                 table,
                 input: Box::new(visitor(*input)),
             },
-            Expr::CreateDatabase { name } => Expr::CreateDatabase { name },
-            Expr::CreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
+            Expr::LogicalScript { statements } => Expr::LogicalScript {
+                statements: map(visitor, statements),
+            },
+            Expr::Script { statements } => Expr::Script {
+                statements: map(visitor, statements),
+            },
+            Expr::LogicalAssign {
+                variable,
+                value,
                 input,
-            } => Expr::CreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input: input.map(|input| Box::new(visitor(*input))),
+            } => Expr::LogicalAssign {
+                variable,
+                value,
+                input: Box::new(visitor(*input)),
             },
-            Expr::CreateIndex {
-                name,
-                table,
-                columns,
-            } => Expr::CreateIndex {
-                name,
-                table,
-                columns,
+            Expr::Assign {
+                variable,
+                value,
+                input,
+            } => Expr::Assign {
+                variable,
+                value,
+                input: Box::new(visitor(*input)),
             },
-            Expr::AlterTable { name, actions } => Expr::AlterTable { name, actions },
-            Expr::Drop { object, name } => Expr::Drop { object, name },
-            Expr::Rename { object, from, to } => Expr::Rename { object, from, to },
-            Expr::Leaf { gid } => Expr::Leaf { gid },
+            other if other.len() == 0 => other,
+            other => panic!("{}.map(_) not implemented", other.name()),
         }
     }
 
-    pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
+    pub fn bottom_up_rewrite(self, visitor: &mut impl FnMut(Expr) -> Expr) -> Expr {
         let operator = self.map(|child| child.bottom_up_rewrite(visitor));
         visitor(operator)
     }
 
-    pub fn top_down_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
+    pub fn top_down_rewrite(self, visitor: &mut impl FnMut(Expr) -> Expr) -> Expr {
         let expr = visitor(self);
         expr.map(|child| child.top_down_rewrite(visitor))
     }
@@ -764,93 +723,8 @@ impl Expr {
             offset: 0,
         }
     }
-}
 
-impl ops::Index<usize> for Expr {
-    type Output = Expr;
-
-    fn index(&self, index: usize) -> &Self::Output {
-        match self {
-            Expr::LogicalJoin { left, right, .. }
-            | Expr::LogicalDependentJoin {
-                subquery: left,
-                domain: right,
-                ..
-            }
-            | Expr::LogicalWith { left, right, .. }
-            | Expr::LogicalUnion { left, right }
-            | Expr::LogicalIntersect { left, right }
-            | Expr::LogicalExcept { left, right }
-            | Expr::NestedLoop { left, right, .. }
-            | Expr::HashJoin { left, right, .. }
-            | Expr::CreateTempTable { left, right, .. }
-            | Expr::Union { left, right }
-            | Expr::Intersect { left, right }
-            | Expr::Except { left, right } => match index {
-                0 => left,
-                1 => right,
-                _ => panic!("{} is out of bounds [0,2)", index),
-            },
-            Expr::LogicalFilter { input, .. }
-            | Expr::LogicalMap { input, .. }
-            | Expr::LogicalAggregate { input, .. }
-            | Expr::LogicalLimit { input, .. }
-            | Expr::LogicalSort { input, .. }
-            | Expr::LogicalInsert { input, .. }
-            | Expr::LogicalValues { input, .. }
-            | Expr::LogicalUpdate { input, .. }
-            | Expr::LogicalDelete { input, .. }
-            | Expr::LogicalCreateTable {
-                input: Some(input), ..
-            }
-            | Expr::Filter { input, .. }
-            | Expr::Map { input, .. }
-            | Expr::LookupJoin { input, .. }
-            | Expr::Aggregate { input, .. }
-            | Expr::Limit { input, .. }
-            | Expr::Sort { input, .. }
-            | Expr::Insert { input, .. }
-            | Expr::Values { input, .. }
-            | Expr::Update { input, .. }
-            | Expr::Delete { input, .. }
-            | Expr::CreateTable {
-                input: Some(input), ..
-            } => match index {
-                0 => input,
-                _ => panic!("{} is out of bounds [0,1)", index),
-            },
-            Expr::Leaf { .. }
-            | Expr::LogicalSingleGet { .. }
-            | Expr::LogicalGet { .. }
-            | Expr::LogicalGetWith { .. }
-            | Expr::LogicalCreateDatabase { .. }
-            | Expr::LogicalCreateTable { input: None, .. }
-            | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalAlterTable { .. }
-            | Expr::LogicalDrop { .. }
-            | Expr::LogicalRename { .. }
-            | Expr::TableFreeScan { .. }
-            | Expr::SeqScan { .. }
-            | Expr::IndexScan { .. }
-            | Expr::GetTempTable { .. }
-            | Expr::CreateDatabase { .. }
-            | Expr::CreateTable { input: None, .. }
-            | Expr::CreateIndex { .. }
-            | Expr::AlterTable { .. }
-            | Expr::Drop { .. }
-            | Expr::Rename { .. } => panic!("{} has no inputs", self.name()),
-        }
-    }
-}
-
-pub trait Scope {
-    fn attributes(&self) -> HashSet<Column>;
-    fn references(&self) -> HashSet<Column>;
-    fn subst(self, map: &HashMap<Column, Column>) -> Self;
-}
-
-impl Scope for Expr {
-    fn attributes(&self) -> HashSet<Column> {
+    pub fn attributes(&self) -> HashSet<Column> {
         match self {
             Expr::LogicalGet { projects, .. } => projects.iter().map(|c| c.clone()).collect(),
             Expr::LogicalMap {
@@ -889,7 +763,8 @@ impl Scope for Expr {
                 join: Join::Single { .. },
                 right: input,
                 ..
-            } => input.attributes(),
+            }
+            | Expr::LogicalAssign { input, .. } => input.attributes(),
             Expr::LogicalJoin {
                 join: Join::Mark(mark, _),
                 right,
@@ -949,7 +824,7 @@ impl Scope for Expr {
         }
     }
 
-    fn references(&self) -> HashSet<Column> {
+    pub fn references(&self) -> HashSet<Column> {
         let mut set = HashSet::new();
         match self {
             Expr::LogicalGet { predicates, .. } | Expr::LogicalFilter { predicates, .. } => {
@@ -998,6 +873,9 @@ impl Scope for Expr {
                     }
                 }
             }
+            Expr::LogicalAssign { value, .. } => {
+                set.extend(value.references());
+            }
             any if any.is_logical() => {}
             any => unimplemented!(
                 "free is not implemented for physical operator {}",
@@ -1010,7 +888,7 @@ impl Scope for Expr {
         set
     }
 
-    fn subst(self, map: &HashMap<Column, Column>) -> Self {
+    pub fn subst(self, map: &HashMap<Column, Column>) -> Self {
         let subst_c = |c: &Column| map.get(c).unwrap_or(c).clone();
         let subst_x = |x: &Scalar| x.clone().subst(map);
         let subst_o = |o: &OrderBy| OrderBy {
@@ -1103,11 +981,95 @@ impl Scope for Expr {
                     .collect(),
                 input: Box::new(input.subst(map)),
             },
+            Expr::LogicalAssign {
+                variable,
+                value,
+                input,
+            } => Expr::LogicalAssign {
+                variable,
+                value,
+                input: Box::new(input.subst(map)),
+            },
             any if any.is_logical() => any.map(|child| child.subst(map)),
             any => unimplemented!(
                 "subst is not implemented for physical operator {}",
                 any.name()
             ),
+        }
+    }
+}
+
+impl ops::Index<usize> for Expr {
+    type Output = Expr;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            Expr::LogicalJoin { left, right, .. }
+            | Expr::LogicalDependentJoin {
+                subquery: left,
+                domain: right,
+                ..
+            }
+            | Expr::LogicalWith { left, right, .. }
+            | Expr::LogicalUnion { left, right }
+            | Expr::LogicalIntersect { left, right }
+            | Expr::LogicalExcept { left, right }
+            | Expr::NestedLoop { left, right, .. }
+            | Expr::HashJoin { left, right, .. }
+            | Expr::CreateTempTable { left, right, .. }
+            | Expr::Union { left, right }
+            | Expr::Intersect { left, right }
+            | Expr::Except { left, right } => match index {
+                0 => left,
+                1 => right,
+                _ => panic!("{} is out of bounds [0,2)", index),
+            },
+            Expr::LogicalFilter { input, .. }
+            | Expr::LogicalMap { input, .. }
+            | Expr::LogicalAggregate { input, .. }
+            | Expr::LogicalLimit { input, .. }
+            | Expr::LogicalSort { input, .. }
+            | Expr::LogicalInsert { input, .. }
+            | Expr::LogicalValues { input, .. }
+            | Expr::LogicalUpdate { input, .. }
+            | Expr::LogicalDelete { input, .. }
+            | Expr::LogicalCreateTable {
+                input: Some(input), ..
+            }
+            | Expr::Filter { input, .. }
+            | Expr::Map { input, .. }
+            | Expr::LookupJoin { input, .. }
+            | Expr::Aggregate { input, .. }
+            | Expr::Limit { input, .. }
+            | Expr::Sort { input, .. }
+            | Expr::Insert { input, .. }
+            | Expr::Values { input, .. }
+            | Expr::Update { input, .. }
+            | Expr::Delete { input, .. }
+            | Expr::LogicalAssign { input, .. }
+            | Expr::Assign { input, .. } => match index {
+                0 => input,
+                _ => panic!("{} is out of bounds [0,1)", index),
+            },
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalGet { .. }
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { input: None, .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalAlterTable { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalRename { .. }
+            | Expr::TableFreeScan { .. }
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::AlterTable { .. }
+            | Expr::Drop { .. }
+            | Expr::Rename { .. }
+            | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
+            Expr::LogicalScript { statements } | Expr::Script { statements } => &statements[index],
         }
     }
 }
@@ -1346,6 +1308,7 @@ impl fmt::Display for Alter {
 pub enum Scalar {
     Literal(Value, DataType),
     Column(Column),
+    Parameter(String, DataType),
     Call(Box<Function>),
     Cast(Box<Scalar>, DataType),
 }
@@ -1355,6 +1318,7 @@ impl Scalar {
         match self {
             Scalar::Literal(_, data) => data.clone(),
             Scalar::Column(column) => column.data.clone(),
+            Scalar::Parameter(_, data) => data.clone(),
             Scalar::Call(function) => function.returns().clone(),
             Scalar::Cast(_, data) => data.clone(),
         }
@@ -1368,7 +1332,7 @@ impl Scalar {
 
     fn collect_references(&self, free: &mut HashSet<Column>) {
         match self {
-            Scalar::Literal { .. } => {}
+            Scalar::Literal(_, _) | Scalar::Parameter(_, _) => {}
             Scalar::Column(column) => {
                 free.insert(column.clone());
             }
@@ -1820,4 +1784,12 @@ impl<'it> Iterator for ExprIterator<'it> {
             None
         }
     }
+}
+
+fn map(mut visitor: impl FnMut(Expr) -> Expr, list: Vec<Expr>) -> Vec<Expr> {
+    let mut mapped = Vec::with_capacity(list.len());
+    for expr in list {
+        mapped.push(visitor(expr))
+    }
+    mapped
 }
