@@ -282,15 +282,7 @@ fn test_optimize() {
             create table foo (person_id int64 primary key, store_id int64)
         "#,
         errors
-    ); // TODO this has a nested loop that could be eliminated.
-       // ok!(
-       //     "examples/ddl/create_table_as.txt",
-       //     r#"
-       //         create table foo (person_id int64 primary key, store_id int64) as
-       //         select person_id, store_id from customer
-       //     "#,
-       //     errors
-       // ); TODO
+    );
     ok!(
         "examples/dml/delete.txt",
         r#"

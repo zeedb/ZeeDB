@@ -33,6 +33,7 @@ pub enum Rule {
     LogicalDeleteToDelete,
     LogicalDropToDrop,
     LogicalAssignToAssign,
+    LogicalCallToCall,
     LogicalScriptToScript,
 }
 
@@ -111,6 +112,7 @@ impl Rule {
             | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
             | (Rule::LogicalDropToDrop, LogicalDrop { .. })
             | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
+            | (Rule::LogicalCallToCall, LogicalCall { .. })
             | (Rule::LogicalScriptToScript, LogicalScript { .. }) => true,
             _ => false,
         }
@@ -598,6 +600,22 @@ impl Rule {
                     });
                 }
             }
+            Rule::LogicalCallToCall => {
+                if let LogicalCall {
+                    procedure,
+                    arguments,
+                    returns,
+                    input,
+                } = bind
+                {
+                    return Some(Call {
+                        procedure,
+                        arguments,
+                        returns,
+                        input,
+                    });
+                }
+            }
             Rule::LogicalScriptToScript => {
                 if let LogicalScript { statements } = bind {
                     return Some(Script { statements });
@@ -635,6 +653,7 @@ impl Rule {
             Rule::LogicalDeleteToDelete,
             Rule::LogicalDropToDrop,
             Rule::LogicalAssignToAssign,
+            Rule::LogicalCallToCall,
             Rule::LogicalScriptToScript,
         ]
     }

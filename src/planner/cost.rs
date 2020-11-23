@@ -106,8 +106,34 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
-        Drop { .. } | Script { .. } | Assign { .. } => 0.0,
-        _ => panic!(),
+        Drop { .. } | Script { .. } | Assign { .. } | Call { .. } => 0.0,
+        Leaf { .. }
+        | LogicalSingleGet
+        | LogicalJoin { .. }
+        | LogicalDependentJoin { .. }
+        | LogicalWith { .. }
+        | LogicalUnion { .. }
+        | LogicalIntersect { .. }
+        | LogicalExcept { .. }
+        | LogicalFilter { .. }
+        | LogicalMap { .. }
+        | LogicalAggregate { .. }
+        | LogicalLimit { .. }
+        | LogicalSort { .. }
+        | LogicalInsert { .. }
+        | LogicalValues { .. }
+        | LogicalUpdate { .. }
+        | LogicalDelete { .. }
+        | LogicalGet { .. }
+        | LogicalGetWith { .. }
+        | LogicalCreateDatabase { .. }
+        | LogicalCreateTable { .. }
+        | LogicalCreateIndex { .. }
+        | LogicalDrop { .. }
+        | LogicalRewrite { .. }
+        | LogicalScript { .. }
+        | LogicalAssign { .. }
+        | LogicalCall { .. } => panic!("logical operator {}", &ss[mid].expr),
     }
 }
 

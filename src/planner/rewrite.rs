@@ -49,13 +49,13 @@ impl RewriteRule {
             RewriteRule::CreateTableToScript => {
                 if let LogicalCreateTable { name, columns } = expr {
                     let mut lines = vec![];
-                    lines
-                        .push("set next_table_id = (select max(table_id) from table);".to_string());
+                    lines.push("set next_table_id = next_val('table');".to_string());
                     lines.push(format!("insert into table (catalog_id, table_id, table_name) values (0, @next_table_id, {:?});", name.path.last().unwrap()));
                     for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                         let column_type = data_type::to_string(column_type);
                         lines.push(format!("insert into column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
                     }
+                    lines.push("call create_table(@next_table_id);".to_string());
                     return Some(LogicalRewrite {
                         sql: lines.join("\n"),
                     });

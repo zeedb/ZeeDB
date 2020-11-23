@@ -141,6 +141,12 @@ pub enum Expr {
         value: Scalar,
         input: Box<Expr>,
     },
+    LogicalCall {
+        procedure: String,
+        arguments: Vec<Scalar>,
+        returns: Option<DataType>,
+        input: Box<Expr>,
+    },
     LogicalRewrite {
         sql: String,
     },
@@ -249,6 +255,12 @@ pub enum Expr {
         value: Scalar,
         input: Box<Expr>,
     },
+    Call {
+        procedure: String,
+        arguments: Vec<Scalar>,
+        returns: Option<DataType>,
+        input: Box<Expr>,
+    },
 }
 
 impl Expr {
@@ -278,7 +290,8 @@ impl Expr {
             | Expr::LogicalDrop { .. }
             | Expr::LogicalRewrite { .. }
             | Expr::LogicalScript { .. }
-            | Expr::LogicalAssign { .. } => true,
+            | Expr::LogicalAssign { .. }
+            | Expr::LogicalCall { .. } => true,
             Expr::Leaf { .. }
             | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
@@ -302,7 +315,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Drop { .. }
             | Expr::Script { .. }
-            | Expr::Assign { .. } => false,
+            | Expr::Assign { .. }
+            | Expr::Call { .. } => false,
         }
     }
 
@@ -322,10 +336,6 @@ impl Expr {
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. } => true,
-            Expr::LogicalScript { statements } => {
-                statements.iter().any(|expr| expr.has_side_effects())
-            }
-            Expr::LogicalAssign { input, .. } => input.has_side_effects(),
             _ if self.is_logical() => self.iter().any(|expr| expr.has_side_effects()),
             _ => panic!("{} is not logical", self.name()),
         }
@@ -365,7 +375,9 @@ impl Expr {
             | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::LogicalAssign { .. }
-            | Expr::Assign { .. } => 1,
+            | Expr::Assign { .. }
+            | Expr::LogicalCall { .. }
+            | Expr::Call { .. } => 1,
             Expr::Leaf { .. }
             | Expr::LogicalSingleGet
             | Expr::LogicalGet { .. }
@@ -650,6 +662,28 @@ impl Expr {
                 value,
                 input: Box::new(visitor(*input)),
             },
+            Expr::LogicalCall {
+                procedure,
+                arguments,
+                returns,
+                input,
+            } => Expr::LogicalCall {
+                procedure,
+                arguments,
+                returns,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Call {
+                procedure,
+                arguments,
+                returns,
+                input,
+            } => Expr::Call {
+                procedure,
+                arguments,
+                returns,
+                input: Box::new(visitor(*input)),
+            },
             other if other.len() == 0 => other,
             other => panic!("{}.map(_) not implemented", other.name()),
         }
@@ -712,7 +746,8 @@ impl Expr {
                 right: input,
                 ..
             }
-            | Expr::LogicalAssign { input, .. } => input.attributes(),
+            | Expr::LogicalAssign { input, .. }
+            | Expr::LogicalCall { input, .. } => input.attributes(),
             Expr::LogicalJoin {
                 join: Join::Mark(mark, _),
                 right,
@@ -823,6 +858,11 @@ impl Expr {
             }
             Expr::LogicalAssign { value, .. } => {
                 set.extend(value.references());
+            }
+            Expr::LogicalCall { arguments, .. } => {
+                for argument in arguments {
+                    set.extend(argument.references());
+                }
             }
             any if any.is_logical() => {}
             any => unimplemented!(
@@ -938,6 +978,17 @@ impl Expr {
                 value,
                 input: Box::new(input.subst(map)),
             },
+            Expr::LogicalCall {
+                procedure,
+                arguments,
+                returns,
+                input,
+            } => Expr::LogicalCall {
+                procedure,
+                arguments,
+                returns,
+                input: Box::new(input.subst(map)),
+            },
             any if any.is_logical() => any.map(|child| child.subst(map)),
             any => unimplemented!(
                 "subst is not implemented for physical operator {}",
@@ -992,7 +1043,9 @@ impl ops::Index<usize> for Expr {
             | Expr::Update { input, .. }
             | Expr::Delete { input, .. }
             | Expr::LogicalAssign { input, .. }
-            | Expr::Assign { input, .. } => match index {
+            | Expr::Assign { input, .. }
+            | Expr::LogicalCall { input, .. }
+            | Expr::Call { input, .. } => match index {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },
@@ -1322,6 +1375,8 @@ pub enum Function {
     Divide(Scalar, Scalar, DataType),
     Multiply(Scalar, Scalar, DataType),
     Subtract(Scalar, Scalar, DataType),
+    // System functions.
+    NextVal(Scalar),
 }
 
 impl Function {
@@ -1343,6 +1398,7 @@ impl Function {
                 match name {
                     "ZetaSQL:$not" => Function::Not(argument),
                     "ZetaSQL:$unary_minus" => Function::UnaryMinus(argument),
+                    "system:next_val" => Function::NextVal(argument),
                     other => panic!("{} is not a unary function", other),
                 }
             }
@@ -1494,13 +1550,16 @@ impl Function {
             Function::Divide(_, _, _) => "Divide",
             Function::Multiply(_, _, _) => "Multiply",
             Function::Subtract(_, _, _) => "Subtract",
+            Function::NextVal(_) => "NextVal",
         }
     }
 
     pub fn arguments(&self) -> Vec<&Scalar> {
         match self {
             Function::CurrentDate | Function::CurrentTimestamp | Function::Rand => vec![],
-            Function::Not(argument) | Function::UnaryMinus(argument) => vec![argument],
+            Function::Not(argument)
+            | Function::UnaryMinus(argument)
+            | Function::NextVal(argument) => vec![argument],
             Function::Equal(left, right)
             | Function::Greater(left, right)
             | Function::GreaterOrEqual(left, right)
@@ -1537,6 +1596,7 @@ impl Function {
             | Function::Multiply(_, _, returns)
             | Function::Subtract(_, _, returns)
             | Function::Divide(_, _, returns) => returns.clone(),
+            Function::NextVal(_) => DataType::Int64,
         }
     }
 
@@ -1562,6 +1622,7 @@ impl Function {
             Function::Subtract(left, right, returns) => {
                 Function::Subtract(f(left), f(right), returns)
             }
+            Function::NextVal(argument) => Function::NextVal(f(argument)),
         }
     }
 }

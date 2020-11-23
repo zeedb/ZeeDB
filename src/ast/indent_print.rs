@@ -406,6 +406,28 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
+            Expr::LogicalCall {
+                procedure,
+                arguments,
+                input,
+                ..
+            }
+            | Expr::Call {
+                procedure,
+                arguments,
+                input,
+                ..
+            } => {
+                write!(
+                    f,
+                    "{} {} {}",
+                    self.name(),
+                    procedure,
+                    join_scalars(arguments)
+                )?;
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
+            }
         }
     }
 }
@@ -438,6 +460,7 @@ impl Expr {
             Expr::LogicalDrop { .. } => "LogicalDrop",
             Expr::LogicalScript { .. } => "LogicalScript",
             Expr::LogicalAssign { .. } => "LogicalAssign",
+            Expr::LogicalCall { .. } => "LogicalCall",
             Expr::LogicalRewrite { .. } => "LogicalRewrite",
             Expr::TableFreeScan { .. } => "TableFreeScan",
             Expr::SeqScan { .. } => "SeqScan",
@@ -462,6 +485,7 @@ impl Expr {
             Expr::Drop { .. } => "Drop",
             Expr::Script { .. } => "Script",
             Expr::Assign { .. } => "Assign",
+            Expr::Call { .. } => "Call",
         }
     }
 }

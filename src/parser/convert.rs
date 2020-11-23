@@ -38,6 +38,7 @@ impl Converter {
             ResolvedUpdateStmtNode(q) => self.update(q),
             ResolvedCreateDatabaseStmtNode(q) => self.create_database(q),
             ResolvedSingleAssignmentStmtNode(q) => self.assign(q),
+            ResolvedCallStmtNode(q) => self.call(q),
             other => panic!("{:?}", other),
         }
     }
@@ -659,6 +660,21 @@ impl Converter {
         LogicalAssign {
             variable: q.variable.get().clone(),
             value: self.expr(q.expr.get(), &mut input),
+            input: Box::new(input),
+        }
+    }
+
+    fn call(&mut self, q: &ResolvedCallStmtProto) -> Expr {
+        let mut input = LogicalSingleGet;
+        LogicalCall {
+            procedure: q.procedure.get().name.get().clone(),
+            arguments: self.exprs(&q.argument_list, &mut input),
+            returns: q
+                .signature
+                .get()
+                .return_type
+                .as_ref()
+                .map(|returns| data_type::from_proto(returns.r#type.get())),
             input: Box::new(input),
         }
     }

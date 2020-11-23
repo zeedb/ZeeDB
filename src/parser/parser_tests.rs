@@ -62,3 +62,17 @@ fn test_script() {
     let sql = "set x = 1;".to_string();
     parser.analyze(&sql, empty_catalog()).unwrap();
 }
+
+#[test]
+fn test_custom_function() {
+    let mut parser = ParseProvider::new();
+    let sql = "select next_val('table');".to_string();
+    parser.analyze(&sql, bootstrap::metadata_zetasql()).unwrap();
+}
+
+#[test]
+fn test_call() {
+    let mut parser = ParseProvider::new();
+    let sql = "call create_table(1);".to_string();
+    parser.analyze(&sql, bootstrap::metadata_zetasql()).unwrap();
+}

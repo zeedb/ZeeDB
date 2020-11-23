@@ -369,7 +369,8 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         | LogicalCreateIndex { .. }
         | LogicalDrop { .. }
         | LogicalScript { .. }
-        | LogicalAssign { .. } => {}
+        | LogicalAssign { .. }
+        | LogicalCall { .. } => {}
         op if !op.is_logical() => panic!(
             "tried to compute logical props of physical operator {}",
             op.name()
@@ -458,6 +459,7 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             | Function::Divide(_, _, _)
             | Function::Multiply(_, _, _)
             | Function::Subtract(_, _, _) => panic!("{:?} is not a logical function", function),
+            Function::NextVal(_) => 1.0,
         },
         Scalar::Cast(_, _) => 0.5,
     }

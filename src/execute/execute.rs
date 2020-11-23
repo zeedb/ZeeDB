@@ -210,6 +210,12 @@ impl ExecuteProvider for Expr {
                 value,
                 input,
             } => todo!(),
+            Call {
+                procedure,
+                arguments,
+                returns,
+                input,
+            } => todo!(),
             Leaf { .. }
             | LogicalSingleGet
             | LogicalGet { .. }
@@ -235,7 +241,8 @@ impl ExecuteProvider for Expr {
             | LogicalDrop { .. }
             | LogicalScript { .. }
             | LogicalRewrite { .. }
-            | LogicalAssign { .. } => panic!("logical operation"),
+            | LogicalAssign { .. }
+            | LogicalCall { .. } => panic!("logical operation"),
         }
     }
 }

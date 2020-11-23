@@ -1,4 +1,5 @@
 use arrow::datatypes::{DataType, Field, Schema};
+use zetasql::function_enums::*;
 use zetasql::*;
 
 pub fn catalog() -> SimpleCatalogProto {
@@ -98,6 +99,8 @@ pub fn metadata_zetasql() -> SimpleCatalogProto {
                 ],
             ),
         ],
+        custom_function: metadata_custom_functions(),
+        procedure: metadata_procedures(),
         ..Default::default()
     }
 }
@@ -348,4 +351,64 @@ fn enabled_functions() -> Vec<i32> {
         FunctionSignatureId::FnLogicalAnd as i32,
         FunctionSignatureId::FnLogicalOr as i32,
     ]
+}
+
+fn metadata_custom_functions() -> Vec<FunctionProto> {
+    vec![simple_function(
+        "next_val".to_string(),
+        vec![TypeKind::TypeString],
+        TypeKind::TypeInt64,
+    )]
+}
+
+fn metadata_procedures() -> Vec<ProcedureProto> {
+    vec![simple_procedure(
+        "create_table".to_string(),
+        vec![TypeKind::TypeInt64],
+        TypeKind::TypeInt64,
+    )]
+}
+
+fn simple_function(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {
+    FunctionProto {
+        name_path: vec![name],
+        group: Some("system".to_string()),
+        signature: vec![simple_signature(arguments, returns)],
+        mode: Some(Mode::Scalar as i32),
+        ..Default::default()
+    }
+}
+
+fn simple_procedure(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> ProcedureProto {
+    ProcedureProto {
+        name_path: vec![name],
+        signature: Some(simple_signature(arguments, returns)),
+        ..Default::default()
+    }
+}
+
+fn simple_signature(mut arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionSignatureProto {
+    let argument_types = arguments.drain(..).map(simple_argument).collect();
+    let return_type = simple_argument(returns);
+    FunctionSignatureProto {
+        argument: argument_types,
+        return_type: Some(return_type),
+        ..Default::default()
+    }
+}
+
+fn simple_argument(argument_type: TypeKind) -> FunctionArgumentTypeProto {
+    FunctionArgumentTypeProto {
+        r#type: Some(TypeProto {
+            type_kind: Some(argument_type as i32),
+            ..Default::default()
+        }),
+        kind: Some(SignatureArgumentKind::ArgTypeFixed as i32),
+        num_occurrences: Some(1),
+        options: Some(FunctionArgumentTypeOptionsProto {
+            cardinality: Some(ArgumentCardinality::Required as i32),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
 }
