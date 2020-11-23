@@ -5,7 +5,7 @@ use ast::*;
 fn test_analyze() {
     let mut parser = ParseProvider::new();
     let expr = parser
-        .analyze(&"select 1".to_string(), empty_catalog())
+        .analyze(&"select 1".to_string(), (1, empty_catalog()))
         .unwrap();
     match expr {
         LogicalMap { .. } => (),
@@ -23,13 +23,13 @@ fn empty_catalog() -> zetasql::SimpleCatalogProto {
 fn test_split() {
     let mut parser = ParseProvider::new();
     let sql = "select 1; select 2".to_string();
-    parser.analyze(&sql, empty_catalog()).unwrap();
+    parser.analyze(&sql, (1, empty_catalog())).unwrap();
 }
 
 #[test]
 fn test_not_available_fn() {
     let mut parser = ParseProvider::new();
-    match parser.analyze(&"select to_proto(true)".to_string(), empty_catalog()) {
+    match parser.analyze(&"select to_proto(true)".to_string(), (1, empty_catalog())) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
     }
@@ -44,7 +44,7 @@ fn test_metadata() {
         join table using (table_id) 
         join catalog using (catalog_id)";
     parser
-        .analyze(&q.to_string(), bootstrap::metadata_zetasql())
+        .analyze(&q.to_string(), (1, bootstrap::metadata_zetasql()))
         .unwrap();
 }
 
@@ -60,19 +60,23 @@ fn test_format() {
 fn test_script() {
     let mut parser = ParseProvider::new();
     let sql = "set x = 1;".to_string();
-    parser.analyze(&sql, empty_catalog()).unwrap();
+    parser.analyze(&sql, (1, empty_catalog())).unwrap();
 }
 
 #[test]
 fn test_custom_function() {
     let mut parser = ParseProvider::new();
     let sql = "select next_val('table');".to_string();
-    parser.analyze(&sql, bootstrap::metadata_zetasql()).unwrap();
+    parser
+        .analyze(&sql, (1, bootstrap::metadata_zetasql()))
+        .unwrap();
 }
 
 #[test]
 fn test_call() {
     let mut parser = ParseProvider::new();
     let sql = "call create_table(1);".to_string();
-    parser.analyze(&sql, bootstrap::metadata_zetasql()).unwrap();
+    parser
+        .analyze(&sql, (1, bootstrap::metadata_zetasql()))
+        .unwrap();
 }

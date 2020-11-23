@@ -15,17 +15,21 @@ use zetasql::resolved_insert_stmt_enums::*;
 use zetasql::value_proto::Value::*;
 use zetasql::*;
 
-pub fn convert(q: &AnyResolvedStatementProto) -> Expr {
-    Converter::new().any_stmt(q)
+pub fn convert(catalog_id: i64, q: &AnyResolvedStatementProto) -> Expr {
+    Converter::new(catalog_id).any_stmt(q)
 }
 
 struct Converter {
+    catalog_id: i64,
     next_column_id: i64,
 }
 
 impl Converter {
-    fn new() -> Converter {
-        Converter { next_column_id: 0 }
+    fn new(catalog_id: i64) -> Converter {
+        Converter {
+            catalog_id,
+            next_column_id: 0,
+        }
     }
 
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
@@ -450,9 +454,11 @@ impl Converter {
 
     fn create_index(&mut self, q: &ResolvedCreateIndexStmtProto) -> Expr {
         let name = Name {
+            catalog_id: self.catalog_id,
             path: q.parent.get().name_path.clone(),
         };
         let table = Name {
+            catalog_id: self.catalog_id,
             path: q.table_name_path.clone(),
         };
         if q.is_unique == Some(true) {
@@ -473,16 +479,12 @@ impl Converter {
     }
 
     fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Expr {
-        self.create_table_base(q.parent.get(), &q.partition_by_list, &q.cluster_by_list)
+        self.create_table_base(q.parent.get())
     }
 
-    fn create_table_base(
-        &mut self,
-        q: &ResolvedCreateTableStmtBaseProto,
-        partition_by_list: &Vec<AnyResolvedExprProto>,
-        cluster_by_list: &Vec<AnyResolvedExprProto>,
-    ) -> Expr {
+    fn create_table_base(&mut self, q: &ResolvedCreateTableStmtBaseProto) -> Expr {
         let name = Name {
+            catalog_id: self.catalog_id,
             path: q.parent.get().name_path.clone(),
         };
         let columns = self.column_definitions(&q.column_definition_list);
@@ -507,6 +509,7 @@ impl Converter {
     fn drop(&mut self, q: &ResolvedDropStmtProto) -> Expr {
         let object = ObjectType::from(q.object_type.get());
         let name = Name {
+            catalog_id: self.catalog_id,
             path: q.name_path.clone(),
         };
         LogicalDrop { object, name }
@@ -650,6 +653,7 @@ impl Converter {
         // TODO fail on unsupported options
         LogicalCreateDatabase {
             name: Name {
+                catalog_id: self.catalog_id,
                 path: q.name_path.clone(),
             },
         }

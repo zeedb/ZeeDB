@@ -383,7 +383,6 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Drop { object, name } => write!(f, "Drop {:?} {}", object, name),
             Expr::LogicalScript { statements } | Expr::Script { statements } => {
                 write!(f, "{}", self.name())?;
                 for expr in statements {
@@ -482,7 +481,6 @@ impl Expr {
             Expr::Values { .. } => "Values",
             Expr::Update { .. } => "Update",
             Expr::Delete { .. } => "Delete",
-            Expr::Drop { .. } => "Drop",
             Expr::Script { .. } => "Script",
             Expr::Assign { .. } => "Assign",
             Expr::Call { .. } => "Call",

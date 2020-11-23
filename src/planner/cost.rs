@@ -106,7 +106,7 @@ pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
-        Drop { .. } | Script { .. } | Assign { .. } | Call { .. } => 0.0,
+        Script { .. } | Assign { .. } | Call { .. } => 0.0,
         Leaf { .. }
         | LogicalSingleGet
         | LogicalJoin { .. }

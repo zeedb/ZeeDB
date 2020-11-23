@@ -1,0 +1,16 @@
+drop table person
+
+Script
+	Assign catalog_id 1
+		TableFreeScan
+	Assign table_id table.table_id
+		LookupJoin Single
+			Filter* (Equal table.table_name person)
+				Map* table.catalog_id table.table_id table.table_name
+					IndexScan* table(@catalog_id:table.catalog_id)
+			TableFreeScan
+	Delete table
+		Map* table.table_id
+			IndexScan table(@table_id:table.table_id)
+	Call drop_table @table_id
+		TableFreeScan

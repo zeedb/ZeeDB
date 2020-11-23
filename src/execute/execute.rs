@@ -113,10 +113,6 @@ pub enum Program {
         table: Table,
         input: Box<Program>,
     },
-    Drop {
-        object: ObjectType,
-        name: Name,
-    },
 }
 
 impl ExecuteProvider for Expr {
@@ -203,7 +199,6 @@ impl ExecuteProvider for Expr {
             Values { .. } => todo!(),
             Update { .. } => todo!(),
             Delete { .. } => todo!(),
-            Drop { object, name } => todo!(),
             Script { statements } => todo!(),
             Assign {
                 variable,
@@ -347,7 +342,6 @@ impl Program {
             } => todo!(),
             Program::Update { updates, input } => todo!(),
             Program::Delete { table, input } => todo!(),
-            Program::Drop { object, name } => todo!(),
         }
     }
 }
@@ -432,7 +426,6 @@ impl Execute for Program {
             } => todo!(),
             Program::Update { updates, input } => todo!(),
             Program::Delete { table, input } => todo!(),
-            Program::Drop { object, name } => todo!(),
         }
     }
 }

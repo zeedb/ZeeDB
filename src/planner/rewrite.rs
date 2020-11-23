@@ -8,6 +8,7 @@ enum RewriteRule {
     CreateDatabaseToScript,
     CreateTableToScript,
     CreateIndexToScript,
+    DropToScript,
     // Unnest meta rule:
     PushDependentJoin,
     // Unnesting implementation rules:
@@ -69,6 +70,29 @@ impl RewriteRule {
                 } = expr
                 {
                     todo!()
+                }
+            }
+            RewriteRule::DropToScript => {
+                if let LogicalDrop { object, name } = expr {
+                    let mut lines = vec![];
+                    match object {
+                        ObjectType::Database => todo!(),
+                        ObjectType::Table => {
+                            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                            for catalog_name in &name.path[0..name.path.len() - 1] {
+                                lines.push(format!("set catalog_id = (select catalog_id from catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                            }
+                            let table_name = name.path.last().unwrap();
+                            lines.push(format!("set table_id = (select table_id from table where table_name = {:?} and catalog_id = @catalog_id);", table_name));
+                            lines.push("delete from table where table_id = @table_id;".to_string());
+                            lines.push("call drop_table(@table_id);".to_string());
+                        }
+                        ObjectType::Index => todo!(),
+                        ObjectType::Column => todo!(),
+                    };
+                    return Some(LogicalRewrite {
+                        sql: lines.join("\n"),
+                    });
                 }
             }
             RewriteRule::PushDependentJoin => {
@@ -938,6 +962,7 @@ fn rewrite_ddl(expr: Expr) -> Expr {
                 RewriteRule::CreateDatabaseToScript,
                 RewriteRule::CreateTableToScript,
                 RewriteRule::CreateIndexToScript,
+                RewriteRule::DropToScript,
             ],
         )
     })
@@ -952,7 +977,9 @@ fn rewrite_logical_rewrite(expr: Expr, parser: &mut ParseProvider) -> Expr {
     expr.bottom_up_rewrite(&mut |expr| match expr {
         LogicalRewrite { sql } => {
             let catalog = bootstrap::metadata_zetasql();
-            let expr = parser.analyze(&sql, catalog).unwrap(); // TODO parse multiple statements
+            let expr = parser
+                .analyze(&sql, (bootstrap::ROOT_CATALOG_ID, catalog))
+                .unwrap(); // TODO parse multiple statements
             rewrite(expr, parser)
         }
         other => other,

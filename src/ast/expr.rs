@@ -243,10 +243,6 @@ pub enum Expr {
         table: Table,
         input: Box<Expr>,
     },
-    Drop {
-        object: ObjectType,
-        name: Name,
-    },
     Script {
         statements: Vec<Expr>,
     },
@@ -313,7 +309,6 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Update { .. }
             | Expr::Delete { .. }
-            | Expr::Drop { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
             | Expr::Call { .. } => false,
@@ -390,7 +385,6 @@ impl Expr {
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
-            | Expr::Drop { .. }
             | Expr::LogicalRewrite { .. } => 0,
             Expr::LogicalScript { statements } | Expr::Script { statements } => statements.len(),
         }
@@ -1061,7 +1055,6 @@ impl ops::Index<usize> for Expr {
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
-            | Expr::Drop { .. }
             | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
             Expr::LogicalScript { statements } | Expr::Script { statements } => &statements[index],
         }
@@ -1235,6 +1228,7 @@ impl fmt::Display for Column {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Name {
+    pub catalog_id: i64,
     pub path: Vec<String>,
 }
 

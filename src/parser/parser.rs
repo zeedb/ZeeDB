@@ -34,7 +34,11 @@ impl ParseProvider {
         }
     }
 
-    pub fn analyze(&mut self, sql: &String, catalog: SimpleCatalogProto) -> Result<Expr, String> {
+    pub fn analyze(
+        &mut self,
+        sql: &String,
+        catalog: (i64, SimpleCatalogProto),
+    ) -> Result<Expr, String> {
         let mut offset = 0;
         let mut exprs = vec![];
         let mut variables = vec![];
@@ -66,11 +70,11 @@ impl ParseProvider {
         &mut self,
         sql: &String,
         offset: i32,
-        catalog: SimpleCatalogProto,
+        catalog: (i64, SimpleCatalogProto),
         variables: &Vec<(String, DataType)>,
     ) -> Result<(i32, Expr), String> {
         let request = tonic::Request::new(AnalyzeRequest {
-            simple_catalog: Some(catalog),
+            simple_catalog: Some(catalog.1),
             options: Some(AnalyzerOptionsProto {
                 default_timezone: Some("UTC".to_string()),
                 language_options: Some(LanguageOptionsProto {
@@ -102,7 +106,7 @@ impl ParseProvider {
                 let response = response.into_inner();
                 let offset = response.resume_byte_position.unwrap();
                 let expr = match response.result.unwrap() {
-                    ResolvedStatement(stmt) => convert(&stmt),
+                    ResolvedStatement(stmt) => convert(catalog.0, &stmt),
                     ResolvedExpression(_) => panic!("expected statement but found expression"),
                 };
                 Ok((offset, expr))

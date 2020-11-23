@@ -2,6 +2,8 @@ use arrow::datatypes::{DataType, Field, Schema};
 use zetasql::function_enums::*;
 use zetasql::*;
 
+pub const ROOT_CATALOG_ID: i64 = 0;
+
 pub fn catalog() -> SimpleCatalogProto {
     SimpleCatalogProto {
         builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
@@ -18,6 +20,7 @@ pub fn catalog() -> SimpleCatalogProto {
 }
 
 pub fn metadata_arrow() -> Vec<Schema> {
+    let parent_catalog_id = Field::new("parent_catalog_id", DataType::Int64, false);
     let catalog_id = Field::new("catalog_id", DataType::Int64, false);
     let table_id = Field::new("table_id", DataType::Int64, false);
     let column_id = Field::new("column_id", DataType::Int64, false);
@@ -25,7 +28,11 @@ pub fn metadata_arrow() -> Vec<Schema> {
     let table_name = Field::new("table_name", DataType::Utf8, false);
     let column_name = Field::new("column_name", DataType::Utf8, false);
     let column_type = Field::new("column_type", DataType::Utf8, false);
-    let catalog = Schema::new(vec![catalog_id.clone(), catalog_name.clone()]);
+    let catalog = Schema::new(vec![
+        parent_catalog_id.clone(),
+        catalog_id.clone(),
+        catalog_name.clone(),
+    ]);
     let table = Schema::new(vec![
         catalog_id.clone(),
         table_id.clone(),
@@ -77,6 +84,7 @@ pub fn metadata_zetasql() -> SimpleCatalogProto {
             table(
                 "catalog",
                 vec![
+                    column("parent_catalog_id", TypeKind::TypeInt64),
                     column("catalog_id", TypeKind::TypeInt64),
                     column("catalog_name", TypeKind::TypeString),
                 ],
@@ -362,11 +370,18 @@ fn metadata_custom_functions() -> Vec<FunctionProto> {
 }
 
 fn metadata_procedures() -> Vec<ProcedureProto> {
-    vec![simple_procedure(
-        "create_table".to_string(),
-        vec![TypeKind::TypeInt64],
-        TypeKind::TypeInt64,
-    )]
+    vec![
+        simple_procedure(
+            "create_table".to_string(),
+            vec![TypeKind::TypeInt64],
+            TypeKind::TypeBool,
+        ),
+        simple_procedure(
+            "drop_table".to_string(),
+            vec![TypeKind::TypeInt64],
+            TypeKind::TypeBool,
+        ),
+    ]
 }
 
 fn simple_function(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {

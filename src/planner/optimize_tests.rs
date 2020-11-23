@@ -7,7 +7,7 @@ macro_rules! ok {
         let mut parser = parser::ParseProvider::new();
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
-        let expr = parser.analyze(&sql, adventure_works()).unwrap();
+        let expr = parser.analyze(&sql, (1, adventure_works())).unwrap();
         let expr = optimize(expr, &mut parser);
         let found = format!("{}\n\n{}", sql, expr);
         if !matches_expected(&$path.to_string(), found) {
@@ -280,6 +280,13 @@ fn test_optimize() {
         "examples/ddl/create_table.txt",
         r#"
             create table foo (person_id int64 primary key, store_id int64)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/ddl/drop_table.txt",
+        r#"
+            drop table person
         "#,
         errors
     );
