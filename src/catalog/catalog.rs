@@ -23,7 +23,7 @@ impl CatalogProvider {
         root.name = Some(name.clone());
         root.catalog.push(bootstrap::metadata_zetasql());
         let q = "
-            select catalog_id, table_id, column_id, catalog_name, table_name, column_name, column_type, partition_by, cluster_by, primary_key
+            select catalog_id, table_id, column_id, catalog_name, table_name, column_name, column_type
             from catalog 
             join table using (catalog_id) 
             join column using (table_id) 

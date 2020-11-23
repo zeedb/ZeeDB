@@ -31,9 +31,7 @@ pub enum Rule {
     LogicalValuesToValues,
     LogicalUpdateToUpdate,
     LogicalDeleteToDelete,
-    LogicalAlterTableToAlterTable,
     LogicalDropToDrop,
-    LogicalRenameToRename,
     LogicalAssignToAssign,
     LogicalScriptToScript,
 }
@@ -61,9 +59,7 @@ impl Rule {
             | Rule::LogicalValuesToValues
             | Rule::LogicalUpdateToUpdate
             | Rule::LogicalDeleteToDelete
-            | Rule::LogicalAlterTableToAlterTable
             | Rule::LogicalDropToDrop
-            | Rule::LogicalRenameToRename
             | Rule::LogicalAssignToAssign
             | Rule::LogicalScriptToScript => true,
             _ => false,
@@ -113,9 +109,7 @@ impl Rule {
             | (Rule::LogicalValuesToValues, LogicalValues { .. })
             | (Rule::LogicalUpdateToUpdate, LogicalUpdate { .. })
             | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
-            | (Rule::LogicalAlterTableToAlterTable, LogicalAlterTable { .. })
             | (Rule::LogicalDropToDrop, LogicalDrop { .. })
-            | (Rule::LogicalRenameToRename, LogicalRename { .. })
             | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
             | (Rule::LogicalScriptToScript, LogicalScript { .. }) => true,
             _ => false,
@@ -585,18 +579,8 @@ impl Rule {
                     return Some(Delete { table, input });
                 }
             }
-            Rule::LogicalAlterTableToAlterTable => {
-                if let LogicalAlterTable { .. } = bind {
-                    todo!()
-                }
-            }
             Rule::LogicalDropToDrop => {
                 if let LogicalDrop { .. } = bind {
-                    todo!()
-                }
-            }
-            Rule::LogicalRenameToRename => {
-                if let LogicalRename { .. } = bind {
                     todo!()
                 }
             }
@@ -649,9 +633,7 @@ impl Rule {
             Rule::LogicalValuesToValues,
             Rule::LogicalUpdateToUpdate,
             Rule::LogicalDeleteToDelete,
-            Rule::LogicalAlterTableToAlterTable,
             Rule::LogicalDropToDrop,
-            Rule::LogicalRenameToRename,
             Rule::LogicalAssignToAssign,
             Rule::LogicalScriptToScript,
         ]

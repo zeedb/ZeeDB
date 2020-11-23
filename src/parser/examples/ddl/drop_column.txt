@@ -1,4 +1,0 @@
-alter table person 
-drop column last_name
-
-LogicalAlterTable person (DropColumn last_name)

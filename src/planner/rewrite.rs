@@ -47,25 +47,14 @@ impl RewriteRule {
                 }
             }
             RewriteRule::CreateTableToScript => {
-                if let LogicalCreateTable {
-                    name,
-                    columns,
-                    partition_by,
-                    cluster_by,
-                    primary_key,
-                    input: None,
-                } = expr
-                {
+                if let LogicalCreateTable { name, columns } = expr {
                     let mut lines = vec![];
                     lines
                         .push("set next_table_id = (select max(table_id) from table);".to_string());
                     lines.push(format!("insert into table (catalog_id, table_id, table_name) values (0, @next_table_id, {:?});", name.path.last().unwrap()));
                     for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                         let column_type = data_type::to_string(column_type);
-                        let partition_by = -1; // TODO
-                        let cluster_by = -1; // TODO
-                        let primary_key = -1; // TODO
-                        lines.push(format!("insert into column (table_id, column_id, column_name, column_type, partition_by, cluster_by, primary_key) values (@next_table_id, {:?}, {:?}, {:?}, {:?}, {:?}, {:?});", column_id, column_name, column_type, partition_by, cluster_by, primary_key));
+                        lines.push(format!("insert into column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
                     }
                     return Some(LogicalRewrite {
                         sql: lines.join("\n"),

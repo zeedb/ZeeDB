@@ -113,18 +113,9 @@ pub enum Program {
         table: Table,
         input: Box<Program>,
     },
-    AlterTable {
-        name: Name,
-        actions: Vec<Alter>,
-    },
     Drop {
         object: ObjectType,
         name: Name,
-    },
-    Rename {
-        object: ObjectType,
-        from: Name,
-        to: Name,
     },
 }
 
@@ -212,9 +203,7 @@ impl ExecuteProvider for Expr {
             Values { .. } => todo!(),
             Update { .. } => todo!(),
             Delete { .. } => todo!(),
-            AlterTable { name, actions } => todo!(),
             Drop { object, name } => todo!(),
-            Rename { object, from, to } => todo!(),
             Script { statements } => todo!(),
             Assign {
                 variable,
@@ -243,9 +232,7 @@ impl ExecuteProvider for Expr {
             | LogicalCreateDatabase { .. }
             | LogicalCreateTable { .. }
             | LogicalCreateIndex { .. }
-            | LogicalAlterTable { .. }
             | LogicalDrop { .. }
-            | LogicalRename { .. }
             | LogicalScript { .. }
             | LogicalRewrite { .. }
             | LogicalAssign { .. } => panic!("logical operation"),
@@ -353,9 +340,7 @@ impl Program {
             } => todo!(),
             Program::Update { updates, input } => todo!(),
             Program::Delete { table, input } => todo!(),
-            Program::AlterTable { name, actions } => todo!(),
             Program::Drop { object, name } => todo!(),
-            Program::Rename { object, from, to } => todo!(),
         }
     }
 }
@@ -440,9 +425,7 @@ impl Execute for Program {
             } => todo!(),
             Program::Update { updates, input } => todo!(),
             Program::Delete { table, input } => todo!(),
-            Program::AlterTable { name, actions } => todo!(),
             Program::Drop { object, name } => todo!(),
-            Program::Rename { object, from, to } => todo!(),
         }
     }
 }

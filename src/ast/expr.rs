@@ -121,10 +121,6 @@ pub enum Expr {
     LogicalCreateTable {
         name: Name,
         columns: Vec<(String, DataType)>,
-        partition_by: Vec<i64>,
-        cluster_by: Vec<i64>,
-        primary_key: Vec<i64>,
-        input: Option<Box<Expr>>,
     },
     // LogicalCreateIndex implements the CREATE INDEX operation.
     LogicalCreateIndex {
@@ -132,21 +128,10 @@ pub enum Expr {
         table: Name,
         columns: Vec<String>,
     },
-    // LogicalAlterTable implements the ALTER TABLE operation.
-    LogicalAlterTable {
-        name: Name,
-        actions: Vec<Alter>,
-    },
     // LogicalDrop implements the DROP DATABASE/TABLE/INDEX operation.
     LogicalDrop {
         object: ObjectType,
         name: Name,
-    },
-    // LogicalRename implements the RENAME operation.
-    LogicalRename {
-        object: ObjectType,
-        from: Name,
-        to: Name,
     },
     LogicalScript {
         statements: Vec<Expr>,
@@ -252,18 +237,9 @@ pub enum Expr {
         table: Table,
         input: Box<Expr>,
     },
-    AlterTable {
-        name: Name,
-        actions: Vec<Alter>,
-    },
     Drop {
         object: ObjectType,
         name: Name,
-    },
-    Rename {
-        object: ObjectType,
-        from: Name,
-        to: Name,
     },
     Script {
         statements: Vec<Expr>,
@@ -299,9 +275,7 @@ impl Expr {
             | Expr::LogicalCreateDatabase { .. }
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
-            | Expr::LogicalRename { .. }
             | Expr::LogicalRewrite { .. }
             | Expr::LogicalScript { .. }
             | Expr::LogicalAssign { .. } => true,
@@ -326,9 +300,7 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Update { .. }
             | Expr::Delete { .. }
-            | Expr::AlterTable { .. }
             | Expr::Drop { .. }
-            | Expr::Rename { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. } => false,
         }
@@ -349,9 +321,7 @@ impl Expr {
             | Expr::LogicalCreateDatabase { .. }
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalAlterTable { .. }
-            | Expr::LogicalDrop { .. }
-            | Expr::LogicalRename { .. } => true,
+            | Expr::LogicalDrop { .. } => true,
             Expr::LogicalScript { statements } => {
                 statements.iter().any(|expr| expr.has_side_effects())
             }
@@ -384,9 +354,6 @@ impl Expr {
             | Expr::LogicalValues { .. }
             | Expr::LogicalUpdate { .. }
             | Expr::LogicalDelete { .. }
-            | Expr::LogicalCreateTable {
-                input: Some { .. }, ..
-            }
             | Expr::Filter { .. }
             | Expr::Map { .. }
             | Expr::LookupJoin { .. }
@@ -404,18 +371,14 @@ impl Expr {
             | Expr::LogicalGet { .. }
             | Expr::LogicalGetWith { .. }
             | Expr::LogicalCreateDatabase { .. }
-            | Expr::LogicalCreateTable { input: None, .. }
+            | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
-            | Expr::LogicalRename { .. }
             | Expr::TableFreeScan
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
-            | Expr::AlterTable { .. }
             | Expr::Drop { .. }
-            | Expr::Rename { .. }
             | Expr::LogicalRewrite { .. } => 0,
             Expr::LogicalScript { statements } | Expr::Script { statements } => statements.len(),
         }
@@ -549,21 +512,6 @@ impl Expr {
                 let input = Box::new(visitor(*input));
                 Expr::LogicalDelete { table, input }
             }
-            Expr::LogicalCreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input,
-            } => Expr::LogicalCreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input: input.map(|input| Box::new(visitor(*input))),
-            },
             Expr::Filter { predicates, input } => Expr::Filter {
                 predicates,
                 input: Box::new(visitor(*input)),
@@ -1033,9 +981,6 @@ impl ops::Index<usize> for Expr {
             | Expr::LogicalValues { input, .. }
             | Expr::LogicalUpdate { input, .. }
             | Expr::LogicalDelete { input, .. }
-            | Expr::LogicalCreateTable {
-                input: Some(input), ..
-            }
             | Expr::Filter { input, .. }
             | Expr::Map { input, .. }
             | Expr::LookupJoin { input, .. }
@@ -1056,18 +1001,14 @@ impl ops::Index<usize> for Expr {
             | Expr::LogicalGet { .. }
             | Expr::LogicalGetWith { .. }
             | Expr::LogicalCreateDatabase { .. }
-            | Expr::LogicalCreateTable { input: None, .. }
+            | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalAlterTable { .. }
             | Expr::LogicalDrop { .. }
-            | Expr::LogicalRename { .. }
             | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
-            | Expr::AlterTable { .. }
             | Expr::Drop { .. }
-            | Expr::Rename { .. }
             | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
             Expr::LogicalScript { statements } | Expr::Script { statements } => &statements[index],
         }
@@ -1283,23 +1224,6 @@ impl fmt::Display for OrderBy {
             write!(f, "-{}", self.column)
         } else {
             write!(f, "{}", self.column)
-        }
-    }
-}
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub enum Alter {
-    AddColumn { name: String, data: DataType },
-    DropColumn { name: String },
-}
-
-impl fmt::Display for Alter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Alter::AddColumn { name, data } => {
-                write!(f, "(AddColumn {}:{})", name, data_type::to_string(data))
-            }
-            Alter::DropColumn { name } => write!(f, "(DropColumn {})", name),
         }
     }
 }

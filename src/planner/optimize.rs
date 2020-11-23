@@ -367,9 +367,7 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         | LogicalCreateDatabase { .. }
         | LogicalCreateTable { .. }
         | LogicalCreateIndex { .. }
-        | LogicalAlterTable { .. }
         | LogicalDrop { .. }
-        | LogicalRename { .. }
         | LogicalScript { .. }
         | LogicalAssign { .. } => {}
         op if !op.is_logical() => panic!(

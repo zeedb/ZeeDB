@@ -1,5 +1,0 @@
-create table foo (id int64, data string) 
-partition by (id) 
-cluster by (id)
-
-LogicalCreateTable foo id:INT64 data:STRING (PartitionBy 0) (ClusterBy 0)

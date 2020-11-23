@@ -1,3 +1,0 @@
-rename column person.last_name to name
-
-LogicalRename Column person.last_name name

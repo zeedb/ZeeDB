@@ -1,3 +1,0 @@
-alter table customer add column foo string
-
-LogicalAlterTable customer (AddColumn foo:STRING)

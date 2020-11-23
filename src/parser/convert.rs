@@ -4,8 +4,6 @@ use encoding::varint128;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
-use zetasql::any_resolved_alter_action_proto::Node::*;
-use zetasql::any_resolved_alter_object_stmt_proto::Node::*;
 use zetasql::any_resolved_create_statement_proto::Node::*;
 use zetasql::any_resolved_create_table_stmt_base_proto::Node::*;
 use zetasql::any_resolved_expr_proto::Node::*;
@@ -38,9 +36,7 @@ impl Converter {
             ResolvedInsertStmtNode(q) => self.insert(q),
             ResolvedDeleteStmtNode(q) => self.delete(q),
             ResolvedUpdateStmtNode(q) => self.update(q),
-            ResolvedRenameStmtNode(q) => self.rename(q),
             ResolvedCreateDatabaseStmtNode(q) => self.create_database(q),
-            ResolvedAlterObjectStmtNode(q) => self.alter(q),
             ResolvedSingleAssignmentStmtNode(q) => self.assign(q),
             other => panic!("{:?}", other),
         }
@@ -445,9 +441,6 @@ impl Converter {
         match q.node.get() {
             ResolvedCreateIndexStmtNode(q) => self.create_index(q),
             ResolvedCreateTableStmtBaseNode(AnyResolvedCreateTableStmtBaseProto {
-                node: Some(ResolvedCreateTableAsSelectStmtNode(q)),
-            }) => self.create_table_as(q),
-            ResolvedCreateTableStmtBaseNode(AnyResolvedCreateTableStmtBaseProto {
                 node: Some(ResolvedCreateTableStmtNode(q)),
             }) => self.create_table(q),
             other => panic!("{:?}", other),
@@ -478,34 +471,8 @@ impl Converter {
         }
     }
 
-    fn create_table_as(&mut self, q: &ResolvedCreateTableAsSelectStmtProto) -> Expr {
-        let input = self.any_resolved_scan(q.query.get());
-        let mut projects = vec![];
-        for i in 0..q.output_column_list.len() {
-            let value = Scalar::Column(Column::from(q.output_column_list[i].column.get()));
-            let column = Column::from(q.parent.get().column_definition_list[i].column.get());
-            projects.push((value, column))
-        }
-        let input = LogicalMap {
-            include_existing: false,
-            projects,
-            input: Box::new(input),
-        };
-        self.create_table_base(
-            q.parent.get(),
-            &q.partition_by_list,
-            &q.cluster_by_list,
-            Some(input),
-        )
-    }
-
     fn create_table(&mut self, q: &ResolvedCreateTableStmtProto) -> Expr {
-        self.create_table_base(
-            q.parent.get(),
-            &q.partition_by_list,
-            &q.cluster_by_list,
-            None,
-        )
+        self.create_table_base(q.parent.get(), &q.partition_by_list, &q.cluster_by_list)
     }
 
     fn create_table_base(
@@ -513,52 +480,12 @@ impl Converter {
         q: &ResolvedCreateTableStmtBaseProto,
         partition_by_list: &Vec<AnyResolvedExprProto>,
         cluster_by_list: &Vec<AnyResolvedExprProto>,
-        input: Option<Expr>,
     ) -> Expr {
-        // TODO fail on unsupported options
         let name = Name {
             path: q.parent.get().name_path.clone(),
         };
         let columns = self.column_definitions(&q.column_definition_list);
-        let primary_key = match &q.primary_key {
-            Some(key) => key.column_offset_list.clone(),
-            None => vec![],
-        };
-        let index_of = |expr: &AnyResolvedExprProto| -> i64 {
-            let target = match expr.node.get() {
-                ResolvedColumnRefNode(ResolvedColumnRefProto {
-                    column:
-                        Some(ResolvedColumnProto {
-                            column_id: Some(id),
-                            ..
-                        }),
-                    ..
-                }) => id,
-                other => panic!("{:?}", other),
-            };
-            for i in 0..q.column_definition_list.len() {
-                if q.column_definition_list[i].column.get().column_id.get() == target {
-                    return i as i64;
-                }
-            }
-            panic!("{:?}", target)
-        };
-        let mut partition_by = vec![];
-        for expr in partition_by_list {
-            partition_by.push(index_of(expr));
-        }
-        let mut cluster_by = vec![];
-        for expr in cluster_by_list {
-            cluster_by.push(index_of(expr));
-        }
-        LogicalCreateTable {
-            name,
-            columns,
-            partition_by,
-            cluster_by,
-            primary_key,
-            input: input.map(Box::new),
-        }
+        LogicalCreateTable { name, columns }
     }
 
     fn column_definitions(
@@ -718,64 +645,12 @@ impl Converter {
         }
     }
 
-    fn rename(&mut self, q: &ResolvedRenameStmtProto) -> Expr {
-        let object = ObjectType::from(q.object_type.get());
-        let from = Name {
-            path: q.old_name_path.clone(),
-        };
-        let to = Name {
-            path: q.new_name_path.clone(),
-        };
-        LogicalRename { object, from, to }
-    }
-
     fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Expr {
         // TODO fail on unsupported options
         LogicalCreateDatabase {
             name: Name {
                 path: q.name_path.clone(),
             },
-        }
-    }
-
-    fn alter(&mut self, q: &AnyResolvedAlterObjectStmtProto) -> Expr {
-        let q = match q {
-            AnyResolvedAlterObjectStmtProto { node: Some(q) } => q,
-            other => panic!("{:?}", other),
-        };
-        match q {
-            ResolvedAlterTableStmtNode(q) => self.alter_table(q),
-            other => panic!("{:?}", other),
-        }
-    }
-
-    fn alter_table(&mut self, q: &ResolvedAlterTableStmtProto) -> Expr {
-        let name = Name {
-            path: q.parent.get().name_path.clone(),
-        };
-        let mut actions = vec![];
-        for action in &q.parent.get().alter_action_list {
-            actions.push(self.alter_action(action))
-        }
-        LogicalAlterTable { name, actions }
-    }
-
-    fn alter_action(&mut self, action: &AnyResolvedAlterActionProto) -> Alter {
-        match action.node.get() {
-            ResolvedSetOptionsActionNode(_) => panic!("{:?}", action),
-            ResolvedAddColumnActionNode(add) => {
-                let (name, data) = self.column_definition(add.column_definition.get());
-                Alter::AddColumn { name, data }
-            }
-            ResolvedDropColumnActionNode(drop) => {
-                let name = drop.column_reference.get().column.get().name.get().clone();
-                Alter::DropColumn { name }
-            }
-            ResolvedGrantToActionNode(_) => panic!("{:?}", action),
-            ResolvedFilterUsingActionNode(_) => panic!("{:?}", action),
-            ResolvedRevokeFromActionNode(_) => panic!("{:?}", action),
-            ResolvedRenameToActionNode(_) => panic!("{:?}", action),
-            ResolvedSetAsActionNode(_) => panic!("{:?}", action),
         }
     }
 

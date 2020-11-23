@@ -113,13 +113,6 @@ fn test_convert() {
         errors
     );
     ok!(
-        "examples/ddl/add_column.txt",
-        r#"
-            alter table customer add column foo string
-        "#,
-        errors
-    );
-    ok!(
         "examples/ddl/create_database.txt",
         r#"
             create database foo
@@ -141,49 +134,9 @@ fn test_convert() {
         errors
     );
     ok!(
-        "examples/ddl/create_table_as.txt",
-        r#"
-            create table foo (person_id int64 primary key, store_id int64) as 
-            select person_id, store_id 
-            from customer
-        "#,
-        errors
-    );
-    ok!(
-        "examples/ddl/create_table_partition_cluster.txt",
-        r#"
-            create table foo (id int64, data string) 
-            partition by (id) 
-            cluster by (id)
-        "#,
-        errors
-    );
-    ok!(
-        "examples/ddl/drop_column.txt",
-        r#"
-            alter table person 
-            drop column last_name
-        "#,
-        errors
-    );
-    ok!(
         "examples/ddl/drop_table.txt",
         r#"
             drop table person
-        "#,
-        errors
-    );
-    ok!(
-        "examples/ddl/rename_column.txt",
-        r#"
-            rename column person.last_name to name
-        "#,
-        errors
-    );
-    ok!(
-        "examples/ddl/rename_column_upper.txt",
-        r#"
-            RENAME COLUMN PERSON.LAST_NAME TO NAME
         "#,
         errors
     );

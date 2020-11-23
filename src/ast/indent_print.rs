@@ -210,42 +210,10 @@ impl IndentPrint for Expr {
             Expr::LogicalCreateDatabase { name } => {
                 write!(f, "{} {}", self.name(), name.path.join("."))
             }
-            Expr::LogicalCreateTable {
-                name,
-                columns,
-                partition_by,
-                cluster_by,
-                primary_key,
-                input,
-            } => {
+            Expr::LogicalCreateTable { name, columns } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for (name, data) in columns {
                     write!(f, " {}:{}", name, data_type::to_string(data))?;
-                }
-                if !partition_by.is_empty() {
-                    write!(f, " (PartitionBy")?;
-                    for p in partition_by {
-                        write!(f, " {}", p)?;
-                    }
-                    write!(f, ")")?;
-                }
-                if !cluster_by.is_empty() {
-                    write!(f, " (ClusterBy")?;
-                    for p in cluster_by {
-                        write!(f, " {}", p)?;
-                    }
-                    write!(f, ")")?;
-                }
-                if !primary_key.is_empty() {
-                    write!(f, " (PrimaryKey")?;
-                    for p in primary_key {
-                        write!(f, " {}", p)?;
-                    }
-                    write!(f, ")")?;
-                }
-                if let Some(input) = input {
-                    newline(f, indent)?;
-                    input.indent_print(f, indent + 1)?;
                 }
                 Ok(())
             }
@@ -261,18 +229,8 @@ impl IndentPrint for Expr {
                 table,
                 columns.join(" ")
             ),
-            Expr::LogicalAlterTable { name, actions } => {
-                write!(f, "{} {}", self.name(), name)?;
-                for a in actions {
-                    write!(f, " {}", a)?;
-                }
-                Ok(())
-            }
             Expr::LogicalDrop { object, name } => {
                 write!(f, "{} {:?} {}", self.name(), object, name)
-            }
-            Expr::LogicalRename { object, from, to } => {
-                write!(f, "{} {:?} {} {}", self.name(), object, from, to)
             }
             Expr::LogicalRewrite { sql } => write!(f, "{} {:?}", self.name(), sql),
             Expr::TableFreeScan => write!(f, "{}", self.name()),
@@ -425,17 +383,7 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::AlterTable { name, actions } => {
-                write!(f, "{} {}", self.name(), name)?;
-                for a in actions {
-                    write!(f, " {}", a)?;
-                }
-                Ok(())
-            }
             Expr::Drop { object, name } => write!(f, "Drop {:?} {}", object, name),
-            Expr::Rename { object, from, to } => {
-                write!(f, "{} {:?} {} {}", self.name(), object, from, to)
-            }
             Expr::LogicalScript { statements } | Expr::Script { statements } => {
                 write!(f, "{}", self.name())?;
                 for expr in statements {
@@ -487,9 +435,7 @@ impl Expr {
             Expr::LogicalCreateDatabase { .. } => "LogicalCreateDatabase",
             Expr::LogicalCreateTable { .. } => "LogicalCreateTable",
             Expr::LogicalCreateIndex { .. } => "LogicalCreateIndex",
-            Expr::LogicalAlterTable { .. } => "LogicalAlterTable",
             Expr::LogicalDrop { .. } => "LogicalDrop",
-            Expr::LogicalRename { .. } => "LogicalRename",
             Expr::LogicalScript { .. } => "LogicalScript",
             Expr::LogicalAssign { .. } => "LogicalAssign",
             Expr::LogicalRewrite { .. } => "LogicalRewrite",
@@ -513,9 +459,7 @@ impl Expr {
             Expr::Values { .. } => "Values",
             Expr::Update { .. } => "Update",
             Expr::Delete { .. } => "Delete",
-            Expr::AlterTable { .. } => "AlterTable",
             Expr::Drop { .. } => "Drop",
-            Expr::Rename { .. } => "Rename",
             Expr::Script { .. } => "Script",
             Expr::Assign { .. } => "Assign",
         }
