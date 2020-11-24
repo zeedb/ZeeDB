@@ -1,9 +1,11 @@
 use crate::hash_table::*;
+use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use ast::*;
 use std::sync::Arc;
+use storage::Storage;
 
 #[test]
 fn test_hash_table() {
@@ -23,8 +25,12 @@ fn test_hash_table() {
         data: DataType::Int64,
     })];
     let input = vec![RecordBatch::try_new(schema, columns).unwrap()];
-    let table = HashTable::new(&scalars, &input).unwrap();
-    let hashes = table.hash(&scalars, input.first().unwrap()).unwrap();
+    let mut storage = Storage::new();
+    let mut state = State::new(&mut storage);
+    let table = HashTable::new(&scalars, &mut state, &input).unwrap();
+    let hashes = table
+        .hash(&scalars, &mut state, input.first().unwrap())
+        .unwrap();
     for i in 0..hashes.len() {
         let a = i as i64;
         let hash = hashes[i];

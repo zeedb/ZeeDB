@@ -1,24 +1,34 @@
 use crate::error::*;
 use crate::eval::eval;
 use crate::hash_table::HashTable;
+use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
+use std::any::Any;
 use std::sync::Arc;
 use storage::*;
 
-pub fn execute(expr: Expr, storage: &Storage) -> Result<Program, Error> {
+pub fn execute(expr: Expr, storage: &mut Storage) -> Result<Program<'_>, Error> {
+    let mut state = State::new(storage);
+    match compile(expr, &mut state) {
+        Ok(compiled) => Ok(Program { compiled, state }),
+        Err(err) => Err(err),
+    }
+}
+
+fn compile(expr: Expr, state: &mut State) -> Result<Compiled, Error> {
     match expr {
-        TableFreeScan => Ok(Program::TableFreeScan),
+        TableFreeScan => Ok(Compiled::TableFreeScan),
         SeqScan {
             projects,
             predicates,
             table,
-        } => Ok(Program::SeqScan {
+        } => Ok(Compiled::SeqScan {
             projects,
             predicates,
-            scan: storage.table(table.id as usize).scan(),
+            scan: state.storage.table(table.id as usize).scan(),
         }),
         IndexScan {
             projects,
@@ -26,18 +36,18 @@ pub fn execute(expr: Expr, storage: &Storage) -> Result<Program, Error> {
             index_predicates,
             table,
         } => todo!(),
-        Filter { predicates, input } => Ok(Program::Filter {
+        Filter { predicates, input } => Ok(Compiled::Filter {
             predicates,
-            input: Box::new(execute(*input, storage)?),
+            input: Box::new(compile(*input, state)?),
         }),
         Map {
             include_existing,
             projects,
             input,
-        } => Ok(Program::Map {
+        } => Ok(Compiled::Map {
             include_existing,
             projects,
-            input: Box::new(execute(*input, storage)?),
+            input: Box::new(compile(*input, state)?),
         }),
         NestedLoop { .. } => todo!(),
         HashJoin {
@@ -52,14 +62,14 @@ pub fn execute(expr: Expr, storage: &Storage) -> Result<Program, Error> {
                 equi_left.push(l);
                 equi_right.push(r);
             }
-            let left = build(execute(*left, storage)?)?;
-            let left = HashTable::new(&equi_left, &left)?;
-            let right = Box::new(execute(*right, storage)?);
-            Ok(Program::HashJoin {
+            let left = Box::new(compile(*left, state)?);
+            let right = Box::new(compile(*right, state)?);
+            Ok(Compiled::HashJoin {
                 join,
                 equi_left,
                 equi_right,
                 left,
+                build_left: None,
                 right,
             })
         }
@@ -82,29 +92,63 @@ pub fn execute(expr: Expr, storage: &Storage) -> Result<Program, Error> {
             offset,
             input,
         } => todo!(),
-        Sort { order_by, input } => Ok(Program::Sort {
+        Sort { order_by, input } => Ok(Compiled::Sort {
             order_by,
-            input: Box::new(execute(*input, storage)?),
+            input: Box::new(compile(*input, state)?),
         }),
         Union { .. } => todo!(),
         Intersect { .. } => todo!(),
         Except { .. } => todo!(),
-        Insert { .. } => todo!(),
-        Values { .. } => todo!(),
+        Insert {
+            table,
+            columns,
+            input,
+        } => Ok(Compiled::Insert {
+            table,
+            columns,
+            input: Box::new(compile(*input, state)?),
+        }),
+        Values {
+            columns,
+            rows,
+            input,
+        } => Ok(Compiled::Values {
+            columns,
+            rows,
+            input: Box::new(compile(*input, state)?),
+        }),
         Update { .. } => todo!(),
         Delete { .. } => todo!(),
-        Script { statements } => todo!(),
+        Script { statements } => {
+            let mut compiled = vec![];
+            for expr in statements {
+                compiled.push(compile(expr, state)?)
+            }
+            Ok(Compiled::Script {
+                offset: 0,
+                statements: compiled,
+            })
+        }
         Assign {
             variable,
             value,
             input,
-        } => todo!(),
+        } => Ok(Compiled::Assign {
+            variable,
+            value,
+            input: Box::new(compile(*input, state)?),
+        }),
         Call {
             procedure,
             arguments,
             returns,
             input,
-        } => todo!(),
+        } => Ok(Compiled::Call {
+            procedure,
+            arguments,
+            returns,
+            input: Box::new(compile(*input, state)?),
+        }),
         Leaf { .. }
         | LogicalSingleGet
         | LogicalGet { .. }
@@ -135,12 +179,24 @@ pub fn execute(expr: Expr, storage: &Storage) -> Result<Program, Error> {
     }
 }
 
-pub trait Execute {
-    // TODO make sure we always call execute repeatedly
-    fn next(&mut self) -> Result<RecordBatch, Error>;
+pub struct Program<'a> {
+    state: State<'a>,
+    compiled: Compiled,
 }
 
-pub enum Program {
+impl<'a> Iterator for Program<'a> {
+    type Item = Result<RecordBatch, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.compiled.next(&mut self.state) {
+            Ok(page) if page.num_rows() == 0 => None,
+            Ok(page) => Some(Ok(page)),
+            Err(err) => Some(Err(err)),
+        }
+    }
+}
+
+enum Compiled {
     TableFreeScan,
     SeqScan {
         projects: Vec<Column>,
@@ -155,37 +211,38 @@ pub enum Program {
     },
     Filter {
         predicates: Vec<Scalar>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Map {
         include_existing: bool,
         projects: Vec<(Scalar, Column)>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     NestedLoop {
         join: Join,
-        left: Box<Program>,
-        right: Box<Program>,
+        left: Box<Compiled>,
+        right: Box<Compiled>,
     },
     HashJoin {
         join: Join,
         equi_left: Vec<Scalar>,
         equi_right: Vec<Scalar>,
-        left: HashTable,
-        right: Box<Program>,
+        left: Box<Compiled>,
+        build_left: Option<HashTable>,
+        right: Box<Compiled>,
     },
     LookupJoin {
         join: Join,
         projects: Vec<Column>,
         index_predicates: Vec<(Column, Scalar)>,
         table: Table,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     CreateTempTable {
         name: String,
         columns: Vec<Column>,
-        left: Box<Program>,
-        right: Box<Program>,
+        left: Box<Compiled>,
+        right: Box<Compiled>,
     },
     GetTempTable {
         name: String,
@@ -194,57 +251,72 @@ pub enum Program {
     Aggregate {
         group_by: Vec<Column>,
         aggregate: Vec<(AggregateFn, Column)>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Limit {
         limit: usize,
         offset: usize,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Sort {
         order_by: Vec<OrderBy>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Union {
-        left: Box<Program>,
-        right: Box<Program>,
+        left: Box<Compiled>,
+        right: Box<Compiled>,
     },
     Intersect {
-        left: Box<Program>,
-        right: Box<Program>,
+        left: Box<Compiled>,
+        right: Box<Compiled>,
     },
     Except {
-        left: Box<Program>,
-        right: Box<Program>,
+        left: Box<Compiled>,
+        right: Box<Compiled>,
     },
     Insert {
         table: Table,
         columns: Vec<Column>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Values {
         columns: Vec<Column>,
         rows: Vec<Vec<Scalar>>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Update {
         updates: Vec<(Column, Option<Column>)>,
-        input: Box<Program>,
+        input: Box<Compiled>,
     },
     Delete {
         table: Table,
-        input: Box<Program>,
+        input: Box<Compiled>,
+    },
+    Script {
+        offset: usize,
+        statements: Vec<Compiled>,
+    },
+    Assign {
+        variable: String,
+        value: Scalar,
+        input: Box<Compiled>,
+    },
+    Call {
+        procedure: String,
+        arguments: Vec<Scalar>,
+        returns: Option<DataType>,
+        input: Box<Compiled>,
     },
 }
 
-impl Program {
+impl Compiled {
     fn schema(&self) -> Schema {
         match self {
-            Program::TableFreeScan => dummy_schema(),
-            Program::Filter { input, .. }
-            | Program::Limit { input, .. }
-            | Program::Sort { input, .. } => input.schema(),
-            Program::SeqScan { projects, .. } | Program::IndexScan { projects, .. } => {
+            Compiled::TableFreeScan => dummy_schema(),
+            Compiled::Filter { input, .. }
+            | Compiled::Limit { input, .. }
+            | Compiled::Sort { input, .. } => input.schema(),
+            Compiled::SeqScan { projects, .. } | Compiled::IndexScan { projects, .. } => {
                 let fields = projects
                     .iter()
                     .map(|column| {
@@ -254,7 +326,7 @@ impl Program {
                     .collect();
                 Schema::new(fields)
             }
-            Program::Map {
+            Compiled::Map {
                 include_existing,
                 projects,
                 input,
@@ -273,7 +345,7 @@ impl Program {
                 }
                 Schema::new(fields)
             }
-            Program::NestedLoop { join, left, right } => {
+            Compiled::NestedLoop { join, left, right } => {
                 let mut fields = vec![];
                 fields.extend_from_slice(left.schema().fields());
                 fields.extend_from_slice(right.schema().fields());
@@ -287,7 +359,7 @@ impl Program {
                 }
                 Schema::new(fields)
             }
-            Program::HashJoin {
+            Compiled::HashJoin {
                 join, left, right, ..
             } => {
                 let mut fields = vec![];
@@ -303,47 +375,50 @@ impl Program {
                 }
                 Schema::new(fields)
             }
-            Program::LookupJoin {
+            Compiled::LookupJoin {
                 join,
                 projects,
                 index_predicates,
                 table,
                 input,
             } => todo!(),
-            Program::CreateTempTable {
+            Compiled::CreateTempTable {
                 name,
                 columns,
                 left,
                 right,
             } => todo!(),
-            Program::GetTempTable { name, columns } => todo!(),
-            Program::Aggregate {
+            Compiled::GetTempTable { name, columns } => todo!(),
+            Compiled::Aggregate {
                 group_by,
                 aggregate,
                 input,
             } => todo!(),
-            Program::Union { left, right } => todo!(),
-            Program::Intersect { left, right } => todo!(),
-            Program::Except { left, right } => todo!(),
-            Program::Insert {
+            Compiled::Union { left, right } => todo!(),
+            Compiled::Intersect { left, right } => todo!(),
+            Compiled::Except { left, right } => todo!(),
+            Compiled::Insert {
                 table,
                 columns,
                 input,
             } => todo!(),
-            Program::Values {
+            Compiled::Values {
                 columns,
                 rows,
                 input,
             } => todo!(),
-            Program::Update { updates, input } => todo!(),
-            Program::Delete { table, input } => todo!(),
+            Compiled::Update { .. }
+            | Compiled::Delete { .. }
+            | Compiled::Script { .. }
+            | Compiled::Assign { .. }
+            | Compiled::Call { .. } => dummy_schema(),
         }
     }
 
-    pub fn next(&mut self) -> Result<RecordBatch, Error> {
+    fn next(&mut self, state: &mut State) -> Result<RecordBatch, Error> {
         match self {
-            Program::TableFreeScan => Ok(dummy_row()),
-            Program::SeqScan {
+            Compiled::TableFreeScan => Ok(dummy_row()),
+            Compiled::SeqScan {
                 projects,
                 predicates,
                 scan,
@@ -353,19 +428,22 @@ impl Program {
                 }
                 seq_scan(scan, projects, predicates)
             }
-            Program::IndexScan {
+            Compiled::IndexScan {
                 projects,
                 predicates,
                 index_predicates,
                 table,
             } => todo!(),
-            Program::Filter { predicates, input } => filter(input.next()?, predicates),
-            Program::Map {
+            Compiled::Filter { predicates, input } => {
+                let input = input.next(state)?;
+                filter(predicates, state, input)
+            }
+            Compiled::Map {
                 include_existing,
                 projects,
                 input,
             } => {
-                let input = input.next()?;
+                let input = input.next(state)?;
                 let mut columns = vec![];
                 let mut fields = vec![];
                 if *include_existing {
@@ -373,7 +451,7 @@ impl Program {
                     fields.extend_from_slice(input.schema().fields())
                 }
                 for (scalar, column) in projects {
-                    columns.push(eval(scalar, &input)?);
+                    columns.push(eval(scalar, state, &input)?);
                     fields.push(Field::new(
                         column.canonical_name().as_str(),
                         column.data.clone(),
@@ -386,60 +464,101 @@ impl Program {
                     columns,
                 )?)
             }
-            Program::NestedLoop { join, left, right } => todo!(),
-            Program::HashJoin {
+            Compiled::NestedLoop { join, left, right } => todo!(),
+            Compiled::HashJoin {
                 join,
                 equi_left,
                 equi_right,
                 left,
+                build_left,
                 right,
             } => {
-                let right = right.next()?;
+                if build_left.is_none() {
+                    let input = build(left, state)?;
+                    let table = HashTable::new(equi_left, state, &input)?;
+                    *build_left = Some(table);
+                }
+                let right = right.next(state)?;
                 if right.num_rows() == 0 {
                     return Ok(empty(self.schema()));
                 }
-                hash_join(left, equi_left, right, equi_right, join)
+                hash_join(
+                    build_left.as_mut().unwrap(),
+                    equi_left,
+                    right,
+                    equi_right,
+                    state,
+                    join,
+                )
             }
-            Program::LookupJoin {
+            Compiled::LookupJoin {
                 join,
                 projects,
                 index_predicates,
                 table,
                 input,
             } => todo!(),
-            Program::CreateTempTable {
+            Compiled::CreateTempTable {
                 name,
                 columns,
                 left,
                 right,
             } => todo!(),
-            Program::GetTempTable { name, columns } => todo!(),
-            Program::Aggregate {
+            Compiled::GetTempTable { name, columns } => todo!(),
+            Compiled::Aggregate {
                 group_by,
                 aggregate,
                 input,
             } => todo!(),
-            Program::Limit {
+            Compiled::Limit {
                 limit,
                 offset,
                 input,
             } => todo!(),
-            Program::Sort { order_by, input } => sort(input.next()?, order_by),
-            Program::Union { left, right } => todo!(),
-            Program::Intersect { left, right } => todo!(),
-            Program::Except { left, right } => todo!(),
-            Program::Insert {
+            Compiled::Sort { order_by, input } => sort(input.next(state)?, order_by),
+            Compiled::Union { left, right } => todo!(),
+            Compiled::Intersect { left, right } => todo!(),
+            Compiled::Except { left, right } => todo!(),
+            Compiled::Insert {
                 table,
                 columns,
                 input,
             } => todo!(),
-            Program::Values {
+            Compiled::Values {
                 columns,
                 rows,
                 input,
             } => todo!(),
-            Program::Update { updates, input } => todo!(),
-            Program::Delete { table, input } => todo!(),
+            Compiled::Update { updates, input } => todo!(),
+            Compiled::Delete { table, input } => todo!(),
+            Compiled::Script { offset, statements } => {
+                while *offset < statements.len() {
+                    let next = statements[*offset].next(state)?;
+                    if next.num_rows() > 0 {
+                        return Ok(next);
+                    } else {
+                        *offset += 1;
+                    }
+                }
+                Ok(empty(self.schema()))
+            }
+            Compiled::Assign {
+                variable,
+                value,
+                input,
+            } => {
+                let input = input.next(state)?;
+                let value = eval(value, state, &input)?;
+                let value = unwrap(value)?;
+                state.variables.insert(variable.clone(), value);
+                Ok(empty(self.schema()))
+            }
+            Compiled::Call {
+                procedure,
+                arguments,
+                returns,
+                input,
+            } => todo!(),
         }
     }
 }
@@ -452,10 +571,14 @@ fn seq_scan(
     Ok(table.pop().unwrap().select(projects))
 }
 
-fn filter(input: RecordBatch, predicates: &Vec<Scalar>) -> Result<RecordBatch, Error> {
-    let mut mask = eval(&predicates[0], &input)?;
+fn filter(
+    predicates: &Vec<Scalar>,
+    state: &mut State,
+    input: RecordBatch,
+) -> Result<RecordBatch, Error> {
+    let mut mask = eval(&predicates[0], state, &input)?;
     for p in &predicates[1..] {
-        let next = eval(p, &input)?;
+        let next = eval(p, state, &input)?;
         mask = Arc::new(arrow::compute::and(
             mask.as_any().downcast_ref::<BooleanArray>().unwrap(),
             next.as_any().downcast_ref::<BooleanArray>().unwrap(),
@@ -495,9 +618,10 @@ fn hash_join(
     equi_left: &Vec<Scalar>,
     right: RecordBatch,
     equi_right: &Vec<Scalar>,
+    state: &mut State,
     join: &Join,
 ) -> Result<RecordBatch, Error> {
-    let buckets = left.hash(equi_right, &right)?;
+    let buckets = left.hash(equi_right, state, &right)?;
     for i in 0..right.num_rows() {
         todo!()
     }
@@ -561,10 +685,14 @@ fn dummy_schema() -> Schema {
     )])
 }
 
-fn build(mut input: Program) -> Result<Vec<RecordBatch>, Error> {
+fn unwrap(input: Arc<dyn Array>) -> Result<Box<dyn Any>, Error> {
+    todo!()
+}
+
+fn build(input: &mut Compiled, state: &mut State) -> Result<Vec<RecordBatch>, Error> {
     let mut acc = vec![];
     loop {
-        let next = input.next()?;
+        let next = input.next(state)?;
         let empty = next.num_rows() == 0;
         acc.push(next);
         if empty {

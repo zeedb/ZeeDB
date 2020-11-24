@@ -1,11 +1,16 @@
 use crate::error::Error;
+use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
 use std::sync::Arc;
 
-pub fn eval(scalar: &Scalar, input: &RecordBatch) -> Result<Arc<dyn Array>, Error> {
+pub(crate) fn eval(
+    scalar: &Scalar,
+    state: &mut State,
+    input: &RecordBatch,
+) -> Result<Arc<dyn Array>, Error> {
     match scalar {
         Scalar::Literal(value, as_type) => match value {
             Value::Int64(value) => Ok(repeat_primitive::<Int64Type>(*value, input.num_rows())),
@@ -35,7 +40,27 @@ pub fn eval(scalar: &Scalar, input: &RecordBatch) -> Result<Arc<dyn Array>, Erro
             Ok(input.column(i).clone())
         }
         Scalar::Parameter(name, as_type) => todo!(),
-        Scalar::Call(function) => todo!(),
+        Scalar::Call(function) => match function.as_ref() {
+            Function::CurrentDate => todo!(),
+            Function::CurrentTimestamp => todo!(),
+            Function::Rand => todo!(),
+            Function::Not(_) => todo!(),
+            Function::UnaryMinus(_) => todo!(),
+            Function::And(_, _) => todo!(),
+            Function::Equal(_, _) => todo!(),
+            Function::Greater(_, _) => todo!(),
+            Function::GreaterOrEqual(_, _) => todo!(),
+            Function::Less(_, _) => todo!(),
+            Function::LessOrEqual(_, _) => todo!(),
+            Function::Like(_, _) => todo!(),
+            Function::NotEqual(_, _) => todo!(),
+            Function::Or(_, _) => todo!(),
+            Function::Add(_, _, _) => todo!(),
+            Function::Divide(_, _, _) => todo!(),
+            Function::Multiply(_, _, _) => todo!(),
+            Function::Subtract(_, _, _) => todo!(),
+            Function::NextVal(_) => todo!(),
+        },
         Scalar::Cast(scalar, as_type) => todo!(),
     }
 }

@@ -2,25 +2,26 @@ use crate::execute::*;
 use arrow::record_batch::RecordBatch;
 use fixtures::*;
 use regex::Regex;
+use storage::Storage;
 
 macro_rules! ok {
     ($path:expr, $sql:expr, $errors:expr) => {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
-        let mut program = compile(&sql);
-        let found = format!("{}\n\n{}", &sql, csv(program.next().unwrap()));
+        let mut storage = Storage::new();
+        let mut program = compile(&sql, &mut storage);
+        let found = format!("{}\n\n{}", &sql, csv(program.next().unwrap().unwrap()));
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
         }
     };
 }
 
-fn compile(sql: &String) -> Program {
+fn compile<'a>(sql: &String, storage: &'a mut Storage) -> Program<'a> {
     let mut parser = parser::ParseProvider::new();
     let expr = parser.analyze(sql, (1, adventure_works())).unwrap();
     let expr = planner::optimize(expr, &mut parser);
-    let storage = storage::Storage::new();
-    execute(expr, &storage).unwrap()
+    execute(expr, storage).unwrap()
 }
 
 fn csv(record_batch: RecordBatch) -> String {
@@ -58,6 +59,13 @@ fn test_execute() {
         "#,
         errors
     );
+    // ok!(
+    //     "examples/create_table.txt",
+    //     r#"
+    //         create table foo (id int64);
+    //     "#,
+    //     errors
+    // );
     if !errors.is_empty() {
         panic!("{:#?}", errors);
     }

@@ -16,7 +16,7 @@ impl CatalogProvider {
         }
     }
 
-    pub fn catalog(&mut self, storage: &storage::Storage) -> (i64, SimpleCatalogProto) {
+    pub fn catalog(&mut self, storage: &mut storage::Storage) -> (i64, SimpleCatalogProto) {
         let q = "
             select parent_catalog_id, catalog_id, catalog_name, table_id, table_name, column_id, column_name, column_type
             from catalog 
@@ -27,7 +27,7 @@ impl CatalogProvider {
         let catalog = (bootstrap::ROOT_CATALOG_ID, bootstrap::metadata_zetasql());
         let expr = self.parser.analyze(&q, catalog).unwrap();
         let expr = planner::optimize(expr, &mut self.parser);
-        let results = execute(expr, storage).unwrap().next().unwrap();
+        let results = execute(expr, storage).unwrap(); // TODO multiple pages!!
         fn get_i64(results: &RecordBatch, column: usize, row: usize) -> i64 {
             results
                 .column(column)
@@ -45,35 +45,38 @@ impl CatalogProvider {
                 .value(row)
         }
         let mut catalogs: BTreeMap<(i64, i64), SimpleCatalogProto> = BTreeMap::new();
-        let mut row = 0;
-        while row < results.num_rows() {
-            let parent_catalog_id = get_i64(&results, 0, row);
-            let catalog_id = get_i64(&results, 1, row);
-            let catalog_name = get_string(&results, 2, row);
-            let mut catalog = bootstrap::catalog();
-            catalog.name = Some(catalog_name.to_string());
-            while row < results.num_rows() && catalog_id == get_i64(&results, 0, row) {
-                let table_id = get_i64(&results, 3, row);
-                let table_name = get_string(&results, 4, row);
-                let mut table = SimpleTableProto {
-                    name: Some(table_name.to_string()),
-                    serialization_id: Some(table_id),
-                    ..Default::default()
-                };
-                while row < results.num_rows() && table_id == get_i64(&results, 1, row) {
-                    let column_id = get_i64(&results, 5, row);
-                    let column_name = get_string(&results, 6, row);
-                    let column_type = get_string(&results, 7, row);
-                    table.column.push(SimpleColumnProto {
-                        name: Some(column_name.to_string()),
-                        r#type: Some(data_type::to_proto(&data_type::from_string(column_type))),
+        for batch_or_err in results {
+            let batch = batch_or_err.unwrap();
+            let mut row = 0;
+            while row < batch.num_rows() {
+                let parent_catalog_id = get_i64(&batch, 0, row);
+                let catalog_id = get_i64(&batch, 1, row);
+                let catalog_name = get_string(&batch, 2, row);
+                let mut catalog = bootstrap::catalog();
+                catalog.name = Some(catalog_name.to_string());
+                while row < batch.num_rows() && catalog_id == get_i64(&batch, 0, row) {
+                    let table_id = get_i64(&batch, 3, row);
+                    let table_name = get_string(&batch, 4, row);
+                    let mut table = SimpleTableProto {
+                        name: Some(table_name.to_string()),
+                        serialization_id: Some(table_id),
                         ..Default::default()
-                    });
-                    row += 1;
+                    };
+                    while row < batch.num_rows() && table_id == get_i64(&batch, 1, row) {
+                        let column_id = get_i64(&batch, 5, row);
+                        let column_name = get_string(&batch, 6, row);
+                        let column_type = get_string(&batch, 7, row);
+                        table.column.push(SimpleColumnProto {
+                            name: Some(column_name.to_string()),
+                            r#type: Some(data_type::to_proto(&data_type::from_string(column_type))),
+                            ..Default::default()
+                        });
+                        row += 1;
+                    }
+                    catalog.table.push(table);
                 }
-                catalog.table.push(table);
+                catalogs.insert((parent_catalog_id, catalog_id), catalog);
             }
-            catalogs.insert((parent_catalog_id, catalog_id), catalog);
         }
         let root_catalog = catalog_tree(
             bootstrap::ROOT_CATALOG_ID,

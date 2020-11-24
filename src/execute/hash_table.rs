@@ -1,5 +1,6 @@
 use crate::error::Error;
 use crate::eval::eval;
+use crate::state::State;
 use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
@@ -12,16 +13,20 @@ use std::sync::Arc;
 // HashTable stores a large set of tuples in a fixed-size, dense hash table.
 // tuples[buckets[i]..buckets[i + 1]] contains all tuples where hash(tuple) % (buckets.len() - 1) == i
 #[derive(Debug)]
-pub struct HashTable {
+pub(crate) struct HashTable {
     offsets: Vec<usize>,
     tuples: RecordBatch,
 }
 
 impl HashTable {
-    pub fn new(scalars: &Vec<Scalar>, input: &Vec<RecordBatch>) -> Result<Self, Error> {
+    pub(crate) fn new(
+        scalars: &Vec<Scalar>,
+        state: &mut State,
+        input: &Vec<RecordBatch>,
+    ) -> Result<Self, Error> {
         let n_rows = input.iter().map(|batch| batch.num_rows()).sum();
         let n_buckets = size_hash_table(n_rows);
-        let buckets = hash_buckets(&scalars, &input, n_rows, n_buckets)?;
+        let buckets = hash_buckets(scalars, state, input, n_rows, n_buckets)?;
         let offsets = bucket_offsets(&buckets, n_buckets);
         let indices = buckets_to_indices(buckets, offsets.clone());
         let schema = input.first().unwrap().schema().clone();
@@ -42,22 +47,25 @@ impl HashTable {
         RecordBatch::try_new(self.tuples.schema().clone(), columns).unwrap()
     }
 
-    pub fn hash(&self, scalars: &Vec<Scalar>, input: &RecordBatch) -> Result<Vec<usize>, Error> {
+    pub(crate) fn hash(
+        &self,
+        scalars: &Vec<Scalar>,
+        state: &mut State,
+        input: &RecordBatch,
+    ) -> Result<Vec<usize>, Error> {
         hash_buckets(
             scalars,
+            state,
             &vec![input.clone()],
             input.num_rows(),
             self.offsets.len() - 1,
         )
     }
-
-    pub fn schema(&self) -> Schema {
-        self.tuples.schema().as_ref().clone()
-    }
 }
 
 fn hash_buckets(
     scalars: &Vec<Scalar>,
+    state: &mut State,
     input: &Vec<RecordBatch>,
     n_rows: usize,
     n_buckets: usize,
@@ -70,7 +78,7 @@ fn hash_buckets(
     for batch in input {
         // For each scalar, compute a vector and hash it.
         for scalar in scalars {
-            let next = eval(scalar, batch)?;
+            let next = eval(scalar, state, batch)?;
             hash_one(next.as_ref(), &mut acc[offset..]);
         }
         offset += batch.num_rows();
