@@ -370,12 +370,32 @@ fn compute_logical_props(ss: &SearchSpace, mexpr: &MultiExpr) -> LogicalProps {
         | LogicalDrop { .. }
         | LogicalScript { .. }
         | LogicalAssign { .. }
-        | LogicalCall { .. } => {}
-        op if !op.is_logical() => panic!(
-            "tried to compute logical props of physical operator {}",
-            op.name()
-        ),
-        op => panic!("tried to compute logical props of {}", op.name()),
+        | LogicalCall { .. }
+        | LogicalRewrite { .. } => {}
+        Leaf { .. }
+        | TableFreeScan { .. }
+        | SeqScan { .. }
+        | IndexScan { .. }
+        | Filter { .. }
+        | Map { .. }
+        | NestedLoop { .. }
+        | HashJoin { .. }
+        | LookupJoin { .. }
+        | CreateTempTable { .. }
+        | GetTempTable { .. }
+        | Aggregate { .. }
+        | Limit { .. }
+        | Sort { .. }
+        | Union { .. }
+        | Intersect { .. }
+        | Except { .. }
+        | Insert { .. }
+        | Values { .. }
+        | Update { .. }
+        | Delete { .. }
+        | Script { .. }
+        | Assign { .. }
+        | Call { .. } => panic!("{} is a physical operator", mexpr.expr.name()),
     };
     LogicalProps {
         cardinality,

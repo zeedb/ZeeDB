@@ -331,8 +331,49 @@ impl Expr {
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. } => true,
-            _ if self.is_logical() => self.iter().any(|expr| expr.has_side_effects()),
-            _ => panic!("{} is not logical", self.name()),
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalGet { .. }
+            | Expr::LogicalFilter { .. }
+            | Expr::LogicalMap { .. }
+            | Expr::LogicalJoin { .. }
+            | Expr::LogicalDependentJoin { .. }
+            | Expr::LogicalWith { .. }
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalAggregate { .. }
+            | Expr::LogicalLimit { .. }
+            | Expr::LogicalSort { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalIntersect { .. }
+            | Expr::LogicalExcept { .. }
+            | Expr::LogicalValues { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalAssign { .. }
+            | Expr::LogicalCall { .. }
+            | Expr::LogicalRewrite { .. } => false,
+            Expr::TableFreeScan
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. }
+            | Expr::Filter { .. }
+            | Expr::Map { .. }
+            | Expr::NestedLoop { .. }
+            | Expr::HashJoin { .. }
+            | Expr::LookupJoin { .. }
+            | Expr::CreateTempTable { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::Aggregate { .. }
+            | Expr::Limit { .. }
+            | Expr::Sort { .. }
+            | Expr::Union { .. }
+            | Expr::Intersect { .. }
+            | Expr::Except { .. }
+            | Expr::Insert { .. }
+            | Expr::Values { .. }
+            | Expr::Update { .. }
+            | Expr::Delete { .. }
+            | Expr::Script { .. }
+            | Expr::Assign { .. }
+            | Expr::Call { .. } => panic!("{} is a physical operator", self.name()),
         }
     }
 
@@ -678,8 +719,18 @@ impl Expr {
                 returns,
                 input: Box::new(visitor(*input)),
             },
-            other if other.len() == 0 => other,
-            other => panic!("{}.map(_) not implemented", other.name()),
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalGet { .. }
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalRewrite { .. }
+            | Expr::TableFreeScan { .. }
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. } => self,
         }
     }
 
