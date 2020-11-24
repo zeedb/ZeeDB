@@ -982,9 +982,8 @@ fn literal(value: &ValueProto, data: &TypeProto) -> Value {
         BoolValue(x) => Value::Bool(*x),
         DoubleValue(x) => Value::Double(x.to_string()),
         StringValue(x) => Value::String(x.clone()),
-        BytesValue(x) => Value::Bytes(x.clone()),
-        DateValue(x) => Value::Date(date_value(*x)),
-        TimestampValue(x) => Value::Timestamp(timestamp_value(x)),
+        DateValue(x) => Value::Date(*x),
+        TimestampValue(x) => Value::Timestamp(microseconds_since_epoch(x)),
         ArrayValue(x) => Value::Array(array_value(&x.element, element_type(data))),
         StructValue(x) => Value::Struct(struct_value(&x.field, field_types(data))),
         NumericValue(buf) => {
@@ -1022,15 +1021,8 @@ fn field_types(data: &TypeProto) -> &Vec<StructFieldProto> {
     }
 }
 
-fn date_value(date: i32) -> chrono::NaiveDate {
-    chrono::NaiveDate::from_ymd(1970, 1, 1) + time::Duration::days(date as i64)
-}
-
-fn timestamp_value(time: &prost_types::Timestamp) -> chrono::DateTime<chrono::Utc> {
-    chrono::DateTime::from_utc(
-        chrono::NaiveDateTime::from_timestamp(time.seconds, time.nanos as u32),
-        chrono::Utc,
-    )
+fn microseconds_since_epoch(time: &prost_types::Timestamp) -> i64 {
+    (time.seconds * 1_000_000) + (time.nanos / 1000) as i64
 }
 
 fn array_value(values: &Vec<ValueProto>, data: &TypeProto) -> Vec<Value> {

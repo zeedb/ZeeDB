@@ -220,10 +220,12 @@ version = "0.1.0"
 dependencies = [
  "arrow",
  "ast",
+ "fixtures",
  "fnv",
  "num-traits",
  "parser",
  "planner",
+ "regex",
  "storage",
  "zetasql",
 ]

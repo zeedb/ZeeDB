@@ -11,8 +11,12 @@ path = "lib.rs"
 arrow = "2.0.0"
 fnv = "1.0.3"
 num-traits = "0.2.14"
+regex = "1"
 ast = { path = "../ast" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }

@@ -1,5 +1,5 @@
 use crate::error::Error;
-use crate::eval::Eval;
+use crate::eval::eval;
 use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
@@ -70,7 +70,7 @@ fn hash_buckets(
     for batch in input {
         // For each scalar, compute a vector and hash it.
         for scalar in scalars {
-            let next = scalar.eval(batch)?;
+            let next = eval(scalar, batch)?;
             hash_one(next.as_ref(), &mut acc[offset..]);
         }
         offset += batch.num_rows();

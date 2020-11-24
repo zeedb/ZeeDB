@@ -14,7 +14,7 @@ fn test_catalog() {
         )
         .unwrap();
     let expr = planner::optimize(expr, &mut parser);
-    expr.start(&mut storage).unwrap().next().unwrap();
+    execute(expr, &mut storage).unwrap().next().unwrap();
     let (_, root) = catalog.catalog(&mut storage);
     assert_eq!(format!("{:?}", root), "");
 }

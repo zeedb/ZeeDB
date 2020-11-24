@@ -27,7 +27,7 @@ impl CatalogProvider {
         let catalog = (bootstrap::ROOT_CATALOG_ID, bootstrap::metadata_zetasql());
         let expr = self.parser.analyze(&q, catalog).unwrap();
         let expr = planner::optimize(expr, &mut self.parser);
-        let results = expr.start(storage).unwrap().next().unwrap();
+        let results = execute(expr, storage).unwrap().next().unwrap();
         fn get_i64(results: &RecordBatch, column: usize, row: usize) -> i64 {
             results
                 .column(column)

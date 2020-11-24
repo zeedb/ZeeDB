@@ -1,5 +1,5 @@
 use crate::error::*;
-use crate::eval::Eval;
+use crate::eval::eval;
 use crate::hash_table::HashTable;
 use arrow::array::*;
 use arrow::datatypes::*;
@@ -8,9 +8,131 @@ use ast::*;
 use std::sync::Arc;
 use storage::*;
 
-pub trait ExecuteProvider {
-    type E: Execute;
-    fn start(self, storage: &Storage) -> Result<Self::E, Error>;
+pub fn execute(expr: Expr, storage: &Storage) -> Result<Program, Error> {
+    match expr {
+        TableFreeScan => Ok(Program::TableFreeScan),
+        SeqScan {
+            projects,
+            predicates,
+            table,
+        } => Ok(Program::SeqScan {
+            projects,
+            predicates,
+            scan: storage.table(table.id as usize).scan(),
+        }),
+        IndexScan {
+            projects,
+            predicates,
+            index_predicates,
+            table,
+        } => todo!(),
+        Filter { predicates, input } => Ok(Program::Filter {
+            predicates,
+            input: Box::new(execute(*input, storage)?),
+        }),
+        Map {
+            include_existing,
+            projects,
+            input,
+        } => Ok(Program::Map {
+            include_existing,
+            projects,
+            input: Box::new(execute(*input, storage)?),
+        }),
+        NestedLoop { .. } => todo!(),
+        HashJoin {
+            join,
+            equi_predicates,
+            left,
+            right,
+        } => {
+            let mut equi_left = vec![];
+            let mut equi_right = vec![];
+            for (l, r) in equi_predicates {
+                equi_left.push(l);
+                equi_right.push(r);
+            }
+            let left = build(execute(*left, storage)?)?;
+            let left = HashTable::new(&equi_left, &left)?;
+            let right = Box::new(execute(*right, storage)?);
+            Ok(Program::HashJoin {
+                join,
+                equi_left,
+                equi_right,
+                left,
+                right,
+            })
+        }
+        LookupJoin {
+            join,
+            projects,
+            index_predicates,
+            table,
+            input,
+        } => todo!(),
+        CreateTempTable { .. } => todo!(),
+        GetTempTable { .. } => todo!(),
+        Aggregate {
+            group_by,
+            aggregate,
+            input,
+        } => todo!(),
+        Limit {
+            limit,
+            offset,
+            input,
+        } => todo!(),
+        Sort { order_by, input } => Ok(Program::Sort {
+            order_by,
+            input: Box::new(execute(*input, storage)?),
+        }),
+        Union { .. } => todo!(),
+        Intersect { .. } => todo!(),
+        Except { .. } => todo!(),
+        Insert { .. } => todo!(),
+        Values { .. } => todo!(),
+        Update { .. } => todo!(),
+        Delete { .. } => todo!(),
+        Script { statements } => todo!(),
+        Assign {
+            variable,
+            value,
+            input,
+        } => todo!(),
+        Call {
+            procedure,
+            arguments,
+            returns,
+            input,
+        } => todo!(),
+        Leaf { .. }
+        | LogicalSingleGet
+        | LogicalGet { .. }
+        | LogicalFilter { .. }
+        | LogicalMap { .. }
+        | LogicalJoin { .. }
+        | LogicalDependentJoin { .. }
+        | LogicalWith { .. }
+        | LogicalGetWith { .. }
+        | LogicalAggregate { .. }
+        | LogicalLimit { .. }
+        | LogicalSort { .. }
+        | LogicalUnion { .. }
+        | LogicalIntersect { .. }
+        | LogicalExcept { .. }
+        | LogicalInsert { .. }
+        | LogicalValues { .. }
+        | LogicalUpdate { .. }
+        | LogicalDelete { .. }
+        | LogicalCreateDatabase { .. }
+        | LogicalCreateTable { .. }
+        | LogicalCreateIndex { .. }
+        | LogicalDrop { .. }
+        | LogicalScript { .. }
+        | LogicalRewrite { .. }
+        | LogicalAssign { .. }
+        | LogicalCall { .. } => panic!("logical operation"),
+    }
 }
 
 pub trait Execute {
@@ -115,137 +237,10 @@ pub enum Program {
     },
 }
 
-impl ExecuteProvider for Expr {
-    type E = Program;
-
-    fn start(self, storage: &Storage) -> Result<Self::E, Error> {
-        match self {
-            TableFreeScan => todo!(),
-            SeqScan {
-                projects,
-                predicates,
-                table,
-            } => Ok(Program::SeqScan {
-                projects,
-                predicates,
-                scan: storage.table(table.id as usize).scan(),
-            }),
-            IndexScan {
-                projects,
-                predicates,
-                index_predicates,
-                table,
-            } => todo!(),
-            Filter { predicates, input } => Ok(Program::Filter {
-                predicates,
-                input: Box::new(input.start(storage)?),
-            }),
-            Map {
-                include_existing,
-                projects,
-                input,
-            } => todo!(),
-            NestedLoop { .. } => todo!(),
-            HashJoin {
-                join,
-                equi_predicates,
-                left,
-                right,
-            } => {
-                let mut equi_left = vec![];
-                let mut equi_right = vec![];
-                for (l, r) in equi_predicates {
-                    equi_left.push(l);
-                    equi_right.push(r);
-                }
-                let left = build(left.start(storage)?)?;
-                let left = HashTable::new(&equi_left, &left)?;
-                let right = Box::new(right.start(storage)?);
-                Ok(Program::HashJoin {
-                    join,
-                    equi_left,
-                    equi_right,
-                    left,
-                    right,
-                })
-            }
-            LookupJoin {
-                join,
-                projects,
-                index_predicates,
-                table,
-                input,
-            } => todo!(),
-            CreateTempTable { .. } => todo!(),
-            GetTempTable { .. } => todo!(),
-            Aggregate {
-                group_by,
-                aggregate,
-                input,
-            } => todo!(),
-            Limit {
-                limit,
-                offset,
-                input,
-            } => todo!(),
-            Sort { order_by, input } => Ok(Program::Sort {
-                order_by,
-                input: Box::new(input.start(storage)?),
-            }),
-            Union { .. } => todo!(),
-            Intersect { .. } => todo!(),
-            Except { .. } => todo!(),
-            Insert { .. } => todo!(),
-            Values { .. } => todo!(),
-            Update { .. } => todo!(),
-            Delete { .. } => todo!(),
-            Script { statements } => todo!(),
-            Assign {
-                variable,
-                value,
-                input,
-            } => todo!(),
-            Call {
-                procedure,
-                arguments,
-                returns,
-                input,
-            } => todo!(),
-            Leaf { .. }
-            | LogicalSingleGet
-            | LogicalGet { .. }
-            | LogicalFilter { .. }
-            | LogicalMap { .. }
-            | LogicalJoin { .. }
-            | LogicalDependentJoin { .. }
-            | LogicalWith { .. }
-            | LogicalGetWith { .. }
-            | LogicalAggregate { .. }
-            | LogicalLimit { .. }
-            | LogicalSort { .. }
-            | LogicalUnion { .. }
-            | LogicalIntersect { .. }
-            | LogicalExcept { .. }
-            | LogicalInsert { .. }
-            | LogicalValues { .. }
-            | LogicalUpdate { .. }
-            | LogicalDelete { .. }
-            | LogicalCreateDatabase { .. }
-            | LogicalCreateTable { .. }
-            | LogicalCreateIndex { .. }
-            | LogicalDrop { .. }
-            | LogicalScript { .. }
-            | LogicalRewrite { .. }
-            | LogicalAssign { .. }
-            | LogicalCall { .. } => panic!("logical operation"),
-        }
-    }
-}
-
 impl Program {
     fn schema(&self) -> Schema {
         match self {
-            Program::TableFreeScan => Schema::new(vec![]),
+            Program::TableFreeScan => dummy_schema(),
             Program::Filter { input, .. }
             | Program::Limit { input, .. }
             | Program::Sort { input, .. } => input.schema(),
@@ -344,12 +339,10 @@ impl Program {
             Program::Delete { table, input } => todo!(),
         }
     }
-}
 
-impl Execute for Program {
-    fn next(&mut self) -> Result<RecordBatch, Error> {
+    pub fn next(&mut self) -> Result<RecordBatch, Error> {
         match self {
-            Program::TableFreeScan => todo!(),
+            Program::TableFreeScan => Ok(dummy_row()),
             Program::SeqScan {
                 projects,
                 predicates,
@@ -371,7 +364,28 @@ impl Execute for Program {
                 include_existing,
                 projects,
                 input,
-            } => todo!(),
+            } => {
+                let input = input.next()?;
+                let mut columns = vec![];
+                let mut fields = vec![];
+                if *include_existing {
+                    columns.extend_from_slice(input.columns());
+                    fields.extend_from_slice(input.schema().fields())
+                }
+                for (scalar, column) in projects {
+                    columns.push(eval(scalar, &input)?);
+                    fields.push(Field::new(
+                        column.canonical_name().as_str(),
+                        column.data.clone(),
+                        false,
+                        // TODO nullability
+                    ));
+                }
+                Ok(RecordBatch::try_new(
+                    Arc::new(Schema::new(fields)),
+                    columns,
+                )?)
+            }
             Program::NestedLoop { join, left, right } => todo!(),
             Program::HashJoin {
                 join,
@@ -439,9 +453,9 @@ fn seq_scan(
 }
 
 fn filter(input: RecordBatch, predicates: &Vec<Scalar>) -> Result<RecordBatch, Error> {
-    let mut mask = predicates[0].eval(&input)?;
+    let mut mask = eval(&predicates[0], &input)?;
     for p in &predicates[1..] {
-        let next = p.eval(&input)?;
+        let next = eval(p, &input)?;
         mask = Arc::new(arrow::compute::and(
             mask.as_any().downcast_ref::<BooleanArray>().unwrap(),
             next.as_any().downcast_ref::<BooleanArray>().unwrap(),
@@ -529,6 +543,22 @@ fn empty_timestamp_array() -> Arc<dyn Array> {
 fn empty_string_array() -> Arc<dyn Array> {
     let array = StringBuilder::new(0).finish();
     Arc::new(array)
+}
+
+fn dummy_row() -> RecordBatch {
+    RecordBatch::try_new(
+        Arc::new(dummy_schema()),
+        vec![Arc::new(BooleanArray::from(vec![false]))],
+    )
+    .unwrap()
+}
+
+fn dummy_schema() -> Schema {
+    Schema::new(vec![Field::new(
+        "$dummy", // TODO dummy column is gross
+        DataType::Boolean,
+        false,
+    )])
 }
 
 fn build(mut input: Program) -> Result<Vec<RecordBatch>, Error> {
