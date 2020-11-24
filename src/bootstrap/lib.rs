@@ -24,10 +24,12 @@ pub fn metadata_arrow() -> Vec<Schema> {
     let catalog_id = Field::new("catalog_id", DataType::Int64, false);
     let table_id = Field::new("table_id", DataType::Int64, false);
     let column_id = Field::new("column_id", DataType::Int64, false);
+    let sequence_id = Field::new("sequence_id", DataType::Int64, false);
     let catalog_name = Field::new("catalog_name", DataType::Utf8, false);
     let table_name = Field::new("table_name", DataType::Utf8, false);
     let column_name = Field::new("column_name", DataType::Utf8, false);
     let column_type = Field::new("column_type", DataType::Utf8, false);
+    let sequence_name = Field::new("sequence_name", DataType::Utf8, false);
     let catalog = Schema::new(vec![
         parent_catalog_id.clone(),
         catalog_id.clone(),
@@ -44,7 +46,8 @@ pub fn metadata_arrow() -> Vec<Schema> {
         column_name.clone(),
         column_type.clone(),
     ]);
-    vec![catalog, table, column]
+    let sequence = Schema::new(vec![sequence_id, sequence_name]);
+    vec![catalog, table, column, sequence]
 }
 
 pub fn metadata_zetasql() -> SimpleCatalogProto {
@@ -104,6 +107,13 @@ pub fn metadata_zetasql() -> SimpleCatalogProto {
                     column("column_id", TypeKind::TypeInt64),
                     column("column_name", TypeKind::TypeString),
                     column("column_type", TypeKind::TypeString),
+                ],
+            ),
+            table(
+                "sequence",
+                vec![
+                    column("sequence_id", TypeKind::TypeInt64),
+                    column("sequence_name", TypeKind::TypeString),
                 ],
             ),
         ],
@@ -364,7 +374,7 @@ fn enabled_functions() -> Vec<i32> {
 fn metadata_custom_functions() -> Vec<FunctionProto> {
     vec![simple_function(
         "next_val".to_string(),
-        vec![TypeKind::TypeString],
+        vec![TypeKind::TypeInt64],
         TypeKind::TypeInt64,
     )]
 }

@@ -66,7 +66,7 @@ fn test_script() {
 #[test]
 fn test_custom_function() {
     let mut parser = ParseProvider::new();
-    let sql = "select next_val('table');".to_string();
+    let sql = "select next_val(1);".to_string();
     parser
         .analyze(&sql, (1, bootstrap::metadata_zetasql()))
         .unwrap();

@@ -1,7 +1,13 @@
 create table foo (person_id int64 primary key, store_id int64)
 
 Script
-	Assign next_table_id (NextVal table)
+	Assign table_sequence_id sequence.sequence_id
+		NestedLoop Single
+			Filter* (Equal sequence.sequence_name table)
+				Map* sequence.sequence_id sequence.sequence_name
+					SeqScan sequence
+			TableFreeScan
+	Assign next_table_id (NextVal @table_sequence_id)
 		TableFreeScan
 	Insert table table.catalog_id table.table_id table.table_name
 		Values table.catalog_id table.table_id table.table_name [0 @next_table_id foo]
