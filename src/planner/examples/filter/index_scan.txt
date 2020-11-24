@@ -3,4 +3,4 @@ from customer
 where store_id = 1
 
 Map* customer.customer_id customer.store_id
-	IndexScan customer(1:customer.store_id)
+	IndexScan customer(customer.store_id:1)

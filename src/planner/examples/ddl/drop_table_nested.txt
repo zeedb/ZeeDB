@@ -1,8 +1,14 @@
-drop table foo
+drop table nested.foo
 
 Script
 	Assign catalog_id 1
 		TableFreeScan
+	Assign catalog_id catalog.catalog_id
+		LookupJoin Single
+			Filter* (Equal catalog.catalog_name "nested")
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name
+					IndexScan* catalog(catalog.parent_catalog_id:@catalog_id)
+			TableFreeScan
 	Assign table_id table.table_id
 		LookupJoin Single
 			Filter* (Equal table.table_name "foo")

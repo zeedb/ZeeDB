@@ -50,9 +50,13 @@ impl RewriteRule {
             RewriteRule::CreateTableToScript => {
                 if let LogicalCreateTable { name, columns } = expr {
                     let mut lines = vec![];
+                    lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                    for catalog_name in &name.path[0..name.path.len() - 1] {
+                        lines.push(format!("set catalog_id = (select catalog_id from catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                    }
                     lines.push("set table_sequence_id = (select sequence_id from sequence where sequence_name = 'table');".to_string());
                     lines.push("set next_table_id = next_val(@table_sequence_id);".to_string());
-                    lines.push(format!("insert into table (catalog_id, table_id, table_name) values (0, @next_table_id, {:?});", name.path.last().unwrap()));
+                    lines.push(format!("insert into table (catalog_id, table_id, table_name) values (@catalog_id, @next_table_id, {:?});", name.path.last().unwrap()));
                     for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                         let column_type = data_type::to_string(column_type);
                         lines.push(format!("insert into column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
@@ -70,7 +74,27 @@ impl RewriteRule {
                     columns,
                 } = expr
                 {
-                    todo!()
+                    let mut lines = vec![];
+                    lines.push(format!("set index_catalog_id = {:?};", name.catalog_id));
+                    for catalog_name in &name.path[0..name.path.len() - 1] {
+                        lines.push(format!("set index_catalog_id = (select catalog_id from catalog where catalog_name = {:?} and parent_catalog_id = @index_catalog_id);", catalog_name));
+                    }
+                    lines.push(format!("set table_catalog_id = {:?};", table.catalog_id));
+                    for catalog_name in &table.path[0..table.path.len() - 1] {
+                        lines.push(format!("set table_catalog_id = (select catalog_id from catalog where catalog_name = {:?} and parent_catalog_id = @table_catalog_id);", catalog_name));
+                    }
+                    lines.push("set index_sequence_id = (select sequence_id from sequence where sequence_name = 'index');".to_string());
+                    lines.push(format!("set table_id = (select table_id from table where catalog_id = @table_catalog_id and table_name = {:?});", table.path.last().unwrap()));
+                    lines.push("set next_index_id = next_val(@index_sequence_id);".to_string());
+                    lines.push(format!("insert into index (catalog_id, index_id, table_id, index_name) values (@index_catalog_id, @next_index_id, @table_id, {:?});", name.path.last().unwrap()));
+                    for (index_order, column_name) in columns.iter().enumerate() {
+                        lines.push(format!("set column_id = (select column_id from column where table_id = @table_id and column_name = {:?});", column_name));
+                        lines.push(format!("insert into index_column (index_id, column_id, index_order) values (@next_index_id, @column_id, {:?});", index_order));
+                    }
+                    lines.push("call create_index(@next_index_id);".to_string());
+                    return Some(LogicalRewrite {
+                        sql: lines.join("\n"),
+                    });
                 }
             }
             RewriteRule::DropToScript => {
@@ -88,7 +112,16 @@ impl RewriteRule {
                             lines.push("delete from table where table_id = @table_id;".to_string());
                             lines.push("call drop_table(@table_id);".to_string());
                         }
-                        ObjectType::Index => todo!(),
+                        ObjectType::Index => {
+                            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                            for catalog_name in &name.path[0..name.path.len() - 1] {
+                                lines.push(format!("set catalog_id = (select catalog_id from catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                            }
+                            let index_name = name.path.last().unwrap();
+                            lines.push(format!("set index_id = (select index_id from index where index_name = {:?} and catalog_id = @catalog_id);", index_name));
+                            lines.push("delete from index where index_id = @index_id;".to_string());
+                            lines.push("call drop_index(@index_id);".to_string());
+                        }
                         ObjectType::Column => todo!(),
                     };
                     return Some(LogicalRewrite {
@@ -980,7 +1013,7 @@ fn rewrite_logical_rewrite(expr: Expr, parser: &mut ParseProvider) -> Expr {
             let catalog = bootstrap::metadata_zetasql();
             let expr = parser
                 .analyze(&sql, (bootstrap::ROOT_CATALOG_ID, catalog))
-                .unwrap(); // TODO parse multiple statements
+                .expect(&sql); // TODO parse multiple statements
             rewrite(expr, parser)
         }
         other => other,

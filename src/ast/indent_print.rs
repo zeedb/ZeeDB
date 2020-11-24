@@ -564,7 +564,7 @@ fn join_scalars(xs: &Vec<Scalar>) -> String {
 
 fn join_index_lookups(index_predicates: &Vec<(Column, Scalar)>) -> String {
     let mut strings = vec![];
-    for (x, c) in index_predicates {
+    for (c, x) in index_predicates {
         strings.push(format!("{}:{}", c, x));
     }
     strings.join(" ")

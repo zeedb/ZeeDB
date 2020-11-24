@@ -4,4 +4,4 @@ where store_id = 1
 
 Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(Add customer.store_id 1)
 	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-		IndexScan customer(1:customer.store_id)
+		IndexScan customer(customer.store_id:1)

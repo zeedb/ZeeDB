@@ -3,4 +3,4 @@ where person_id = 1
 
 Delete customer
 	Map* customer.person_id
-		IndexScan customer(1:customer.person_id)
+		IndexScan customer(customer.person_id:1)

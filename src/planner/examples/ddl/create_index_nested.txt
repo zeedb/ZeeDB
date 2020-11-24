@@ -1,0 +1,41 @@
+create index nested.foo_index on person (person_id)
+
+Script
+	Assign index_catalog_id 1
+		TableFreeScan
+	Assign index_catalog_id catalog.catalog_id
+		LookupJoin Single
+			Filter* (Equal catalog.catalog_name "nested")
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name
+					IndexScan* catalog(catalog.parent_catalog_id:@index_catalog_id)
+			TableFreeScan
+	Assign table_catalog_id 1
+		TableFreeScan
+	Assign index_sequence_id sequence.sequence_id
+		NestedLoop Single
+			Filter* (Equal sequence.sequence_name "index")
+				Map* sequence.sequence_id sequence.sequence_name
+					SeqScan sequence
+			TableFreeScan
+	Assign table_id table.table_id
+		LookupJoin Single
+			Filter* (Equal table.table_name "person")
+				Map* table.catalog_id table.table_id table.table_name
+					IndexScan* table(table.catalog_id:@table_catalog_id)
+			TableFreeScan
+	Assign next_index_id (NextVal @index_sequence_id)
+		TableFreeScan
+	Insert index index.catalog_id index.index_id index.table_id index.index_name
+		Values index.catalog_id index.index_id index.table_id index.index_name [@index_catalog_id @next_index_id @table_id "foo_index"]
+			TableFreeScan
+	Assign column_id column.column_id
+		LookupJoin Single
+			Filter* (Equal column.column_name "person_id")
+				Map* column.table_id column.column_id column.column_name
+					IndexScan* column(column.table_id:@table_id)
+			TableFreeScan
+	Insert index_column index_column.index_id index_column.column_id index_column.index_order
+		Values index_column.index_id index_column.column_id index_column.index_order [@next_index_id @column_id 0]
+			TableFreeScan
+	Call create_index @next_index_id
+		TableFreeScan

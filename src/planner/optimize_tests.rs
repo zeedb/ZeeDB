@@ -17,7 +17,7 @@ macro_rules! ok {
 }
 
 #[test]
-fn test_optimize() {
+fn test_aggregate() {
     let mut errors = vec![];
     ok!(
         "examples/aggregate/combine_consecutive_projects.txt",
@@ -52,6 +52,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_correlated() {
+    let mut errors = vec![];
     ok!(
         "examples/correlated/redundant_table_free_single_join.txt",
         r#"
@@ -276,6 +284,14 @@ fn test_optimize() {
             where customer.person_id = person.person_id"#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_ddl() {
+    let mut errors = vec![];
     ok!(
         "examples/ddl/create_table.txt",
         r#"
@@ -286,10 +302,61 @@ fn test_optimize() {
     ok!(
         "examples/ddl/drop_table.txt",
         r#"
-            drop table person
+            drop table foo
         "#,
         errors
     );
+    ok!(
+        "examples/ddl/create_table_nested.txt",
+        r#"
+            create table nested.foo (person_id int64 primary key, store_id int64)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/ddl/drop_table_nested.txt",
+        r#"
+            drop table nested.foo
+        "#,
+        errors
+    );
+    ok!(
+        "examples/ddl/create_index.txt",
+        r#"
+            create index foo_index on person (person_id)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/ddl/drop_index.txt",
+        r#"
+            drop index foo_index
+        "#,
+        errors
+    );
+    ok!(
+        "examples/ddl/create_index_nested.txt",
+        r#"
+            create index nested.foo_index on person (person_id)
+        "#,
+        errors
+    );
+    ok!(
+        "examples/ddl/drop_index_nested.txt",
+        r#"
+            drop index nested.foo_index
+        "#,
+        errors
+    );
+    // TODO what if create or drop names are nested?
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_dml() {
+    let mut errors = vec![];
     ok!(
         "examples/dml/delete.txt",
         r#"
@@ -334,6 +401,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_filter() {
+    let mut errors = vec![];
     ok!(
         "examples/filter/combine_consecutive_filters.txt",
         r#"
@@ -389,6 +464,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_join() {
+    let mut errors = vec![];
     ok!(
         "examples/join/semi_join.txt",
         r#"
@@ -516,6 +599,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_limit() {
+    let mut errors = vec![];
     ok!(
         "examples/limit/limit_offset.txt",
         r#"
@@ -526,6 +617,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_set() {
+    let mut errors = vec![];
     ok!(
         "examples/set/union_all.txt",
         r#"
@@ -535,6 +634,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_sort() {
+    let mut errors = vec![];
     ok!(
         "examples/sort/order_by.txt",
         r#"
@@ -544,6 +651,14 @@ fn test_optimize() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_with() {
+    let mut errors = vec![];
     ok!(
         "examples/with/redundant_with_clause_with_projection.txt",
         r#"

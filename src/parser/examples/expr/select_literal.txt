@@ -1,6 +1,6 @@
 select customer_id as a, "foo" as b 
 from customer
 
-LogicalMap $query.b:foo customer.customer_id
+LogicalMap $query.b:"foo" customer.customer_id
 	Map* customer.customer_id
 		LogicalGet customer

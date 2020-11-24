@@ -1,0 +1,22 @@
+drop index nested.foo_index
+
+Script
+	Assign catalog_id 1
+		TableFreeScan
+	Assign catalog_id catalog.catalog_id
+		LookupJoin Single
+			Filter* (Equal catalog.catalog_name "nested")
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name
+					IndexScan* catalog(catalog.parent_catalog_id:@catalog_id)
+			TableFreeScan
+	Assign index_id index.index_id
+		LookupJoin Single
+			Filter* (Equal index.index_name "foo_index")
+				Map* index.catalog_id index.index_id index.index_name
+					IndexScan* index(index.catalog_id:@catalog_id)
+			TableFreeScan
+	Delete index
+		Map* index.index_id
+			IndexScan index(index.index_id:@index_id)
+	Call drop_index @index_id
+		TableFreeScan

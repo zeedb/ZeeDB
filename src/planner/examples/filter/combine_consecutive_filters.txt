@@ -3,6 +3,6 @@ from (select * from person where first_name like "A%")
 where last_name like "A%"
 
 Map $query.$col1:1
-	Filter* (Like person.last_name A%) (Like person.first_name A%)
+	Filter* (Like person.last_name "A%") (Like person.first_name "A%")
 		Map* person.person_id person.first_name person.last_name person.modified_date
 			SeqScan person

@@ -4,6 +4,6 @@ where store.store_id = 1
 
 NestedLoop Inner
 	Map* store.store_id
-		IndexScan store(1:store.store_id)
+		IndexScan store(store.store_id:1)
 	Map* customer.customer_id
 		SeqScan customer

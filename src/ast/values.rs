@@ -20,7 +20,7 @@ impl fmt::Display for Value {
             Value::Int64(x) => write!(f, "{}", x),
             Value::Bool(x) => write!(f, "{}", x),
             Value::Double(x) => write!(f, "{}", x),
-            Value::String(x) => write!(f, "{}", x),
+            Value::String(x) => write!(f, "{:?}", x),
             Value::Date(x) => write!(f, "{}", date_value(*x)),
             Value::Timestamp(x) => write!(f, "{}", timestamp_value(*x)),
             Value::Numeric(x) => write!(f, "{}", x),

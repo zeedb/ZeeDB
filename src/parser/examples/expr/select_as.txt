@@ -1,4 +1,4 @@
 select "foo" as a
 
-LogicalMap $query.a:foo
+LogicalMap $query.a:"foo"
 	LogicalSingleGet

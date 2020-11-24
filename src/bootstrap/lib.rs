@@ -25,11 +25,14 @@ pub fn metadata_arrow() -> Vec<Schema> {
     let table_id = Field::new("table_id", DataType::Int64, false);
     let column_id = Field::new("column_id", DataType::Int64, false);
     let sequence_id = Field::new("sequence_id", DataType::Int64, false);
+    let index_id = Field::new("index_id", DataType::Int64, false);
+    let index_order = Field::new("index_order", DataType::Int64, false);
     let catalog_name = Field::new("catalog_name", DataType::Utf8, false);
     let table_name = Field::new("table_name", DataType::Utf8, false);
     let column_name = Field::new("column_name", DataType::Utf8, false);
     let column_type = Field::new("column_type", DataType::Utf8, false);
     let sequence_name = Field::new("sequence_name", DataType::Utf8, false);
+    let index_name = Field::new("index_name", DataType::Utf8, false);
     let catalog = Schema::new(vec![
         parent_catalog_id.clone(),
         catalog_id.clone(),
@@ -46,8 +49,19 @@ pub fn metadata_arrow() -> Vec<Schema> {
         column_name.clone(),
         column_type.clone(),
     ]);
+    let index = Schema::new(vec![
+        catalog_id.clone(),
+        index_id.clone(),
+        table_id.clone(),
+        index_name.clone(),
+    ]);
+    let index_column = Schema::new(vec![
+        index_id.clone(),
+        column_id.clone(),
+        index_order.clone(),
+    ]);
     let sequence = Schema::new(vec![sequence_id, sequence_name]);
-    vec![catalog, table, column, sequence]
+    vec![catalog, table, column, index, index_column, sequence]
 }
 
 pub fn metadata_zetasql() -> SimpleCatalogProto {
@@ -107,6 +121,23 @@ pub fn metadata_zetasql() -> SimpleCatalogProto {
                     column("column_id", TypeKind::TypeInt64),
                     column("column_name", TypeKind::TypeString),
                     column("column_type", TypeKind::TypeString),
+                ],
+            ),
+            table(
+                "index",
+                vec![
+                    column("catalog_id", TypeKind::TypeInt64),
+                    column("index_id", TypeKind::TypeInt64),
+                    column("table_id", TypeKind::TypeInt64),
+                    column("index_name", TypeKind::TypeString),
+                ],
+            ),
+            table(
+                "index_column",
+                vec![
+                    column("index_id", TypeKind::TypeInt64),
+                    column("column_id", TypeKind::TypeInt64),
+                    column("index_order", TypeKind::TypeInt64),
                 ],
             ),
             table(
@@ -388,6 +419,16 @@ fn metadata_procedures() -> Vec<ProcedureProto> {
         ),
         simple_procedure(
             "drop_table".to_string(),
+            vec![TypeKind::TypeInt64],
+            TypeKind::TypeBool,
+        ),
+        simple_procedure(
+            "create_index".to_string(),
+            vec![TypeKind::TypeInt64],
+            TypeKind::TypeBool,
+        ),
+        simple_procedure(
+            "drop_index".to_string(),
             vec![TypeKind::TypeInt64],
             TypeKind::TypeBool,
         ),

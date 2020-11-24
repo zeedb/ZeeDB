@@ -7,7 +7,7 @@ Map $query.$col1:$aggregate.$agg1
 			Map $proj.$max:customer.modified_date store.store_id' store.name'
 				HashJoin Inner store.store_id'=customer.store_id
 					Aggregate store.store_id' store.name'
-						Filter* (Like store.name' A%)
+						Filter* (Like store.name' "A%")
 							Map* store.store_id' store.name'
 								SeqScan store
 					Map* customer.store_id customer.modified_date

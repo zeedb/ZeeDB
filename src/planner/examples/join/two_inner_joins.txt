@@ -6,7 +6,7 @@ join store using (store_id)
 Map customer.store_id person.person_id person.first_name person.last_name person.modified_date customer.customer_id customer.account_number customer.modified_date store.name store.modified_date
 	LookupJoin Inner
 		Map* person.person_id person.first_name person.last_name person.modified_date
-			IndexScan* person(customer.person_id:person.person_id)
+			IndexScan* person(person.person_id:customer.person_id)
 		HashJoin Inner store.store_id=customer.store_id
 			Map* store.store_id store.name store.modified_date
 				SeqScan store

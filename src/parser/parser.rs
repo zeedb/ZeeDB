@@ -50,6 +50,9 @@ impl ParseProvider {
                 variable, value, ..
             } = &next_expr
             {
+                if let Some(i) = variables.iter().position(|(name, _)| name == variable) {
+                    variables.remove(i);
+                }
                 variables.push((variable.clone(), value.data()))
             }
             // Add next_expr to list and prepare to continue parsing.

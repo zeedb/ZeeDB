@@ -9,7 +9,7 @@ Update person.first_name:$update.$expr
 				NestedLoop Inner
 					Aggregate person.last_name'
 						Map* person.person_id person.first_name person.last_name'
-							IndexScan person(1:person.person_id)
+							IndexScan person(person.person_id:1)
 					TableFreeScan
 			Map* person.person_id person.first_name person.last_name
-				IndexScan person(1:person.person_id)
+				IndexScan person(person.person_id:1)

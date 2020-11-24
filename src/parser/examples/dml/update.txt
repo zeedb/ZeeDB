@@ -3,7 +3,7 @@ set first_name = "Foo"
 where person_id = 1
 
 LogicalUpdate person.first_name:$update.$expr
-	LogicalMap $update.$expr:Foo
+	LogicalMap $update.$expr:"Foo"
 		LogicalFilter (Equal person.person_id 1)
 			Map* person.person_id person.first_name
 				LogicalGet person

@@ -6,6 +6,6 @@ and customer.customer_id = 1
 Map customer.customer_id store.store_id
 	LookupJoin Inner
 		Map* store.store_id
-			IndexScan* store(customer.store_id:store.store_id)
+			IndexScan* store(store.store_id:customer.store_id)
 		Map* customer.customer_id customer.store_id
-			IndexScan customer(1:customer.customer_id)
+			IndexScan customer(customer.customer_id:1)

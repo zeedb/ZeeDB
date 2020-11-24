@@ -1,8 +1,14 @@
-create table foo (person_id int64 primary key, store_id int64)
+create table nested.foo (person_id int64 primary key, store_id int64)
 
 Script
 	Assign catalog_id 1
 		TableFreeScan
+	Assign catalog_id catalog.catalog_id
+		LookupJoin Single
+			Filter* (Equal catalog.catalog_name "nested")
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name
+					IndexScan* catalog(catalog.parent_catalog_id:@catalog_id)
+			TableFreeScan
 	Assign table_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Filter* (Equal sequence.sequence_name "table")
