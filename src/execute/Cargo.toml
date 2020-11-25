@@ -13,6 +13,7 @@ fnv = "1.0.3"
 num-traits = "0.2.14"
 regex = "1"
 ast = { path = "../ast" }
+catalog = { path = "../catalog" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 storage = { path = "../storage" }

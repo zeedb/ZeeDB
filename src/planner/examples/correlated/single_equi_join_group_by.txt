@@ -2,11 +2,13 @@ select store_id, (select count(1) from customer where customer.store_id = store.
 from store
 
 Map $query.customers:$aggregate.$agg1 store.store_id
-	HashJoin Single store.store_id'=store.store_id
-		Aggregate store.store_id' $aggregate.$agg1:(Count $proj.$count)
-			Map $proj.$count:1 store.store_id'
-				Map store.store_id':customer.store_id, ..
-					Map* customer.store_id
-						SeqScan customer
-		Map* store.store_id
-			SeqScan store
+	HashJoin Single (Equal store.store_id store.store_id')
+		Partition* store.store_id'
+			Aggregate store.store_id' $aggregate.$agg1:(Count $proj.$count)
+				Map $proj.$count:1 store.store_id'
+					Map store.store_id':customer.store_id, ..
+						Map* customer.store_id
+							SeqScan customer
+		Partition* store.store_id
+			Map* store.store_id
+				SeqScan store

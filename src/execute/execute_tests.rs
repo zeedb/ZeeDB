@@ -1,3 +1,4 @@
+use crate::catalog_provider::CatalogProvider;
 use crate::execute::*;
 use arrow::record_batch::RecordBatch;
 use fixtures::*;
@@ -19,8 +20,9 @@ macro_rules! ok {
 
 fn compile<'a>(sql: &String, storage: &'a mut Storage) -> Program<'a> {
     let mut parser = parser::ParseProvider::new();
-    let expr = parser.analyze(sql, (1, adventure_works())).unwrap();
-    let expr = planner::optimize(expr, &mut parser);
+    let catalog = CatalogProvider::new().catalog(storage);
+    let expr = parser.analyze(sql, &catalog).unwrap();
+    let expr = planner::optimize(expr, &catalog, &mut parser);
     execute(expr, storage).unwrap()
 }
 

@@ -24,13 +24,11 @@ fn test_hash_table() {
         table: None,
         data: DataType::Int64,
     })];
-    let input = vec![RecordBatch::try_new(schema, columns).unwrap()];
+    let input = RecordBatch::try_new(schema, columns).unwrap();
     let mut storage = Storage::new();
     let mut state = State::new(&mut storage);
     let table = HashTable::new(&scalars, &mut state, &input).unwrap();
-    let hashes = table
-        .hash(&scalars, &mut state, input.first().unwrap())
-        .unwrap();
+    let hashes = table.hash(&scalars, &mut state, &input).unwrap();
     for i in 0..hashes.len() {
         let a = i as i64;
         let hash = hashes[i];

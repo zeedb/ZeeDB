@@ -1,5 +1,6 @@
 use crate::search_space::*;
 use ast::*;
+use catalog::Catalog;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
@@ -188,7 +189,7 @@ impl Rule {
         binds
     }
 
-    pub fn apply(&self, ss: &SearchSpace, bind: Expr) -> Option<Expr> {
+    pub fn apply(&self, ss: &SearchSpace, stats: &Catalog, bind: Expr) -> Option<Expr> {
         match self {
             Rule::InnerJoinCommutivity => {
                 if let LogicalJoin {
@@ -389,14 +390,14 @@ impl Rule {
                     table,
                 } = bind
                 {
-                    if let Some(i) = find_index_scan(&predicates, &table) {
-                        let mut predicates = predicates;
-                        let (c, x) = unpack_index_lookup(predicates.remove(i), &table).unwrap();
+                    if let Some((index_predicates, predicates)) =
+                        stats.find_index_scan(&predicates, &table)
+                    {
                         return Some(IndexScan {
                             projects,
                             predicates,
                             table,
-                            index_predicates: vec![(c, x)],
+                            index_predicates,
                         });
                     }
                 }
@@ -433,17 +434,16 @@ impl Rule {
                     if let (Leaf { gid: left }, Leaf { gid: right }) =
                         (left.as_ref(), right.as_ref())
                     {
-                        let (equi_predicates, remaining_predicates) = hash_join(
+                        if let Some((partition_left, partition_right)) = hash_join(
                             ss,
                             join.predicates().clone(),
                             GroupID(*left),
                             GroupID(*right),
-                        );
-                        let join = join.replace(remaining_predicates);
-                        if !equi_predicates.is_empty() {
+                        ) {
                             return Some(HashJoin {
                                 join,
-                                equi_predicates,
+                                partition_left,
+                                partition_right,
                                 left: Box::new(Leaf { gid: *left }),
                                 right: Box::new(Leaf { gid: *right }),
                             });
@@ -461,13 +461,14 @@ impl Rule {
                     {
                         let mut predicates = join.predicates().clone();
                         predicates.extend(table_predicates);
-                        if let Some(i) = find_index_scan(&predicates, &table) {
-                            let (c, x) = unpack_index_lookup(predicates.remove(i), &table).unwrap();
+                        if let Some((index_predicates, predicates)) =
+                            stats.find_index_scan(&predicates, &table)
+                        {
                             return Some(LookupJoin {
                                 join: join.replace(predicates),
                                 projects,
                                 table,
-                                index_predicates: vec![(c, x)],
+                                index_predicates,
                                 input: right,
                             });
                         }
@@ -658,62 +659,36 @@ impl Rule {
         ]
     }
 }
-fn find_index_scan(predicates: &Vec<Scalar>, table: &Table) -> Option<usize> {
-    for i in 0..predicates.len() {
-        if unpack_index_lookup(predicates[i].clone(), table).is_some() {
-            return Some(i);
-        }
-    }
-    None
-}
-
-fn unpack_index_lookup(predicate: Scalar, table: &Table) -> Option<(Column, Scalar)> {
-    if let Scalar::Call(function) = predicate {
-        match *function {
-            Function::Equal(Scalar::Column(column), lookup)
-            | Function::Equal(lookup, Scalar::Column(column))
-                if column.name.ends_with("_id") && column.table.as_ref() == Some(&table.name) =>
-            {
-                return Some((column, lookup));
-            }
-            _ => {}
-        }
-    }
-    None
-}
 
 fn hash_join(
     ss: &SearchSpace,
     mut join_predicates: Vec<Scalar>,
     left: GroupID,
     right: GroupID,
-) -> (Vec<(Scalar, Scalar)>, Vec<Scalar>) {
-    let mut equi_predicates = vec![];
-    let mut remaining_predicates = vec![];
+) -> Option<(Vec<Scalar>, Vec<Scalar>)> {
+    let mut partition_left = vec![];
+    let mut partition_right = vec![];
     for predicate in join_predicates.drain(0..) {
         if let Scalar::Call(function) = predicate {
             if let Function::Equal(left_side, right_side) = *function {
                 if contains_all(&ss[left], left_side.references())
                     && contains_all(&ss[right], right_side.references())
                 {
-                    equi_predicates.push((left_side, right_side));
+                    partition_left.push(left_side);
+                    partition_right.push(right_side);
                 } else if contains_all(&ss[right], left_side.references())
                     && contains_all(&ss[left], right_side.references())
                 {
-                    equi_predicates.push((right_side, left_side));
-                } else {
-                    remaining_predicates.push(Scalar::Call(Box::new(Function::Equal(
-                        left_side, right_side,
-                    ))));
+                    partition_left.push(right_side);
+                    partition_right.push(left_side);
                 }
-            } else {
-                remaining_predicates.push(Scalar::Call(function));
             }
-        } else {
-            remaining_predicates.push(predicate);
         }
     }
-    (equi_predicates, remaining_predicates)
+    if partition_left.is_empty() {
+        return None;
+    }
+    Some((partition_left, partition_right))
 }
 
 fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {

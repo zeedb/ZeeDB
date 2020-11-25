@@ -178,7 +178,8 @@ pub enum Expr {
     },
     HashJoin {
         join: Join,
-        equi_predicates: Vec<(Scalar, Scalar)>,
+        partition_left: Vec<Scalar>,
+        partition_right: Vec<Scalar>,
         left: Box<Expr>,
         right: Box<Expr>,
     },
@@ -579,12 +580,14 @@ impl Expr {
             },
             Expr::HashJoin {
                 join,
-                equi_predicates,
+                partition_left,
+                partition_right,
                 left,
                 right,
             } => Expr::HashJoin {
                 join,
-                equi_predicates,
+                partition_left,
+                partition_right,
                 left: Box::new(visitor(*left)),
                 right: Box::new(visitor(*right)),
             },

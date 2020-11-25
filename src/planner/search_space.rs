@@ -5,8 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::ops;
 
-// TODO make fields private, moving some functions to the file.
-
 // SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
 pub struct SearchSpace {
     pub groups: Vec<Option<Group>>,
@@ -215,7 +213,7 @@ impl fmt::Debug for MultiExpr {
     }
 }
 
-pub(crate) fn leaf(expr: &Expr) -> GroupID {
+pub fn leaf(expr: &Expr) -> GroupID {
     if let Leaf { gid } = expr {
         GroupID(*gid)
     } else {

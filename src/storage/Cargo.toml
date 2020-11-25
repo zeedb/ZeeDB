@@ -11,4 +11,4 @@ path = "lib.rs"
 arrow = "2.0.0"
 regex = "1.4.2"
 ast = { path = "../ast" }
-bootstrap = { path = "../bootstrap" }
+catalog = { path = "../catalog" }

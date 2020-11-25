@@ -6,7 +6,7 @@ use arrow::record_batch::RecordBatch;
 use ast::*;
 use std::sync::Arc;
 
-pub(crate) fn eval(
+pub fn eval(
     scalar: &Scalar,
     state: &mut State,
     input: &RecordBatch,

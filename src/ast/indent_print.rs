@@ -263,18 +263,20 @@ impl IndentPrint for Expr {
             }
             Expr::HashJoin {
                 join,
-                equi_predicates,
+                partition_left,
+                partition_right,
                 left,
                 right,
             } => {
                 write!(f, "{} {}", self.name(), join)?;
-                for (left, right) in equi_predicates {
-                    write!(f, " {}={}", left, right)?;
-                }
                 newline(f, indent)?;
-                left.indent_print(f, indent + 1)?;
+                write!(f, "Partition* {}", join_scalars(partition_left))?;
+                newline(f, indent + 1)?;
+                left.indent_print(f, indent + 2)?;
                 newline(f, indent)?;
-                right.indent_print(f, indent + 1)
+                write!(f, "Partition* {}", join_scalars(partition_right))?;
+                newline(f, indent + 1)?;
+                right.indent_print(f, indent + 2)
             }
             Expr::LookupJoin {
                 join,

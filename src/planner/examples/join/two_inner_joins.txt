@@ -7,8 +7,10 @@ Map customer.store_id person.person_id person.first_name person.last_name person
 	LookupJoin Inner
 		Map* person.person_id person.first_name person.last_name person.modified_date
 			IndexScan* person(person.person_id:customer.person_id)
-		HashJoin Inner store.store_id=customer.store_id
-			Map* store.store_id store.name store.modified_date
-				SeqScan store
-			Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-				SeqScan customer
+		HashJoin Inner (Equal customer.store_id store.store_id)
+			Partition* store.store_id
+				Map* store.store_id store.name store.modified_date
+					SeqScan store
+			Partition* customer.store_id
+				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+					SeqScan customer

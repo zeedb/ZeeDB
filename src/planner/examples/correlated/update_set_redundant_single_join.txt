@@ -5,18 +5,24 @@ where customer.person_id = person.person_id
 
 Update customer.account_number:$update.$expr
 	Map $update.$expr:$expr_subquery.person_id
-		HashJoin Single person.person_id'=person.person_id
-			Map $expr_subquery.person_id:person.person_id' person.person_id'
-				NestedLoop Inner
-					TableFreeScan
-					Aggregate person.person_id'
-						HashJoin Inner customer.person_id=person.person_id'
-							Map* customer.person_id customer.account_number
-								SeqScan customer
-							Map* person.person_id'
-								SeqScan person
-			HashJoin Inner customer.person_id=person.person_id
-				Map* customer.person_id customer.account_number
-					SeqScan customer
-				Map* person.person_id
-					SeqScan person
+		HashJoin Single (Equal person.person_id person.person_id')
+			Partition* person.person_id'
+				Map $expr_subquery.person_id:person.person_id' person.person_id'
+					NestedLoop Inner
+						TableFreeScan
+						Aggregate person.person_id'
+							HashJoin Inner (Equal customer.person_id person.person_id')
+								Partition* customer.person_id
+									Map* customer.person_id customer.account_number
+										SeqScan customer
+								Partition* person.person_id'
+									Map* person.person_id'
+										SeqScan person
+			Partition* person.person_id
+				HashJoin Inner (Equal customer.person_id person.person_id)
+					Partition* customer.person_id
+						Map* customer.person_id customer.account_number
+							SeqScan customer
+					Partition* person.person_id
+						Map* person.person_id
+							SeqScan person

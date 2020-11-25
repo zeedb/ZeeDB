@@ -1,11 +1,12 @@
 use crate::parser::*;
 use ast::*;
+use catalog::Catalog;
 
 #[test]
 fn test_analyze() {
     let mut parser = ParseProvider::new();
     let expr = parser
-        .analyze(&"select 1".to_string(), (1, empty_catalog()))
+        .analyze(&"select 1".to_string(), &Catalog::empty(1))
         .unwrap();
     match expr {
         LogicalMap { .. } => (),
@@ -13,23 +14,17 @@ fn test_analyze() {
     }
 }
 
-fn empty_catalog() -> zetasql::SimpleCatalogProto {
-    let mut cat = bootstrap::catalog();
-    cat.catalog.push(bootstrap::metadata_zetasql());
-    cat
-}
-
 #[test]
 fn test_split() {
     let mut parser = ParseProvider::new();
     let sql = "select 1; select 2".to_string();
-    parser.analyze(&sql, (1, empty_catalog())).unwrap();
+    parser.analyze(&sql, &Catalog::empty(1)).unwrap();
 }
 
 #[test]
 fn test_not_available_fn() {
     let mut parser = ParseProvider::new();
-    match parser.analyze(&"select to_proto(true)".to_string(), (1, empty_catalog())) {
+    match parser.analyze(&"select to_proto(true)".to_string(), &Catalog::empty(1)) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
     }
@@ -44,7 +39,7 @@ fn test_metadata() {
         join table using (table_id) 
         join catalog using (catalog_id)";
     parser
-        .analyze(&q.to_string(), (1, bootstrap::metadata_zetasql()))
+        .analyze(&q.to_string(), &Catalog::bootstrap())
         .unwrap();
 }
 
@@ -60,23 +55,19 @@ fn test_format() {
 fn test_script() {
     let mut parser = ParseProvider::new();
     let sql = "set x = 1;".to_string();
-    parser.analyze(&sql, (1, empty_catalog())).unwrap();
+    parser.analyze(&sql, &Catalog::empty(1)).unwrap();
 }
 
 #[test]
 fn test_custom_function() {
     let mut parser = ParseProvider::new();
     let sql = "select next_val(1);".to_string();
-    parser
-        .analyze(&sql, (1, bootstrap::metadata_zetasql()))
-        .unwrap();
+    parser.analyze(&sql, &Catalog::bootstrap()).unwrap();
 }
 
 #[test]
 fn test_call() {
     let mut parser = ParseProvider::new();
     let sql = "call create_table(1);".to_string();
-    parser
-        .analyze(&sql, (1, bootstrap::metadata_zetasql()))
-        .unwrap();
+    parser.analyze(&sql, &Catalog::bootstrap()).unwrap();
 }

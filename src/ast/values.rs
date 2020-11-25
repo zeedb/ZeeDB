@@ -1,6 +1,7 @@
 use chrono::*;
 use std::fmt;
 
+// TODO get rid of this and use Any.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Value {
     Int64(i64),

@@ -1,5 +1,6 @@
 use crate::search_space::*;
 use ast::*;
+use catalog::Catalog;
 use std::collections::HashMap;
 
 pub type Cost = f64;
@@ -20,14 +21,14 @@ const COST_HASH_BUILD: Cost = COST_HASH_PROBE * 2.0;
 // physicalCost computes the local cost of the physical operator at the head of a multi-expression tree.
 // To compute the total physical cost of an expression, you need to choose a single physical expression
 // at every node of the tree and add up the local costs.
-pub fn physical_cost(ss: &SearchSpace, mid: MultiExprID) -> Cost {
+pub fn physical_cost(ss: &SearchSpace, stats: &Catalog, mid: MultiExprID) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].expr {
         TableFreeScan { .. } => 0.0,
         SeqScan {
             predicates, table, ..
         } => {
-            let table_cardinality = crate::optimize::table_cardinality(table) as f64;
+            let table_cardinality = stats.table_cardinality(table) as f64;
             let read_blocks = f64::max(1.0, table_cardinality * TUPLE_SIZE / BLOCK_SIZE);
             let count_predicates = predicates.len() as f64;
             read_blocks * COST_READ_BLOCK + count_predicates * table_cardinality * COST_CPU_PRED

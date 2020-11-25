@@ -1,4 +1,5 @@
 use crate::optimize::*;
+use catalog::Catalog;
 use fixtures::*;
 use regex::Regex;
 
@@ -7,8 +8,9 @@ macro_rules! ok {
         let mut parser = parser::ParseProvider::new();
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
-        let expr = parser.analyze(&sql, (1, adventure_works())).unwrap();
-        let expr = optimize(expr, &mut parser);
+        let catalog = Catalog::adventure_works();
+        let expr = parser.analyze(&sql, &catalog).unwrap();
+        let expr = optimize(expr, &catalog, &mut parser);
         let found = format!("{}\n\n{}", sql, expr);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());

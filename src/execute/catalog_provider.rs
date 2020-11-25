@@ -1,22 +1,25 @@
+use crate::execute;
 use arrow::array::*;
 use arrow::record_batch::*;
 use ast::data_type;
-use execute::*;
+use catalog::Catalog;
+use parser::ParseProvider;
+use planner::optimize;
 use std::collections::BTreeMap;
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
 pub struct CatalogProvider {
-    parser: parser::ParseProvider,
+    parser: ParseProvider,
 }
 
 impl CatalogProvider {
     pub fn new() -> Self {
         Self {
-            parser: parser::ParseProvider::new(),
+            parser: ParseProvider::new(),
         }
     }
 
-    pub fn catalog(&mut self, storage: &mut storage::Storage) -> (i64, SimpleCatalogProto) {
+    pub fn catalog(&mut self, storage: &mut storage::Storage) -> Catalog {
         let q = "
             select parent_catalog_id, catalog_id, catalog_name, table_id, table_name, column_id, column_name, column_type
             from catalog 
@@ -24,9 +27,9 @@ impl CatalogProvider {
             join column using (table_id) 
             order by catalog_id, table_id, column_id"
             .to_string();
-        let catalog = (bootstrap::ROOT_CATALOG_ID, bootstrap::metadata_zetasql());
-        let expr = self.parser.analyze(&q, catalog).unwrap();
-        let expr = planner::optimize(expr, &mut self.parser);
+        let catalog = Catalog::bootstrap();
+        let expr = self.parser.analyze(&q, &catalog).unwrap();
+        let expr = optimize(expr, &catalog, &mut self.parser);
         let results = execute(expr, storage).unwrap(); // TODO multiple pages!!
         fn get_i64(results: &RecordBatch, column: usize, row: usize) -> i64 {
             results
@@ -52,7 +55,7 @@ impl CatalogProvider {
                 let parent_catalog_id = get_i64(&batch, 0, row);
                 let catalog_id = get_i64(&batch, 1, row);
                 let catalog_name = get_string(&batch, 2, row);
-                let mut catalog = bootstrap::catalog();
+                let mut catalog = Catalog::empty(catalog_id).catalog;
                 catalog.name = Some(catalog_name.to_string());
                 while row < batch.num_rows() && catalog_id == get_i64(&batch, 0, row) {
                     let table_id = get_i64(&batch, 3, row);
@@ -78,12 +81,13 @@ impl CatalogProvider {
                 catalogs.insert((parent_catalog_id, catalog_id), catalog);
             }
         }
-        let root_catalog = catalog_tree(
-            bootstrap::ROOT_CATALOG_ID,
-            bootstrap::catalog(),
+        let mut root = Catalog::empty(catalog::ROOT_CATALOG_ID);
+        root.catalog = catalog_tree(
+            catalog::ROOT_CATALOG_ID,
+            Catalog::empty(catalog::ROOT_CATALOG_ID).catalog,
             &mut catalogs,
         );
-        (bootstrap::ROOT_CATALOG_ID, root_catalog)
+        root
     }
 }
 

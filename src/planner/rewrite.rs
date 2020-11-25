@@ -1,5 +1,6 @@
 use arrow::datatypes::*;
 use ast::*;
+use catalog::Catalog;
 use parser::ParseProvider;
 
 #[derive(Debug)]
@@ -1010,10 +1011,8 @@ fn general_unnest(expr: Expr) -> Expr {
 fn rewrite_logical_rewrite(expr: Expr, parser: &mut ParseProvider) -> Expr {
     expr.bottom_up_rewrite(&mut |expr| match expr {
         LogicalRewrite { sql } => {
-            let catalog = bootstrap::metadata_zetasql();
-            let expr = parser
-                .analyze(&sql, (bootstrap::ROOT_CATALOG_ID, catalog))
-                .expect(&sql); // TODO parse multiple statements
+            let catalog = Catalog::bootstrap();
+            let expr = parser.analyze(&sql, &catalog).expect(&sql);
             rewrite(expr, parser)
         }
         other => other,

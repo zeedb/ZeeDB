@@ -2,6 +2,7 @@ use crate::convert::convert;
 use crate::server::create_zetasql_server;
 use arrow::datatypes::DataType;
 use ast::Expr;
+use catalog::Catalog;
 use tokio::runtime::Runtime;
 use tonic::transport::channel::Channel;
 use zetasql::analyze_response::Result::*;
@@ -34,11 +35,7 @@ impl ParseProvider {
         }
     }
 
-    pub fn analyze(
-        &mut self,
-        sql: &String,
-        catalog: (i64, SimpleCatalogProto),
-    ) -> Result<Expr, String> {
+    pub fn analyze(&mut self, sql: &String, catalog: &Catalog) -> Result<Expr, String> {
         let mut offset = 0;
         let mut exprs = vec![];
         let mut variables = vec![];
@@ -73,16 +70,16 @@ impl ParseProvider {
         &mut self,
         sql: &String,
         offset: i32,
-        catalog: (i64, SimpleCatalogProto),
+        catalog: &Catalog,
         variables: &Vec<(String, DataType)>,
     ) -> Result<(i32, Expr), String> {
         let request = tonic::Request::new(AnalyzeRequest {
-            simple_catalog: Some(catalog.1),
+            simple_catalog: Some(catalog.catalog.clone()),
             options: Some(AnalyzerOptionsProto {
                 default_timezone: Some("UTC".to_string()),
                 language_options: Some(LanguageOptionsProto {
-                    enabled_language_features: bootstrap::enabled_language_features(),
-                    supported_statement_kinds: bootstrap::supported_statement_kinds(),
+                    enabled_language_features: catalog::enabled_language_features(),
+                    supported_statement_kinds: catalog::supported_statement_kinds(),
                     ..Default::default()
                 }),
                 prune_unused_columns: Some(true),
@@ -109,7 +106,7 @@ impl ParseProvider {
                 let response = response.into_inner();
                 let offset = response.resume_byte_position.unwrap();
                 let expr = match response.result.unwrap() {
-                    ResolvedStatement(stmt) => convert(catalog.0, &stmt),
+                    ResolvedStatement(stmt) => convert(catalog.catalog_id, &stmt),
                     ResolvedExpression(_) => panic!("expected statement but found expression"),
                 };
                 Ok((offset, expr))

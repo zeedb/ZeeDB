@@ -3,11 +3,13 @@ from (select *, account_number - 1 as prev_account_number from customer) c1
 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
 
 Map customer.customer_id
-	HashJoin Semi c1.prev_account_number'=c1.prev_account_number customer.person_id=customer.person_id
-		Map customer.person_id c1.prev_account_number'
-			Map c1.prev_account_number':customer.account_number, ..
-				Map* customer.person_id customer.account_number
+	HashJoin Semi (Equal c1.prev_account_number c1.prev_account_number') (Equal customer.person_id customer.person_id)
+		Partition* c1.prev_account_number' customer.person_id
+			Map customer.person_id c1.prev_account_number'
+				Map c1.prev_account_number':customer.account_number, ..
+					Map* customer.person_id customer.account_number
+						SeqScan customer
+		Partition* c1.prev_account_number customer.person_id
+			Map c1.prev_account_number:(Subtract customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 					SeqScan customer
-		Map c1.prev_account_number:(Subtract customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-			Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-				SeqScan customer

@@ -17,7 +17,7 @@ time = "0.1.39"
 tokio = { version = "0.2", features = ["macros"] }
 tonic = "0.2.0"
 regex = "1"
-bootstrap = { path = "../bootstrap" }
+catalog = { path = "../catalog" }
 encoding = { path = "../encoding" }
 zetasql = { path = "../zetasql" }
 
