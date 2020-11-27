@@ -10,6 +10,7 @@ path = "lib.rs"
 [dependencies]
 arrow = "2.0.0"
 num = "0.3"
+ast = { path = "../ast" }
 
 [dev-dependencies]
-fixtures = { path = "../fixtures" }
+test_fixtures = { path = "../test_fixtures" }

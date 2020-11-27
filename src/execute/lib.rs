@@ -7,6 +7,7 @@ mod hash_table;
 #[cfg(test)]
 mod hash_table_tests;
 mod join;
+mod sort;
 mod state;
 
 pub use execute::*;

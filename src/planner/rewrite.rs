@@ -2,7 +2,6 @@ use arrow::datatypes::*;
 use ast::*;
 use catalog::Catalog;
 use parser::ParseProvider;
-use std::sync::Arc;
 
 #[derive(Debug)]
 enum RewriteRule {
@@ -1012,7 +1011,7 @@ fn general_unnest(expr: Expr) -> Expr {
 fn rewrite_logical_rewrite(expr: Expr, parser: &mut ParseProvider) -> Expr {
     expr.bottom_up_rewrite(&mut |expr| match expr {
         LogicalRewrite { sql } => {
-            let catalog = Catalog::bootstrap();
+            let catalog = catalog::bootstrap();
             let expr = parser.analyze(&sql, &catalog).expect(&sql);
             rewrite(expr, parser)
         }

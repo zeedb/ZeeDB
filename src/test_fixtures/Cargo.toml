@@ -1,5 +1,5 @@
 [package]
-name = "fixtures"
+name = "test_fixtures"
 version = "0.1.0"
 edition = "2018"
 publish = false
@@ -9,4 +9,5 @@ path = "lib.rs"
 
 [dependencies]
 arrow = "2.0.0"
+catalog = { path = "../catalog" }
 zetasql = { path = "../zetasql" }

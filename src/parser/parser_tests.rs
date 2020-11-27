@@ -41,7 +41,7 @@ fn test_metadata() {
         join table using (table_id) 
         join catalog using (catalog_id)";
     parser
-        .analyze(&q.to_string(), &Catalog::bootstrap())
+        .analyze(&q.to_string(), &catalog::bootstrap())
         .unwrap();
 }
 
@@ -64,12 +64,12 @@ fn test_script() {
 fn test_custom_function() {
     let mut parser = ParseProvider::new();
     let sql = "select next_val(1);".to_string();
-    parser.analyze(&sql, &Catalog::bootstrap()).unwrap();
+    parser.analyze(&sql, &catalog::bootstrap()).unwrap();
 }
 
 #[test]
 fn test_call() {
     let mut parser = ParseProvider::new();
     let sql = "call create_table(1);".to_string();
-    parser.analyze(&sql, &Catalog::bootstrap()).unwrap();
+    parser.analyze(&sql, &catalog::bootstrap()).unwrap();
 }

@@ -208,13 +208,13 @@ dependencies = [
  "arrow",
  "ast",
  "catalog",
- "fixtures",
  "kernel",
  "num-traits",
  "parser",
  "planner",
  "regex",
  "storage",
+ "test_fixtures",
  "zetasql",
 ]
 
@@ -223,14 +223,6 @@ name = "fixedbitset"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "37ab347416e802de484e4d03c7316c48f1ecb56574dfd4a46a80f173ce1de04d"
-
-[[package]]
-name = "fixtures"
-version = "0.1.0"
-dependencies = [
- "arrow",
- "zetasql",
-]
 
 [[package]]
 name = "flatbuffers"
@@ -502,8 +494,9 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "arrow",
- "fixtures",
+ "ast",
  "num",
+ "test_fixtures",
 ]
 
 [[package]]
@@ -676,10 +669,10 @@ dependencies = [
  "catalog",
  "chrono",
  "encoding",
- "fixtures",
  "futures",
  "prost-types",
  "regex",
+ "test_fixtures",
  "time",
  "tokio",
  "tonic",
@@ -762,9 +755,9 @@ dependencies = [
  "ast",
  "catalog",
  "encoding",
- "fixtures",
  "parser",
  "regex",
+ "test_fixtures",
  "zetasql",
 ]
 
@@ -1056,6 +1049,15 @@ dependencies = [
  "redox_syscall",
  "remove_dir_all",
  "winapi 0.3.8",
+]
+
+[[package]]
+name = "test_fixtures"
+version = "0.1.0"
+dependencies = [
+ "arrow",
+ "catalog",
+ "zetasql",
 ]
 
 [[package]]

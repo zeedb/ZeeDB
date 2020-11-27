@@ -1,14 +1,13 @@
 use crate::parser::*;
-use catalog::Catalog;
-use fixtures::*;
 use regex::Regex;
+use test_fixtures::*;
 
 macro_rules! ok {
     ($path:expr, $sql:expr, $errors:expr) => {
         let mut parser = ParseProvider::new();
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
-        let catalog = Catalog::adventure_works();
+        let catalog = test_fixtures::adventure_works();
         let found = parser.analyze(&sql, &catalog).unwrap();
         let found = format!("{}\n\n{}", &sql, found);
         if !matches_expected(&$path.to_string(), found) {

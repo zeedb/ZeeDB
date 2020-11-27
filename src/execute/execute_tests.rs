@@ -1,9 +1,9 @@
 use crate::catalog_provider::CatalogProvider;
 use crate::execute::*;
 use arrow::record_batch::RecordBatch;
-use fixtures::*;
 use regex::Regex;
 use storage::Storage;
+use test_fixtures::*;
 
 fn run(path: &str, script: Vec<&str>, errors: &mut Vec<String>) {
     let trim = Regex::new(r"(?m)^\s+").unwrap();

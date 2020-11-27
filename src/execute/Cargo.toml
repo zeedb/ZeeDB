@@ -20,4 +20,4 @@ storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
 
 [dev-dependencies]
-fixtures = { path = "../fixtures" }
+test_fixtures = { path = "../test_fixtures" }

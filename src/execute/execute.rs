@@ -474,7 +474,7 @@ impl Input {
                 let input = input.next(state)?;
                 let mut columns = vec![];
                 for column in projects {
-                    columns.push(find(&input, column));
+                    columns.push(kernel::find(&input, column));
                 }
                 Ok(RecordBatch::try_new(self.schema.clone(), columns)?)
             }
@@ -552,7 +552,7 @@ impl Input {
                 offset,
                 input,
             } => todo!(),
-            Node::Sort { order_by, input } => sort(input.next(state)?, order_by),
+            Node::Sort { order_by, input } => crate::sort::sort(input.next(state)?, order_by),
             Node::Union { left, right } => todo!(),
             Node::Intersect { left, right } => todo!(),
             Node::Except { left, right } => todo!(),
@@ -633,21 +633,6 @@ impl fmt::Debug for Input {
     }
 }
 
-fn sort(input: RecordBatch, order_by: &Vec<OrderBy>) -> Result<RecordBatch, Error> {
-    let sort_options = |order_by: &OrderBy| arrow::compute::SortOptions {
-        descending: order_by.descending,
-        nulls_first: order_by.nulls_first,
-    };
-    let sort_column = |order_by: &OrderBy| arrow::compute::SortColumn {
-        options: Some(sort_options(order_by)),
-        values: find(&input, &order_by.column),
-    };
-    let order_by: Vec<arrow::compute::SortColumn> = order_by.iter().map(sort_column).collect();
-    let indices = arrow::compute::lexsort_to_indices(order_by.as_slice())?;
-    let indices: Arc<dyn Array> = Arc::new(indices);
-    Ok(kernel::gather(&input, &indices))
-}
-
 fn dummy_row(schema: Arc<Schema>) -> RecordBatch {
     RecordBatch::try_new(schema, vec![Arc::new(BooleanArray::from(vec![false]))]).unwrap()
 }
@@ -670,13 +655,4 @@ fn build(input: &mut Input, state: &mut State) -> Result<RecordBatch, Error> {
             Ok(batch) => batches.push(batch),
         }
     }
-}
-
-fn find(input: &RecordBatch, column: &Column) -> Arc<dyn Array> {
-    for i in 0..input.num_columns() {
-        if input.schema().field(i).name() == &column.canonical_name() {
-            return input.column(i).clone();
-        }
-    }
-    panic!("{} is not in {}", column.name, input.schema())
 }

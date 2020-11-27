@@ -21,7 +21,7 @@ impl CatalogProvider {
 
     pub fn catalog(&mut self, storage: &mut storage::Storage) -> Catalog {
         let mut all_catalogs: BTreeMap<(i64, i64), SimpleCatalogProto> = BTreeMap::new();
-        let bootstrap_catalog = Catalog::bootstrap();
+        let bootstrap_catalog = catalog::bootstrap();
         // Find all tables and the catalogs they are members of.
         let q = "
             select parent_catalog_id, catalog_id, catalog_name, table_id, table_name, column_id, column_name, column_type
@@ -64,7 +64,7 @@ impl CatalogProvider {
                 let catalog_id = kernel::coerce::<Int64Array>(batch.column(1)).value(offset);
                 let catalog_name = kernel::coerce::<StringArray>(batch.column(2)).value(offset);
                 if !all_catalogs.contains_key(&(parent_catalog_id, catalog_id)) {
-                    let mut catalog = Catalog::empty(catalog_id).catalog;
+                    let mut catalog = catalog::empty();
                     catalog.name = Some(catalog_name.to_string());
                     all_catalogs.insert((parent_catalog_id, catalog_id), catalog);
                 }
@@ -73,7 +73,7 @@ impl CatalogProvider {
         // Arrange catalogs into a tree data structure.
         let mut root = all_catalogs
             .remove(&(catalog::ROOT_CATALOG_PARENT_ID, catalog::ROOT_CATALOG_ID))
-            .unwrap_or(Catalog::empty(catalog::ROOT_CATALOG_ID).catalog);
+            .unwrap_or(catalog::empty());
         catalog_tree(catalog::ROOT_CATALOG_ID, &mut root, &mut all_catalogs);
         assert!(all_catalogs.is_empty());
 
@@ -100,7 +100,7 @@ fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCat
     let catalog_id = catalog_id_column.value(*offset);
     let catalog_name = kernel::coerce::<StringArray>(batch.column(2)).value(*offset);
 
-    let mut catalog = Catalog::empty(catalog_id).catalog;
+    let mut catalog = catalog::empty();
     catalog.name = Some(catalog_name.to_string());
 
     while *offset < batch.num_rows() && catalog_id == catalog_id_column.value(*offset) {
