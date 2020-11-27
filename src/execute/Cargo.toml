@@ -9,11 +9,11 @@ path = "lib.rs"
 
 [dependencies]
 arrow = "2.0.0"
-fnv = "1.0.3"
 num-traits = "0.2.14"
 regex = "1"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
+kernel = { path = "../kernel" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 storage = { path = "../storage" }

@@ -28,17 +28,17 @@ fn test_hash_table() {
     let mut storage = Storage::new();
     let mut state = State::new(&mut storage);
     let table = HashTable::new(&scalars, &mut state, &input).unwrap();
-    let hashes = table.hash(&scalars, &mut state, &input).unwrap();
-    for i in 0..hashes.len() {
-        let a = i as i64;
-        let hash = hashes[i];
-        let bucket = table.get(hash as usize);
-        let b: &Int64Array = bucket
-            .column(1)
-            .as_any()
-            .downcast_ref::<Int64Array>()
-            .unwrap();
-        let find = 1000 + a;
-        assert!(b.value_slice(0, b.len()).contains(&find))
+    let buckets = table.hash_buckets(&scalars, &mut state, &input).unwrap();
+    let output = table.cross_join(&input, &buckets);
+    let a1: &Int64Array = kernel::coerce(output.column(0));
+    let b1: &Int64Array = kernel::coerce(output.column(1));
+    let a2: &Int64Array = kernel::coerce(output.column(2));
+    let b2: &Int64Array = kernel::coerce(output.column(3));
+    let mut count = 0;
+    for i in 0..output.num_rows() {
+        if a1.value(i) == a2.value(i) && b1.value(i) == b2.value(i) {
+            count += 1;
+        }
     }
+    assert_eq!(count, 100);
 }

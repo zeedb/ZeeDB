@@ -1,8 +1,7 @@
 use crate::page::*;
-use arrow::datatypes::*;
 use arrow::record_batch::*;
-use std::fmt::Display;
-use std::sync::{Arc, RwLock};
+use std::fmt;
+use std::sync::Arc;
 
 // Heap represents a logical table as a list of pages.
 // New tuples are added to the end of the heap.
@@ -10,51 +9,46 @@ use std::sync::{Arc, RwLock};
 // During the GC process, the heap is partially sorted on the cluster-by key.
 // A good cluster-by key will cluster frequently-updated rows together.
 pub struct Heap {
-    pages: RwLock<Vec<Arc<Page>>>,
+    pages: Vec<Arc<Page>>,
 }
 
 impl Heap {
-    pub fn empty(schema: Arc<Schema>) -> Self {
-        Self {
-            pages: RwLock::new(vec![Arc::new(Page::empty(schema))]),
-        }
+    pub fn empty() -> Self {
+        Self { pages: vec![] }
     }
 
     pub fn scan(&self) -> Vec<Arc<Page>> {
-        self.pages
-            .read()
-            .unwrap()
-            .iter()
-            .map(|page| page.clone())
-            .collect()
+        self.pages.iter().map(|page| page.clone()).collect()
     }
 
-    pub fn insert(&self, records: &RecordBatch, txn: u64) {
+    pub fn insert(&mut self, records: &RecordBatch, txn: u64) {
+        if self.pages.is_empty() {
+            self.pages.push(Arc::new(Page::empty(records.schema())));
+        }
         // Insert however many records fit in the last page.
-        let offset = self
-            .pages
-            .read()
-            .unwrap()
-            .last()
-            .unwrap()
-            .insert(records, txn);
+        let offset = self.pages.last().unwrap().insert(records, txn);
         // If there are leftover records, add a page and try again.
         if offset < records.num_rows() {
-            self.pages
-                .write()
-                .unwrap()
-                .push(Arc::new(Page::empty(records.schema().clone())));
+            self.pages.push(Arc::new(Page::empty(records.schema())));
             self.insert(&slice(records, offset, records.num_rows() - offset), txn);
         }
     }
-}
 
-impl Display for Heap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for page in self.scan().iter() {
-            page.fmt(f)?;
+    pub fn is_uninitialized(&self) -> bool {
+        self.pages.is_empty()
+    }
+
+    pub fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
+        if let Some(page) = self.pages.last() {
+            page.print(f, indent)?;
         }
         Ok(())
+    }
+}
+
+impl std::fmt::Debug for Heap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.print(f, 0)
     }
 }
 

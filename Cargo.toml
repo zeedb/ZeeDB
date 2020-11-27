@@ -4,6 +4,7 @@ members = [
     "src/catalog",
     "src/encoding",
     "src/execute",
+    "src/kernel",
     "src/parser",
     "src/planner",
     "src/scratch",

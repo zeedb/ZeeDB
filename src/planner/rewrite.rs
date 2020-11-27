@@ -2,6 +2,7 @@ use arrow::datatypes::*;
 use ast::*;
 use catalog::Catalog;
 use parser::ParseProvider;
+use std::sync::Arc;
 
 #[derive(Debug)]
 enum RewriteRule {
@@ -445,7 +446,7 @@ impl RewriteRule {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
                         }
                         combined_attributes.push((
-                            Scalar::Literal(Value::Bool(true), DataType::Boolean),
+                            Scalar::Literal(Value::new(Box::new(true), DataType::Boolean)),
                             mark.clone(),
                         ));
                         combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));

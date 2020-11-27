@@ -1,10 +1,10 @@
-use crate::error::Error;
 use crate::hash_table::HashTable;
 use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;
 use ast::*;
+use kernel::Error;
 use std::sync::Arc;
 
 pub fn hash_join(
@@ -14,39 +14,12 @@ pub fn hash_join(
     join: &Join,
     state: &mut State,
 ) -> Result<RecordBatch, Error> {
-    let buckets = left.hash(partition_right, state, &right)?;
-    let mut output = vec![];
-    for (bucket, right) in partition(right, buckets) {
-        output.push(nested_loop(&left.get(bucket), right, join, state)?);
-    }
-    Ok(crate::common::concat_batches(output))
-}
-
-fn partition(input: RecordBatch, buckets: Vec<usize>) -> Vec<(usize, RecordBatch)> {
-    let max_bucket = buckets.iter().max().unwrap_or(&0);
-    let mut indices: Vec<UInt32Builder> = Vec::with_capacity(max_bucket + 1);
-    indices.resize_with(max_bucket + 1, || UInt32Builder::new(0));
-    for (i, bucket) in buckets.iter().enumerate() {
-        indices[*bucket].append_value(i as u32).unwrap();
-    }
-    let mut partitions = Vec::with_capacity(indices.len());
-    for bucket in 0..indices.len() {
-        let indices = &indices[bucket].finish();
-        let batch = crate::common::take_batch(&input, indices);
-        partitions.push((bucket, batch));
-    }
-    partitions
-}
-
-pub fn nested_loop(
-    left: &RecordBatch,
-    right: RecordBatch,
-    join: &Join,
-    state: &mut State,
-) -> Result<RecordBatch, Error> {
+    let buckets = left.hash_buckets(partition_right, state, &right)?;
+    let input = left.cross_join(&right, &buckets);
     match join {
         Join::Inner(predicates) => {
-            crate::filter::filter(predicates, cross_product(left, &right)?, state)
+            let mask = crate::eval::all(predicates, &input, state)?;
+            Ok(kernel::gather_logical(&input, &mask))
         }
         Join::Right(_) => todo!(),
         Join::Outer(_) => todo!(),
@@ -57,23 +30,93 @@ pub fn nested_loop(
     }
 }
 
-fn cross_product(left: &RecordBatch, right: &RecordBatch) -> Result<RecordBatch, Error> {
-    let num_rows = left.num_rows() * right.num_rows();
-    let mut index_left = UInt32Builder::new(num_rows);
-    let mut index_right = UInt32Builder::new(num_rows);
-    for i in 0..left.num_rows() {
-        for j in 0..right.num_rows() {
-            index_left.append_value(i as u32).unwrap();
-            index_right.append_value(j as u32).unwrap();
+pub fn nested_loop(
+    left: &RecordBatch,
+    right: &RecordBatch,
+    join: &Join,
+    state: &mut State,
+) -> Result<RecordBatch, Error> {
+    match join {
+        Join::Inner(predicates) => nested_loop_inner(predicates, left, right, state),
+        Join::Right(_) => todo!(),
+        Join::Outer(_) => todo!(),
+        Join::Semi(_) => todo!(),
+        Join::Anti(_) => todo!(),
+        Join::Single(predicates) => nested_loop_single(predicates, left, right, state),
+        Join::Mark(_, _) => todo!(),
+    }
+}
+
+fn nested_loop_inner(
+    predicates: &Vec<Scalar>,
+    left: &RecordBatch,
+    right: &RecordBatch,
+    state: &mut State,
+) -> Result<RecordBatch, Error> {
+    let input = cross_product(left, right)?;
+    let mask = crate::eval::all(predicates, &input, state)?;
+    Ok(kernel::gather_logical(&input, &mask))
+}
+
+fn nested_loop_single(
+    predicates: &Vec<Scalar>,
+    left: &RecordBatch,
+    right: &RecordBatch,
+    state: &mut State,
+) -> Result<RecordBatch, Error> {
+    let head = cross_product(left, &right)?;
+    let mask = crate::eval::all(predicates, &head, state)?;
+    let head = kernel::gather_logical(&head, &mask);
+    let tail = unmatched(left, right, &mask);
+    let combined = kernel::cat(&vec![head, tail]);
+    assert!(combined.num_rows() >= right.num_rows());
+    Ok(combined)
+}
+
+fn unmatched(left: &RecordBatch, right: &RecordBatch, mask: &Arc<dyn Array>) -> RecordBatch {
+    let mask = mask.as_any().downcast_ref::<BooleanArray>().unwrap();
+    let mut unmatched = Vec::with_capacity(right.num_rows());
+    unmatched.resize(right.num_rows(), true);
+    for i in 0..right.num_rows() {
+        for j in 0..left.num_rows() {
+            if mask.value(i * left.num_rows() + j) {
+                unmatched[i] = false;
+            }
         }
     }
-    let left = crate::common::take_batch(left, &index_left.finish());
-    let right = crate::common::take_batch(right, &index_right.finish());
-    let mut columns = vec![];
-    columns.extend_from_slice(left.columns());
-    columns.extend_from_slice(right.columns());
-    let mut fields = vec![];
-    fields.extend_from_slice(left.schema().fields());
-    fields.extend_from_slice(right.schema().fields());
-    Ok(RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap())
+    let left = nulls(right.num_rows(), left.schema());
+    let right = kernel::zip(&left, right);
+    let index: Arc<dyn Array> = Arc::new(BooleanArray::from(unmatched));
+    kernel::gather_logical(&right, &Arc::new(index))
+}
+
+fn nulls(num_rows: usize, schema: Arc<Schema>) -> RecordBatch {
+    let columns = schema
+        .fields()
+        .iter()
+        .map(|field| kernel::nulls(num_rows, field.data_type()))
+        .collect();
+    RecordBatch::try_new(schema, columns).unwrap()
+}
+
+fn cross_product(left: &RecordBatch, right: &RecordBatch) -> Result<RecordBatch, Error> {
+    let (index_left, index_right) = index_cross_product(left.num_rows(), right.num_rows());
+    let index_left: Arc<dyn Array> = Arc::new(index_left);
+    let index_right: Arc<dyn Array> = Arc::new(index_right);
+    let left = kernel::gather(left, &index_left);
+    let right = kernel::gather(right, &index_right);
+    Ok(kernel::zip(&left, &right))
+}
+
+fn index_cross_product(num_left: usize, num_right: usize) -> (UInt32Array, UInt32Array) {
+    let num_rows = num_left * num_right;
+    let mut index_left = UInt32Builder::new(num_rows);
+    let mut index_right = UInt32Builder::new(num_rows);
+    for i in 0..num_right {
+        for j in 0..num_left {
+            index_right.append_value(i as u32).unwrap();
+            index_left.append_value(j as u32).unwrap();
+        }
+    }
+    (index_left.finish(), index_right.finish())
 }

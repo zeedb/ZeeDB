@@ -49,6 +49,10 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
+            Expr::LogicalOut { input, .. } | Expr::Out { input, .. } => {
+                // Don't print output node.
+                input.indent_print(f, indent)
+            }
             Expr::LogicalMap {
                 include_existing,
                 projects,
@@ -178,15 +182,24 @@ impl IndentPrint for Expr {
             }
             Expr::LogicalValues {
                 columns,
-                rows,
+                values,
+                input,
+            }
+            | Expr::Values {
+                columns,
+                values,
                 input,
             } => {
                 write!(f, "{}", self.name())?;
                 for column in columns {
                     write!(f, " {}", column)?;
                 }
+                let num_rows = values.first().map(|column| column.len()).unwrap_or(0);
+                let rows: Vec<Vec<Scalar>> = (0..num_rows)
+                    .map(|i| values.iter().map(|column| column[i].clone()).collect())
+                    .collect();
                 for row in rows {
-                    write!(f, " [{}]", join_scalars(row))?;
+                    write!(f, " [{}]", join_scalars(&row))?;
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -357,18 +370,6 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Values {
-                columns,
-                rows,
-                input,
-            } => {
-                write!(f, "{} {}", self.name(), join_columns(columns))?;
-                for row in rows {
-                    write!(f, " [{}]", join_scalars(row))?;
-                }
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
             Expr::Update { updates, input } => {
                 write!(f, "{}", self.name())?;
                 for (target, value) in updates {
@@ -408,24 +409,12 @@ impl IndentPrint for Expr {
                 input.indent_print(f, indent + 1)
             }
             Expr::LogicalCall {
-                procedure,
-                arguments,
-                input,
-                ..
+                procedure, input, ..
             }
             | Expr::Call {
-                procedure,
-                arguments,
-                input,
-                ..
+                procedure, input, ..
             } => {
-                write!(
-                    f,
-                    "{} {} {}",
-                    self.name(),
-                    procedure,
-                    join_scalars(arguments)
-                )?;
+                write!(f, "{} {}", self.name(), procedure)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
@@ -440,6 +429,7 @@ impl Expr {
             Expr::LogicalSingleGet { .. } => "LogicalSingleGet",
             Expr::LogicalGet { .. } => "LogicalGet",
             Expr::LogicalFilter { .. } => "LogicalFilter",
+            Expr::LogicalOut { .. } => "LogicalOut",
             Expr::LogicalMap { .. } => "LogicalMap",
             Expr::LogicalJoin { .. } => "LogicalJoin",
             Expr::LogicalDependentJoin { .. } => "LogicalDependentJoin",
@@ -467,6 +457,7 @@ impl Expr {
             Expr::SeqScan { .. } => "SeqScan",
             Expr::IndexScan { .. } => "IndexScan",
             Expr::Filter { .. } => "Filter",
+            Expr::Out { .. } => "Out",
             Expr::Map { .. } => "Map",
             Expr::NestedLoop { .. } => "NestedLoop",
             Expr::HashJoin { .. } => "HashJoin",
@@ -514,12 +505,12 @@ impl fmt::Display for Join {
 impl fmt::Display for Scalar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Scalar::Literal(value, _) => write!(f, "{}", value),
+            Scalar::Literal(value) => write!(f, "{}", value),
             Scalar::Column(column) => write!(f, "{}", column),
             Scalar::Parameter(name, _) => write!(f, "@{}", name),
             Scalar::Call(function) => {
                 if function.arguments().is_empty() {
-                    write!(f, "({:?})", function)
+                    write!(f, "({})", function.name())
                 } else {
                     let arguments: Vec<String> = function
                         .arguments()

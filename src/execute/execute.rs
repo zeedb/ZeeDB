@@ -1,21 +1,21 @@
-use crate::error::Error;
-use crate::eval::eval;
 use crate::hash_table::HashTable;
 use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
-use std::any::Any;
+use kernel::Error;
+use std::fmt;
 use std::sync::Arc;
 use storage::*;
 
-pub fn execute(expr: Expr, storage: &mut Storage) -> Result<Program<'_>, Error> {
+pub fn execute(expr: Expr, storage: &mut Storage) -> Program<'_> {
     let state = State::new(storage);
-    let input = compile(expr)?;
-    Ok(Program { state, input })
+    let input = compile(expr);
+    Program { state, input }
 }
 
+#[derive(Debug)]
 pub struct Program<'a> {
     state: State<'a>,
     input: Input,
@@ -26,8 +26,11 @@ struct Input {
     schema: Arc<Schema>,
 }
 
+#[derive(Debug)]
 enum Node {
-    TableFreeScan,
+    TableFreeScan {
+        empty: bool,
+    },
     SeqScan {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
@@ -42,6 +45,10 @@ enum Node {
     },
     Filter {
         predicates: Vec<Scalar>,
+        input: Input,
+    },
+    Out {
+        projects: Vec<Column>,
         input: Input,
     },
     Map {
@@ -108,12 +115,12 @@ enum Node {
     },
     Insert {
         table: Table,
-        columns: Vec<Column>,
+        schema: Arc<Schema>,
         input: Input,
     },
     Values {
         columns: Vec<Column>,
-        rows: Vec<Vec<Scalar>>,
+        values: Vec<Vec<Scalar>>,
         input: Input,
     },
     Update {
@@ -134,9 +141,7 @@ enum Node {
         input: Input,
     },
     Call {
-        procedure: String,
-        arguments: Vec<Scalar>,
-        returns: Option<DataType>,
+        procedure: Procedure,
         input: Input,
     },
 }
@@ -146,60 +151,64 @@ impl<'a> Iterator for Program<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.input.next(&mut self.state) {
-            Ok(page) if page.num_rows() == 0 => None,
             Ok(page) => Some(Ok(page)),
+            Err(Error::Empty) => None,
             Err(err) => Some(Err(err)),
         }
     }
 }
 
-fn compile(expr: Expr) -> Result<Input, Error> {
-    let node = compile_node(expr)?;
-    let schema = schema(&node);
-    Ok(Input {
+fn compile(expr: Expr) -> Input {
+    let node = compile_node(expr);
+    let schema = node.schema();
+    Input {
         node: Box::new(node),
         schema: Arc::new(schema),
-    })
+    }
 }
 
-fn compile_node(expr: Expr) -> Result<Node, Error> {
+fn compile_node(expr: Expr) -> Node {
     match expr {
-        TableFreeScan => Ok(Node::TableFreeScan),
+        TableFreeScan => Node::TableFreeScan { empty: false },
         SeqScan {
             projects,
             predicates,
             table,
-        } => Ok(Node::SeqScan {
+        } => Node::SeqScan {
             projects,
             predicates,
             table,
             scan: None,
-        }),
+        },
         IndexScan {
             projects,
             predicates,
             index_predicates,
             table,
         } => todo!(),
-        Filter { predicates, input } => Ok(Node::Filter {
+        Filter { predicates, input } => Node::Filter {
             predicates,
-            input: compile(*input)?,
-        }),
+            input: compile(*input),
+        },
+        Out { projects, input } => Node::Out {
+            projects,
+            input: compile(*input),
+        },
         Map {
             include_existing,
             projects,
             input,
-        } => Ok(Node::Map {
+        } => Node::Map {
             include_existing,
             projects,
-            input: compile(*input)?,
-        }),
-        NestedLoop { join, left, right } => Ok(Node::NestedLoop {
+            input: compile(*input),
+        },
+        NestedLoop { join, left, right } => Node::NestedLoop {
             join,
-            left: compile(*left)?,
+            left: compile(*left),
             build_left: None,
-            right: compile(*right)?,
-        }),
+            right: compile(*right),
+        },
         HashJoin {
             join,
             partition_left,
@@ -207,16 +216,16 @@ fn compile_node(expr: Expr) -> Result<Node, Error> {
             left,
             right,
         } => {
-            let left = compile(*left)?;
-            let right = compile(*right)?;
-            Ok(Node::HashJoin {
+            let left = compile(*left);
+            let right = compile(*right);
+            Node::HashJoin {
                 join,
                 partition_left,
                 partition_right,
                 left,
                 build_left: None,
                 right,
-            })
+            }
         }
         LookupJoin {
             join,
@@ -237,10 +246,10 @@ fn compile_node(expr: Expr) -> Result<Node, Error> {
             offset,
             input,
         } => todo!(),
-        Sort { order_by, input } => Ok(Node::Sort {
+        Sort { order_by, input } => Node::Sort {
             order_by,
-            input: compile(*input)?,
-        }),
+            input: compile(*input),
+        },
         Union { .. } => todo!(),
         Intersect { .. } => todo!(),
         Except { .. } => todo!(),
@@ -248,56 +257,55 @@ fn compile_node(expr: Expr) -> Result<Node, Error> {
             table,
             columns,
             input,
-        } => Ok(Node::Insert {
+        } => Node::Insert {
             table,
-            columns,
-            input: compile(*input)?,
-        }),
+            schema: Arc::new(Schema::new(
+                columns
+                    .iter()
+                    .map(|column| column.into_table_field())
+                    .collect(),
+            )),
+            input: compile(*input),
+        },
         Values {
             columns,
-            rows,
+            values,
             input,
-        } => Ok(Node::Values {
+        } => Node::Values {
             columns,
-            rows,
-            input: compile(*input)?,
-        }),
+            values,
+            input: compile(*input),
+        },
         Update { .. } => todo!(),
         Delete { .. } => todo!(),
         Script { statements } => {
             let mut compiled = vec![];
             for expr in statements {
-                compiled.push(compile(expr)?)
+                compiled.push(compile(expr))
             }
-            Ok(Node::Script {
+            Node::Script {
                 offset: 0,
                 statements: compiled,
-            })
+            }
         }
         Assign {
             variable,
             value,
             input,
-        } => Ok(Node::Assign {
+        } => Node::Assign {
             variable,
             value,
-            input: compile(*input)?,
-        }),
-        Call {
+            input: compile(*input),
+        },
+        Call { procedure, input } => Node::Call {
             procedure,
-            arguments,
-            returns,
-            input,
-        } => Ok(Node::Call {
-            procedure,
-            arguments,
-            returns,
-            input: compile(*input)?,
-        }),
+            input: compile(*input),
+        },
         Leaf { .. }
         | LogicalSingleGet
         | LogicalGet { .. }
         | LogicalFilter { .. }
+        | LogicalOut { .. }
         | LogicalMap { .. }
         | LogicalJoin { .. }
         | LogicalDependentJoin { .. }
@@ -324,117 +332,115 @@ fn compile_node(expr: Expr) -> Result<Node, Error> {
     }
 }
 
-fn schema(compiled: &Node) -> Schema {
-    match compiled {
-        Node::TableFreeScan => dummy_schema(),
-        Node::Filter { input, .. } | Node::Limit { input, .. } | Node::Sort { input, .. } => {
-            schema(input.node.as_ref())
-        }
-        Node::SeqScan { projects, .. } | Node::IndexScan { projects, .. } => {
-            let fields = projects
-                .iter()
-                .map(|column| {
-                    Field::new(column.canonical_name().as_str(), column.data.clone(), false)
-                    // TODO allow columns to be nullable
-                })
-                .collect();
-            Schema::new(fields)
-        }
-        Node::Map {
-            include_existing,
-            projects,
-            input,
-        } => {
-            let mut fields = vec![];
-            if *include_existing {
-                fields.extend_from_slice(schema(input.node.as_ref()).fields());
+impl Node {
+    fn schema(&self) -> Schema {
+        match self {
+            Node::TableFreeScan { .. } => dummy_schema(),
+            Node::Filter { input, .. } | Node::Limit { input, .. } | Node::Sort { input, .. } => {
+                input.node.schema()
             }
-            for (_, column) in projects {
-                fields.push(Field::new(
-                    column.canonical_name().as_str(),
-                    column.data.clone(),
-                    false,
-                ))
-                // TODO allow columns to be nullable
+            Node::SeqScan { projects, .. } | Node::IndexScan { projects, .. } => {
+                let fields = projects
+                    .iter()
+                    .map(|column| column.into_query_field())
+                    .collect();
+                Schema::new(fields)
             }
-            Schema::new(fields)
-        }
-        Node::NestedLoop {
-            join, left, right, ..
-        } => {
-            let mut fields = vec![];
-            fields.extend_from_slice(schema(left.node.as_ref()).fields());
-            fields.extend_from_slice(schema(right.node.as_ref()).fields());
-            if let Join::Mark(column, _) = join {
-                fields.push(Field::new(
-                    column.canonical_name().as_str(),
-                    column.data.clone(),
-                    false,
-                ))
-                // TODO allow columns to be nullable
+            Node::Out { projects, .. } => {
+                let mut fields = vec![];
+                for column in projects {
+                    fields.push(column.into_query_field())
+                }
+                Schema::new(fields)
             }
-            Schema::new(fields)
-        }
-        Node::HashJoin {
-            join, left, right, ..
-        } => {
-            let mut fields = vec![];
-            fields.extend_from_slice(schema(left.node.as_ref()).fields());
-            fields.extend_from_slice(schema(right.node.as_ref()).fields());
-            if let Join::Mark(column, _) = join {
-                fields.push(Field::new(
-                    column.canonical_name().as_str(),
-                    column.data.clone(),
-                    false,
-                ))
-                // TODO allow columns to be nullable
+            Node::Map {
+                include_existing,
+                projects,
+                input,
+            } => {
+                let mut fields = vec![];
+                if *include_existing {
+                    fields.extend_from_slice(input.node.schema().fields());
+                }
+                for (_, column) in projects {
+                    fields.push(column.into_query_field())
+                }
+                Schema::new(fields)
             }
-            Schema::new(fields)
+            Node::NestedLoop {
+                join, left, right, ..
+            } => {
+                let mut fields = vec![];
+                fields.extend_from_slice(left.node.schema().fields());
+                fields.extend_from_slice(right.node.schema().fields());
+                if let Join::Mark(column, _) = join {
+                    fields.push(column.into_query_field())
+                }
+                Schema::new(fields)
+            }
+            Node::HashJoin {
+                join, left, right, ..
+            } => {
+                let mut fields = vec![];
+                fields.extend_from_slice(left.node.schema().fields());
+                fields.extend_from_slice(right.node.schema().fields());
+                if let Join::Mark(column, _) = join {
+                    fields.push(column.into_query_field())
+                }
+                Schema::new(fields)
+            }
+            Node::LookupJoin {
+                join,
+                projects,
+                index_predicates,
+                table,
+                input,
+            } => todo!(),
+            Node::CreateTempTable {
+                name,
+                columns,
+                left,
+                right,
+            } => todo!(),
+            Node::GetTempTable { name, columns } => todo!(),
+            Node::Aggregate {
+                group_by,
+                aggregate,
+                input,
+            } => todo!(),
+            Node::Union { left, right } => todo!(),
+            Node::Intersect { left, right } => todo!(),
+            Node::Except { left, right } => todo!(),
+            Node::Insert { .. } => dummy_schema(),
+            Node::Values {
+                columns,
+                values,
+                input,
+            } => Schema::new(
+                columns
+                    .iter()
+                    .map(|column| column.into_query_field())
+                    .collect(),
+            ),
+            Node::Update { .. }
+            | Node::Delete { .. }
+            | Node::Script { .. }
+            | Node::Assign { .. }
+            | Node::Call { .. } => dummy_schema(),
         }
-        Node::LookupJoin {
-            join,
-            projects,
-            index_predicates,
-            table,
-            input,
-        } => todo!(),
-        Node::CreateTempTable {
-            name,
-            columns,
-            left,
-            right,
-        } => todo!(),
-        Node::GetTempTable { name, columns } => todo!(),
-        Node::Aggregate {
-            group_by,
-            aggregate,
-            input,
-        } => todo!(),
-        Node::Union { left, right } => todo!(),
-        Node::Intersect { left, right } => todo!(),
-        Node::Except { left, right } => todo!(),
-        Node::Insert {
-            table,
-            columns,
-            input,
-        } => todo!(),
-        Node::Values {
-            columns,
-            rows,
-            input,
-        } => todo!(),
-        Node::Update { .. }
-        | Node::Delete { .. }
-        | Node::Script { .. }
-        | Node::Assign { .. }
-        | Node::Call { .. } => dummy_schema(),
     }
 }
 
 impl Input {
     fn next(&mut self, state: &mut State) -> Result<RecordBatch, Error> {
         match self.node.as_mut() {
-            Node::TableFreeScan => Ok(dummy_row(self.schema.clone())),
+            Node::TableFreeScan { empty } => {
+                if *empty {
+                    return Err(Error::Empty);
+                }
+                *empty = true;
+                Ok(dummy_row(self.schema.clone()))
+            }
             Node::SeqScan {
                 projects,
                 predicates,
@@ -445,11 +451,11 @@ impl Input {
                     *scan = Some(state.storage.table(table.id).scan())
                 }
                 match scan.as_mut().unwrap().pop() {
-                    Some(page) => Ok(crate::filter::filter(
-                        predicates,
-                        page.select(projects),
-                        state,
-                    )?),
+                    Some(page) => {
+                        let input = page.select(projects);
+                        let boolean = crate::eval::all(predicates, &input, state)?;
+                        Ok(kernel::gather_logical(&input, &boolean))
+                    }
                     None => Err(Error::Empty),
                 }
             }
@@ -461,7 +467,16 @@ impl Input {
             } => todo!(),
             Node::Filter { predicates, input } => {
                 let input = input.next(state)?;
-                crate::filter::filter(predicates, input, state)
+                let boolean = crate::eval::all(predicates, &input, state)?;
+                Ok(kernel::gather_logical(&input, &boolean))
+            }
+            Node::Out { projects, input } => {
+                let input = input.next(state)?;
+                let mut columns = vec![];
+                for column in projects {
+                    columns.push(find(&input, column));
+                }
+                Ok(RecordBatch::try_new(self.schema.clone(), columns)?)
             }
             Node::Map {
                 include_existing,
@@ -474,7 +489,7 @@ impl Input {
                     columns.extend_from_slice(input.columns());
                 }
                 for (scalar, column) in projects {
-                    columns.push(eval(scalar, state, &input)?);
+                    columns.push(crate::eval::eval(scalar, &input, state)?);
                 }
                 Ok(RecordBatch::try_new(self.schema.clone(), columns)?)
             }
@@ -489,7 +504,7 @@ impl Input {
                     *build_left = Some(input);
                 }
                 let right = right.next(state)?;
-                crate::join::nested_loop(build_left.as_ref().unwrap(), right, &join, state)
+                crate::join::nested_loop(build_left.as_ref().unwrap(), &right, &join, state)
             }
             Node::HashJoin {
                 join,
@@ -543,23 +558,44 @@ impl Input {
             Node::Except { left, right } => todo!(),
             Node::Insert {
                 table,
-                columns,
+                schema,
                 input,
-            } => todo!(),
-            Node::Values {
-                columns,
-                rows,
-                input,
-            } => todo!(),
+            } => {
+                let input = input.next(state)?;
+                let input = RecordBatch::try_new(
+                    schema.clone(),
+                    input
+                        .columns()
+                        .iter()
+                        .map(|column| column.clone())
+                        .collect(),
+                )
+                .unwrap();
+                state.storage.table_mut(table.id).insert(&input, state.txn);
+                Ok(dummy_row(self.schema.clone()))
+            }
+            Node::Values { values, input, .. } => {
+                let input = input.next(state)?;
+                let mut columns = vec![];
+                for i in 0..values.len() {
+                    columns.push(crate::eval::evals(&values[i], &input, state)?);
+                }
+                Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
+            }
             Node::Update { updates, input } => todo!(),
             Node::Delete { table, input } => todo!(),
             Node::Script { offset, statements } => {
                 while *offset < statements.len() {
-                    let next = statements[*offset].next(state)?;
-                    if next.num_rows() > 0 {
-                        return Ok(next);
-                    } else {
-                        *offset += 1;
+                    match statements[*offset].next(state) {
+                        Err(Error::Empty) => {
+                            *offset += 1;
+                        }
+                        Err(error) => {
+                            return Err(error);
+                        }
+                        Ok(batch) => {
+                            return Ok(batch);
+                        }
                     }
                 }
                 Err(Error::Empty)
@@ -570,18 +606,30 @@ impl Input {
                 input,
             } => {
                 let input = input.next(state)?;
-                let value = eval(value, state, &input)?;
-                let value = unwrap_scalar(value)?;
+                let value = crate::eval::eval(value, &input, state)?;
                 state.variables.insert(variable.clone(), value);
-                Err(Error::Empty)
+                Ok(dummy_row(self.schema.clone()))
             }
-            Node::Call {
-                procedure,
-                arguments,
-                returns,
-                input,
-            } => todo!(),
+            Node::Call { procedure, input } => {
+                let input = input.next(state)?;
+                match procedure {
+                    Procedure::CreateTable(id) => {
+                        let id = crate::eval::eval(id, &input, state)?;
+                        state.storage.create_table(kernel::int64(&id));
+                    }
+                    Procedure::DropTable(id) => todo!(),
+                    Procedure::CreateIndex(id) => todo!(),
+                    Procedure::DropIndex(id) => todo!(),
+                };
+                Ok(dummy_row(self.schema.clone()))
+            }
         }
+    }
+}
+
+impl fmt::Debug for Input {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.node.fmt(f)
     }
 }
 
@@ -596,53 +644,9 @@ fn sort(input: RecordBatch, order_by: &Vec<OrderBy>) -> Result<RecordBatch, Erro
     };
     let order_by: Vec<arrow::compute::SortColumn> = order_by.iter().map(sort_column).collect();
     let indices = arrow::compute::lexsort_to_indices(order_by.as_slice())?;
-    let columns = input
-        .columns()
-        .iter()
-        .map(|column| arrow::compute::take(column, &indices, None).unwrap())
-        .collect();
-    Ok(RecordBatch::try_new(input.schema().clone(), columns)?)
+    let indices: Arc<dyn Array> = Arc::new(indices);
+    Ok(kernel::gather(&input, &indices))
 }
-
-// fn empty(schema: Schema) -> RecordBatch {
-//     schema
-//         .fields()
-//         .iter()
-//         .map(|column| match column.data_type() {
-//             DataType::Boolean => empty_bool_array(),
-//             DataType::Int64 => empty_primitive_array::<Int64Type>(),
-//             DataType::UInt64 => empty_primitive_array::<UInt64Type>(),
-//             DataType::Float64 => empty_primitive_array::<Float64Type>(),
-//             DataType::Date32(DateUnit::Day) => empty_primitive_array::<Date32Type>(),
-//             DataType::Timestamp(TimeUnit::Microsecond, None) => empty_timestamp_array(),
-//             DataType::FixedSizeBinary(16) => todo!(),
-//             DataType::Utf8 => empty_string_array(),
-//             DataType::Struct(fields) => todo!(),
-//             DataType::List(element) => todo!(),
-//             other => panic!("{:?} not supported", other),
-//         })
-//         .collect()
-// }
-
-// fn empty_bool_array() -> Arc<dyn Array> {
-//     let array = BooleanArray::builder(0).finish();
-//     Arc::new(array)
-// }
-
-// fn empty_primitive_array<T: ArrowNumericType>() -> Arc<dyn Array> {
-//     let array = PrimitiveArray::<T>::builder(0).finish();
-//     Arc::new(array)
-// }
-
-// fn empty_timestamp_array() -> Arc<dyn Array> {
-//     let array = TimestampMicrosecondArray::builder(0).finish();
-//     Arc::new(array)
-// }
-
-// fn empty_string_array() -> Arc<dyn Array> {
-//     let array = StringBuilder::new(0).finish();
-//     Arc::new(array)
-// }
 
 fn dummy_row(schema: Arc<Schema>) -> RecordBatch {
     RecordBatch::try_new(schema, vec![Arc::new(BooleanArray::from(vec![false]))]).unwrap()
@@ -656,16 +660,12 @@ fn dummy_schema() -> Schema {
     )])
 }
 
-fn unwrap_scalar(input: Arc<dyn Array>) -> Result<Box<dyn Any>, Error> {
-    todo!()
-}
-
 fn build(input: &mut Input, state: &mut State) -> Result<RecordBatch, Error> {
     let mut batches = vec![];
     loop {
         match input.next(state) {
             Err(Error::Empty) if batches.is_empty() => return Err(Error::Empty),
-            Err(Error::Empty) => return Ok(crate::common::concat_batches(batches)),
+            Err(Error::Empty) => return Ok(kernel::cat(&batches)),
             Err(other) => return Err(other),
             Ok(batch) => batches.push(batch),
         }

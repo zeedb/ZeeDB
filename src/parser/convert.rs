@@ -48,7 +48,14 @@ impl Converter {
     }
 
     fn query(&mut self, q: &ResolvedQueryStmtProto) -> Expr {
-        self.any_resolved_scan(q.query.get())
+        LogicalOut {
+            projects: q
+                .output_column_list
+                .iter()
+                .map(|c| Column::from(c.column.get()))
+                .collect(),
+            input: Box::new(self.any_resolved_scan(q.query.get())),
+        }
     }
 
     fn any_resolved_scan(&mut self, q: &AnyResolvedScanProto) -> Expr {
@@ -538,24 +545,23 @@ impl Converter {
     }
 
     fn rows(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
+        let num_columns = q.insert_column_list.len();
         let mut input = LogicalSingleGet;
-        let mut rows = Vec::with_capacity(q.row_list.len());
-        for row in &q.row_list {
-            rows.push(self.row(row, &mut input));
+        let mut values: Vec<Vec<Scalar>> = Vec::with_capacity(num_columns);
+        values.resize_with(num_columns, Vec::new);
+        for i in 0..q.row_list.len() {
+            for j in 0..num_columns {
+                values[j].push(self.expr(
+                    q.row_list[i].value_list[j].value.as_ref().unwrap(),
+                    &mut input,
+                ));
+            }
         }
         LogicalValues {
             columns: self.columns(&q.insert_column_list),
-            rows,
+            values,
             input: Box::new(input),
         }
-    }
-
-    fn row(&mut self, row: &ResolvedInsertRowProto, input: &mut Expr) -> Vec<Scalar> {
-        let mut values = Vec::with_capacity(row.value_list.len());
-        for value in &row.value_list {
-            values.push(self.expr(value.value.get(), input));
-        }
-        values
     }
 
     fn columns(&mut self, xs: &Vec<ResolvedColumnProto>) -> Vec<Column> {
@@ -670,15 +676,15 @@ impl Converter {
 
     fn call(&mut self, q: &ResolvedCallStmtProto) -> Expr {
         let mut input = LogicalSingleGet;
+        let procedure = match q.procedure.get().name.get().as_str() {
+            "create_table" => Procedure::CreateTable(self.expr(&q.argument_list[0], &mut input)),
+            "drop_table" => Procedure::DropTable(self.expr(&q.argument_list[0], &mut input)),
+            "create_index" => Procedure::CreateIndex(self.expr(&q.argument_list[0], &mut input)),
+            "drop_index" => Procedure::DropIndex(self.expr(&q.argument_list[0], &mut input)),
+            other => panic!("{}", other),
+        };
         LogicalCall {
-            procedure: q.procedure.get().name.get().clone(),
-            arguments: self.exprs(&q.argument_list, &mut input),
-            returns: q
-                .signature
-                .get()
-                .return_type
-                .as_ref()
-                .map(|returns| data_type::from_proto(returns.r#type.get())),
+            procedure,
             input: Box::new(input),
         }
     }
@@ -696,7 +702,7 @@ impl Converter {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
                 let data = x.value.get().r#type.get();
-                Scalar::Literal(literal(value, data), data_type::from_proto(data))
+                Scalar::Literal(literal(value, data))
             }
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
@@ -977,72 +983,27 @@ fn literal(value: &ValueProto, data: &TypeProto) -> Value {
         ValueProto { value: Some(value) } => value,
         other => panic!("{:?}", other),
     };
+    let as_type = data_type::from_proto(data);
     match value {
-        Int64Value(x) => Value::Int64(*x),
-        BoolValue(x) => Value::Bool(*x),
-        DoubleValue(x) => Value::Double(x.to_string()),
-        StringValue(x) => Value::String(x.clone()),
-        DateValue(x) => Value::Date(*x),
-        TimestampValue(x) => Value::Timestamp(microseconds_since_epoch(x)),
-        ArrayValue(x) => Value::Array(array_value(&x.element, element_type(data))),
-        StructValue(x) => Value::Struct(struct_value(&x.field, field_types(data))),
+        Int64Value(x) => Value::new(Box::new(*x), as_type),
+        BoolValue(x) => Value::new(Box::new(*x), as_type),
+        DoubleValue(x) => Value::new(Box::new(*x), as_type),
+        StringValue(x) => Value::new(Box::new(x.clone()), as_type),
+        DateValue(x) => Value::new(Box::new(*x), as_type),
+        TimestampValue(x) => Value::new(Box::new(microseconds_since_epoch(x)), as_type),
         NumericValue(buf) => {
             let mut x = 0i128;
             varint128::write(&mut x, buf);
-            Value::Numeric(x)
+            Value::new(Box::new(x), as_type)
         }
-        other => panic!("{:?}", other),
-    }
-}
-
-fn element_type(data: &TypeProto) -> &TypeProto {
-    let data = match data {
-        TypeProto {
-            array_type: Some(data),
-            ..
-        } => data,
-        other => panic!("{:?}", other),
-    };
-    match data.borrow() {
-        ArrayTypeProto {
-            element_type: Some(data),
-        } => &*data,
-        other => panic!("{:?}", other),
-    }
-}
-
-fn field_types(data: &TypeProto) -> &Vec<StructFieldProto> {
-    match data {
-        TypeProto {
-            struct_type: Some(StructTypeProto { field }),
-            ..
-        } => field,
+        ArrayValue(x) => todo!(),
+        StructValue(x) => todo!(),
         other => panic!("{:?}", other),
     }
 }
 
 fn microseconds_since_epoch(time: &prost_types::Timestamp) -> i64 {
     (time.seconds * 1_000_000) + (time.nanos / 1000) as i64
-}
-
-fn array_value(values: &Vec<ValueProto>, data: &TypeProto) -> Vec<Value> {
-    let mut list = vec![];
-    for v in values {
-        list.push(literal(&v, &data));
-    }
-    list
-}
-
-fn struct_value(values: &Vec<ValueProto>, types: &Vec<StructFieldProto>) -> Vec<Value> {
-    let mut list = vec![];
-    for i in 0..list.len() {
-        list.push(struct_field(&values[i], &types[i]));
-    }
-    list
-}
-
-fn struct_field(value: &ValueProto, data: &StructFieldProto) -> Value {
-    literal(value, data.field_type.as_ref().unwrap())
 }
 
 trait Getter<T> {

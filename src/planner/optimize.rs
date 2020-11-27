@@ -251,6 +251,13 @@ impl<'a> Optimizer<'a> {
                     column_unique_cardinality.insert(c.clone(), cardinality.min(*n));
                 }
             }
+            LogicalOut { projects, input } => {
+                cardinality = self.ss[leaf(input)].props.cardinality;
+                for c in projects {
+                    let n = self.ss[leaf(input)].props.column_unique_cardinality[c];
+                    column_unique_cardinality.insert(c.clone(), n);
+                }
+            }
             LogicalMap {
                 include_existing,
                 projects,
@@ -399,6 +406,7 @@ impl<'a> Optimizer<'a> {
             | SeqScan { .. }
             | IndexScan { .. }
             | Filter { .. }
+            | Out { .. }
             | Map { .. }
             | NestedLoop { .. }
             | HashJoin { .. }
@@ -460,9 +468,13 @@ fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -
 
 fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> f64 {
     match predicate {
-        Scalar::Literal(Value::Bool(true), _) => 1.0,
-        Scalar::Literal(Value::Bool(false), _) => 0.0,
-        Scalar::Literal(value, _) => panic!("{} is not bool", value),
+        Scalar::Literal(value) => {
+            if value.bool().unwrap() {
+                1.0
+            } else {
+                0.0
+            }
+        }
         Scalar::Column(_) => 0.5,
         Scalar::Parameter(_, _) => 0.5,
         Scalar::Call(function) => match function.deref() {
@@ -524,7 +536,7 @@ fn max_cuc(
 
 fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> usize {
     match expr {
-        Scalar::Literal(_, _) => 1,
+        Scalar::Literal(_) => 1,
         Scalar::Column(column) => *scope
             .get(column)
             .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),

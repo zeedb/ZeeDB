@@ -4,10 +4,9 @@ use arrow::datatypes::*;
 use arrow::record_batch::*;
 use ast::Column;
 use regex::Regex;
-use std::fmt::{Debug, Display};
+use std::fmt;
 use std::mem::size_of;
 use std::ops::Deref;
-use std::ops::RangeInclusive;
 use std::sync::atomic::*;
 use std::sync::Arc;
 
@@ -204,18 +203,8 @@ impl Page {
             ptr.offset(row as isize).as_ref().unwrap()
         }
     }
-}
 
-impl Debug for Page {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let schema = self.schema.to_string();
-        let num_rows = self.num_rows().load(Ordering::Relaxed);
-        write!(f, "Page {{ [{}] #{} }}", schema, num_rows)
-    }
-}
-
-impl Display for Page {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    pub fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
         let record_batch = self.select(&all_columns(self.schema.as_ref()));
         let trim = |field: &String| {
             if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
@@ -239,7 +228,19 @@ impl Display for Page {
             .write(&record_batch)
             .unwrap();
         let csv = String::from_utf8(csv_bytes).unwrap();
-        f.write_str(csv.as_str())
+        for line in csv.lines() {
+            for _ in 0..indent {
+                write!(f, "\t")?;
+            }
+            writeln!(f, "{}", line.trim())?;
+        }
+        Ok(())
+    }
+}
+
+impl fmt::Debug for Page {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.print(f, 0)
     }
 }
 

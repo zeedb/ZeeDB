@@ -8,10 +8,12 @@ fn test_analyze() {
     let expr = parser
         .analyze(&"select 1".to_string(), &Catalog::empty(1))
         .unwrap();
-    match expr {
-        LogicalMap { .. } => (),
-        other => panic!("{:?}", other),
+    if let LogicalOut { input, .. } = &expr {
+        if let LogicalMap { .. } = input.as_ref() {
+            return;
+        }
     }
+    panic!("{:?}", &expr);
 }
 
 #[test]

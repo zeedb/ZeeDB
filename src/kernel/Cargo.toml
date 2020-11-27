@@ -1,0 +1,15 @@
+[package]
+name = "kernel"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+arrow = "2.0.0"
+num = "0.3"
+
+[dev-dependencies]
+fixtures = { path = "../fixtures" }

@@ -1,22 +1,53 @@
 use crate::heap::*;
-use std::sync::Arc;
+use std::fmt;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 pub struct Storage {
     tables: Vec<Heap>,
+    sequences: Vec<AtomicI64>,
 }
 
 impl Storage {
     pub fn new() -> Self {
-        // Initialize system tables catalog, table, column
-        Self {
-            tables: catalog::bootstrap_storage()
-                .drain(..)
-                .map(|schema| Heap::empty(Arc::new(schema)))
-                .collect(),
+        // First 100 tables are reserved for system use.
+        let mut tables = Vec::with_capacity(0);
+        tables.resize_with(100, Heap::empty);
+        // First 100 sequences are reserved for system use.
+        let mut sequences = Vec::with_capacity(0);
+        sequences.resize_with(100, || AtomicI64::new(100));
+        // Bootstrap tables.
+        for (table_id, values) in catalog::bootstrap_tables() {
+            tables[table_id as usize].insert(&values, 0);
         }
+        Self { tables, sequences }
     }
 
     pub fn table(&self, id: i64) -> &Heap {
         &self.tables[id as usize]
+    }
+
+    pub fn table_mut(&mut self, id: i64) -> &mut Heap {
+        &mut self.tables[id as usize]
+    }
+
+    pub fn create_table(&mut self, id: i64) {
+        self.tables.resize_with(id as usize + 1, Heap::empty);
+    }
+
+    pub fn next_val(&self, id: i64) -> i64 {
+        self.sequences[id as usize].fetch_add(1, Ordering::Relaxed)
+    }
+}
+
+impl fmt::Debug for Storage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Storage:")?;
+        for (i, heap) in self.tables.iter().enumerate() {
+            if !heap.is_uninitialized() {
+                writeln!(f, "\t{}:", i)?;
+                heap.print(f, 2)?;
+            }
+        }
+        Ok(())
     }
 }

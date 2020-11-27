@@ -1,22 +1,27 @@
-use arrow::datatypes::{DataType, Field, Schema};
+use arrow::array::*;
+use arrow::datatypes::*;
+use arrow::record_batch::*;
 use ast::*;
 use std::collections::HashMap;
+use std::sync::atomic::AtomicI64;
+use std::sync::Arc;
 use zetasql::function_enums::*;
 use zetasql::SimpleCatalogProto;
 use zetasql::*;
 
+pub const ROOT_CATALOG_PARENT_ID: i64 = -1;
 pub const ROOT_CATALOG_ID: i64 = 0;
 
 pub struct Catalog {
     pub catalog_id: i64,
     pub catalog: SimpleCatalogProto,
-    indices: HashMap<i64, Index>,
+    pub indices: HashMap<i64, Index>,
 }
 
-struct Index {
-    index_id: i64,
-    table_id: i64,
-    columns: Vec<String>,
+pub struct Index {
+    pub index_id: i64,
+    pub table_id: i64,
+    pub columns: Vec<String>,
 }
 
 impl Catalog {
@@ -143,51 +148,6 @@ impl Catalog {
         }
         None
     }
-}
-
-pub fn bootstrap_storage() -> Vec<Schema> {
-    let parent_catalog_id = Field::new("parent_catalog_id", DataType::Int64, false);
-    let catalog_id = Field::new("catalog_id", DataType::Int64, false);
-    let table_id = Field::new("table_id", DataType::Int64, false);
-    let column_id = Field::new("column_id", DataType::Int64, false);
-    let sequence_id = Field::new("sequence_id", DataType::Int64, false);
-    let index_id = Field::new("index_id", DataType::Int64, false);
-    let index_order = Field::new("index_order", DataType::Int64, false);
-    let catalog_name = Field::new("catalog_name", DataType::Utf8, false);
-    let table_name = Field::new("table_name", DataType::Utf8, false);
-    let column_name = Field::new("column_name", DataType::Utf8, false);
-    let column_type = Field::new("column_type", DataType::Utf8, false);
-    let sequence_name = Field::new("sequence_name", DataType::Utf8, false);
-    let index_name = Field::new("index_name", DataType::Utf8, false);
-    let catalog = Schema::new(vec![
-        parent_catalog_id.clone(),
-        catalog_id.clone(),
-        catalog_name.clone(),
-    ]);
-    let table = Schema::new(vec![
-        catalog_id.clone(),
-        table_id.clone(),
-        table_name.clone(),
-    ]);
-    let column = Schema::new(vec![
-        table_id.clone(),
-        column_id.clone(),
-        column_name.clone(),
-        column_type.clone(),
-    ]);
-    let index = Schema::new(vec![
-        catalog_id.clone(),
-        index_id.clone(),
-        table_id.clone(),
-        index_name.clone(),
-    ]);
-    let index_column = Schema::new(vec![
-        index_id.clone(),
-        column_id.clone(),
-        index_order.clone(),
-    ]);
-    let sequence = Schema::new(vec![sequence_id, sequence_name]);
-    vec![catalog, table, column, index, index_column, sequence]
 }
 
 fn bootstrap_zetasql() -> SimpleCatalogProto {
@@ -603,4 +563,40 @@ fn simple_argument(argument_type: TypeKind) -> FunctionArgumentTypeProto {
         }),
         ..Default::default()
     }
+}
+
+pub fn bootstrap_sequences() -> Vec<AtomicI64> {
+    let table_id = AtomicI64::new(100);
+    vec![table_id]
+}
+
+pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
+    let catalog = RecordBatch::try_new(
+        Arc::new(Schema::new(vec![
+            Field::new("parent_catalog_id", DataType::Int64, false),
+            Field::new("catalog_id", DataType::Int64, false),
+            Field::new("catalog_name", DataType::Utf8, false),
+        ])),
+        vec![
+            Arc::new(Int64Array::from(vec![ROOT_CATALOG_PARENT_ID])),
+            Arc::new(Int64Array::from(vec![ROOT_CATALOG_ID])),
+            Arc::new(StringArray::from(vec!["root"])),
+        ],
+    )
+    .unwrap();
+    let sequence = RecordBatch::try_new(
+        Arc::new(Schema::new(vec![
+            Field::new("sequence_id", DataType::Int64, false),
+            Field::new("sequence_name", DataType::Utf8, false),
+        ])),
+        vec![
+            Arc::new(Int64Array::from(vec![0])),
+            Arc::new(StringArray::from(vec!["table"])),
+        ],
+    )
+    .unwrap();
+    let mut tables = HashMap::new();
+    tables.insert(0, catalog);
+    tables.insert(5, sequence);
+    tables
 }

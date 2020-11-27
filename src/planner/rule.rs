@@ -16,6 +16,7 @@ pub enum Rule {
     LogicalGetToSeqScan,
     LogicalGetToIndexScan,
     LogicalFilterToFilter,
+    LogicalOutToOut,
     LogicalMapToMap,
     LogicalJoinToNestedLoop,
     LogicalJoinToHashJoin,
@@ -45,6 +46,7 @@ impl Rule {
             | Rule::LogicalGetToSeqScan
             | Rule::LogicalGetToIndexScan
             | Rule::LogicalFilterToFilter
+            | Rule::LogicalOutToOut
             | Rule::LogicalMapToMap
             | Rule::LogicalJoinToNestedLoop
             | Rule::LogicalJoinToHashJoin
@@ -95,6 +97,7 @@ impl Rule {
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter { .. })
+            | (Rule::LogicalOutToOut, LogicalOut { .. })
             | (Rule::LogicalMapToMap, LogicalMap { .. })
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
             | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
@@ -407,6 +410,11 @@ impl Rule {
                     return Some(Filter { predicates, input });
                 }
             }
+            Rule::LogicalOutToOut => {
+                if let LogicalOut { projects, input } = bind {
+                    return Some(Out { projects, input });
+                }
+            }
             Rule::LogicalMapToMap => {
                 if let LogicalMap {
                     include_existing,
@@ -561,13 +569,13 @@ impl Rule {
             Rule::LogicalValuesToValues => {
                 if let LogicalValues {
                     columns,
-                    rows,
+                    values,
                     input,
                 } = bind
                 {
                     return Some(Values {
                         columns,
-                        rows,
+                        values,
                         input,
                     });
                 }
@@ -602,19 +610,8 @@ impl Rule {
                 }
             }
             Rule::LogicalCallToCall => {
-                if let LogicalCall {
-                    procedure,
-                    arguments,
-                    returns,
-                    input,
-                } = bind
-                {
-                    return Some(Call {
-                        procedure,
-                        arguments,
-                        returns,
-                        input,
-                    });
+                if let LogicalCall { procedure, input } = bind {
+                    return Some(Call { procedure, input });
                 }
             }
             Rule::LogicalScriptToScript => {
@@ -636,6 +633,7 @@ impl Rule {
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,
             Rule::LogicalFilterToFilter,
+            Rule::LogicalOutToOut,
             Rule::LogicalMapToMap,
             Rule::LogicalJoinToNestedLoop,
             Rule::LogicalJoinToHashJoin,

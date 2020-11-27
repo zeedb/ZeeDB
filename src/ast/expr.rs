@@ -25,6 +25,10 @@ pub enum Expr {
         predicates: Vec<Scalar>,
         input: Box<Expr>,
     },
+    LogicalOut {
+        projects: Vec<Column>,
+        input: Box<Expr>,
+    },
     // LogicalMap { columns } implements the SELECT clause.
     LogicalMap {
         include_existing: bool,
@@ -96,10 +100,10 @@ pub enum Expr {
         columns: Vec<Column>,
         input: Box<Expr>,
     },
-    // LogicalValues { rows, columns } implements VALUES expressions.
+    // LogicalValues { columns, values } implements VALUES expressions.
     LogicalValues {
         columns: Vec<Column>,
-        rows: Vec<Vec<Scalar>>,
+        values: Vec<Vec<Scalar>>,
         input: Box<Expr>,
     },
     // LogicalUpdate { sets } implements the UPDATE operation.
@@ -142,9 +146,7 @@ pub enum Expr {
         input: Box<Expr>,
     },
     LogicalCall {
-        procedure: String,
-        arguments: Vec<Scalar>,
-        returns: Option<DataType>,
+        procedure: Procedure,
         input: Box<Expr>,
     },
     LogicalRewrite {
@@ -164,6 +166,10 @@ pub enum Expr {
     },
     Filter {
         predicates: Vec<Scalar>,
+        input: Box<Expr>,
+    },
+    Out {
+        projects: Vec<Column>,
         input: Box<Expr>,
     },
     Map {
@@ -233,7 +239,7 @@ pub enum Expr {
     },
     Values {
         columns: Vec<Column>,
-        rows: Vec<Vec<Scalar>>,
+        values: Vec<Vec<Scalar>>,
         input: Box<Expr>,
     },
     Update {
@@ -253,9 +259,7 @@ pub enum Expr {
         input: Box<Expr>,
     },
     Call {
-        procedure: String,
-        arguments: Vec<Scalar>,
-        returns: Option<DataType>,
+        procedure: Procedure,
         input: Box<Expr>,
     },
 }
@@ -270,6 +274,7 @@ impl Expr {
             | Expr::LogicalIntersect { .. }
             | Expr::LogicalExcept { .. }
             | Expr::LogicalFilter { .. }
+            | Expr::LogicalOut { .. }
             | Expr::LogicalMap { .. }
             | Expr::LogicalAggregate { .. }
             | Expr::LogicalLimit { .. }
@@ -294,6 +299,7 @@ impl Expr {
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::Filter { .. }
+            | Expr::Out { .. }
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
@@ -336,6 +342,7 @@ impl Expr {
             | Expr::LogicalSingleGet { .. }
             | Expr::LogicalGet { .. }
             | Expr::LogicalFilter { .. }
+            | Expr::LogicalOut { .. }
             | Expr::LogicalMap { .. }
             | Expr::LogicalJoin { .. }
             | Expr::LogicalDependentJoin { .. }
@@ -356,6 +363,7 @@ impl Expr {
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
             | Expr::Filter { .. }
+            | Expr::Out { .. }
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
@@ -393,6 +401,7 @@ impl Expr {
             | Expr::Intersect { .. }
             | Expr::Except { .. } => 2,
             Expr::LogicalFilter { .. }
+            | Expr::LogicalOut { .. }
             | Expr::LogicalMap { .. }
             | Expr::LogicalAggregate { .. }
             | Expr::LogicalLimit { .. }
@@ -402,6 +411,7 @@ impl Expr {
             | Expr::LogicalUpdate { .. }
             | Expr::LogicalDelete { .. }
             | Expr::Filter { .. }
+            | Expr::Out { .. }
             | Expr::Map { .. }
             | Expr::LookupJoin { .. }
             | Expr::Aggregate { .. }
@@ -438,6 +448,10 @@ impl Expr {
                 let input = Box::new(visitor(*input));
                 Expr::LogicalFilter { predicates, input }
             }
+            Expr::LogicalOut { projects, input } => Expr::LogicalOut {
+                projects,
+                input: Box::new(visitor(*input)),
+            },
             Expr::LogicalMap {
                 include_existing,
                 projects,
@@ -542,13 +556,13 @@ impl Expr {
             }
             Expr::LogicalValues {
                 columns,
-                rows,
+                values,
                 input,
             } => {
                 let input = Box::new(visitor(*input));
                 Expr::LogicalValues {
                     columns,
-                    rows,
+                    values,
                     input,
                 }
             }
@@ -562,6 +576,10 @@ impl Expr {
             }
             Expr::Filter { predicates, input } => Expr::Filter {
                 predicates,
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Out { projects, input } => Expr::Out {
+                projects,
                 input: Box::new(visitor(*input)),
             },
             Expr::Map {
@@ -661,11 +679,11 @@ impl Expr {
             },
             Expr::Values {
                 columns,
-                rows,
+                values,
                 input,
             } => Expr::Values {
                 columns,
-                rows,
+                values,
                 input: Box::new(visitor(*input)),
             },
             Expr::Update { updates, input } => Expr::Update {
@@ -700,26 +718,12 @@ impl Expr {
                 value,
                 input: Box::new(visitor(*input)),
             },
-            Expr::LogicalCall {
+            Expr::LogicalCall { procedure, input } => Expr::LogicalCall {
                 procedure,
-                arguments,
-                returns,
-                input,
-            } => Expr::LogicalCall {
-                procedure,
-                arguments,
-                returns,
                 input: Box::new(visitor(*input)),
             },
-            Expr::Call {
+            Expr::Call { procedure, input } => Expr::Call {
                 procedure,
-                arguments,
-                returns,
-                input,
-            } => Expr::Call {
-                procedure,
-                arguments,
-                returns,
                 input: Box::new(visitor(*input)),
             },
             Expr::Leaf { .. }
@@ -896,10 +900,12 @@ impl Expr {
                     set.insert(o.column.clone());
                 }
             }
-            Expr::LogicalValues { columns, rows, .. } => {
+            Expr::LogicalValues {
+                columns, values, ..
+            } => {
                 set.extend(columns.clone());
-                for row in rows {
-                    for x in row {
+                for array in values {
+                    for x in array {
                         set.extend(x.references());
                     }
                 }
@@ -907,10 +913,8 @@ impl Expr {
             Expr::LogicalAssign { value, .. } => {
                 set.extend(value.references());
             }
-            Expr::LogicalCall { arguments, .. } => {
-                for argument in arguments {
-                    set.extend(argument.references());
-                }
+            Expr::LogicalCall { procedure, .. } => {
+                set.extend(procedure.references());
             }
             any if any.is_logical() => {}
             any => unimplemented!(
@@ -1007,11 +1011,11 @@ impl Expr {
             },
             Expr::LogicalValues {
                 columns,
-                rows,
+                values,
                 input,
             } => Expr::LogicalValues {
                 columns: columns.iter().map(subst_c).collect(),
-                rows: rows
+                values: values
                     .iter()
                     .map(|row| row.iter().map(subst_x).collect())
                     .collect(),
@@ -1026,15 +1030,8 @@ impl Expr {
                 value,
                 input: Box::new(input.subst(map)),
             },
-            Expr::LogicalCall {
+            Expr::LogicalCall { procedure, input } => Expr::LogicalCall {
                 procedure,
-                arguments,
-                returns,
-                input,
-            } => Expr::LogicalCall {
-                procedure,
-                arguments,
-                returns,
                 input: Box::new(input.subst(map)),
             },
             any if any.is_logical() => any.map(|child| child.subst(map)),
@@ -1072,6 +1069,7 @@ impl ops::Index<usize> for Expr {
                 _ => panic!("{} is out of bounds [0,2)", index),
             },
             Expr::LogicalFilter { input, .. }
+            | Expr::LogicalOut { input, .. }
             | Expr::LogicalMap { input, .. }
             | Expr::LogicalAggregate { input, .. }
             | Expr::LogicalLimit { input, .. }
@@ -1081,6 +1079,7 @@ impl ops::Index<usize> for Expr {
             | Expr::LogicalUpdate { input, .. }
             | Expr::LogicalDelete { input, .. }
             | Expr::Filter { input, .. }
+            | Expr::Out { input, .. }
             | Expr::Map { input, .. }
             | Expr::LookupJoin { input, .. }
             | Expr::Aggregate { input, .. }
@@ -1233,8 +1232,18 @@ impl Column {
         }
     }
 
+    pub fn into_query_field(&self) -> Field {
+        // TODO allow nullability
+        Field::new(self.canonical_name().as_str(), self.data.clone(), false)
+    }
+
+    pub fn into_table_field(&self) -> Field {
+        // TODO allow nullability
+        Field::new(self.name.as_str(), self.data.clone(), false)
+    }
+
     pub fn canonical_name(&self) -> String {
-        format!("{}#{}", self.name, self.id).to_string()
+        format!("{}#{}", self.name, self.id)
     }
 }
 
@@ -1331,7 +1340,7 @@ impl fmt::Display for OrderBy {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Scalar {
-    Literal(Value, DataType),
+    Literal(Value),
     Column(Column),
     Parameter(String, DataType),
     Call(Box<Function>),
@@ -1341,7 +1350,7 @@ pub enum Scalar {
 impl Scalar {
     pub fn data(&self) -> DataType {
         match self {
-            Scalar::Literal(_, data) => data.clone(),
+            Scalar::Literal(value) => value.data().clone(),
             Scalar::Column(column) => column.data.clone(),
             Scalar::Parameter(_, data) => data.clone(),
             Scalar::Call(function) => function.returns().clone(),
@@ -1357,7 +1366,7 @@ impl Scalar {
 
     fn collect_references(&self, free: &mut HashSet<Column>) {
         match self {
-            Scalar::Literal(_, _) | Scalar::Parameter(_, _) => {}
+            Scalar::Literal(_) | Scalar::Parameter(_, _) => {}
             Scalar::Column(column) => {
                 free.insert(column.clone());
             }
@@ -1800,6 +1809,36 @@ pub struct Distinct(bool);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IgnoreNulls(bool);
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum Procedure {
+    CreateTable(Scalar),
+    DropTable(Scalar),
+    CreateIndex(Scalar),
+    DropIndex(Scalar),
+}
+
+impl Procedure {
+    fn references(&self) -> HashSet<Column> {
+        match self {
+            Procedure::CreateTable(argument)
+            | Procedure::DropTable(argument)
+            | Procedure::CreateIndex(argument)
+            | Procedure::DropIndex(argument) => argument.references(),
+        }
+    }
+}
+
+impl fmt::Display for Procedure {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Procedure::CreateTable(id) => write!(f, "create_table {}", id),
+            Procedure::DropTable(id) => write!(f, "drop_table {}", id),
+            Procedure::CreateIndex(id) => write!(f, "create_index {}", id),
+            Procedure::DropIndex(id) => write!(f, "drop_index {}", id),
+        }
+    }
+}
 
 pub struct ExprIterator<'it> {
     parent: &'it Expr,

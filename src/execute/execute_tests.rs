@@ -5,17 +5,19 @@ use fixtures::*;
 use regex::Regex;
 use storage::Storage;
 
-macro_rules! ok {
-    ($path:expr, $sql:expr, $errors:expr) => {
-        let trim = Regex::new(r"(?m)^\s+").unwrap();
-        let sql = trim.replace_all($sql, "").trim().to_string();
-        let mut storage = Storage::new();
-        let mut program = compile(&sql, &mut storage);
-        let found = format!("{}\n\n{}", &sql, csv(program.next().unwrap().unwrap()));
-        if !matches_expected(&$path.to_string(), found) {
-            $errors.push($path.to_string());
-        }
-    };
+fn run(path: &str, script: Vec<&str>, errors: &mut Vec<String>) {
+    let trim = Regex::new(r"(?m)^\s+").unwrap();
+    let mut output = None;
+    let mut storage = Storage::new();
+    for sql in &script {
+        let sql = trim.replace_all(sql, "").trim().to_string();
+        let program = compile(&sql, &mut storage);
+        output = Some(program.last().unwrap().unwrap());
+    }
+    let found = format!("{}\n\n{}", script.join("\n"), csv(output.unwrap()));
+    if !matches_expected(&path.to_string(), found) {
+        errors.push(path.to_string());
+    }
 }
 
 fn compile<'a>(sql: &String, storage: &'a mut Storage) -> Program<'a> {
@@ -23,7 +25,7 @@ fn compile<'a>(sql: &String, storage: &'a mut Storage) -> Program<'a> {
     let catalog = CatalogProvider::new().catalog(storage);
     let expr = parser.analyze(sql, &catalog).unwrap();
     let expr = planner::optimize(expr, &catalog, &mut parser);
-    execute(expr, storage).unwrap()
+    execute(expr, storage)
 }
 
 fn csv(record_batch: RecordBatch) -> String {
@@ -54,20 +56,21 @@ fn csv(record_batch: RecordBatch) -> String {
 #[test]
 fn test_execute() {
     let mut errors = vec![];
-    ok!(
-        "examples/select_1.txt",
-        r#"
-            select 1;
-        "#,
-        errors
+    run("examples/select_1.txt", vec!["select 1;"], &mut errors);
+    run(
+        "examples/create_table.txt",
+        vec!["create table foo (id int64)"],
+        &mut errors,
     );
-    // ok!(
-    //     "examples/create_table.txt",
-    //     r#"
-    //         create table foo (id int64);
-    //     "#,
-    //     errors
-    // );
+    run(
+        "examples/create_then_insert.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "select * from foo;",
+        ],
+        &mut errors,
+    );
     if !errors.is_empty() {
         panic!("{:#?}", errors);
     }

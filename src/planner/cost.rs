@@ -24,7 +24,16 @@ const COST_HASH_BUILD: Cost = COST_HASH_PROBE * 2.0;
 pub fn physical_cost(ss: &SearchSpace, stats: &Catalog, mid: MultiExprID) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].expr {
-        TableFreeScan { .. } => 0.0,
+        TableFreeScan { .. }
+        | Out { .. }
+        | Limit { .. }
+        | Union { .. }
+        | Intersect { .. }
+        | Except { .. }
+        | Values { .. }
+        | Script { .. }
+        | Assign { .. }
+        | Call { .. } => 0.0,
         SeqScan {
             predicates, table, ..
         } => {
@@ -94,20 +103,16 @@ pub fn physical_cost(ss: &SearchSpace, stats: &Catalog, mid: MultiExprID) -> Cos
             let n_aggregate = n * aggregate.len() as f64;
             n_group_by * COST_HASH_BUILD + n_aggregate * COST_CPU_APPLY
         }
-        Limit { .. } => 0.0,
         Sort { .. } => {
             let card = ss[parent].props.cardinality.max(1) as f64;
             let log = 2.0 * card * f64::log2(card);
             log * COST_CPU_COMP_MOVE
         }
-        Union { .. } | Intersect { .. } | Except { .. } => 0.0,
-        Values { .. } => 0.0,
         Insert { input, .. } | Update { input, .. } | Delete { input, .. } => {
             let length = ss[leaf(input)].props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK
         }
-        Script { .. } | Assign { .. } | Call { .. } => 0.0,
         Leaf { .. }
         | LogicalSingleGet
         | LogicalJoin { .. }
@@ -117,6 +122,7 @@ pub fn physical_cost(ss: &SearchSpace, stats: &Catalog, mid: MultiExprID) -> Cos
         | LogicalIntersect { .. }
         | LogicalExcept { .. }
         | LogicalFilter { .. }
+        | LogicalOut { .. }
         | LogicalMap { .. }
         | LogicalAggregate { .. }
         | LogicalLimit { .. }

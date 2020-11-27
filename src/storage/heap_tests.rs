@@ -14,18 +14,18 @@ fn test_insert_delete() {
         Arc::new(Int64Array::from(vec![Some(1), Some(2)])),
         Arc::new(Int64Array::from(vec![Some(10), Some(20)])),
     ];
-    let cluster = Heap::empty(schema.clone());
-    cluster.insert(&RecordBatch::try_new(schema, columns).unwrap(), 1000);
+    let mut heap = Heap::empty();
+    heap.insert(&RecordBatch::try_new(schema, columns).unwrap(), 1000);
     assert_eq!(
         "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,18446744073709551615\n",
-        format!("{}", cluster)
+        format!("{:?}", heap)
     );
-    for page in cluster.scan().iter() {
+    for page in heap.scan().iter() {
         page.delete(1, 2000);
     }
     assert_eq!(
         "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,2000\n",
-        format!("{}", cluster)
+        format!("{:?}", heap)
     );
 }
 
@@ -34,6 +34,6 @@ fn test_insert_new_page() {
     let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
     let values: Vec<i64> = (0..crate::page::PAGE_SIZE as i64 * 2).collect();
     let column = Arc::new(Int64Array::from(values));
-    let cluster = Heap::empty(schema.clone());
+    let mut cluster = Heap::empty();
     cluster.insert(&RecordBatch::try_new(schema, vec![column]).unwrap(), 1000);
 }

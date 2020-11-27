@@ -1,0 +1,4 @@
+create table foo (id int64)
+
+$dummy
+false
