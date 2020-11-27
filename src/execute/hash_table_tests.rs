@@ -28,8 +28,10 @@ fn test_hash_table() {
     let mut storage = Storage::new();
     let mut state = State::new(&mut storage);
     let table = HashTable::new(&scalars, &mut state, &input).unwrap();
-    let buckets = table.hash_buckets(&scalars, &mut state, &input).unwrap();
-    let output = table.bucket_cross_product(&input, &buckets);
+    let buckets = crate::eval::hash(&scalars, table.n_buckets(), &input, &mut state).unwrap();
+    let (left, right_index) = table.probe(&buckets);
+    let right = kernel::gather(&input, &right_index);
+    let output = kernel::zip(&left, &right);
     let a1: &Int64Array = kernel::coerce(output.column(0));
     let b1: &Int64Array = kernel::coerce(output.column(1));
     let a2: &Int64Array = kernel::coerce(output.column(2));

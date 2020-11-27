@@ -131,3 +131,21 @@ fn binary<T: 'static, U: Array + 'static>(
     let output = f(left, right)?;
     Ok(Arc::new(output))
 }
+
+pub fn hash(
+    scalars: &Vec<Scalar>,
+    n_buckets: usize,
+    input: &RecordBatch,
+    state: &mut State,
+) -> Result<Arc<dyn Array>, Error> {
+    let mut output = None;
+    for scalar in scalars {
+        let any = crate::eval::eval(scalar, input, state)?;
+        let next = kernel::hash(&any, n_buckets);
+        output = match output {
+            None => Some(next),
+            Some(prev) => Some(kernel::bit_or(&prev, &next)),
+        }
+    }
+    Ok(output.unwrap())
+}

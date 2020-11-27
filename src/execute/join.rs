@@ -32,8 +32,10 @@ fn hash_join_inner(
     partition_right: &Vec<Scalar>,
     state: &mut State,
 ) -> Result<RecordBatch, Error> {
-    let buckets = left.hash_buckets(partition_right, state, &right)?;
-    let input = left.bucket_cross_product(&right, &buckets);
+    let buckets = crate::eval::hash(partition_right, left.n_buckets(), right, state)?;
+    let (left, right_index) = left.probe(&buckets);
+    let right = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left, &right);
     let mask = crate::eval::all(predicates, &input, state)?;
     Ok(kernel::gather_logical(&input, &mask))
 }
