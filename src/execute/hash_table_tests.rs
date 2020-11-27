@@ -29,7 +29,7 @@ fn test_hash_table() {
     let mut state = State::new(&mut storage);
     let table = HashTable::new(&scalars, &mut state, &input).unwrap();
     let buckets = table.hash_buckets(&scalars, &mut state, &input).unwrap();
-    let output = table.cross_join(&input, &buckets);
+    let output = table.bucket_cross_product(&input, &buckets);
     let a1: &Int64Array = kernel::coerce(output.column(0));
     let b1: &Int64Array = kernel::coerce(output.column(1));
     let a2: &Int64Array = kernel::coerce(output.column(2));

@@ -9,18 +9,13 @@ use std::sync::Arc;
 
 pub fn hash_join(
     left: &HashTable,
-    right: RecordBatch,
+    right: &RecordBatch,
     partition_right: &Vec<Scalar>,
     join: &Join,
     state: &mut State,
 ) -> Result<RecordBatch, Error> {
-    let buckets = left.hash_buckets(partition_right, state, &right)?;
-    let input = left.cross_join(&right, &buckets);
     match join {
-        Join::Inner(predicates) => {
-            let mask = crate::eval::all(predicates, &input, state)?;
-            Ok(kernel::gather_logical(&input, &mask))
-        }
+        Join::Inner(predicates) => hash_join_inner(predicates, left, right, partition_right, state),
         Join::Right(_) => todo!(),
         Join::Outer(_) => todo!(),
         Join::Semi(_) => todo!(),
@@ -28,6 +23,19 @@ pub fn hash_join(
         Join::Single(_) => todo!(),
         Join::Mark(_, _) => todo!(),
     }
+}
+
+fn hash_join_inner(
+    predicates: &Vec<Scalar>,
+    left: &HashTable,
+    right: &RecordBatch,
+    partition_right: &Vec<Scalar>,
+    state: &mut State,
+) -> Result<RecordBatch, Error> {
+    let buckets = left.hash_buckets(partition_right, state, &right)?;
+    let input = left.bucket_cross_product(&right, &buckets);
+    let mask = crate::eval::all(predicates, &input, state)?;
+    Ok(kernel::gather_logical(&input, &mask))
 }
 
 pub fn nested_loop(

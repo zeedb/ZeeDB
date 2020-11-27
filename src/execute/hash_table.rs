@@ -5,8 +5,8 @@ use ast::*;
 use kernel::Error;
 use std::sync::Arc;
 
-// HashTable stores a large set of tuples in a fixed-size, dense hash table.
-// tuples[buckets[i]..buckets[i + 1]] contains all tuples where hash(tuple) % (buckets.len() - 1) == i
+/// HashTable stores a large set of tuples in a fixed-size, dense hash table.
+/// tuples[buckets[i]..buckets[i + 1]] contains all tuples where hash(tuple) % (buckets.len() - 1) == i
 #[derive(Debug)]
 pub struct HashTable {
     offsets: Vec<usize>,
@@ -28,6 +28,7 @@ impl HashTable {
         Ok(HashTable { offsets, tuples })
     }
 
+    /// Hash scalars for each row of input, and divide into the same number of buckets as exist in this hash table.
     pub fn hash_buckets(
         &self,
         scalars: &Vec<Scalar>,
@@ -38,20 +39,31 @@ impl HashTable {
         hash_buckets(scalars, state, input, n_buckets)
     }
 
-    pub fn cross_join(&self, right: &RecordBatch, buckets: &Arc<dyn Array>) -> RecordBatch {
-        let (left_index, right_index) = self.gather_join(buckets);
+    /// Gather rows of self (build side of join) and right (probe side of join), so that rows with matching hash buckets are neighbors in the combined output.
+    pub fn bucket_cross_product(
+        &self,
+        right: &RecordBatch,
+        buckets: &Arc<dyn Array>,
+    ) -> RecordBatch {
+        let (left_index, right_index) = self.index_bucket_cross_product(buckets);
         let left = kernel::gather(&self.tuples, &left_index);
         let right = kernel::gather(right, &right_index);
         kernel::zip(&left, &right)
     }
 
-    fn gather_join(&self, buckets: &Arc<dyn Array>) -> (Arc<dyn Array>, Arc<dyn Array>) {
+    fn index_bucket_cross_product(
+        &self,
+        buckets: &Arc<dyn Array>,
+    ) -> (Arc<dyn Array>, Arc<dyn Array>) {
         let buckets = kernel::coerce::<UInt32Array>(buckets);
         let mut left_index = vec![];
         let mut right_index = vec![];
+        // For each row from the probe side of the join, get the bucket...
         for i_right in 0..buckets.len() {
             let bucket = buckets.value(i_right) as usize;
+            // ...for each row on the build side of the join with matching bucket...
             for i_left in self.offsets[bucket]..self.offsets[bucket + 1] {
+                // ...add a row to the output, effectively performing a cross-join.
                 left_index.push(i_left as u32);
                 right_index.push(i_right as u32);
             }

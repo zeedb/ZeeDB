@@ -522,7 +522,7 @@ impl Input {
                 let right = right.next(state)?;
                 crate::join::hash_join(
                     build_left.as_mut().unwrap(),
-                    right,
+                    &right,
                     partition_right,
                     join,
                     state,
