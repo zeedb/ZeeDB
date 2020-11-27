@@ -25,8 +25,8 @@ fn test_to_string() {
     assert_eq!(
         "STRUCT<i INT64, s STRING>".to_string(),
         data_type::to_string(&DataType::Struct(vec![
-            Field::new("i", DataType::Int64, false),
-            Field::new("s", DataType::Utf8, false),
+            Field::new("i", DataType::Int64, true),
+            Field::new("s", DataType::Utf8, true),
         ]))
     );
     assert_eq!(
@@ -46,8 +46,8 @@ fn test_to_from_string() {
         DataType::Timestamp(TimeUnit::Microsecond, None),
         DataType::FixedSizeBinary(16),
         // DataType::Struct(vec![
-        //     Field::new("i", DataType::Int64, false),
-        //     Field::new("s", DataType::Utf8, false),
+        //     Field::new("i", DataType::Int64, true),
+        //     Field::new("s", DataType::Utf8, true),
         // ]),
         // DataType::List(Box::from(DataType::Int64)),
     ];
@@ -72,8 +72,8 @@ fn test_to_from_proto() {
         DataType::Timestamp(TimeUnit::Microsecond, None),
         DataType::FixedSizeBinary(16),
         // DataType::Struct(vec![
-        //     Field::new("i", DataType::Int64, false),
-        //     Field::new("s", DataType::Utf8, false),
+        //     Field::new("i", DataType::Int64, true),
+        //     Field::new("s", DataType::Utf8, true),
         // ]),
         // DataType::List(Box::from(DataType::Int64)),
     ];

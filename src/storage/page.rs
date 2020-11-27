@@ -2,6 +2,7 @@ use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
+use arrow::util::bit_util::*;
 use ast::Column;
 use regex::Regex;
 use std::fmt;
@@ -43,7 +44,7 @@ impl Page {
         let mut columns = vec![];
         for field in schema.fields() {
             columns.push(capacity);
-            // If column is nullable, allocate a null bitmap.
+            // Allocate a null bitmap.
             if field.is_nullable() {
                 capacity = align(capacity + PAGE_SIZE / 8);
             }
@@ -80,46 +81,31 @@ impl Page {
         let mut columns = vec![];
         let mut fields = vec![];
         for column in projects {
-            let (i, field) = self
-                .schema
-                .fields()
-                .iter()
-                .enumerate()
-                .find(|(_, field)| field.name() == &column.name)
-                .unwrap();
-            let field = Field::new(
-                column.canonical_name().as_str(),
-                field.data_type().clone(),
-                field.is_nullable(),
-            );
-            let column = head(
-                &field,
-                self.columns[i],
-                &self.columns_buffer,
-                &self.string_buffers[i],
-                num_rows,
-            );
-            columns.push(column);
-            fields.push(field);
+            for (i, field) in self.schema.fields().iter().enumerate() {
+                if field.name() == &column.name {
+                    let field = Field::new(
+                        column.canonical_name().as_str(),
+                        field.data_type().clone(),
+                        field.is_nullable(),
+                    );
+                    let column = head(
+                        &field,
+                        self.columns[i],
+                        &self.columns_buffer,
+                        self.string_buffers[i].as_ref(),
+                        num_rows,
+                    );
+                    columns.push(column);
+                    fields.push(field);
+                }
+            }
         }
         // Add system columns.
         let xmin = xcolumn("$xmin");
-        columns.push(head(
-            &xmin,
-            self.xmin,
-            &self.columns_buffer,
-            &None,
-            num_rows,
-        ));
+        columns.push(head(&xmin, self.xmin, &self.columns_buffer, None, num_rows));
         fields.push(xmin);
         let xmax = xcolumn("$xmax");
-        columns.push(head(
-            &xmax,
-            self.xmax,
-            &self.columns_buffer,
-            &None,
-            num_rows,
-        ));
+        columns.push(head(&xmax, self.xmax, &self.columns_buffer, None, num_rows));
         fields.push(xmax);
         // Wrap RecordBatch in a reference that ensures the underlying buffer doesn't get destroyed.
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
@@ -129,14 +115,21 @@ impl Page {
         let (start, end) = self.reserve(records.num_rows());
         // Write the new row in the reserved slot.
         for i in 0..records.num_columns() {
+            let mut nulls_offset = None;
+            let mut columns_offset = self.columns[i];
+            if self.schema.field(i).is_nullable() {
+                nulls_offset = Some(columns_offset);
+                columns_offset = align(columns_offset + PAGE_SIZE / 8)
+            }
             extend(
-                self.columns[i],
+                nulls_offset,
+                columns_offset,
                 &self.columns_buffer,
-                &self.string_buffers[i],
+                self.string_buffers[i].as_ref(),
                 start,
                 end,
                 records.column(i).deref(),
-            )
+            );
         }
         // Make the rows visible to subsequent transactions.
         for i in start..end {
@@ -279,34 +272,38 @@ fn head(
     field: &Field,
     mut column_offset: usize,
     columns_buffer: &Buffer,
-    string_buffer: &Option<Buffer>,
+    string_buffer: Option<&Buffer>,
     len: usize,
 ) -> Arc<dyn Array> {
     let mut array = ArrayDataBuilder::new(field.data_type().clone()).len(len);
     // If column is nullable, add a null buffer and offset the values buffer.
     if field.is_nullable() {
-        let null_buffer = columns_buffer.slice(column_offset);
-        array = array.null_bit_buffer(null_buffer);
+        let nulls_buffer = columns_buffer.slice(column_offset);
+        array = array.null_bit_buffer(nulls_buffer);
         column_offset = align(column_offset + pax_length(&DataType::Boolean, PAGE_SIZE))
     }
     // Add the values buffer.
     let values_buffer = columns_buffer.slice(column_offset);
     array = array.add_buffer(values_buffer);
     // If column is a string, add a string buffer.
-    if let Some(string_buffer) = string_buffer.as_ref() {
+    if let Some(string_buffer) = string_buffer {
         array = array.add_buffer(string_buffer.clone());
     }
     make_array(array.build())
 }
 
 fn extend(
+    nulls_offset: Option<usize>,
     column_offset: usize,
     columns_buffer: &Buffer,
-    string_buffer: &Option<Buffer>,
+    string_buffer: Option<&Buffer>,
     start: usize,
     end: usize,
     values: &dyn Array,
 ) {
+    if let Some(nulls_offset) = nulls_offset {
+        extend_nulls(nulls_offset, columns_buffer, start, end, values);
+    }
     match values.data_type() {
         DataType::Boolean => extend_boolean(column_offset, columns_buffer, start, end, values),
         DataType::Int64 => {
@@ -330,12 +327,36 @@ fn extend(
         DataType::Utf8 => extend_string(
             column_offset,
             columns_buffer,
-            string_buffer.as_ref().unwrap(),
+            string_buffer.unwrap(),
             start,
             end,
             values,
         ),
         other => panic!("{:?}", other),
+    }
+}
+
+fn extend_nulls(
+    nulls_offset: usize,
+    columns_buffer: &Buffer,
+    start: usize,
+    end: usize,
+    values: &dyn Array,
+) {
+    let dst = columns_buffer.slice(nulls_offset).raw_data() as *mut u8;
+    if let Some(nulls_buffer) = values.data_ref().null_buffer() {
+        let src = nulls_buffer.raw_data();
+        unsafe {
+            for i in 0..(end - start) {
+                if get_bit_raw(src, i) {
+                    set_bit_raw(dst, start + i)
+                }
+            }
+        }
+    } else {
+        unsafe {
+            set_bits_raw(dst, start, end);
+        }
     }
 }
 
@@ -366,9 +387,18 @@ fn extend_boolean(
     src: &dyn Array,
 ) {
     let dst = columns_buffer.slice(column_offset).raw_data() as *mut u8;
-    let src: &BooleanArray = src.as_any().downcast_ref::<BooleanArray>().unwrap();
+    let src = src
+        .as_any()
+        .downcast_ref::<BooleanArray>()
+        .unwrap()
+        .values()
+        .raw_data();
     for i in 0..(end - start) {
-        set_bit(dst, start + i, src.value(i))
+        unsafe {
+            if get_bit_raw(src, i) {
+                set_bit_raw(dst, start + i)
+            }
+        }
     }
 }
 
@@ -428,15 +458,3 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
         other => panic!("{:?}", other),
     }
 }
-
-fn set_bit(data: *mut u8, i: usize, value: bool) {
-    unsafe {
-        if value {
-            *data.add(i >> 3) |= BIT_MASK[i & 7];
-        } else {
-            *data.add(i >> 3) ^= BIT_MASK[i & 7];
-        }
-    }
-}
-
-static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];

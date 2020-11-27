@@ -7,8 +7,8 @@ use std::sync::Arc;
 #[test]
 fn test_insert_delete() {
     let schema = Arc::new(Schema::new(vec![
-        Field::new("a", DataType::Int64, false),
-        Field::new("b", DataType::Int64, false),
+        Field::new("a", DataType::Int64, true),
+        Field::new("b", DataType::Int64, true),
     ]));
     let columns: Vec<Arc<dyn Array>> = vec![
         Arc::new(Int64Array::from(vec![Some(1), Some(2)])),
@@ -31,7 +31,7 @@ fn test_insert_delete() {
 
 #[test]
 fn test_insert_new_page() {
-    let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
+    let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, true)]));
     let values: Vec<i64> = (0..crate::page::PAGE_SIZE as i64 * 2).collect();
     let column = Arc::new(Int64Array::from(values));
     let mut cluster = Heap::empty();

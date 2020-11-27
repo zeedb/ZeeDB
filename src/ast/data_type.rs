@@ -68,7 +68,7 @@ fn fields(fs: Vec<zetasql::StructFieldProto>) -> Vec<Field> {
         list.push(Field::new(
             f.field_name.unwrap().as_str(),
             from_proto(&f.field_type.unwrap()),
-            false,
+            true,
         ))
     }
     list

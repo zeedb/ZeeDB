@@ -641,7 +641,7 @@ fn dummy_schema() -> Schema {
     Schema::new(vec![Field::new(
         "$dummy", // TODO dummy column is gross
         DataType::Boolean,
-        false,
+        true,
     )])
 }
 

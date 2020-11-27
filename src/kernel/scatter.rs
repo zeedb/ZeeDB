@@ -1,6 +1,7 @@
 use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
+use arrow::util::bit_util::*;
 use num::Zero;
 use std::ops::AddAssign;
 use std::sync::Arc;
@@ -150,16 +151,3 @@ fn bit_ceil(value: usize, divisor: usize) -> usize {
         quot
     }
 }
-
-/// Sets bit at position `i` for `data`
-pub fn set_bit(data: &mut [u8], i: usize) {
-    data[i >> 3] |= BIT_MASK[i & 7];
-}
-
-/// Sets bit at position `i` for `data` to 0
-#[inline]
-pub fn unset_bit(data: &mut [u8], i: usize) {
-    data[i >> 3] ^= BIT_MASK[i & 7];
-}
-
-static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];

@@ -1233,13 +1233,11 @@ impl Column {
     }
 
     pub fn into_query_field(&self) -> Field {
-        // TODO allow nullability
-        Field::new(self.canonical_name().as_str(), self.data.clone(), false)
+        Field::new(self.canonical_name().as_str(), self.data.clone(), true)
     }
 
     pub fn into_table_field(&self) -> Field {
-        // TODO allow nullability
-        Field::new(self.name.as_str(), self.data.clone(), false)
+        Field::new(self.name.as_str(), self.data.clone(), true)
     }
 
     pub fn canonical_name(&self) -> String {

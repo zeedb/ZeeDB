@@ -10,8 +10,8 @@ use storage::Storage;
 #[test]
 fn test_hash_table() {
     let schema = Arc::new(Schema::new(vec![
-        Field::new("a#0", DataType::Int64, false),
-        Field::new("b#0", DataType::Int64, false),
+        Field::new("a#0", DataType::Int64, true),
+        Field::new("b#0", DataType::Int64, true),
     ]));
     let a: Vec<i64> = (0..100).collect();
     let b: Vec<i64> = (1000..1100).collect();

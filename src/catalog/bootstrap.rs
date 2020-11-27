@@ -28,9 +28,9 @@ pub fn bootstrap_sequences() -> Vec<AtomicI64> {
 pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
     let catalog = RecordBatch::try_new(
         Arc::new(Schema::new(vec![
-            Field::new("parent_catalog_id", DataType::Int64, false),
-            Field::new("catalog_id", DataType::Int64, false),
-            Field::new("catalog_name", DataType::Utf8, false),
+            Field::new("parent_catalog_id", DataType::Int64, true),
+            Field::new("catalog_id", DataType::Int64, true),
+            Field::new("catalog_name", DataType::Utf8, true),
         ])),
         vec![
             Arc::new(Int64Array::from(vec![ROOT_CATALOG_PARENT_ID])),
@@ -41,8 +41,8 @@ pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
     .unwrap();
     let sequence = RecordBatch::try_new(
         Arc::new(Schema::new(vec![
-            Field::new("sequence_id", DataType::Int64, false),
-            Field::new("sequence_name", DataType::Utf8, false),
+            Field::new("sequence_id", DataType::Int64, true),
+            Field::new("sequence_name", DataType::Utf8, true),
         ])),
         vec![
             Arc::new(Int64Array::from(vec![0])),

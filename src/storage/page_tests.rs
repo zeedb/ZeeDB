@@ -7,14 +7,14 @@ use std::sync::Arc;
 #[test]
 fn test_fixed_types() {
     let schema = Arc::new(Schema::new(vec![
-        Field::new("boolean", DataType::Boolean, false),
-        Field::new("int64", DataType::Int64, false),
-        Field::new("float64", DataType::Float64, false),
-        Field::new("date32", DataType::Date32(DateUnit::Day), false),
+        Field::new("boolean", DataType::Boolean, true),
+        Field::new("int64", DataType::Int64, true),
+        Field::new("float64", DataType::Float64, true),
+        Field::new("date32", DataType::Date32(DateUnit::Day), true),
         Field::new(
             "timestamp",
             DataType::Timestamp(TimeUnit::Microsecond, None),
-            false,
+            true,
         ),
     ]));
     let pax = Page::empty(schema.clone());
@@ -34,13 +34,18 @@ fn test_fixed_types() {
         "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\n",
         format!("{:?}", pax)
     );
+    assert_eq!(1, pax.insert(&input, 2000));
+    assert_eq!(
+        "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,2000,18446744073709551615\n",
+        format!("{:?}", pax)
+    );
 }
 
 #[test]
 fn test_var_types() {
     let schema = Arc::new(Schema::new(vec![
-        Field::new("int64", DataType::Int64, false),
-        Field::new("string", DataType::Utf8, false),
+        Field::new("int64", DataType::Int64, true),
+        Field::new("string", DataType::Utf8, true),
     ]));
     let pax = Page::empty(schema.clone());
     let input = RecordBatch::try_new(
@@ -66,8 +71,8 @@ fn test_var_types() {
 #[test]
 fn test_insert_delete() {
     let schema = Arc::new(Schema::new(vec![
-        Field::new("a", DataType::Int64, false),
-        Field::new("b", DataType::Int64, false),
+        Field::new("a", DataType::Int64, true),
+        Field::new("b", DataType::Int64, true),
     ]));
     let pax = Page::empty(schema.clone());
     let input = RecordBatch::try_new(
