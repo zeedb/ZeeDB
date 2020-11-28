@@ -1,6 +1,5 @@
 use crate::state::State;
 use arrow::array::*;
-use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
 use kernel::Error;

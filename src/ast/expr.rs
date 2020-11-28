@@ -772,7 +772,9 @@ impl Expr {
 
     pub fn attributes(&self) -> HashSet<Column> {
         match self {
-            Expr::LogicalGet { projects, .. } => projects.iter().map(|c| c.clone()).collect(),
+            Expr::LogicalGet { projects, .. } | Expr::LogicalOut { projects, .. } => {
+                projects.iter().map(|c| c.clone()).collect()
+            }
             Expr::LogicalMap {
                 include_existing,
                 projects,
@@ -863,10 +865,43 @@ impl Expr {
                 }
                 set
             }
-            any if any.is_logical() => HashSet::new(),
-            any => unimplemented!(
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalUpdate { .. }
+            | Expr::LogicalDelete { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalRewrite { .. } => HashSet::new(),
+            Expr::TableFreeScan { .. }
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. }
+            | Expr::Filter { .. }
+            | Expr::Out { .. }
+            | Expr::Map { .. }
+            | Expr::NestedLoop { .. }
+            | Expr::HashJoin { .. }
+            | Expr::LookupJoin { .. }
+            | Expr::CreateTempTable { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::Aggregate { .. }
+            | Expr::Limit { .. }
+            | Expr::Sort { .. }
+            | Expr::Union { .. }
+            | Expr::Intersect { .. }
+            | Expr::Except { .. }
+            | Expr::Insert { .. }
+            | Expr::Values { .. }
+            | Expr::Update { .. }
+            | Expr::Delete { .. }
+            | Expr::Script { .. }
+            | Expr::Assign { .. }
+            | Expr::Call { .. } => panic!(
                 "attributes is not implemented for physical operator {}",
-                any.name()
+                &self.name()
             ),
         }
     }
@@ -928,11 +963,48 @@ impl Expr {
             Expr::LogicalCall { procedure, .. } => {
                 set.extend(procedure.references());
             }
-            // TODO enumerate all cases.
-            any if any.is_logical() => {}
-            any => unimplemented!(
+            Expr::LogicalSingleGet { .. }
+            | Expr::Leaf { .. }
+            | Expr::LogicalOut { .. }
+            | Expr::LogicalLimit { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalIntersect { .. }
+            | Expr::LogicalExcept { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalUpdate { .. }
+            | Expr::LogicalDelete { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalRewrite { .. } => {}
+            Expr::TableFreeScan { .. }
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. }
+            | Expr::Filter { .. }
+            | Expr::Out { .. }
+            | Expr::Map { .. }
+            | Expr::NestedLoop { .. }
+            | Expr::HashJoin { .. }
+            | Expr::LookupJoin { .. }
+            | Expr::CreateTempTable { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::Aggregate { .. }
+            | Expr::Limit { .. }
+            | Expr::Sort { .. }
+            | Expr::Union { .. }
+            | Expr::Intersect { .. }
+            | Expr::Except { .. }
+            | Expr::Insert { .. }
+            | Expr::Values { .. }
+            | Expr::Update { .. }
+            | Expr::Delete { .. }
+            | Expr::Script { .. }
+            | Expr::Assign { .. }
+            | Expr::Call { .. } => unimplemented!(
                 "free is not implemented for physical operator {}",
-                any.name()
+                self.name()
             ),
         }
         for i in 0..self.len() {
@@ -1047,11 +1119,65 @@ impl Expr {
                 procedure,
                 input: Box::new(input.subst(map)),
             },
-            // TODO enumerate all cases.
-            any if any.is_logical() => any.map(|child| child.subst(map)),
-            any => unimplemented!(
+            Expr::LogicalOut { projects, input } => Expr::LogicalOut {
+                projects: projects.iter().map(subst_c).collect(),
+                input: Box::new(input.subst(map)),
+            },
+            Expr::LogicalUpdate {
+                table,
+                pid,
+                tid,
+                input,
+            } => Expr::LogicalUpdate {
+                table,
+                pid: subst_c(&pid),
+                tid: subst_c(&tid),
+                input: Box::new(input.subst(map)),
+            },
+            Expr::LogicalDelete { pid, tid, input } => Expr::LogicalDelete {
+                pid: subst_c(&pid),
+                tid: subst_c(&tid),
+                input: Box::new(input.subst(map)),
+            },
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalLimit { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalIntersect { .. }
+            | Expr::LogicalExcept { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalRewrite { .. } => self.map(|child| child.subst(map)),
+            Expr::TableFreeScan { .. }
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. }
+            | Expr::Filter { .. }
+            | Expr::Out { .. }
+            | Expr::Map { .. }
+            | Expr::NestedLoop { .. }
+            | Expr::HashJoin { .. }
+            | Expr::LookupJoin { .. }
+            | Expr::CreateTempTable { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::Aggregate { .. }
+            | Expr::Limit { .. }
+            | Expr::Sort { .. }
+            | Expr::Union { .. }
+            | Expr::Intersect { .. }
+            | Expr::Except { .. }
+            | Expr::Insert { .. }
+            | Expr::Values { .. }
+            | Expr::Update { .. }
+            | Expr::Delete { .. }
+            | Expr::Script { .. }
+            | Expr::Assign { .. }
+            | Expr::Call { .. } => panic!(
                 "subst is not implemented for physical operator {}",
-                any.name()
+                self.name()
             ),
         }
     }
