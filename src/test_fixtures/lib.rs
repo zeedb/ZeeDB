@@ -15,8 +15,10 @@ pub fn matches_expected(path: &String, found: String) -> bool {
     match read_expected(path) {
         Ok(expect) if expect == found => true,
         _ => {
-            let mut file = fs::File::create(path).unwrap();
-            file.write_all(found.as_bytes()).unwrap();
+            match fs::File::create(path) {
+                Ok(mut file) => file.write_all(found.as_bytes()).unwrap(),
+                Err(err) => println!("{}: {}", path, err),
+            }
             false
         }
     }

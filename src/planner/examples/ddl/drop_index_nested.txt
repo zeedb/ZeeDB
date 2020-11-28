@@ -15,7 +15,7 @@ Script
 				Map* index.catalog_id index.index_id index.index_name index.$xmin index.$xmax
 					SeqScan index
 			TableFreeScan
-	Delete index.$pid index.$tid
+	Delete index
 		Filter* (LessOrEqual index.$xmin (Xid)) (Less (Xid) index.$xmax) (Equal index.index_id @index_id)
 			Map* index.index_id index.$xmin index.$xmax index.$pid index.$tid
 				SeqScan index

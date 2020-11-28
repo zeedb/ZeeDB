@@ -2,7 +2,8 @@ update customer
 set account_number = default
 where person_id = 1
 
-Update customer.account_number:_
-	Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax) (Equal customer.person_id 1)
-		Map* customer.person_id customer.account_number customer.$xmin customer.$xmax
-			SeqScan customer
+Update customer
+	Map customer.customer_id customer.person_id customer.store_id customer.account_number:(Default) customer.modified_date customer.$pid customer.$tid
+		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax) (Equal customer.person_id 1)
+			Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$pid customer.$tid
+				SeqScan customer

@@ -553,17 +553,8 @@ impl Rule {
                 }
             }
             Rule::LogicalInsertToInsert => {
-                if let LogicalInsert {
-                    table,
-                    columns,
-                    input,
-                } = bind
-                {
-                    return Some(Insert {
-                        table,
-                        columns,
-                        input,
-                    });
+                if let LogicalInsert { table, input } = bind {
+                    return Some(Insert { table, input });
                 }
             }
             Rule::LogicalValuesToValues => {
@@ -581,8 +572,19 @@ impl Rule {
                 }
             }
             Rule::LogicalUpdateToUpdate => {
-                if let LogicalUpdate { updates, input } = bind {
-                    return Some(Update { updates, input });
+                if let LogicalUpdate {
+                    table,
+                    pid,
+                    tid,
+                    input,
+                } = bind
+                {
+                    return Some(Update {
+                        table,
+                        pid,
+                        tid,
+                        input,
+                    });
                 }
             }
             Rule::LogicalDeleteToDelete => {

@@ -2,8 +2,8 @@ update person
 set first_name = "Foo"
 where person_id = 1
 
-Update person.first_name:$update.$expr
-	Map $update.$expr:"Foo"
+Update person
+	Map person.person_id person.first_name:"Foo" person.last_name person.modified_date person.$pid person.$tid
 		Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Equal person.person_id 1)
-			Map* person.person_id person.first_name person.$xmin person.$xmax
+			Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax person.$pid person.$tid
 				SeqScan person

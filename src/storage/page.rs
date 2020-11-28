@@ -93,6 +93,10 @@ impl Page {
         crate::arc::leak(&self.inner) as u64
     }
 
+    pub fn schema(&self) -> Arc<Schema> {
+        self.inner.schema.clone()
+    }
+
     pub fn select(&self, projects: &Vec<Column>) -> RecordBatch {
         let num_rows = self.num_rows().load(Ordering::Relaxed);
         // View data columns as arrow format.
@@ -100,7 +104,7 @@ impl Page {
         let mut fields = vec![];
         for column in projects {
             for (i, field) in self.inner.schema.fields().iter().enumerate() {
-                if field.name() == &column.name {
+                if base_name(field.name()) == base_name(&column.name) {
                     let field = Field::new(
                         column.canonical_name().as_str(),
                         field.data_type().clone(),
@@ -146,8 +150,8 @@ impl Page {
             fields.push(pid.into_query_field());
         }
         if let Some(tid) = projects.iter().find(|c| c.name == "$tid") {
-            columns.push(Arc::new(UInt64Array::from(
-                (0u64..num_rows as u64).collect::<Vec<u64>>(),
+            columns.push(Arc::new(UInt32Array::from(
+                (0u32..num_rows as u32).collect::<Vec<u32>>(),
             )));
             fields.push(tid.into_query_field());
         }
@@ -158,22 +162,26 @@ impl Page {
     pub fn insert(&self, records: &RecordBatch, txn: u64) -> usize {
         let (start, end) = self.reserve(records.num_rows());
         // Write the new row in the reserved slot.
-        for i in 0..records.num_columns() {
-            let mut nulls_offset = None;
-            let mut columns_offset = self.inner.columns[i];
-            if self.inner.schema.field(i).is_nullable() {
-                nulls_offset = Some(columns_offset);
-                columns_offset = align(columns_offset + PAGE_SIZE / 8)
+        for (dst, dst_field) in self.inner.schema.fields().iter().enumerate() {
+            for (src, src_field) in records.schema().fields().iter().enumerate() {
+                if base_name(src_field.name()) == base_name(dst_field.name()) {
+                    let mut nulls_offset = None;
+                    let mut columns_offset = self.inner.columns[dst];
+                    if self.inner.schema.field(dst).is_nullable() {
+                        nulls_offset = Some(columns_offset);
+                        columns_offset = align(columns_offset + PAGE_SIZE / 8)
+                    }
+                    extend(
+                        nulls_offset,
+                        columns_offset,
+                        &self.inner.columns_buffer,
+                        self.inner.string_buffers[dst].as_ref(),
+                        start,
+                        end,
+                        records.column(src).deref(),
+                    );
+                }
             }
-            extend(
-                nulls_offset,
-                columns_offset,
-                &self.inner.columns_buffer,
-                self.inner.string_buffers[i].as_ref(),
-                start,
-                end,
-                records.column(i).deref(),
-            );
         }
         // Make the rows visible to subsequent transactions.
         for i in start..end {
@@ -241,7 +249,7 @@ impl Page {
         }
     }
 
-    pub fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
+    pub(crate) fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
         let mut star: Vec<Column> = self
             .inner
             .schema
@@ -513,5 +521,13 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
         DataType::Date32(DateUnit::Day) => Date32Type::get_bit_width() / 8 * num_rows,
         DataType::Utf8 => 4 * (num_rows + 1), // offset width
         other => panic!("{:?}", other),
+    }
+}
+
+fn base_name(field: &String) -> &str {
+    if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
+        captures.get(1).unwrap().as_str()
+    } else {
+        field
     }
 }

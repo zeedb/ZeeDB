@@ -1,7 +1,7 @@
 delete customer
 where person_id = 1
 
-Delete customer.$pid customer.$tid
+Delete customer
 	Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax) (Equal customer.person_id 1)
 		Map* customer.person_id customer.$xmin customer.$xmax customer.$pid customer.$tid
 			SeqScan customer

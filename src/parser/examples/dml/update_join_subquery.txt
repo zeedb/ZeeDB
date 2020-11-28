@@ -3,8 +3,8 @@ set account_number = (select person.person_id)
 from person 
 where customer.person_id = person.person_id
 
-LogicalUpdate customer.account_number:$update.$expr
-	LogicalMap $update.$expr:$expr_subquery.person_id
+LogicalUpdate customer
+	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:$expr_subquery.person_id customer.modified_date customer.$pid customer.$tid
 		LogicalJoin Single (Equal person.person_id person.person_id')
 			LogicalDependentJoin [person.person_id']
 				LogicalMap $expr_subquery.person_id:person.person_id'
@@ -12,7 +12,7 @@ LogicalUpdate customer.account_number:$update.$expr
 				LogicalFilter (Equal customer.person_id person.person_id')
 					LogicalJoin Inner
 						Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-							Map* customer.person_id customer.account_number customer.$xmin customer.$xmax
+							Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$pid customer.$tid
 								LogicalGet customer
 						Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
 							Map* person.person_id' person.$xmin person.$xmax
@@ -20,7 +20,7 @@ LogicalUpdate customer.account_number:$update.$expr
 			LogicalFilter (Equal customer.person_id person.person_id)
 				LogicalJoin Inner
 					Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-						Map* customer.person_id customer.account_number customer.$xmin customer.$xmax
+						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$pid customer.$tid
 							LogicalGet customer
 					Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
 						Map* person.person_id person.$xmin person.$xmax

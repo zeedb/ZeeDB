@@ -1,10 +1,24 @@
 use arrow::array::*;
 use arrow::compute::SortColumn;
 use arrow::datatypes::*;
-use arrow::error::ArrowError;
 use arrow::record_batch::*;
 use ast::Column;
 use std::sync::Arc;
+
+pub fn zip(left: &RecordBatch, right: &RecordBatch) -> RecordBatch {
+    assert!(left.num_rows() == right.num_rows());
+    let mut columns = vec![];
+    columns.extend_from_slice(left.columns());
+    columns.extend_from_slice(right.columns());
+    let mut fields = vec![];
+    fields.extend_from_slice(left.schema().fields());
+    fields.extend_from_slice(right.schema().fields());
+    RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
+}
+
+pub fn update(any: &RecordBatch, updates: &Vec<(Column, Arc<dyn Array>)>) -> RecordBatch {
+    todo!()
+}
 
 impl crate::Kernel for RecordBatch {
     fn cat(any: &Vec<Self>) -> Self {
@@ -69,15 +83,4 @@ impl crate::Kernel for RecordBatch {
         let indices = arrow::compute::lexsort_to_indices(&sort_columns[..]).unwrap();
         Arc::new(indices)
     }
-}
-
-pub fn zip(left: &RecordBatch, right: &RecordBatch) -> RecordBatch {
-    assert!(left.num_rows() == right.num_rows());
-    let mut columns = vec![];
-    columns.extend_from_slice(left.columns());
-    columns.extend_from_slice(right.columns());
-    let mut fields = vec![];
-    fields.extend_from_slice(left.schema().fields());
-    fields.extend_from_slice(right.schema().fields());
-    RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
 }

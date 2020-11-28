@@ -1,6 +1,6 @@
 insert into person (person_id, first_name, last_name, modified_date)
 values (1, "Foo", "Bar", current_timestamp())
 
-Insert person person.person_id person.first_name person.last_name person.modified_date
+Insert person
 	Values person.person_id person.first_name person.last_name person.modified_date [1 "Foo" "Bar" (CurrentTimestamp)]
 		TableFreeScan

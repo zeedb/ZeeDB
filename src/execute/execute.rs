@@ -5,6 +5,7 @@ use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
 use kernel::Error;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use storage::*;
@@ -115,7 +116,6 @@ enum Node {
     },
     Insert {
         table: Table,
-        schema: Arc<Schema>,
         input: Input,
     },
     Values {
@@ -124,7 +124,9 @@ enum Node {
         input: Input,
     },
     Update {
-        updates: Vec<(Column, Option<Column>)>,
+        table: Table,
+        pid: Column,
+        tid: Column,
         input: Input,
     },
     Delete {
@@ -254,18 +256,8 @@ fn compile_node(expr: Expr) -> Node {
         Union { .. } => todo!(),
         Intersect { .. } => todo!(),
         Except { .. } => todo!(),
-        Insert {
+        Insert { table, input } => Node::Insert {
             table,
-            columns,
-            input,
-        } => Node::Insert {
-            table,
-            schema: Arc::new(Schema::new(
-                columns
-                    .iter()
-                    .map(|column| column.into_table_field())
-                    .collect(),
-            )),
             input: compile(*input),
         },
         Values {
@@ -277,7 +269,17 @@ fn compile_node(expr: Expr) -> Node {
             values,
             input: compile(*input),
         },
-        Update { .. } => todo!(),
+        Update {
+            table,
+            pid,
+            tid,
+            input,
+        } => Node::Update {
+            table,
+            pid,
+            tid,
+            input: compile(*input),
+        },
         Delete { pid, tid, input } => Node::Delete {
             pid,
             tid,
@@ -561,21 +563,8 @@ impl Input {
             Node::Union { left, right } => todo!(),
             Node::Intersect { left, right } => todo!(),
             Node::Except { left, right } => todo!(),
-            Node::Insert {
-                table,
-                schema,
-                input,
-            } => {
+            Node::Insert { table, input } => {
                 let input = input.next(state)?;
-                let input = RecordBatch::try_new(
-                    schema.clone(),
-                    input
-                        .columns()
-                        .iter()
-                        .map(|column| column.clone())
-                        .collect(),
-                )
-                .unwrap();
                 state.storage.table_mut(table.id).insert(&input, state.txn);
                 Ok(dummy_row(self.schema.clone()))
             }
@@ -587,7 +576,65 @@ impl Input {
                 }
                 Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
-            Node::Update { updates, input } => todo!(),
+            Node::Update {
+                table,
+                pid,
+                tid,
+                input,
+            } => {
+                let input = input.next(state)?;
+                // Identify rows to be updated by (pid, tid) .
+                let pid: &UInt64Array = input
+                    .column(
+                        input
+                            .schema()
+                            .fields()
+                            .iter()
+                            .position(|f| f.name() == &pid.canonical_name())
+                            .expect(&pid.canonical_name()),
+                    )
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap();
+                let tid: &UInt32Array = input
+                    .column(
+                        input
+                            .schema()
+                            .fields()
+                            .iter()
+                            .position(|f| f.name() == &tid.canonical_name())
+                            .expect(&tid.canonical_name()),
+                    )
+                    .as_any()
+                    .downcast_ref::<UInt32Array>()
+                    .unwrap();
+                // Partition by page.
+                let mut partitions: HashMap<u64, Vec<u32>> = HashMap::new();
+                for i in 0..pid.len() {
+                    let pid = pid.value(i);
+                    let tid = tid.value(i);
+                    if let Some(vec) = partitions.get_mut(&pid) {
+                        vec.push(tid);
+                    } else {
+                        partitions.insert(pid, vec![tid]);
+                    }
+                }
+                // For each page...
+                for (pid, tids) in partitions {
+                    // ...delete updated rows...
+                    unsafe {
+                        let page = Page::read(pid);
+                        for tid in &tids {
+                            page.delete(*tid as usize, state.txn);
+                        }
+                    }
+                    // ...upsert new row versions.
+                    let tids: Arc<dyn Array> = Arc::new(UInt32Array::from(tids));
+                    let input = kernel::gather(&input, &tids);
+                    state.storage.table_mut(table.id).insert(&input, state.txn);
+                }
+                Ok(dummy_row(self.schema.clone()))
+            }
             Node::Delete { pid, tid, input } => {
                 let input = input.next(state)?;
                 let pid: &UInt64Array = input
@@ -602,7 +649,7 @@ impl Input {
                     .as_any()
                     .downcast_ref::<UInt64Array>()
                     .unwrap();
-                let tid: &UInt64Array = input
+                let tid: &UInt32Array = input
                     .column(
                         input
                             .schema()
@@ -612,7 +659,7 @@ impl Input {
                             .expect(&tid.canonical_name()),
                     )
                     .as_any()
-                    .downcast_ref::<UInt64Array>()
+                    .downcast_ref::<UInt32Array>()
                     .unwrap();
                 for i in 0..input.num_rows() {
                     unsafe {

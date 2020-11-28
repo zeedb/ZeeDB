@@ -2,8 +2,8 @@ update customer
 set account_number = 0
 where person_id in (select person_id from person where first_name = "Joe")
 
-Update customer.account_number:$update.$expr
-	Map $update.$expr:0
+Update customer
+	Map customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date customer.$pid customer.$tid
 		HashJoin Semi (Equal customer.person_id person.person_id)
 			Partition* person.person_id
 				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Equal person.first_name "Joe")
@@ -11,5 +11,5 @@ Update customer.account_number:$update.$expr
 						SeqScan person
 			Partition* customer.person_id
 				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-					Map* customer.person_id customer.account_number customer.$xmin customer.$xmax
+					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$pid customer.$tid
 						SeqScan customer

@@ -1,4 +1,5 @@
 use crate::page::*;
+use arrow::datatypes::Schema;
 use arrow::record_batch::*;
 use std::fmt;
 use std::sync::Arc;
@@ -26,7 +27,8 @@ impl Heap {
             self.pages.push(Page::empty(records.schema()));
         }
         // Insert however many records fit in the last page.
-        let offset = self.pages.last().unwrap().insert(records, txn);
+        let last = self.pages.last().unwrap();
+        let offset = last.insert(records, txn);
         // If there are leftover records, add a page and try again.
         if offset < records.num_rows() {
             self.pages.push(Page::empty(records.schema()));
@@ -38,7 +40,11 @@ impl Heap {
         self.pages = vec![];
     }
 
-    pub fn is_uninitialized(&self) -> bool {
+    pub fn schema(&self) -> Option<Arc<Schema>> {
+        self.pages.first().map(|page| page.schema())
+    }
+
+    pub(crate) fn is_uninitialized(&self) -> bool {
         self.pages.is_empty()
     }
 

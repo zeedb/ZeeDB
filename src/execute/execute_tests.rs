@@ -67,10 +67,20 @@ fn test_execute() {
         &mut errors,
     );
     run(
-        "examples/create_then_insert.txt",
+        "examples/insert.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
+            "select * from foo;",
+        ],
+        &mut errors,
+    );
+    run(
+        "examples/insert_vary_order.txt",
+        vec![
+            "create table foo (id int64, ok bool);",
+            "insert into foo (id, ok) values (1, false);",
+            "insert into foo (ok, id) values (true, 2);",
             "select * from foo;",
         ],
         &mut errors,
@@ -81,6 +91,27 @@ fn test_execute() {
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
             "delete from foo where id = 1;",
+            "select * from foo;",
+        ],
+        &mut errors,
+    );
+    run(
+        "examples/delete_then_insert.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "delete from foo where id = 1;",
+            "insert into foo (id) values (2);",
+            "select * from foo;",
+        ],
+        &mut errors,
+    );
+    run(
+        "examples/update.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "update foo set id = 2 where id = 1;",
             "select * from foo;",
         ],
         &mut errors,

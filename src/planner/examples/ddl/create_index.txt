@@ -19,7 +19,7 @@ Script
 			TableFreeScan
 	Assign next_index_id (NextVal @index_sequence_id)
 		TableFreeScan
-	Insert index index.catalog_id index.index_id index.table_id index.index_name
+	Insert index
 		Values index.catalog_id index.index_id index.table_id index.index_name [@index_catalog_id @next_index_id @table_id "foo_index"]
 			TableFreeScan
 	Assign column_id column.column_id
@@ -28,7 +28,7 @@ Script
 				Map* column.table_id column.column_id column.column_name column.$xmin column.$xmax
 					SeqScan column
 			TableFreeScan
-	Insert index_column index_column.index_id index_column.column_id index_column.index_order
+	Insert index_column
 		Values index_column.index_id index_column.column_id index_column.index_order [@next_index_id @column_id 0]
 			TableFreeScan
 	Call create_index @next_index_id

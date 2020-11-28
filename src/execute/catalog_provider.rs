@@ -30,15 +30,12 @@ impl CatalogProvider {
             join column using (table_id) 
             order by catalog_id, table_id, column_id"
             .to_string();
-        let program = execute(
-            optimize(
-                self.parser.analyze(&q, &bootstrap_catalog).unwrap(),
-                &bootstrap_catalog,
-                &mut self.parser,
-            ),
-            txn,
-            storage,
+        let expr = optimize(
+            self.parser.analyze(&q, &bootstrap_catalog).unwrap(),
+            &bootstrap_catalog,
+            &mut self.parser,
         );
+        let program = execute(expr, txn, storage);
         for batch_or_err in program {
             let batch = batch_or_err.unwrap();
             for (parent_catalog_id, catalog_id, catalog) in read_catalogs(&batch) {
@@ -50,15 +47,12 @@ impl CatalogProvider {
             select parent_catalog_id, catalog_id, catalog_name
             from catalog"
             .to_string();
-        let program = execute(
-            optimize(
-                self.parser.analyze(&q, &bootstrap_catalog).unwrap(),
-                &bootstrap_catalog,
-                &mut self.parser,
-            ),
-            txn,
-            storage,
+        let expr = optimize(
+            self.parser.analyze(&q, &bootstrap_catalog).unwrap(),
+            &bootstrap_catalog,
+            &mut self.parser,
         );
+        let program = execute(expr, txn, storage);
         for batch_or_err in program {
             let batch = batch_or_err.unwrap();
             for offset in 0..batch.num_rows() {

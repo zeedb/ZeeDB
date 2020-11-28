@@ -9,7 +9,7 @@ Script
 				Map* table.catalog_id table.table_id table.table_name table.$xmin table.$xmax
 					SeqScan table
 			TableFreeScan
-	Delete table.$pid table.$tid
+	Delete table
 		Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.table_id @table_id)
 			Map* table.table_id table.$xmin table.$xmax table.$pid table.$tid
 				SeqScan table

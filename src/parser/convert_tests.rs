@@ -62,6 +62,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_correlated() {
+    let mut errors = vec![];
     ok!(
         "examples/correlated/exists.txt",
         r#"
@@ -113,6 +121,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_ddl() {
+    let mut errors = vec![];
     ok!(
         "examples/ddl/create_database.txt",
         r#"
@@ -141,6 +157,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_dml() {
+    let mut errors = vec![];
     ok!(
         "examples/dml/delete.txt",
         r#"
@@ -220,6 +244,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_expr() {
+    let mut errors = vec![];
     ok!(
         "examples/expr/cast_column.txt",
         r#"
@@ -322,6 +354,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_filter() {
+    let mut errors = vec![];
     ok!(
         "examples/filter/where.txt",
         r#"
@@ -376,6 +416,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_join() {
+    let mut errors = vec![];
     ok!(
         "examples/join/explicit_equi_join.txt",
         r#"
@@ -436,6 +484,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_sort() {
+    let mut errors = vec![];
     ok!(
         "examples/sort/order_by_different.txt",
         r#"
@@ -484,6 +540,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_subquery() {
+    let mut errors = vec![];
     ok!(
         "examples/subquery/from_select.txt",
         r#"
@@ -508,6 +572,14 @@ fn test_convert() {
         "#,
         errors
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_script() {
+    let mut errors = vec![];
     ok!(
         "examples/script/set.txt",
         r#"

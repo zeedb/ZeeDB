@@ -1,7 +1,7 @@
 delete customer
 where person_id in (select person_id from customer where account_number = 0)
 
-Delete customer.$pid customer.$tid
+Delete customer
 	Map $mark.$in:true customer.$pid customer.$tid customer.$xmax customer.$xmin customer.person_id customer.person_id
 		HashJoin Semi (Equal customer.person_id customer.person_id)
 			Partition* customer.person_id

@@ -123,7 +123,7 @@ impl Converter {
         let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
         let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
         let pid = self.create_column(table.name.clone(), "$pid".to_string(), DataType::UInt64);
-        let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt64);
+        let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt32);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -583,13 +583,28 @@ impl Converter {
             todo!("nested insert")
         }
         let input = match &q.query {
-            Some(q) => self.any_resolved_scan(q),
+            Some(scan) => self.insert_scan(q, scan),
             None => self.rows(q),
         };
-        let table = Table::from(q.table_scan.get());
         LogicalInsert {
-            table,
-            columns: self.columns(&q.insert_column_list),
+            table: Table::from(q.table_scan.get()),
+            input: Box::new(input),
+        }
+    }
+
+    fn insert_scan(&mut self, q: &ResolvedInsertStmtProto, scan: &AnyResolvedScanProto) -> Expr {
+        let input = self.any_resolved_scan(scan);
+        let projects = (0..q.query_output_column_list.len())
+            .map(|i| {
+                (
+                    Scalar::Column(Column::from(&q.query_output_column_list[i])),
+                    Column::from(&q.insert_column_list[i]),
+                )
+            })
+            .collect();
+        LogicalMap {
+            include_existing: false,
+            projects,
             input: Box::new(input),
         }
     }
@@ -643,7 +658,8 @@ impl Converter {
         if q.table_scan.is_none() {
             todo!("nested updates")
         }
-        let mut input = self.table_scan(q.table_scan.get());
+        let table = Table::from(q.table_scan.get());
+        let (mut input, pid, tid) = self.table_scan_for_update(q.table_scan.get());
         if let Some(from) = &q.from_scan {
             let from = self.any_resolved_scan(from);
             let predicates = vec![];
@@ -661,48 +677,46 @@ impl Converter {
             };
         }
         let mut projects = vec![];
-        let mut updates = vec![];
-        for item in &q.update_item_list {
-            let target = match item.target.get().node.get() {
-                ResolvedColumnRefNode(ResolvedColumnRefProto {
-                    column: Some(target),
-                    ..
-                }) => Column::from(target),
-                other => panic!("{:?}", other),
-            };
-            let value = match item.set_value.get().value.get().node.get() {
-                ResolvedColumnRefNode(ResolvedColumnRefProto {
-                    column: Some(value),
-                    ..
-                }) => Some(Column::from(value)),
-                ResolvedDmldefaultNode(_) => None,
-                _ => {
-                    let scalar = self.expr(item.set_value.get().value.get(), &mut input);
-                    let fake = self.create_column(
-                        "$update".to_string(),
-                        "$expr".to_string(),
-                        scalar.data(),
-                    );
-                    projects.push((scalar, fake.clone()));
-                    Some(fake)
+        let mut updated_column = |column: &ResolvedColumnProto| -> Option<Scalar> {
+            for item in &q.update_item_list {
+                if let ResolvedColumnRefNode(target) = item.target.get().node.get() {
+                    if target.column.get().name == column.name {
+                        let value = match item.set_value.get().value.get().node.get() {
+                            ResolvedDmldefaultNode(default) => {
+                                self.default(column, default.parent.get().r#type.get())
+                            }
+                            other => self.expr_node(other, &mut input),
+                        };
+                        return Some(value);
+                    }
                 }
-            };
-            updates.push((target, value))
+            }
+            None
+        };
+        for column in &q.table_scan.get().parent.get().column_list {
+            let as_column = Column::from(column);
+            let value = updated_column(column).unwrap_or(Scalar::Column(as_column.clone()));
+            projects.push((value, as_column))
         }
-        if projects.is_empty() {
-            return LogicalUpdate {
-                updates,
-                input: Box::new(input),
-            };
-        }
+        projects.push((Scalar::Column(pid.clone()), pid.clone()));
+        projects.push((Scalar::Column(tid.clone()), tid.clone()));
         LogicalUpdate {
-            updates,
+            table,
+            pid,
+            tid,
             input: Box::new(LogicalMap {
                 include_existing: false,
                 projects,
                 input: Box::new(input),
             }),
         }
+    }
+
+    fn default(&mut self, column: &ResolvedColumnProto, as_type: &TypeProto) -> Scalar {
+        Scalar::Call(Box::new(Function::Default(
+            Column::from(column),
+            data_type::from_proto(as_type),
+        )))
     }
 
     fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Expr {
@@ -748,7 +762,11 @@ impl Converter {
     }
 
     fn expr(&mut self, x: &AnyResolvedExprProto, outer: &mut Expr) -> Scalar {
-        match x.node.get() {
+        self.expr_node(x.node.get(), outer)
+    }
+
+    fn expr_node(&mut self, x: &any_resolved_expr_proto::Node, outer: &mut Expr) -> Scalar {
+        match x {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
                 let data = x.value.get().r#type.get();

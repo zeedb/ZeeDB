@@ -2,17 +2,17 @@ update person
 set first_name = (select last_name) 
 where person_id = 1
 
-LogicalUpdate person.first_name:$update.$expr
-	LogicalMap $update.$expr:$expr_subquery.last_name
+LogicalUpdate person
+	LogicalMap person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date person.$pid person.$tid
 		LogicalJoin Single (Equal person.last_name person.last_name')
 			LogicalDependentJoin [person.last_name']
 				LogicalMap $expr_subquery.last_name:person.last_name'
 					LogicalSingleGet
 				LogicalFilter (Equal person.person_id 1)
 					Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-						Map* person.person_id person.first_name person.last_name' person.$xmin person.$xmax
+						Map* person.person_id person.first_name person.last_name' person.modified_date person.$xmin person.$xmax person.$pid person.$tid
 							LogicalGet person
 			LogicalFilter (Equal person.person_id 1)
 				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-					Map* person.person_id person.first_name person.last_name person.$xmin person.$xmax
+					Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax person.$pid person.$tid
 						LogicalGet person

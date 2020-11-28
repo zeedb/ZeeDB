@@ -23,7 +23,7 @@ impl IndentPrint for Expr {
         };
         match self {
             Expr::Leaf { gid } => write!(f, "@{}", gid),
-            Expr::LogicalSingleGet => write!(f, "{}", self.name()),
+            Expr::LogicalSingleGet | Expr::TableFreeScan => write!(f, "{}", self.name()),
             Expr::LogicalGet {
                 projects,
                 predicates,
@@ -44,7 +44,7 @@ impl IndentPrint for Expr {
                 write!(f, "{} {}", self.name(), table.name)?;
                 Ok(())
             }
-            Expr::LogicalFilter { predicates, input } => {
+            Expr::LogicalFilter { predicates, input } | Expr::Filter { predicates, input } => {
                 write!(f, "{} {}", self.name(), join_scalars(predicates))?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -123,6 +123,11 @@ impl IndentPrint for Expr {
                 group_by,
                 aggregate,
                 input,
+            }
+            | Expr::Aggregate {
+                group_by,
+                aggregate,
+                input,
             } => {
                 write!(f, "{}", self.name())?;
                 for column in group_by {
@@ -138,12 +143,17 @@ impl IndentPrint for Expr {
                 limit,
                 offset,
                 input,
+            }
+            | Expr::Limit {
+                limit,
+                offset,
+                input,
             } => {
                 write!(f, "{} {} {}", self.name(), limit, offset)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalSort { order_by, input } => {
+            Expr::LogicalSort { order_by, input } | Expr::Sort { order_by, input } => {
                 write!(f, "{}", self.name())?;
                 for sort in order_by {
                     if sort.descending {
@@ -168,15 +178,8 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::LogicalInsert {
-                table,
-                columns,
-                input,
-            } => {
+            Expr::LogicalInsert { table, input } | Expr::Insert { table, input } => {
                 write!(f, "{} {}", self.name(), table.name)?;
-                for c in columns {
-                    write!(f, " {}", c)?;
-                }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
@@ -204,19 +207,16 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalUpdate { updates, input } => {
-                write!(f, "{}", self.name())?;
-                for (target, value) in updates {
-                    match value {
-                        Some(value) => write!(f, " {}:{}", target, value)?,
-                        None => write!(f, " {}:_", target)?,
-                    }
-                }
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::LogicalDelete { pid, tid, input } => {
-                write!(f, "{} {} {}", self.name(), pid, tid)?;
+            Expr::LogicalUpdate { pid, input, .. }
+            | Expr::Update { pid, input, .. }
+            | Expr::LogicalDelete { pid, input, .. }
+            | Expr::Delete { pid, input, .. } => {
+                write!(
+                    f,
+                    "{} {}",
+                    self.name(),
+                    pid.table.as_ref().unwrap_or(&"".to_string())
+                )?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
@@ -246,7 +246,6 @@ impl IndentPrint for Expr {
                 write!(f, "{} {:?} {}", self.name(), object, name)
             }
             Expr::LogicalRewrite { sql } => write!(f, "{} {:?}", self.name(), sql),
-            Expr::TableFreeScan => write!(f, "{}", self.name()),
             Expr::IndexScan {
                 projects,
                 predicates,
@@ -268,11 +267,6 @@ impl IndentPrint for Expr {
                     join_index_lookups(index_predicates)
                 )?;
                 Ok(())
-            }
-            Expr::Filter { predicates, input } => {
-                write!(f, "{} {}", self.name(), join_scalars(predicates))?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
             }
             Expr::HashJoin {
                 join,
@@ -316,73 +310,6 @@ impl IndentPrint for Expr {
                     table.name,
                     join_index_lookups(index_predicates)
                 )?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::Aggregate {
-                group_by,
-                aggregate,
-                input,
-            } => {
-                write!(f, "{}", self.name())?;
-                for column in group_by {
-                    write!(f, " {}", column)?;
-                }
-                for (aggregate, column) in aggregate {
-                    write!(f, " {}:{}", column, aggregate)?;
-                }
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::Limit {
-                limit,
-                offset,
-                input,
-            } => {
-                write!(f, "{} {} {}", self.name(), limit, offset)?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::Sort { order_by, input } => {
-                write!(f, "{}", self.name())?;
-                for sort in order_by {
-                    if sort.descending {
-                        write!(f, " (Desc {})", sort.column)?;
-                    } else {
-                        write!(f, " {}", sort.column)?;
-                    }
-                }
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::Insert {
-                table,
-                columns,
-                input,
-            } => {
-                write!(
-                    f,
-                    "{} {} {}",
-                    self.name(),
-                    table.name,
-                    join_columns(columns)
-                )?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::Update { updates, input } => {
-                write!(f, "{}", self.name())?;
-                for (target, value) in updates {
-                    match value {
-                        Some(value) => write!(f, " {}:{}", target, value)?,
-                        None => write!(f, " {}:_", target)?,
-                    }
-                }
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
-            Expr::Delete { pid, tid, input } => {
-                write!(f, "{} {} {}", self.name(), pid, tid)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }

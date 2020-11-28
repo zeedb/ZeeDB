@@ -97,7 +97,6 @@ pub enum Expr {
     // LogicalInsert { table, columns } implements the INSERT operation.
     LogicalInsert {
         table: Table,
-        columns: Vec<Column>,
         input: Box<Expr>,
     },
     // LogicalValues { columns, values } implements VALUES expressions.
@@ -109,7 +108,9 @@ pub enum Expr {
     // LogicalUpdate { sets } implements the UPDATE operation.
     // (column, None) indicates set column to default value.
     LogicalUpdate {
-        updates: Vec<(Column, Option<Column>)>,
+        table: Table,
+        pid: Column,
+        tid: Column,
         input: Box<Expr>,
     },
     // LogicalDelete { table } implements the DELETE operation.
@@ -235,7 +236,6 @@ pub enum Expr {
     },
     Insert {
         table: Table,
-        columns: Vec<Column>,
         input: Box<Expr>,
     },
     Values {
@@ -244,7 +244,9 @@ pub enum Expr {
         input: Box<Expr>,
     },
     Update {
-        updates: Vec<(Column, Option<Column>)>,
+        table: Table,
+        pid: Column,
+        tid: Column,
         input: Box<Expr>,
     },
     Delete {
@@ -544,17 +546,9 @@ impl Expr {
                 let right = Box::new(visitor(*right));
                 Expr::LogicalExcept { left, right }
             }
-            Expr::LogicalInsert {
-                table,
-                columns,
-                input,
-            } => {
+            Expr::LogicalInsert { table, input } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalInsert {
-                    table,
-                    columns,
-                    input,
-                }
+                Expr::LogicalInsert { table, input }
             }
             Expr::LogicalValues {
                 columns,
@@ -568,9 +562,19 @@ impl Expr {
                     input,
                 }
             }
-            Expr::LogicalUpdate { updates, input } => {
+            Expr::LogicalUpdate {
+                table,
+                pid,
+                tid,
+                input,
+            } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalUpdate { updates, input }
+                Expr::LogicalUpdate {
+                    table,
+                    pid,
+                    tid,
+                    input,
+                }
             }
             Expr::LogicalDelete { pid, tid, input } => Expr::LogicalDelete {
                 pid,
@@ -671,13 +675,8 @@ impl Expr {
                 left: Box::new(visitor(*left)),
                 right: Box::new(visitor(*right)),
             },
-            Expr::Insert {
+            Expr::Insert { table, input } => Expr::Insert {
                 table,
-                columns,
-                input,
-            } => Expr::Insert {
-                table,
-                columns,
                 input: Box::new(visitor(*input)),
             },
             Expr::Values {
@@ -689,8 +688,17 @@ impl Expr {
                 values,
                 input: Box::new(visitor(*input)),
             },
-            Expr::Update { updates, input } => Expr::Update {
-                updates,
+            Expr::Update {
+                table,
+                pid,
+                tid,
+
+                input,
+            } => Expr::Update {
+                table,
+                pid,
+                tid,
+
                 input: Box::new(visitor(*input)),
             },
             Expr::Delete { pid, tid, input } => Expr::Delete {
@@ -920,6 +928,7 @@ impl Expr {
             Expr::LogicalCall { procedure, .. } => {
                 set.extend(procedure.references());
             }
+            // TODO enumerate all cases.
             any if any.is_logical() => {}
             any => unimplemented!(
                 "free is not implemented for physical operator {}",
@@ -1038,6 +1047,7 @@ impl Expr {
                 procedure,
                 input: Box::new(input.subst(map)),
             },
+            // TODO enumerate all cases.
             any if any.is_logical() => any.map(|child| child.subst(map)),
             any => unimplemented!(
                 "subst is not implemented for physical operator {}",
@@ -1435,6 +1445,7 @@ pub enum Function {
     Multiply(Scalar, Scalar, DataType),
     Subtract(Scalar, Scalar, DataType),
     // System functions.
+    Default(Column, DataType),
     NextVal(Scalar),
     Xid,
 }
@@ -1610,6 +1621,7 @@ impl Function {
             Function::Divide(_, _, _) => "Divide",
             Function::Multiply(_, _, _) => "Multiply",
             Function::Subtract(_, _, _) => "Subtract",
+            Function::Default(_, _) => "Default",
             Function::NextVal(_) => "NextVal",
             Function::Xid => "Xid",
         }
@@ -1617,9 +1629,11 @@ impl Function {
 
     pub fn arguments(&self) -> Vec<&Scalar> {
         match self {
-            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
-                vec![]
-            }
+            Function::CurrentDate
+            | Function::CurrentTimestamp
+            | Function::Rand
+            | Function::Default(_, _)
+            | Function::Xid => vec![],
             Function::Not(argument)
             | Function::UnaryMinus(argument)
             | Function::NextVal(argument) => vec![argument],
@@ -1658,7 +1672,8 @@ impl Function {
             Function::Add(_, _, returns)
             | Function::Multiply(_, _, returns)
             | Function::Subtract(_, _, returns)
-            | Function::Divide(_, _, returns) => returns.clone(),
+            | Function::Divide(_, _, returns)
+            | Function::Default(_, returns) => returns.clone(),
             Function::NextVal(_) => DataType::Int64,
             Function::Xid => DataType::UInt64,
         }
@@ -1666,9 +1681,11 @@ impl Function {
 
     pub fn map(self, f: impl Fn(Scalar) -> Scalar) -> Self {
         match self {
-            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
-                self
-            }
+            Function::CurrentDate
+            | Function::CurrentTimestamp
+            | Function::Rand
+            | Function::Xid
+            | Function::Default(_, _) => self,
             Function::Not(argument) => Function::Not(f(argument)),
             Function::And(left, right) => Function::And(f(left), f(right)),
             Function::Equal(left, right) => Function::Equal(f(left), f(right)),

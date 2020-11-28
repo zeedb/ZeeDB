@@ -91,6 +91,7 @@ pub fn eval(
             Function::Divide(_, _, _) => todo!(),
             Function::Multiply(_, _, _) => todo!(),
             Function::Subtract(_, _, _) => todo!(),
+            Function::Default(column, _) => todo!(),
             Function::NextVal(sequence) => {
                 let input = eval(sequence, input, state)?;
                 let input: &Int64Array = input.as_any().downcast_ref::<Int64Array>().unwrap();
