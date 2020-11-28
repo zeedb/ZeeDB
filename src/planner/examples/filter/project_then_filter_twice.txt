@@ -4,5 +4,6 @@ where id < 100
 
 Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 	Map $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
-		Map* customer.customer_id
-			SeqScan customer
+		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+			Map* customer.customer_id customer.$xmin customer.$xmax
+				SeqScan customer

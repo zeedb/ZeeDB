@@ -26,7 +26,7 @@ fn test_hash_table() {
     })];
     let input = RecordBatch::try_new(schema, columns).unwrap();
     let mut storage = Storage::new();
-    let mut state = State::new(&mut storage);
+    let mut state = State::new(100, &mut storage);
     let table = HashTable::new(&scalars, &mut state, &input).unwrap();
     let buckets = crate::eval::hash(&scalars, table.n_buckets(), &input, &mut state).unwrap();
     let (left, right_index) = table.probe(&buckets);

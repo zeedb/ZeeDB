@@ -114,7 +114,8 @@ pub enum Expr {
     },
     // LogicalDelete { table } implements the DELETE operation.
     LogicalDelete {
-        table: Table,
+        pid: Column,
+        tid: Column,
         input: Box<Expr>,
     },
     // LogicalCreateDatabase { database } implements the CREATE DATABASE operation.
@@ -247,7 +248,8 @@ pub enum Expr {
         input: Box<Expr>,
     },
     Delete {
-        table: Table,
+        pid: Column,
+        tid: Column,
         input: Box<Expr>,
     },
     Script {
@@ -570,10 +572,11 @@ impl Expr {
                 let input = Box::new(visitor(*input));
                 Expr::LogicalUpdate { updates, input }
             }
-            Expr::LogicalDelete { table, input } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalDelete { table, input }
-            }
+            Expr::LogicalDelete { pid, tid, input } => Expr::LogicalDelete {
+                pid,
+                tid,
+                input: Box::new(visitor(*input)),
+            },
             Expr::Filter { predicates, input } => Expr::Filter {
                 predicates,
                 input: Box::new(visitor(*input)),
@@ -690,8 +693,9 @@ impl Expr {
                 updates,
                 input: Box::new(visitor(*input)),
             },
-            Expr::Delete { table, input } => Expr::Delete {
-                table,
+            Expr::Delete { pid, tid, input } => Expr::Delete {
+                pid,
+                tid,
                 input: Box::new(visitor(*input)),
             },
             Expr::LogicalScript { statements } => Expr::LogicalScript {
@@ -1432,6 +1436,7 @@ pub enum Function {
     Subtract(Scalar, Scalar, DataType),
     // System functions.
     NextVal(Scalar),
+    Xid,
 }
 
 impl Function {
@@ -1606,12 +1611,15 @@ impl Function {
             Function::Multiply(_, _, _) => "Multiply",
             Function::Subtract(_, _, _) => "Subtract",
             Function::NextVal(_) => "NextVal",
+            Function::Xid => "Xid",
         }
     }
 
     pub fn arguments(&self) -> Vec<&Scalar> {
         match self {
-            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand => vec![],
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
+                vec![]
+            }
             Function::Not(argument)
             | Function::UnaryMinus(argument)
             | Function::NextVal(argument) => vec![argument],
@@ -1652,12 +1660,15 @@ impl Function {
             | Function::Subtract(_, _, returns)
             | Function::Divide(_, _, returns) => returns.clone(),
             Function::NextVal(_) => DataType::Int64,
+            Function::Xid => DataType::UInt64,
         }
     }
 
     pub fn map(self, f: impl Fn(Scalar) -> Scalar) -> Self {
         match self {
-            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand => self,
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
+                self
+            }
             Function::Not(argument) => Function::Not(f(argument)),
             Function::And(left, right) => Function::And(f(left), f(right)),
             Function::Equal(left, right) => Function::Equal(f(left), f(right)),

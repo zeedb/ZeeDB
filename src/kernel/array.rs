@@ -1,5 +1,4 @@
 use arrow::array::*;
-use arrow::compute::SortColumn;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use arrow::record_batch::*;
@@ -33,6 +32,133 @@ impl crate::Kernel for Arc<dyn Array> {
     fn sort(any: &Self) -> Arc<dyn Array> {
         let u32 = arrow::compute::sort_to_indices(any, None).unwrap();
         Arc::new(u32)
+    }
+}
+
+pub fn equal(
+    left_any: &Arc<dyn Array>,
+    right_any: &Arc<dyn Array>,
+) -> Result<Arc<dyn Array>, ArrowError> {
+    binary_operator::<Equal>(left_any, right_any)
+}
+
+pub fn less(
+    left_any: &Arc<dyn Array>,
+    right_any: &Arc<dyn Array>,
+) -> Result<Arc<dyn Array>, ArrowError> {
+    binary_operator::<Less>(left_any, right_any)
+}
+
+pub fn less_equal(
+    left_any: &Arc<dyn Array>,
+    right_any: &Arc<dyn Array>,
+) -> Result<Arc<dyn Array>, ArrowError> {
+    binary_operator::<LessEq>(left_any, right_any)
+}
+
+pub fn and(
+    left_bool: &Arc<dyn Array>,
+    right_bool: &Arc<dyn Array>,
+) -> Result<Arc<dyn Array>, ArrowError> {
+    let bool = arrow::compute::and(coerce(left_bool), coerce(right_bool))?;
+    Ok(Arc::new(bool))
+}
+
+fn binary_operator<Op: BinaryOperator>(
+    left: &Arc<dyn Array>,
+    right: &Arc<dyn Array>,
+) -> Result<Arc<dyn Array>, ArrowError> {
+    let output = match left.data_type() {
+        DataType::Boolean => Op::bool(coerce(left), coerce(right))?,
+        DataType::Int64 => Op::num::<Int64Type>(coerce(left), coerce(right))?,
+        DataType::UInt64 => Op::num::<UInt64Type>(coerce(left), coerce(right))?,
+        DataType::Float64 => Op::num::<Float64Type>(coerce(left), coerce(right))?,
+        DataType::Date32(DateUnit::Day) => Op::num::<Date32Type>(coerce(left), coerce(right))?,
+        DataType::Timestamp(TimeUnit::Microsecond, None) => {
+            Op::num::<TimestampMicrosecondType>(coerce(left), coerce(right))?
+        }
+        DataType::FixedSizeBinary(16) => todo!(),
+        DataType::Utf8 => Op::utf8(coerce(left), coerce(right))?,
+        DataType::Struct(fields) => todo!(),
+        DataType::List(element) => todo!(),
+        other => panic!("{:?} is not a supported type", other),
+    };
+    Ok(Arc::new(output))
+}
+
+trait BinaryOperator {
+    type Output: Array + 'static;
+
+    fn bool(left: &BooleanArray, right: &BooleanArray) -> Result<Self::Output, ArrowError>;
+
+    fn num<T: ArrowNumericType>(
+        left: &PrimitiveArray<T>,
+        right: &PrimitiveArray<T>,
+    ) -> Result<Self::Output, ArrowError>;
+
+    fn utf8(left: &StringArray, right: &StringArray) -> Result<Self::Output, ArrowError>;
+}
+
+struct Equal;
+
+impl BinaryOperator for Equal {
+    type Output = BooleanArray;
+
+    fn bool(left: &BooleanArray, right: &BooleanArray) -> Result<BooleanArray, ArrowError> {
+        todo!()
+    }
+
+    fn num<T: ArrowNumericType>(
+        left: &PrimitiveArray<T>,
+        right: &PrimitiveArray<T>,
+    ) -> Result<BooleanArray, ArrowError> {
+        arrow::compute::eq(left, right)
+    }
+
+    fn utf8(left: &StringArray, right: &StringArray) -> Result<BooleanArray, ArrowError> {
+        arrow::compute::eq_utf8(left, right)
+    }
+}
+
+struct Less;
+
+impl BinaryOperator for Less {
+    type Output = BooleanArray;
+
+    fn bool(left: &BooleanArray, right: &BooleanArray) -> Result<BooleanArray, ArrowError> {
+        todo!()
+    }
+
+    fn num<T: ArrowNumericType>(
+        left: &PrimitiveArray<T>,
+        right: &PrimitiveArray<T>,
+    ) -> Result<BooleanArray, ArrowError> {
+        arrow::compute::lt(left, right)
+    }
+
+    fn utf8(left: &StringArray, right: &StringArray) -> Result<BooleanArray, ArrowError> {
+        arrow::compute::lt_utf8(left, right)
+    }
+}
+
+struct LessEq;
+
+impl BinaryOperator for LessEq {
+    type Output = BooleanArray;
+
+    fn bool(left: &BooleanArray, right: &BooleanArray) -> Result<BooleanArray, ArrowError> {
+        todo!()
+    }
+
+    fn num<T: ArrowNumericType>(
+        left: &PrimitiveArray<T>,
+        right: &PrimitiveArray<T>,
+    ) -> Result<BooleanArray, ArrowError> {
+        arrow::compute::lt_eq(left, right)
+    }
+
+    fn utf8(left: &StringArray, right: &StringArray) -> Result<BooleanArray, ArrowError> {
+        arrow::compute::lt_eq_utf8(left, right)
     }
 }
 
@@ -104,6 +230,7 @@ pub fn hash(any: &Arc<dyn Array>, buckets: usize) -> Arc<dyn Array> {
 }
 
 fn hash_typed<T: ArrowPrimitiveType>(any: &Arc<dyn Array>, buckets: usize) -> Arc<dyn Array> {
+    assert!(buckets > 0);
     let any: &PrimitiveArray<T> = any.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
     let mut output = UInt32Array::builder(any.len());
     for i in 0..any.len() {

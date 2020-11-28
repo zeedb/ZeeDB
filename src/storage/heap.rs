@@ -9,7 +9,7 @@ use std::sync::Arc;
 // During the GC process, the heap is partially sorted on the cluster-by key.
 // A good cluster-by key will cluster frequently-updated rows together.
 pub struct Heap {
-    pages: Vec<Arc<Page>>,
+    pages: Vec<Page>,
 }
 
 impl Heap {
@@ -17,21 +17,25 @@ impl Heap {
         Self { pages: vec![] }
     }
 
-    pub fn scan(&self) -> Vec<Arc<Page>> {
+    pub fn scan(&self) -> Vec<Page> {
         self.pages.iter().map(|page| page.clone()).collect()
     }
 
     pub fn insert(&mut self, records: &RecordBatch, txn: u64) {
         if self.pages.is_empty() {
-            self.pages.push(Arc::new(Page::empty(records.schema())));
+            self.pages.push(Page::empty(records.schema()));
         }
         // Insert however many records fit in the last page.
         let offset = self.pages.last().unwrap().insert(records, txn);
         // If there are leftover records, add a page and try again.
         if offset < records.num_rows() {
-            self.pages.push(Arc::new(Page::empty(records.schema())));
+            self.pages.push(Page::empty(records.schema()));
             self.insert(&slice(records, offset, records.num_rows() - offset), txn);
         }
+    }
+
+    pub fn truncate(&mut self) {
+        self.pages = vec![];
     }
 
     pub fn is_uninitialized(&self) -> bool {

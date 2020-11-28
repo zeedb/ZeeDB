@@ -4,15 +4,15 @@ Script
 	Assign catalog_id 1
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
-		LookupJoin Single
-			Filter* (Equal catalog.catalog_name "nested")
-				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name
-					IndexScan* catalog(catalog.parent_catalog_id:@catalog_id)
+		NestedLoop Single
+			Filter* (LessOrEqual catalog.$xmin (Xid)) (Less (Xid) catalog.$xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name catalog.$xmin catalog.$xmax
+					SeqScan catalog
 			TableFreeScan
 	Assign table_sequence_id sequence.sequence_id
 		NestedLoop Single
-			Filter* (Equal sequence.sequence_name "table")
-				Map* sequence.sequence_id sequence.sequence_name
+			Filter* (LessOrEqual sequence.$xmin (Xid)) (Less (Xid) sequence.$xmax) (Equal sequence.sequence_name "table")
+				Map* sequence.sequence_id sequence.sequence_name sequence.$xmin sequence.$xmax
 					SeqScan sequence
 			TableFreeScan
 	Assign next_table_id (NextVal @table_sequence_id)

@@ -4,13 +4,18 @@ join customer using (person_id)
 join store using (store_id)
 
 Map customer.store_id person.person_id person.first_name person.last_name person.modified_date customer.customer_id customer.account_number customer.modified_date store.name store.modified_date
-	LookupJoin Inner
-		Map* person.person_id person.first_name person.last_name person.modified_date
-			IndexScan* person(person.person_id:customer.person_id)
-		HashJoin Inner (Equal customer.store_id store.store_id)
-			Partition* store.store_id
-				Map* store.store_id store.name store.modified_date
-					SeqScan store
-			Partition* customer.store_id
-				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-					SeqScan customer
+	HashJoin Inner (Equal person.person_id customer.person_id)
+		Partition* customer.person_id
+			HashJoin Inner (Equal customer.store_id store.store_id)
+				Partition* store.store_id
+					Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+						Map* store.store_id store.name store.modified_date store.$xmin store.$xmax
+							SeqScan store
+				Partition* customer.store_id
+					Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax
+							SeqScan customer
+		Partition* person.person_id
+			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
+				Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax
+					SeqScan person

@@ -9,8 +9,8 @@ use std::fmt;
 use std::sync::Arc;
 use storage::*;
 
-pub fn execute(expr: Expr, storage: &mut Storage) -> Program<'_> {
-    let state = State::new(storage);
+pub fn execute(expr: Expr, txn: u64, storage: &mut Storage) -> Program<'_> {
+    let state = State::new(txn, storage);
     let input = compile(expr);
     Program { state, input }
 }
@@ -35,7 +35,7 @@ enum Node {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
         table: Table,
-        scan: Option<Vec<Arc<Page>>>,
+        scan: Option<Vec<Page>>,
     },
     IndexScan {
         projects: Vec<Column>,
@@ -128,7 +128,8 @@ enum Node {
         input: Input,
     },
     Delete {
-        table: Table,
+        pid: Column,
+        tid: Column,
         input: Input,
     },
     Script {
@@ -277,7 +278,11 @@ fn compile_node(expr: Expr) -> Node {
             input: compile(*input),
         },
         Update { .. } => todo!(),
-        Delete { .. } => todo!(),
+        Delete { pid, tid, input } => Node::Delete {
+            pid,
+            tid,
+            input: compile(*input),
+        },
         Script { statements } => {
             let mut compiled = vec![];
             for expr in statements {
@@ -583,7 +588,42 @@ impl Input {
                 Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
             Node::Update { updates, input } => todo!(),
-            Node::Delete { table, input } => todo!(),
+            Node::Delete { pid, tid, input } => {
+                let input = input.next(state)?;
+                let pid: &UInt64Array = input
+                    .column(
+                        input
+                            .schema()
+                            .fields()
+                            .iter()
+                            .position(|f| f.name() == &pid.canonical_name())
+                            .expect(&pid.canonical_name()),
+                    )
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap();
+                let tid: &UInt64Array = input
+                    .column(
+                        input
+                            .schema()
+                            .fields()
+                            .iter()
+                            .position(|f| f.name() == &tid.canonical_name())
+                            .expect(&tid.canonical_name()),
+                    )
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap();
+                for i in 0..input.num_rows() {
+                    unsafe {
+                        let pid = pid.value(i);
+                        let tid = tid.value(i) as usize;
+                        let page = Page::read(pid);
+                        page.delete(tid, state.txn);
+                    }
+                }
+                Ok(dummy_row(self.schema.clone()))
+            }
             Node::Script { offset, statements } => {
                 while *offset < statements.len() {
                     match statements[*offset].next(state) {
@@ -617,7 +657,10 @@ impl Input {
                         let id = crate::eval::eval(id, &input, state)?;
                         state.storage.create_table(kernel::int64(&id));
                     }
-                    Procedure::DropTable(id) => todo!(),
+                    Procedure::DropTable(id) => {
+                        let id = crate::eval::eval(id, &input, state)?;
+                        state.storage.drop_table(kernel::int64(&id));
+                    }
                     Procedure::CreateIndex(id) => todo!(),
                     Procedure::DropIndex(id) => todo!(),
                 };

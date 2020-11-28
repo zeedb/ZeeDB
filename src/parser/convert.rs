@@ -82,18 +82,68 @@ impl Converter {
     }
 
     fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Expr {
-        let projects = q
+        let mut projects: Vec<Column> = q
             .parent
             .get()
             .column_list
             .iter()
             .map(|c| Column::from(c))
             .collect();
+        let table = Table::from(q);
+        let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
+        let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
+        let predicates = vec![
+            Scalar::Call(Box::new(Function::LessOrEqual(
+                Scalar::Column(xmin.clone()),
+                Scalar::Call(Box::new(Function::Xid)),
+            ))),
+            Scalar::Call(Box::new(Function::Less(
+                Scalar::Call(Box::new(Function::Xid)),
+                Scalar::Column(xmax.clone()),
+            ))),
+        ];
+        projects.push(xmin);
+        projects.push(xmax);
         LogicalGet {
             projects,
-            predicates: vec![],
-            table: Table::from(q),
+            predicates,
+            table,
         }
+    }
+
+    fn table_scan_for_update(&mut self, q: &ResolvedTableScanProto) -> (Expr, Column, Column) {
+        let mut projects: Vec<Column> = q
+            .parent
+            .get()
+            .column_list
+            .iter()
+            .map(|c| Column::from(c))
+            .collect();
+        let table = Table::from(q);
+        let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
+        let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
+        let pid = self.create_column(table.name.clone(), "$pid".to_string(), DataType::UInt64);
+        let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt64);
+        let predicates = vec![
+            Scalar::Call(Box::new(Function::LessOrEqual(
+                Scalar::Column(xmin.clone()),
+                Scalar::Call(Box::new(Function::Xid)),
+            ))),
+            Scalar::Call(Box::new(Function::Less(
+                Scalar::Call(Box::new(Function::Xid)),
+                Scalar::Column(xmax.clone()),
+            ))),
+        ];
+        projects.push(xmin);
+        projects.push(xmax);
+        projects.push(pid.clone());
+        projects.push(tid.clone());
+        let expr = LogicalGet {
+            projects,
+            predicates,
+            table,
+        };
+        (expr, pid, tid)
     }
 
     fn join(&mut self, q: &ResolvedJoinScanProto) -> Expr {
@@ -577,11 +627,11 @@ impl Converter {
     }
 
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
-        let mut input = self.table_scan(q.table_scan.get());
+        let (mut input, pid, tid) = self.table_scan_for_update(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
-        let table = Table::from(q.table_scan.get());
         LogicalDelete {
-            table,
+            pid,
+            tid,
             input: Box::new(LogicalFilter {
                 predicates,
                 input: Box::new(input),

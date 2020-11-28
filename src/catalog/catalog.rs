@@ -40,13 +40,19 @@ impl Catalog {
         table: &Table,
     ) -> Option<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
         // TODO
+        let indices = vec![
+            ("customer", "customer_id"),
+            ("customer", "person_id"),
+            ("customer", "store_id"),
+            ("person", "person_id"),
+            ("store", "store_id"),
+        ];
         for i in 0..predicates.len() {
             if let Scalar::Call(function) = &predicates[i] {
                 match function.as_ref() {
                     Function::Equal(Scalar::Column(column), lookup)
                     | Function::Equal(lookup, Scalar::Column(column))
-                        if column.name.ends_with("_id")
-                            && column.table.as_ref() == Some(&table.name) =>
+                        if indices.contains(&(column.name.as_str(), table.name.as_str())) =>
                     {
                         let mut remaining_predicates = predicates.clone();
                         remaining_predicates.remove(i);

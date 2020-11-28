@@ -1,12 +1,14 @@
 delete person
 where person_id in (select person_id from customer)
 
-Delete person
-	Map $mark.$in:true customer.person_id person.person_id
+Delete person.$pid person.$tid
+	Map $mark.$in:true customer.person_id person.$pid person.$tid person.$xmax person.$xmin person.person_id
 		HashJoin Semi (Equal person.person_id customer.person_id)
 			Partition* customer.person_id
-				Map* customer.person_id
-					SeqScan customer
+				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+					Map* customer.person_id customer.$xmin customer.$xmax
+						SeqScan customer
 			Partition* person.person_id
-				Map* person.person_id
-					SeqScan person
+				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
+					Map* person.person_id person.$xmin person.$xmax person.$pid person.$tid
+						SeqScan person

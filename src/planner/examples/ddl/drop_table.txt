@@ -4,13 +4,14 @@ Script
 	Assign catalog_id 1
 		TableFreeScan
 	Assign table_id table.table_id
-		LookupJoin Single
-			Filter* (Equal table.table_name "foo")
-				Map* table.catalog_id table.table_id table.table_name
-					IndexScan* table(table.catalog_id:@catalog_id)
+		NestedLoop Single
+			Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
+				Map* table.catalog_id table.table_id table.table_name table.$xmin table.$xmax
+					SeqScan table
 			TableFreeScan
-	Delete table
-		Map* table.table_id
-			IndexScan table(table.table_id:@table_id)
+	Delete table.$pid table.$tid
+		Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.table_id @table_id)
+			Map* table.table_id table.$xmin table.$xmax table.$pid table.$tid
+				SeqScan table
 	Call drop_table @table_id
 		TableFreeScan

@@ -7,8 +7,10 @@ Map $query.$col2:$aggregate.$agg1 store.store_id
 		Partition* store.store_id'
 			Aggregate store.store_id' $aggregate.$agg1:(CountStar)
 				Map store.store_id':customer.store_id, ..
-					Map* customer.store_id
-						SeqScan customer
+					Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+						Map* customer.store_id customer.$xmin customer.$xmax
+							SeqScan customer
 		Partition* store.store_id
-			Map* store.store_id
-				SeqScan store
+			Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+				Map* store.store_id store.$xmin store.$xmax
+					SeqScan store

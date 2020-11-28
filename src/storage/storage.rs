@@ -34,6 +34,10 @@ impl Storage {
         self.tables.resize_with(id as usize + 1, Heap::empty);
     }
 
+    pub fn drop_table(&mut self, id: i64) {
+        self.tables[id as usize].truncate()
+    }
+
     pub fn next_val(&self, id: i64) -> i64 {
         self.sequences[id as usize].fetch_add(1, Ordering::Relaxed)
     }

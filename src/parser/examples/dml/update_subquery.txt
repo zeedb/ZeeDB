@@ -9,8 +9,10 @@ LogicalUpdate person.first_name:$update.$expr
 				LogicalMap $expr_subquery.last_name:person.last_name'
 					LogicalSingleGet
 				LogicalFilter (Equal person.person_id 1)
-					Map* person.person_id person.first_name person.last_name'
-						LogicalGet person
+					Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
+						Map* person.person_id person.first_name person.last_name' person.$xmin person.$xmax
+							LogicalGet person
 			LogicalFilter (Equal person.person_id 1)
-				Map* person.person_id person.first_name person.last_name
-					LogicalGet person
+				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
+					Map* person.person_id person.first_name person.last_name person.$xmin person.$xmax
+						LogicalGet person

@@ -4,5 +4,6 @@ where store_id = 1
 
 LogicalMap customer.customer_id
 	LogicalFilter (Equal customer.store_id 1)
-		Map* customer.customer_id customer.store_id
-			LogicalGet customer
+		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+			Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
+				LogicalGet customer

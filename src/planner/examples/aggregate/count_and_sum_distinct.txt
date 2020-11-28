@@ -3,5 +3,6 @@ from customer
 
 Aggregate $aggregate.$agg1:(Count (Distinct $proj.$count)) $aggregate.$agg2:(Sum (Distinct $proj.$sum))
 	Map $proj.$count:customer.account_number $proj.$sum:customer.account_number
-		Map* customer.account_number
-			SeqScan customer
+		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+			Map* customer.account_number customer.$xmin customer.$xmax
+				SeqScan customer

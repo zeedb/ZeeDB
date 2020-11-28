@@ -7,8 +7,10 @@ Map $query.$col1:1
 		Partition* person.modified_date' customer.person_id
 			Map customer.person_id person.modified_date'
 				Map person.modified_date':customer.modified_date, ..
-					Map* customer.person_id customer.modified_date
-						SeqScan customer
+					Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+						Map* customer.person_id customer.modified_date customer.$xmin customer.$xmax
+							SeqScan customer
 		Partition* person.modified_date person.person_id
-			Map* person.person_id person.modified_date
-				SeqScan person
+			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
+				Map* person.person_id person.modified_date person.$xmin person.$xmax
+					SeqScan person

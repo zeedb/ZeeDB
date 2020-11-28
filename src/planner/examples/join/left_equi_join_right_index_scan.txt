@@ -7,8 +7,10 @@ Map customer.customer_id store.store_id
 	Filter (Equal store.store_id 1)
 		HashJoin Right (Equal customer.store_id store.store_id)
 			Partition* store.store_id
-				Map* store.store_id
-					SeqScan store
+				Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+					Map* store.store_id store.$xmin store.$xmax
+						SeqScan store
 			Partition* customer.store_id
-				Map* customer.customer_id customer.store_id
-					SeqScan customer
+				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+					Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
+						SeqScan customer

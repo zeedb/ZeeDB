@@ -66,35 +66,24 @@ pub fn eval(
             Function::Rand => todo!(),
             Function::Not(_) => todo!(),
             Function::UnaryMinus(_) => todo!(),
-            Function::And(_, _) => todo!(),
-            Function::Equal(left, right) => match left.data() {
-                DataType::Boolean => binary(arrow::compute::eq_utf8, left, right, input, state),
-                DataType::Int64 => {
-                    binary(arrow::compute::eq::<Int64Type>, left, right, input, state)
-                }
-                DataType::Float64 => {
-                    binary(arrow::compute::eq::<Float64Type>, left, right, input, state)
-                }
-                DataType::Date32(DateUnit::Day) => {
-                    binary(arrow::compute::eq::<Date32Type>, left, right, input, state)
-                }
-                DataType::Timestamp(TimeUnit::Microsecond, None) => binary(
-                    arrow::compute::eq::<TimestampMicrosecondType>,
-                    left,
-                    right,
-                    input,
-                    state,
-                ),
-                DataType::FixedSizeBinary(16) => todo!(),
-                DataType::Utf8 => binary(arrow::compute::eq_utf8, left, right, input, state),
-                DataType::Struct(fields) => todo!(),
-                DataType::List(element) => todo!(),
-                other => panic!("{:?} is not a supported type", other),
-            },
+            Function::And(left, right) => Ok(kernel::and(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
+            Function::Equal(left, right) => Ok(kernel::equal(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
             Function::Greater(_, _) => todo!(),
             Function::GreaterOrEqual(_, _) => todo!(),
-            Function::Less(_, _) => todo!(),
-            Function::LessOrEqual(_, _) => todo!(),
+            Function::Less(left, right) => Ok(kernel::less(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
+            Function::LessOrEqual(left, right) => Ok(kernel::less_equal(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
             Function::Like(_, _) => todo!(),
             Function::NotEqual(_, _) => todo!(),
             Function::Or(_, _) => todo!(),
@@ -112,24 +101,12 @@ pub fn eval(
                 }
                 Ok(Arc::new(output.finish()))
             }
+            Function::Xid => Ok(Arc::new(UInt64Array::from(
+                vec![state.txn].repeat(input.num_rows()),
+            ))),
         },
         Scalar::Cast(scalar, as_type) => todo!(),
     }
-}
-
-fn binary<T: 'static, U: Array + 'static>(
-    f: impl Fn(&T, &T) -> arrow::error::Result<U>,
-    left: &Scalar,
-    right: &Scalar,
-    input: &RecordBatch,
-    state: &mut State,
-) -> Result<Arc<dyn Array>, Error> {
-    let left = eval(left, input, state)?;
-    let right = eval(right, input, state)?;
-    let left = left.as_any().downcast_ref::<T>().unwrap();
-    let right = right.as_any().downcast_ref::<T>().unwrap();
-    let output = f(left, right)?;
-    Ok(Arc::new(output))
 }
 
 pub fn hash(

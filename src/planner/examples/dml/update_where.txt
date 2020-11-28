@@ -4,5 +4,6 @@ where person_id = 1
 
 Update person.first_name:$update.$expr
 	Map $update.$expr:"Foo"
-		Map* person.person_id person.first_name
-			IndexScan person(person.person_id:1)
+		Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Equal person.person_id 1)
+			Map* person.person_id person.first_name person.$xmin person.$xmax
+				SeqScan person

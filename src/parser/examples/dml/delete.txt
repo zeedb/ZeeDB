@@ -1,7 +1,8 @@
 delete customer 
 where person_id = 1
 
-LogicalDelete customer
+LogicalDelete customer.$pid customer.$tid
 	LogicalFilter (Equal customer.person_id 1)
-		Map* customer.person_id
-			LogicalGet customer
+		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+			Map* customer.person_id customer.$xmin customer.$xmax customer.$pid customer.$tid
+				LogicalGet customer

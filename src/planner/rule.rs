@@ -586,8 +586,8 @@ impl Rule {
                 }
             }
             Rule::LogicalDeleteToDelete => {
-                if let LogicalDelete { table, input } = bind {
-                    return Some(Delete { table, input });
+                if let LogicalDelete { pid, tid, input } = bind {
+                    return Some(Delete { pid, tid, input });
                 }
             }
             Rule::LogicalDropToDrop => {

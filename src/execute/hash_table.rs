@@ -24,7 +24,7 @@ impl HashTable {
         let buckets = crate::eval::hash(scalars, n_buckets, input, state)?;
         let indices = kernel::sort(&buckets);
         let tuples = kernel::gather(input, &indices);
-        let offsets = bucket_offsets(&buckets);
+        let offsets = bucket_offsets(&buckets, n_buckets);
         Ok(HashTable { offsets, tuples })
     }
 
@@ -56,9 +56,8 @@ impl HashTable {
     }
 }
 
-fn bucket_offsets(buckets: &Arc<dyn Array>) -> Vec<usize> {
+fn bucket_offsets(buckets: &Arc<dyn Array>, n_buckets: usize) -> Vec<usize> {
     let buckets = kernel::coerce::<UInt32Array>(buckets);
-    let n_buckets = arrow::compute::max(buckets).map(|n| n + 1).unwrap_or(0) as usize;
     // Compute a dense histogram of buckets in offsets[1..n_buckets+1].
     let mut offsets = Vec::with_capacity(n_buckets);
     offsets.resize_with(n_buckets + 1, usize::default);

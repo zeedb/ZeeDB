@@ -9,12 +9,14 @@ Map $query.$col1:$aggregate.$agg1
 					HashJoin Inner (Equal customer.store_id store.store_id')
 						Partition* store.store_id'
 							Aggregate store.store_id' store.name'
-								Filter* (Like store.name' "A%")
-									Map* store.store_id' store.name'
+								Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax) (Like store.name' "A%")
+									Map* store.store_id' store.name' store.$xmin store.$xmax
 										SeqScan store
 						Partition* customer.store_id
-							Map* customer.store_id customer.modified_date
-								SeqScan customer
+							Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+								Map* customer.store_id customer.modified_date customer.$xmin customer.$xmax
+									SeqScan customer
 		Partition* store.store_id store.name
-			Map* store.store_id store.name
-				SeqScan store
+			Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+				Map* store.store_id store.name store.$xmin store.$xmax
+					SeqScan store

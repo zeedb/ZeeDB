@@ -17,7 +17,7 @@ fn test_fixed_types() {
             true,
         ),
     ]));
-    let pax = Page::empty(schema.clone());
+    let page = Page::empty(schema.clone());
     let input = RecordBatch::try_new(
         schema.clone(),
         vec![
@@ -29,15 +29,15 @@ fn test_fixed_types() {
         ],
     )
     .unwrap();
-    assert_eq!(1, pax.insert(&input, 1000));
+    assert_eq!(1, page.insert(&input, 1000));
     assert_eq!(
         "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\n",
-        format!("{:?}", pax)
+        format!("{:?}", page)
     );
-    assert_eq!(1, pax.insert(&input, 2000));
+    assert_eq!(1, page.insert(&input, 2000));
     assert_eq!(
         "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,2000,18446744073709551615\n",
-        format!("{:?}", pax)
+        format!("{:?}", page)
     );
 }
 
@@ -47,7 +47,7 @@ fn test_var_types() {
         Field::new("int64", DataType::Int64, true),
         Field::new("string", DataType::Utf8, true),
     ]));
-    let pax = Page::empty(schema.clone());
+    let page = Page::empty(schema.clone());
     let input = RecordBatch::try_new(
         schema.clone(),
         vec![
@@ -56,15 +56,15 @@ fn test_var_types() {
         ],
     )
     .unwrap();
-    assert_eq!(2, pax.insert(&input, 1000));
+    assert_eq!(2, page.insert(&input, 1000));
     assert_eq!(
         "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n",
-        format!("{:?}", pax)
+        format!("{:?}", page)
     );
-    assert_eq!(2, pax.insert(&input, 2000));
+    assert_eq!(2, page.insert(&input, 2000));
     assert_eq!(
         "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n1,foo,2000,18446744073709551615\n2,bar,2000,18446744073709551615\n",
-        format!("{:?}", pax)
+        format!("{:?}", page)
     );
 }
 
@@ -74,7 +74,7 @@ fn test_insert_delete() {
         Field::new("a", DataType::Int64, true),
         Field::new("b", DataType::Int64, true),
     ]));
-    let pax = Page::empty(schema.clone());
+    let page = Page::empty(schema.clone());
     let input = RecordBatch::try_new(
         schema.clone(),
         vec![
@@ -83,11 +83,11 @@ fn test_insert_delete() {
         ],
     )
     .unwrap();
-    assert_eq!(2, pax.insert(&input, 1000));
-    assert!(pax.delete(1, 2000));
-    assert!(!pax.delete(1, 2001));
+    assert_eq!(2, page.insert(&input, 1000));
+    assert!(page.delete(1, 2000));
+    assert!(!page.delete(1, 2001));
     assert_eq!(
         "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,2000\n",
-        format!("{:?}", pax)
+        format!("{:?}", page)
     );
 }

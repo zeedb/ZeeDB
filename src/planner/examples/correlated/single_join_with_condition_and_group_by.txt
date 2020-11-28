@@ -7,9 +7,10 @@ Map $query.$col1:$aggregate.$agg1
 			Aggregate store.store_id' $aggregate.$agg1:(Max $proj.$max)
 				Map $proj.$max:customer.modified_date store.store_id'
 					Map store.store_id':customer.store_id, ..
-						Filter* (Greater customer.account_number 100)
-							Map* customer.store_id customer.account_number customer.modified_date
+						Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax) (Greater customer.account_number 100)
+							Map* customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax
 								SeqScan customer
 		Partition* store.store_id
-			Map* store.store_id
-				SeqScan store
+			Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+				Map* store.store_id store.$xmin store.$xmax
+					SeqScan store

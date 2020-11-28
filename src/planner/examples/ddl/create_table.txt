@@ -5,8 +5,8 @@ Script
 		TableFreeScan
 	Assign table_sequence_id sequence.sequence_id
 		NestedLoop Single
-			Filter* (Equal sequence.sequence_name "table")
-				Map* sequence.sequence_id sequence.sequence_name
+			Filter* (LessOrEqual sequence.$xmin (Xid)) (Less (Xid) sequence.$xmax) (Equal sequence.sequence_name "table")
+				Map* sequence.sequence_id sequence.sequence_name sequence.$xmin sequence.$xmax
 					SeqScan sequence
 			TableFreeScan
 	Assign next_table_id (NextVal @table_sequence_id)

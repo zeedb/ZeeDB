@@ -7,25 +7,29 @@ use test_fixtures::*;
 
 fn run(path: &str, script: Vec<&str>, errors: &mut Vec<String>) {
     let trim = Regex::new(r"(?m)^\s+").unwrap();
-    let mut output = None;
+    let mut output = "".to_string();
     let mut storage = Storage::new();
-    for sql in &script {
+    for (txn, sql) in script.iter().enumerate() {
         let sql = trim.replace_all(sql, "").trim().to_string();
-        let program = compile(&sql, &mut storage);
-        output = Some(program.last().unwrap().unwrap());
+        let program = compile(&sql, txn as u64, &mut storage);
+        if let Some(Ok(last)) = program.last() {
+            output = csv(last);
+        } else {
+            output = "".to_string();
+        }
     }
-    let found = format!("{}\n\n{}", script.join("\n"), csv(output.unwrap()));
+    let found = format!("{}\n\n{}", script.join("\n"), output);
     if !matches_expected(&path.to_string(), found) {
         errors.push(path.to_string());
     }
 }
 
-fn compile<'a>(sql: &String, storage: &'a mut Storage) -> Program<'a> {
+fn compile<'a>(sql: &String, txn: u64, storage: &'a mut Storage) -> Program<'a> {
     let mut parser = parser::ParseProvider::new();
-    let catalog = CatalogProvider::new().catalog(storage);
+    let catalog = CatalogProvider::new().catalog(txn, storage);
     let expr = parser.analyze(sql, &catalog).unwrap();
     let expr = planner::optimize(expr, &catalog, &mut parser);
-    execute(expr, storage)
+    execute(expr, txn, storage)
 }
 
 fn csv(record_batch: RecordBatch) -> String {
@@ -67,6 +71,27 @@ fn test_execute() {
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
+            "select * from foo;",
+        ],
+        &mut errors,
+    );
+    run(
+        "examples/delete.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "delete from foo where id = 1;",
+            "select * from foo;",
+        ],
+        &mut errors,
+    );
+    run(
+        "examples/drop_table.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "drop table foo;",
+            "create table foo (id int64);",
             "select * from foo;",
         ],
         &mut errors,

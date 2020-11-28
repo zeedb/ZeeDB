@@ -19,7 +19,7 @@ impl CatalogProvider {
         }
     }
 
-    pub fn catalog(&mut self, storage: &mut storage::Storage) -> Catalog {
+    pub fn catalog(&mut self, txn: u64, storage: &mut storage::Storage) -> Catalog {
         let mut all_catalogs: BTreeMap<(i64, i64), SimpleCatalogProto> = BTreeMap::new();
         let bootstrap_catalog = catalog::bootstrap();
         // Find all tables and the catalogs they are members of.
@@ -36,6 +36,7 @@ impl CatalogProvider {
                 &bootstrap_catalog,
                 &mut self.parser,
             ),
+            txn,
             storage,
         );
         for batch_or_err in program {
@@ -55,6 +56,7 @@ impl CatalogProvider {
                 &bootstrap_catalog,
                 &mut self.parser,
             ),
+            txn,
             storage,
         );
         for batch_or_err in program {

@@ -215,8 +215,8 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalDelete { table, input } => {
-                write!(f, "{} {}", self.name(), table.name)?;
+            Expr::LogicalDelete { pid, tid, input } => {
+                write!(f, "{} {} {}", self.name(), pid, tid)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
@@ -381,8 +381,8 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::Delete { table, input } => {
-                write!(f, "{} {}", self.name(), table)?;
+            Expr::Delete { pid, tid, input } => {
+                write!(f, "{} {} {}", self.name(), pid, tid)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }

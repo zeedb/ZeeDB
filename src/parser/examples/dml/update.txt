@@ -5,5 +5,6 @@ where person_id = 1
 LogicalUpdate person.first_name:$update.$expr
 	LogicalMap $update.$expr:"Foo"
 		LogicalFilter (Equal person.person_id 1)
-			Map* person.person_id person.first_name
-				LogicalGet person
+			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
+				Map* person.person_id person.first_name person.$xmin person.$xmax
+					LogicalGet person

@@ -1,8 +1,11 @@
 select customer.customer_id, store.store_id
 from customer, store
 
-NestedLoop Inner
-	Map* store.store_id
-		SeqScan store
-	Map* customer.customer_id
-		SeqScan customer
+Map customer.customer_id store.store_id
+	NestedLoop Inner
+		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+			Map* store.store_id store.$xmin store.$xmax
+				SeqScan store
+		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
+			Map* customer.customer_id customer.$xmin customer.$xmax
+				SeqScan customer

@@ -3,7 +3,7 @@ use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use arrow::util::bit_util::*;
-use ast::Column;
+use ast::*;
 use regex::Regex;
 use std::fmt;
 use std::mem::size_of;
@@ -13,6 +13,11 @@ use std::sync::Arc;
 
 pub const PAGE_SIZE: usize = 1024;
 const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
+
+#[derive(Clone)]
+pub struct Page {
+    inner: Arc<Inner>,
+}
 
 // Mutable pages are in PAX layout with string values stored separately.
 //
@@ -27,7 +32,7 @@ const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
 //       0     0
 //
 // Stats are stored at the end of the page.
-pub struct Page {
+struct Inner {
     schema: Arc<Schema>,
     columns: Vec<usize>,
     xmin: usize,
@@ -64,7 +69,7 @@ impl Page {
             .iter()
             .map(|field| string_buffer(field.data_type()))
             .collect();
-        Self {
+        let inner = Inner {
             schema,
             columns,
             string_buffers,
@@ -72,7 +77,20 @@ impl Page {
             xmax,
             num_rows,
             columns_buffer,
+        };
+        Self {
+            inner: Arc::new(inner),
         }
+    }
+
+    pub unsafe fn read(pid: u64) -> Self {
+        Page {
+            inner: crate::arc::read(pid as *const Inner),
+        }
+    }
+
+    fn pid(&self) -> u64 {
+        crate::arc::leak(&self.inner) as u64
     }
 
     pub fn select(&self, projects: &Vec<Column>) -> RecordBatch {
@@ -81,7 +99,7 @@ impl Page {
         let mut columns = vec![];
         let mut fields = vec![];
         for column in projects {
-            for (i, field) in self.schema.fields().iter().enumerate() {
+            for (i, field) in self.inner.schema.fields().iter().enumerate() {
                 if field.name() == &column.name {
                     let field = Field::new(
                         column.canonical_name().as_str(),
@@ -90,9 +108,9 @@ impl Page {
                     );
                     let column = head(
                         &field,
-                        self.columns[i],
-                        &self.columns_buffer,
-                        self.string_buffers[i].as_ref(),
+                        self.inner.columns[i],
+                        &self.inner.columns_buffer,
+                        self.inner.string_buffers[i].as_ref(),
                         num_rows,
                     );
                     columns.push(column);
@@ -101,12 +119,38 @@ impl Page {
             }
         }
         // Add system columns.
-        let xmin = xcolumn("$xmin");
-        columns.push(head(&xmin, self.xmin, &self.columns_buffer, None, num_rows));
-        fields.push(xmin);
-        let xmax = xcolumn("$xmax");
-        columns.push(head(&xmax, self.xmax, &self.columns_buffer, None, num_rows));
-        fields.push(xmax);
+        if let Some(xmin) = projects.iter().find(|c| c.name == "$xmin") {
+            columns.push(head(
+                &Field::new("$xmin", DataType::UInt64, false),
+                self.inner.xmin,
+                &self.inner.columns_buffer,
+                None,
+                num_rows,
+            ));
+            fields.push(xmin.into_query_field());
+        }
+        if let Some(xmax) = projects.iter().find(|c| c.name == "$xmax") {
+            columns.push(head(
+                &Field::new("$xmax", DataType::UInt64, false),
+                self.inner.xmax,
+                &self.inner.columns_buffer,
+                None,
+                num_rows,
+            ));
+            fields.push(xmax.into_query_field());
+        }
+        if let Some(pid) = projects.iter().find(|c| c.name == "$pid") {
+            columns.push(Arc::new(UInt64Array::from(
+                vec![self.pid()].repeat(num_rows),
+            )));
+            fields.push(pid.into_query_field());
+        }
+        if let Some(tid) = projects.iter().find(|c| c.name == "$tid") {
+            columns.push(Arc::new(UInt64Array::from(
+                (0u64..num_rows as u64).collect::<Vec<u64>>(),
+            )));
+            fields.push(tid.into_query_field());
+        }
         // Wrap RecordBatch in a reference that ensures the underlying buffer doesn't get destroyed.
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
     }
@@ -116,16 +160,16 @@ impl Page {
         // Write the new row in the reserved slot.
         for i in 0..records.num_columns() {
             let mut nulls_offset = None;
-            let mut columns_offset = self.columns[i];
-            if self.schema.field(i).is_nullable() {
+            let mut columns_offset = self.inner.columns[i];
+            if self.inner.schema.field(i).is_nullable() {
                 nulls_offset = Some(columns_offset);
                 columns_offset = align(columns_offset + PAGE_SIZE / 8)
             }
             extend(
                 nulls_offset,
                 columns_offset,
-                &self.columns_buffer,
-                self.string_buffers[i].as_ref(),
+                &self.inner.columns_buffer,
+                self.inner.string_buffers[i].as_ref(),
                 start,
                 end,
                 records.column(i).deref(),
@@ -172,33 +216,60 @@ impl Page {
     }
 
     fn num_rows(&self) -> &AtomicUsize {
-        self.stat::<AtomicUsize>(self.num_rows)
+        self.stat::<AtomicUsize>(self.inner.num_rows)
     }
 
     fn xmin(&self, row: usize) -> &AtomicU64 {
-        self.column::<AtomicU64>(self.xmin, row)
+        self.column::<AtomicU64>(self.inner.xmin, row)
     }
 
     fn xmax(&self, row: usize) -> &AtomicU64 {
-        self.column::<AtomicU64>(self.xmax, row)
+        self.column::<AtomicU64>(self.inner.xmax, row)
     }
 
     fn stat<T>(&self, offset: usize) -> &T {
         unsafe {
-            let ptr = self.columns_buffer.raw_data().offset(offset as isize) as *const T;
+            let ptr = self.inner.columns_buffer.raw_data().offset(offset as isize) as *const T;
             ptr.as_ref().unwrap()
         }
     }
 
     fn column<T>(&self, offset: usize, row: usize) -> &T {
         unsafe {
-            let ptr = self.columns_buffer.raw_data().offset(offset as isize) as *const T;
+            let ptr = self.inner.columns_buffer.raw_data().offset(offset as isize) as *const T;
             ptr.offset(row as isize).as_ref().unwrap()
         }
     }
 
     pub fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        let record_batch = self.select(&all_columns(self.schema.as_ref()));
+        let mut star: Vec<Column> = self
+            .inner
+            .schema
+            .fields()
+            .iter()
+            .map(|field| Column {
+                created: ast::Phase::Plan,
+                id: 0,
+                name: field.name().clone(),
+                table: None,
+                data: field.data_type().clone(),
+            })
+            .collect();
+        star.push(Column {
+            created: Phase::Plan,
+            id: 0,
+            name: "$xmin".to_string(),
+            table: None,
+            data: DataType::UInt64,
+        });
+        star.push(Column {
+            created: Phase::Plan,
+            id: 0,
+            name: "$xmax".to_string(),
+            table: None,
+            data: DataType::UInt64,
+        });
+        let record_batch = self.select(&star);
         let trim = |field: &String| {
             if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
                 captures.get(1).unwrap().as_str().to_string()
@@ -235,20 +306,6 @@ impl fmt::Debug for Page {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.print(f, 0)
     }
-}
-
-fn all_columns(schema: &Schema) -> Vec<Column> {
-    schema
-        .fields()
-        .iter()
-        .map(|field| Column {
-            created: ast::Phase::Plan,
-            id: 0,
-            name: field.name().clone(),
-            table: None,
-            data: field.data_type().clone(),
-        })
-        .collect()
 }
 
 fn string_buffer(data: &DataType) -> Option<Buffer> {

@@ -1,8 +1,5 @@
 use arrow::array::*;
-use arrow::datatypes::*;
 use arrow::error::ArrowError;
-use arrow::record_batch::*;
-use ast::Column;
 use std::sync::Arc;
 
 pub trait Kernel: Sized {
