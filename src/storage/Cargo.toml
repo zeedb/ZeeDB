@@ -9,6 +9,8 @@ path = "lib.rs"
 
 [dependencies]
 arrow = "2.0.0"
+packed_simd = { version = "0.3.4", package = "packed_simd_2" }
+rand = "0.7.3"
 regex = "1.4.2"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }

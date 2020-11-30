@@ -1,5 +1,10 @@
+#![feature(slice_strip)]
+
 mod arc;
 mod arc_tests;
+mod art;
+#[cfg(test)]
+mod art_tests;
 mod byte_key;
 #[cfg(test)]
 mod byte_key_tests;
