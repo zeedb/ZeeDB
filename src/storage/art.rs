@@ -1,5 +1,6 @@
+use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Bound, RangeBounds};
+use std::ops::{Bound, Range, RangeBounds};
 
 pub struct Art {
     root: Node,
@@ -21,24 +22,38 @@ impl Art {
         self.root.remove(key)
     }
 
-    pub fn range<'a, 'b>(&'a self, bounds: impl RangeBounds<&'b [u8]>) -> RangeIter<'a> {
-        let start = match bounds.start_bound() {
-            Bound::Included(slice) => Bound::Included(slice.to_vec()),
-            Bound::Excluded(slice) => Bound::Excluded(slice.to_vec()),
-            Bound::Unbounded => Bound::Unbounded,
-        };
-        let end = match bounds.end_bound() {
-            Bound::Included(slice) => Bound::Included(slice.to_vec()),
-            Bound::Excluded(slice) => Bound::Excluded(slice.to_vec()),
-            Bound::Unbounded => Bound::Unbounded,
-        };
-        RangeIter {
-            start,
-            end,
-            // TODO: find the smallest node that includes range.
-            ancestors: vec![],
-            unexplored: Some(&self.root),
+    pub fn range<'a, 'b>(&'a self, bounds: impl RangeBounds<&'b [u8]>) -> Vec<Value> {
+        fn inc(key: &[u8]) -> Vec<u8> {
+            if key.is_empty() {
+                vec![0]
+            } else if key.last().unwrap() == &u8::MAX {
+                let mut key = key.to_vec();
+                key.push(0);
+                key
+            } else {
+                let mut key = key.to_vec();
+                *key.last_mut().unwrap() += 1;
+                key
+            }
         }
+        let start_inclusive = match bounds.start_bound() {
+            Bound::Included(key) => key.to_vec(),
+            Bound::Excluded(key) => inc(*key),
+            Bound::Unbounded => vec![],
+        };
+        let (end_exclusive, is_bound) = match bounds.end_bound() {
+            Bound::Included(key) => (inc(*key), true),
+            Bound::Excluded(key) => (key.to_vec(), true),
+            Bound::Unbounded => (vec![], false),
+        };
+        let end_exclusive = if is_bound {
+            Some(end_exclusive.as_slice())
+        } else {
+            None
+        };
+        let mut acc = vec![];
+        self.root.range(LowerBound(&start_inclusive), UpperBound(end_exclusive), &mut acc);
+        acc
     }
 }
 
@@ -62,7 +77,7 @@ struct Leaf {
 struct Node4 {
     key: Vec<u8>,
     value: Option<Value>,
-    count: u32,
+    count: usize,
     digit: [u8; 4],
     child: [Node; 4],
 }
@@ -71,7 +86,7 @@ struct Node4 {
 struct Node16 {
     key: Vec<u8>,
     value: Option<Value>,
-    count: u32,
+    count: usize,
     digit: [u8; 16],
     child: [Node; 16],
 }
@@ -80,7 +95,7 @@ struct Node16 {
 struct Node48 {
     key: Vec<u8>,
     value: Option<Value>,
-    count: u32,
+    count: usize,
     /// Initially EMPTY.
     child_index: [u8; 256],
     child: [Node; 48],
@@ -90,7 +105,7 @@ struct Node48 {
 struct Node256 {
     key: Vec<u8>,
     value: Option<Value>,
-    count: u32,
+    count: usize,
     child: [Node; 256],
 }
 
@@ -120,7 +135,7 @@ impl Node {
                 if key.is_empty() {
                     return node.value;
                 }
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     if node.digit[i] == key[0] {
                         return node.child[i].get(&key[1..]);
                     }
@@ -134,7 +149,10 @@ impl Node {
                 }
                 let byte = packed_simd::u8x16::splat(key[0]);
                 let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
-                let mask = 1u16.checked_shl(node.count).unwrap_or(0).wrapping_sub(1);
+                let mask = 1u16
+                    .checked_shl(node.count as u32)
+                    .unwrap_or(0)
+                    .wrapping_sub(1);
                 let bitfield = cmp.bitmask() & mask;
                 if bitfield != 0 {
                     return node.child[bitfield.trailing_zeros() as usize].get(&key[1..]);
@@ -174,7 +192,7 @@ impl Node {
                 if key.is_empty() {
                     return self.take();
                 }
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     if node.digit[i] == key[0] {
                         return node.child[i].remove(&key[1..]);
                     }
@@ -188,7 +206,10 @@ impl Node {
                 }
                 let byte = packed_simd::u8x16::splat(key[0]);
                 let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
-                let mask = 1u16.checked_shl(node.count).unwrap_or(0).wrapping_sub(1);
+                let mask = 1u16
+                    .checked_shl(node.count as u32)
+                    .unwrap_or(0)
+                    .wrapping_sub(1);
                 let bitfield = cmp.bitmask() & mask;
                 if bitfield != 0 {
                     return node.child[bitfield.trailing_zeros() as usize].remove(&key[1..]);
@@ -214,6 +235,111 @@ impl Node {
         // TODO restore path compression.
     }
 
+    fn range(
+        &self,
+        start_inclusive: LowerBound,
+        end_exclusive: UpperBound,
+        acc: &mut Vec<Value>,
+    ) -> Option<()> {
+        match self {
+            Node::Null => Some(()),
+            Node::Leaf(node) => {
+                if start_inclusive.le(&node.key) && end_exclusive.gt(&node.key) {
+                    acc.push(node.value);
+                }
+                Some(())
+            }
+            Node::Node4(node) => {
+                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                if start_inclusive.is_empty() {
+                    if let Some(value) = node.value {
+                        acc.push(value);
+                    }
+                }
+                for i in 0..node.count {
+                    let digit = &node.digit[i..=i];
+                    if let Some(start_inclusive) = start_inclusive.drop_prefix(digit) {
+                        if let Some(end_exclusive) = end_exclusive.drop_prefix(digit) {
+                            node.child[i].range(
+                                start_inclusive,
+                                end_exclusive,
+                                acc,
+                            );
+                        }
+                    }
+                }
+                Some(())
+            }
+            Node::Node16(node) => {
+                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                if start_inclusive.is_empty() {
+                    if let Some(value) = node.value {
+                        acc.push(value);
+                    }
+                }
+                for i in 0..node.count {
+                    let digit = &node.digit[i..=i];
+                    if let Some(start_inclusive) = start_inclusive.drop_prefix(digit) {
+                        if let Some(end_exclusive) = end_exclusive.drop_prefix(digit) {
+                            node.child[i].range(
+                                start_inclusive,
+                                end_exclusive,
+                                acc,
+                            );
+                        }
+                    }
+                }
+                Some(())
+            }
+            Node::Node48(node) => {
+                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                if start_inclusive.is_empty() {
+                    if let Some(value) = node.value {
+                        acc.push(value);
+                    }
+                }
+                for digit in 0..node.child_index.len() {
+                    if node.child_index[digit] != EMPTY {
+                        if let Some(start_inclusive) = start_inclusive.drop_prefix(&[digit as u8]) {
+                            if let Some(end_exclusive) = end_exclusive.drop_prefix(&[digit as u8]) {
+                                node.child[node.child_index[digit as usize] as usize].range(
+                                    start_inclusive,
+                                    end_exclusive,
+                                    acc,
+                                );
+                            }
+                        }
+                    }
+                }
+                Some(())
+            }
+            Node::Node256(node) => {
+                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                if start_inclusive.is_empty() {
+                    if let Some(value) = node.value {
+                        acc.push(value);
+                    }
+                }
+                for digit in 0..node.child.len() {
+                    if let Some(start_inclusive) = start_inclusive.drop_prefix(&[digit as u8]) {
+                        if let Some(end_exclusive) = end_exclusive.drop_prefix(&[digit as u8]) {
+                            node.child[digit as usize].range(
+                                start_inclusive,
+                                end_exclusive,
+                                acc,
+                            );
+                        }
+                    }
+                }
+                Some(())
+            }
+        }
+    }
+
     fn insert(&mut self, key: &[u8], value: Value) -> Option<Value> {
         if let Some(key) = key.strip_prefix(self.key()) {
             if key.is_empty() {
@@ -224,74 +350,6 @@ impl Node {
         } else {
             self.pivot(find_pivot(key, self.key()));
             self.insert(key, value)
-        }
-    }
-
-    fn first_child(&self) -> Option<&Node> {
-        match self {
-            Node::Null | Node::Leaf(_) => None,
-            Node::Node4(node) => {
-                if 0 < node.count {
-                    Some(&node.child[0])
-                } else {
-                    None
-                }
-            }
-            Node::Node16(node) => {
-                if 0 < node.count {
-                    Some(&node.child[0])
-                } else {
-                    None
-                }
-            }
-            Node::Node48(node) => {
-                if 0 < node.count {
-                    Some(&node.child[0])
-                } else {
-                    None
-                }
-            }
-            Node::Node256(node) => {
-                if 0 < node.count {
-                    Some(&node.child[0])
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    fn next_child(&self, child: u32) -> Option<&Node> {
-        match self {
-            Node::Null | Node::Leaf(_) => None,
-            Node::Node4(node) => {
-                if child + 1 < node.count {
-                    Some(&node.child[child as usize + 1])
-                } else {
-                    None
-                }
-            }
-            Node::Node16(node) => {
-                if child + 1 < node.count {
-                    Some(&node.child[child as usize + 1])
-                } else {
-                    None
-                }
-            }
-            Node::Node48(node) => {
-                if child + 1 < node.count {
-                    Some(&node.child[child as usize + 1])
-                } else {
-                    None
-                }
-            }
-            Node::Node256(node) => {
-                if child + 1 < node.count {
-                    Some(&node.child[child as usize + 1])
-                } else {
-                    None
-                }
-            }
         }
     }
 
@@ -337,17 +395,6 @@ impl Node {
         }
     }
 
-    fn peek(&self) -> Option<Value> {
-        match self {
-            Node::Null => None,
-            Node::Leaf(node) => Some(node.value),
-            Node::Node4(node) => node.value,
-            Node::Node16(node) => node.value,
-            Node::Node48(node) => node.value,
-            Node::Node256(node) => node.value,
-        }
-    }
-
     fn set(&mut self, digit: u8, key: &[u8], value: Value) -> Option<Value> {
         match self {
             Node::Null => {
@@ -363,15 +410,15 @@ impl Node {
             }
             Node::Node4(node) => {
                 // If digit is already present, recurse.
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     if node.digit[i] == digit {
                         return node.child[i].insert(key, value);
                     }
                 }
                 // If space is available, add digit.
                 if node.count < 4 {
-                    node.digit[node.count as usize] = digit;
-                    node.child[node.count as usize] = Node::Leaf(Box::new(Leaf {
+                    node.digit[node.count] = digit;
+                    node.child[node.count] = Node::Leaf(Box::new(Leaf {
                         key: key.to_vec(),
                         value,
                     }));
@@ -386,15 +433,18 @@ impl Node {
                 // If digit is already present, recurse.
                 let byte = packed_simd::u8x16::splat(digit);
                 let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
-                let mask = 1u16.checked_shl(node.count).unwrap_or(0).wrapping_sub(1);
+                let mask = 1u16
+                    .checked_shl(node.count as u32)
+                    .unwrap_or(0)
+                    .wrapping_sub(1);
                 let bitfield = cmp.bitmask() & mask;
                 if bitfield != 0 {
                     return node.child[bitfield.trailing_zeros() as usize].insert(key, value);
                 }
                 // If space is available, add digit.
                 if node.count < 16 {
-                    node.digit[node.count as usize] = digit;
-                    node.child[node.count as usize] = Node::Leaf(Box::new(Leaf {
+                    node.digit[node.count] = digit;
+                    node.child[node.count] = Node::Leaf(Box::new(Leaf {
                         key: key.to_vec(),
                         value,
                     }));
@@ -414,7 +464,7 @@ impl Node {
                 // If space is available, add digit.
                 if node.count < 48 {
                     node.child_index[digit as usize] = node.count as u8;
-                    node.child[node.count as usize] = Node::Leaf(Box::new(Leaf {
+                    node.child[node.count] = Node::Leaf(Box::new(Leaf {
                         key: key.to_vec(),
                         value,
                     }));
@@ -442,7 +492,7 @@ impl Node {
             Node::Node4(mut node) => {
                 let mut digit: [u8; 16] = Default::default();
                 let mut child: [Node; 16] = Default::default();
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     digit[i] = node.digit[i];
                     child[i] = std::mem::take(&mut node.child[i]);
                 }
@@ -457,7 +507,7 @@ impl Node {
             Node::Node16(mut node) => {
                 let mut child_index = [EMPTY; 256];
                 let mut child = nulls_48();
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     child_index[node.digit[i] as usize] = i as u8;
                     child[i] = std::mem::take(&mut node.child[i]);
                 }
@@ -533,7 +583,7 @@ impl Node {
                     indent,
                     format!("{}Node4 {:?} {:?}", prefix, node.key, node.value),
                 );
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     node.child[i].print(f, format!("{:>3} -> ", node.digit[i]), indent + 1)?;
                 }
                 Ok(())
@@ -543,7 +593,7 @@ impl Node {
                     indent,
                     format!("{}Node16 {:?} {:?}", prefix, node.key, node.value),
                 );
-                for i in 0..node.count as usize {
+                for i in 0..node.count {
                     node.child[i].print(f, format!("{:>3} -> ", node.digit[i]), indent + 1)?;
                 }
                 Ok(())
@@ -569,7 +619,7 @@ impl Node {
                     indent,
                     format!("{}Node256 {:?} {:?}", prefix, node.key, node.value),
                 );
-                for i in 0..node.count as usize {
+                for i in 0..node.child.len() {
                     node.child[i].print(f, format!("{:>3} -> ", i), indent + 1)?;
                 }
                 Ok(())
@@ -578,64 +628,74 @@ impl Node {
     }
 }
 
-pub struct RangeIter<'a> {
-    // TODO use start and end to filter results.
-    start: Bound<Vec<u8>>,
-    end: Bound<Vec<u8>>,
-    ancestors: Vec<(&'a Node, u32)>,
-    unexplored: Option<&'a Node>,
+struct LowerBound<'a>(&'a [u8]);
+struct UpperBound<'a>(Option<&'a [u8]>);
+
+impl<'a> LowerBound<'a> {
+    fn drop_prefix(&self, prefix: &[u8]) -> Option<Self> {
+        match self.head(prefix.len()).cmp(prefix) {
+            Ordering::Less => Some(LowerBound(&[])),
+            Ordering::Equal => Some(self.tail(prefix.len())),
+            Ordering::Greater => None,
+        }
+    }
+
+    fn cmp(&self, key: &[u8]) -> Ordering {
+        self.0.cmp(key)
+    }
+
+    fn le(&self, key: &[u8]) -> bool {
+        self.0 <= key
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn head(&self, n: usize) -> Self {
+        LowerBound(head(self.0, n))
+    }
+
+    fn tail(&self, n: usize) -> Self {
+        LowerBound(tail(self.0, n))
+    }
 }
 
-impl fmt::Debug for RangeIter<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        for (node, child) in &self.ancestors {
-            write!(f, "{:?} =={}==> ", node.key(), child)?;
-        }
-        if let Some(unexplored) = self.unexplored {
-            write!(f, "{:?} ...", unexplored.key())
+impl<'a> UpperBound<'a> {
+    fn drop_prefix(&self, prefix: &[u8]) -> Option<Self> {
+        if let UpperBound(Some(greater)) = self {
+            match head(greater, prefix.len()).cmp(prefix) {
+                Ordering::Greater => Some(UpperBound(None)),
+                Ordering::Equal => Some(UpperBound(Some(tail(greater, prefix.len())))),
+                Ordering::Less => None,
+            }
         } else {
-            write!(f, "*")
+            Some(UpperBound(None))
+        }
+    }
+
+    fn gt(&self, key: &[u8]) -> bool {
+        if let UpperBound(Some(greater)) = self {
+            *greater > key
+        } else {
+            true
         }
     }
 }
 
-impl<'a> Iterator for RangeIter<'a> {
-    type Item = Value;
+fn head(slice: &[u8], n: usize) -> &[u8] {
+    if n < slice.len() {
+        &slice[..n]
+    } else {
+        slice
+    }
+}
 
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            // If cursor points to an unexplored node, try to traverse down it.
-            if let Some(cursor) = std::mem::take(&mut self.unexplored) {
-                if let Some(next) = cursor.first_child() {
-                    // Update the iterator to point to the first child.
-                    self.ancestors.push((cursor, 0));
-                    self.unexplored = Some(next);
-                }
-                // Return the value of the node we just explored.
-                if let Some(value) = cursor.peek() {
-                    return Some(value);
-                } else {
-                    continue;
-                }
-            }
-            // Try to move to the next sibling.
-            if let Some((parent, child)) = self.ancestors.last_mut() {
-                if let Some(next) = parent.next_child(*child) {
-                    // Update the iterator to point to the next sibline.
-                    *child = *child + 1;
-                    self.unexplored = Some(next);
-                    // In the next iteration, we will enter the "explore child" branch.
-                    continue;
-                }
-            }
-            // Try to move upwards so that we can move to the uncle of the cursor in the next iteration.
-            if let Some(_) = self.ancestors.pop() {
-                // In the next iteration, we will enter the "try to move sideways" branch.
-                continue;
-            }
-            // Give up.
-            return None;
-        }
+fn tail(slice: &[u8], n: usize) -> &[u8] {
+    if n < slice.len() {
+        &slice[n..]
+    } else {
+        &[]
     }
 }
 

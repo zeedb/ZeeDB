@@ -337,7 +337,7 @@ fn full_range() {
      *  ()->2 (aa$)->3 (a$)->4 ()->5 (aa$)->6
      *
      */
-    let found: Vec<Value> = m.range(..).collect();
+    let found: Vec<Value> = m.range(..);
     let expected = vec![int0, int1, int2, int3, int4, int5, int6];
     assert_eq!(expected, found);
 }
@@ -356,11 +356,10 @@ fn count_full_range() {
             },
         );
     }
-    assert_eq!(n, m.range(..).count());
+    assert_eq!(n, m.range(..).len());
 }
 
 #[test]
-#[ignore]
 fn partial_range() {
     println!("controlled test");
     {
@@ -396,7 +395,7 @@ fn partial_range() {
          *  ()->2 (aa$)->3 (a$)->4 ()->5 (aa$)->6
          *
          */
-        let found: Vec<Value> = m.range(..).collect();
+        let found: Vec<Value> = m.range("aaaaaaaaaa".as_bytes().."aaaabaaaaa".as_bytes());
         let expected = vec![int3, int4, int5];
         assert_eq!(expected, found);
     }
@@ -424,9 +423,7 @@ fn partial_range() {
             while end < start {
                 end = rng.gen::<u32>() as usize % N;
             }
-            let actual_n = m
-                .range(keys[start].as_slice()..keys[end].as_slice())
-                .count();
+            let actual_n = m.range(keys[start].as_slice()..keys[end].as_slice()).len();
             assert_eq!(end - start, actual_n);
         }
     }
