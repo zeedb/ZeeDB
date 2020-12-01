@@ -2,7 +2,7 @@ use crate::execute;
 use arrow::array::*;
 use arrow::record_batch::*;
 use ast::data_type;
-use catalog::Catalog;
+use catalog::{Catalog, Index};
 use parser::ParseProvider;
 use planner::optimize;
 use std::collections::{BTreeMap, HashMap};
@@ -72,13 +72,65 @@ impl CatalogProvider {
             .unwrap_or(catalog::empty());
         catalog_tree(catalog::ROOT_CATALOG_ID, &mut root, &mut all_catalogs);
         assert!(all_catalogs.is_empty());
-
+        // Find indexes.
+        let q = "
+            select index_id, table_id, column_name
+            from index
+            join index_column using (index_id)
+            join column using (table_id, column_id)
+            order by index_id, index_order"
+            .to_string();
+        let expr = optimize(
+            self.parser.analyze(&q, &bootstrap_catalog).unwrap(),
+            &bootstrap_catalog,
+            &mut self.parser,
+        );
+        let program = execute(expr, txn, storage);
+        let mut indexes = HashMap::new();
+        for batch_or_err in program {
+            let batch = batch_or_err.unwrap();
+            for index in read_indexes(&batch) {
+                if !indexes.contains_key(&index.table_id) {
+                    indexes.insert(index.table_id, vec![]);
+                }
+                indexes.get_mut(&index.table_id).unwrap().push(index);
+            }
+        }
         Catalog {
             catalog_id: catalog::ROOT_CATALOG_ID,
             catalog: root,
-            indexes: HashMap::new(),
+            indexes,
         }
     }
+}
+
+fn read_indexes(batch: &RecordBatch) -> Vec<Index> {
+    let mut offset = 0;
+    let mut indexes = vec![];
+    while offset < batch.num_rows() {
+        indexes.push(read_index(batch, &mut offset));
+    }
+    indexes
+}
+
+fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
+    let index_id_column = kernel::coerce::<Int64Array>(batch.column(0));
+    let index_id = index_id_column.value(*offset);
+    let table_id = kernel::coerce::<Int64Array>(batch.column(1)).value(0);
+    let column_name_column = kernel::coerce::<StringArray>(batch.column(2));
+
+    let mut index = Index {
+        index_id,
+        table_id,
+        columns: vec![],
+    };
+    while *offset < batch.num_rows() && index_id == index_id_column.value(*offset) {
+        let column_name = column_name_column.value(*offset).to_string();
+        index.columns.push(column_name);
+        *offset += 1;
+    }
+
+    index
 }
 
 fn read_catalogs(batch: &RecordBatch) -> Vec<(i64, i64, SimpleCatalogProto)> {

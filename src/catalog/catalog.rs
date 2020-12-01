@@ -5,8 +5,10 @@ use zetasql::*;
 
 pub struct Catalog {
     pub catalog_id: i64,
+    /// Catalog in ZetaSQL format.
     pub catalog: SimpleCatalogProto,
-    pub indexes: HashMap<i64, Index>,
+    /// Indexes, organized by table id.
+    pub indexes: HashMap<i64, Vec<Index>>,
 }
 
 pub struct Index {

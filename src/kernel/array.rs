@@ -3,6 +3,7 @@ use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use arrow::record_batch::*;
 use ast::Column;
+use std::ops::BitOr;
 use std::sync::Arc;
 
 impl crate::Kernel for Arc<dyn Array> {
@@ -252,7 +253,21 @@ fn fnv(bytes: &[u8]) -> u64 {
 }
 
 pub fn bit_or(left: &Arc<dyn Array>, right: &Arc<dyn Array>) -> Arc<dyn Array> {
-    todo!()
+    let mut builder = ArrayData::builder(left.data_type().clone());
+    let left_data = left.data();
+    let right_data = right.data();
+    let left_buffer = left_data.buffers().first().unwrap();
+    let right_buffer = right_data.buffers().first().unwrap();
+    let buffer = (left_buffer | right_buffer).unwrap();
+    builder = builder.add_buffer(buffer);
+    let left_nulls = left_data.null_buffer();
+    let right_nulls = right_data.null_buffer();
+    match (left_nulls, right_nulls) {
+        (Some(left), Some(right)) => builder = builder.null_bit_buffer((left | right).unwrap()),
+        (Some(bits), _) | (_, Some(bits)) => builder = builder.null_bit_buffer(bits.clone()),
+        (None, None) => {}
+    };
+    make_array(builder.build())
 }
 
 pub fn find(input: &RecordBatch, column: &Column) -> Arc<dyn Array> {
