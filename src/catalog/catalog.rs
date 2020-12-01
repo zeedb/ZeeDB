@@ -6,7 +6,7 @@ use zetasql::*;
 pub struct Catalog {
     pub catalog_id: i64,
     pub catalog: SimpleCatalogProto,
-    pub indices: HashMap<i64, Index>,
+    pub indexes: HashMap<i64, Index>,
 }
 
 pub struct Index {
@@ -20,7 +20,7 @@ impl Catalog {
         Self {
             catalog_id,
             catalog: empty(),
-            indices: HashMap::new(),
+            indexes: HashMap::new(),
         }
     }
 
@@ -40,7 +40,7 @@ impl Catalog {
         table: &Table,
     ) -> Option<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
         // TODO
-        let indices = vec![
+        let indexes = vec![
             ("customer", "customer_id"),
             ("customer", "person_id"),
             ("customer", "store_id"),
@@ -52,7 +52,7 @@ impl Catalog {
                 match function.as_ref() {
                     Function::Equal(Scalar::Column(column), lookup)
                     | Function::Equal(lookup, Scalar::Column(column))
-                        if indices.contains(&(column.name.as_str(), table.name.as_str())) =>
+                        if indexes.contains(&(column.name.as_str(), table.name.as_str())) =>
                     {
                         let mut remaining_predicates = predicates.clone();
                         remaining_predicates.remove(i);

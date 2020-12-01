@@ -76,7 +76,7 @@ impl CatalogProvider {
         Catalog {
             catalog_id: catalog::ROOT_CATALOG_ID,
             catalog: root,
-            indices: HashMap::new(),
+            indexes: HashMap::new(),
         }
     }
 }

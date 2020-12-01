@@ -19,8 +19,8 @@ impl crate::Kernel for Arc<dyn Array> {
     }
 
     fn scatter(any: &Self, uint32: &Arc<dyn Array>) -> Self {
-        let indices = coerce::<UInt32Array>(uint32);
-        crate::scatter::scatter(any, indices)
+        let indexes = coerce::<UInt32Array>(uint32);
+        crate::scatter::scatter(any, indexes)
     }
 
     fn repeat(any: &Self, len: usize) -> Self {

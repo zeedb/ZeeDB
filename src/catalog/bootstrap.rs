@@ -16,7 +16,7 @@ pub fn bootstrap() -> Catalog {
     Catalog {
         catalog_id: ROOT_CATALOG_ID,
         catalog: bootstrap_zetasql(),
-        indices: HashMap::new(),
+        indexes: HashMap::new(),
     }
 }
 

@@ -80,7 +80,7 @@ impl crate::Kernel for RecordBatch {
                 options: None,
             })
             .collect();
-        let indices = arrow::compute::lexsort_to_indices(&sort_columns[..]).unwrap();
-        Arc::new(indices)
+        let indexes = arrow::compute::lexsort_to_indices(&sort_columns[..]).unwrap();
+        Arc::new(indexes)
     }
 }

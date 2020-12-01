@@ -6,31 +6,31 @@ use num::Zero;
 use std::ops::AddAssign;
 use std::sync::Arc;
 
-pub fn scatter(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Array> {
-    assert!(values.len() == indices.len());
+pub fn scatter(values: &Arc<dyn Array>, indexes: &UInt32Array) -> Arc<dyn Array> {
+    assert!(values.len() == indexes.len());
 
     match values.data_type() {
-        DataType::Boolean => scatter_boolean(values, indices),
-        DataType::Int64 => scatter_primitive::<Int64Type>(values, indices),
-        DataType::UInt64 => scatter_primitive::<UInt64Type>(values, indices),
-        DataType::Float64 => scatter_primitive::<Float64Type>(values, indices),
-        DataType::Date32(_) => scatter_primitive::<Date32Type>(values, indices),
+        DataType::Boolean => scatter_boolean(values, indexes),
+        DataType::Int64 => scatter_primitive::<Int64Type>(values, indexes),
+        DataType::UInt64 => scatter_primitive::<UInt64Type>(values, indexes),
+        DataType::Float64 => scatter_primitive::<Float64Type>(values, indexes),
+        DataType::Date32(_) => scatter_primitive::<Date32Type>(values, indexes),
         DataType::Timestamp(Microsecond, _) => {
-            scatter_primitive::<TimestampMicrosecondType>(values, indices)
+            scatter_primitive::<TimestampMicrosecondType>(values, indexes)
         }
         DataType::FixedSizeBinary(16) => todo!(),
-        DataType::Utf8 => scatter_string::<i32>(values, indices),
+        DataType::Utf8 => scatter_string::<i32>(values, indexes),
         DataType::Struct(fields) => todo!(),
         DataType::List(element) => todo!(),
         other => panic!("{:?} not supported", other),
     }
 }
 
-fn scatter_primitive<T>(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Array>
+fn scatter_primitive<T>(values: &Arc<dyn Array>, indexes: &UInt32Array) -> Arc<dyn Array>
 where
     T: ArrowPrimitiveType,
 {
-    let data_len = arrow::compute::max(indices).map(|n| n + 1).unwrap_or(0) as usize;
+    let data_len = arrow::compute::max(indexes).map(|n| n + 1).unwrap_or(0) as usize;
 
     let array = values.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
 
@@ -42,8 +42,8 @@ where
     let mut new_values: Vec<T::Native> = Vec::with_capacity(data_len);
     new_values.resize_with(data_len, T::Native::default);
 
-    for src in 0..indices.len() {
-        let dst = indices.value(src) as usize;
+    for src in 0..indexes.len() {
+        let dst = indexes.value(src) as usize;
         if array.is_null(src) {
             unset_bit(null_slice, dst);
         }
@@ -54,7 +54,7 @@ where
 
     let data = ArrayData::new(
         T::get_data_type(),
-        indices.len(),
+        indexes.len(),
         None,
         Some(nulls),
         0,
@@ -64,8 +64,8 @@ where
     Arc::new(PrimitiveArray::<T>::from(Arc::new(data)))
 }
 
-fn scatter_boolean(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Array> {
-    let data_len = arrow::compute::max(indices).map(|n| n + 1).unwrap_or(0) as usize;
+fn scatter_boolean(values: &Arc<dyn Array>, indexes: &UInt32Array) -> Arc<dyn Array> {
+    let data_len = arrow::compute::max(indexes).map(|n| n + 1).unwrap_or(0) as usize;
 
     let array = values.as_any().downcast_ref::<BooleanArray>().unwrap();
 
@@ -76,8 +76,8 @@ fn scatter_boolean(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Ar
     let null_slice = null_buf.data_mut();
     let val_slice = val_buf.data_mut();
 
-    for src in 0..indices.len() {
-        let dst = indices.value(src) as usize;
+    for src in 0..indexes.len() {
+        let dst = indexes.value(src) as usize;
         if array.is_null(src) {
             unset_bit(null_slice, dst);
         } else if array.value(src) {
@@ -89,7 +89,7 @@ fn scatter_boolean(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Ar
 
     let data = ArrayData::new(
         DataType::Boolean,
-        indices.len(),
+        indexes.len(),
         None,
         Some(nulls),
         0,
@@ -99,11 +99,11 @@ fn scatter_boolean(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Ar
     Arc::new(BooleanArray::from(Arc::new(data)))
 }
 
-fn scatter_string<OffsetSize>(values: &Arc<dyn Array>, indices: &UInt32Array) -> Arc<dyn Array>
+fn scatter_string<OffsetSize>(values: &Arc<dyn Array>, indexes: &UInt32Array) -> Arc<dyn Array>
 where
     OffsetSize: Zero + AddAssign + StringOffsetSizeTrait,
 {
-    let data_len = arrow::compute::max(indices).map(|n| n + 1).unwrap_or(0) as usize;
+    let data_len = arrow::compute::max(indexes).map(|n| n + 1).unwrap_or(0) as usize;
 
     let array: &GenericStringArray<OffsetSize> = values
         .as_any()
@@ -119,8 +119,8 @@ where
     let mut length_so_far = OffsetSize::zero();
 
     offsets.push(length_so_far);
-    for src in 0..indices.len() {
-        let dst = indices.value(src) as usize;
+    for src in 0..indexes.len() {
+        let dst = indexes.value(src) as usize;
         if array.is_valid(src) {
             let s = array.value(src);
 

@@ -22,8 +22,8 @@ impl HashTable {
         let n_rows = input.num_rows();
         let n_buckets = size_hash_table(n_rows);
         let buckets = crate::eval::hash(scalars, n_buckets, input, state)?;
-        let indices = kernel::sort(&buckets);
-        let tuples = kernel::gather(input, &indices);
+        let indexes = kernel::sort(&buckets);
+        let tuples = kernel::gather(input, &indexes);
         let offsets = bucket_offsets(&buckets, n_buckets);
         Ok(HashTable { offsets, tuples })
     }
