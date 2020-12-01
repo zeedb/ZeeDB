@@ -8,7 +8,7 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-arrow = "2.0.0"
+arrow = { version = "2.0.0", features = ["simd"] }
 num-traits = "0.2.14"
 regex = "1"
 ast = { path = "../ast" }
