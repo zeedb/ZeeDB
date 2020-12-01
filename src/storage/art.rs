@@ -27,7 +27,7 @@ impl Art {
         self.root.remove(key)
     }
 
-    pub fn range<'a, 'b>(&'a self, bounds: impl RangeBounds<&'b [u8]>) -> Vec<Value> {
+    pub fn range<'a>(&self, bounds: impl RangeBounds<&'a [u8]>) -> Vec<Value> {
         fn inc(key: &[u8]) -> Vec<u8> {
             if key.is_empty() {
                 vec![0]
@@ -57,7 +57,11 @@ impl Art {
             None
         };
         let mut acc = vec![];
-        self.root.range(LowerBound(&start_inclusive), UpperBound(end_exclusive), &mut acc);
+        self.root.range(
+            LowerBound(&start_inclusive),
+            UpperBound(end_exclusive),
+            &mut acc,
+        );
         acc
     }
 }
@@ -266,11 +270,7 @@ impl Node {
                     let digit = &node.digit[i..=i];
                     if let Some(start_inclusive) = start_inclusive.drop_prefix(digit) {
                         if let Some(end_exclusive) = end_exclusive.drop_prefix(digit) {
-                            node.child[i].range(
-                                start_inclusive,
-                                end_exclusive,
-                                acc,
-                            );
+                            node.child[i].range(start_inclusive, end_exclusive, acc);
                         }
                     }
                 }
@@ -288,11 +288,7 @@ impl Node {
                     let digit = &node.digit[i..=i];
                     if let Some(start_inclusive) = start_inclusive.drop_prefix(digit) {
                         if let Some(end_exclusive) = end_exclusive.drop_prefix(digit) {
-                            node.child[i].range(
-                                start_inclusive,
-                                end_exclusive,
-                                acc,
-                            );
+                            node.child[i].range(start_inclusive, end_exclusive, acc);
                         }
                     }
                 }
@@ -332,11 +328,7 @@ impl Node {
                 for digit in 0..node.child.len() {
                     if let Some(start_inclusive) = start_inclusive.drop_prefix(&[digit as u8]) {
                         if let Some(end_exclusive) = end_exclusive.drop_prefix(&[digit as u8]) {
-                            node.child[digit as usize].range(
-                                start_inclusive,
-                                end_exclusive,
-                                acc,
-                            );
+                            node.child[digit as usize].range(start_inclusive, end_exclusive, acc);
                         }
                     }
                 }
@@ -725,31 +717,31 @@ impl fmt::Display for Art {
 #[rustfmt::skip]
 fn nulls_48() -> [Node; 48] {
     [
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
     ]
 }
 
 #[rustfmt::skip]
 fn nulls_256() -> [Node; 256] {
     [
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
-        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, 
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
+        Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null, Node::Null,
     ]
 }
 
