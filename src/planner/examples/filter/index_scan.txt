@@ -2,6 +2,6 @@ select customer_id
 from customer
 where store_id = 1
 
-Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax) (Equal customer.store_id 1)
+Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
 	Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
-		SeqScan customer
+		IndexScan customer(customer.store_id:1)

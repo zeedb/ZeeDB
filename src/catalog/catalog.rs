@@ -40,34 +40,42 @@ impl Catalog {
         &self,
         predicates: &Vec<Scalar>,
         table: &Table,
-    ) -> Option<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
-        // TODO
-        let indexes = vec![
-            ("customer", "customer_id"),
-            ("customer", "person_id"),
-            ("customer", "store_id"),
-            ("person", "person_id"),
-            ("store", "store_id"),
-        ];
-        for i in 0..predicates.len() {
-            if let Scalar::Call(function) = &predicates[i] {
-                match function.as_ref() {
-                    Function::Equal(Scalar::Column(column), lookup)
-                    | Function::Equal(lookup, Scalar::Column(column))
-                        if indexes.contains(&(column.name.as_str(), table.name.as_str())) =>
-                    {
-                        let mut remaining_predicates = predicates.clone();
-                        remaining_predicates.remove(i);
-                        return Some((
-                            vec![(column.clone(), lookup.clone())],
-                            remaining_predicates,
-                        ));
-                    }
-                    _ => {}
+    ) -> Vec<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
+        self.indexes
+            .get(&table.id)
+            .unwrap_or(&vec![])
+            .iter()
+            .flat_map(|index| index.check(predicates))
+            .collect()
+    }
+}
+
+impl Index {
+    fn check(&self, predicates: &Vec<Scalar>) -> Option<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
+        let mut index_predicates = vec![];
+        let mut remaining_predicates = vec![];
+        for column_name in &self.columns {
+            for predicate in predicates {
+                match predicate {
+                    Scalar::Call(function) => match function.as_ref() {
+                        Function::Equal(Scalar::Column(column), lookup)
+                        | Function::Equal(lookup, Scalar::Column(column))
+                            if column_name == &column.name =>
+                        {
+                            // TODO need to check if table matches!!
+                            index_predicates.push((column.clone(), lookup.clone()));
+                        }
+                        _ => remaining_predicates.push(predicate.clone()),
+                    },
+                    _ => remaining_predicates.push(predicate.clone()),
                 }
             }
         }
-        None
+        if self.columns.len() == index_predicates.len() {
+            Some((index_predicates, remaining_predicates))
+        } else {
+            None
+        }
     }
 }
 

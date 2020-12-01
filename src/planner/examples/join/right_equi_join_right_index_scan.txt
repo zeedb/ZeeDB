@@ -4,10 +4,10 @@ right join store on customer.store_id = store.store_id
 where store.store_id = 1
 
 Map customer.customer_id store.store_id
-	NestedLoop Right (Equal customer.store_id store.store_id)
+	LookupJoin Right
 		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
 			Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
-				SeqScan customer
-		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax) (Equal store.store_id 1)
+				IndexScan* customer(customer.store_id:store.store_id)
+		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
 			Map* store.store_id store.$xmin store.$xmax
-				SeqScan store
+				IndexScan store(store.store_id:1)

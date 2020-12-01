@@ -4,10 +4,10 @@ where customer.store_id = store.store_id
 and store.store_id = 1
 
 Map customer.customer_id store.store_id
-	NestedLoop Inner (Equal customer.store_id store.store_id)
-		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax) (Equal store.store_id 1)
-			Map* store.store_id store.$xmin store.$xmax
-				SeqScan store
+	LookupJoin Inner
 		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
 			Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
-				SeqScan customer
+				IndexScan* customer(customer.store_id:store.store_id)
+		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
+			Map* store.store_id store.$xmin store.$xmax
+				IndexScan store(store.store_id:1)

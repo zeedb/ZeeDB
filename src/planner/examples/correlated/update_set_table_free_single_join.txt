@@ -8,10 +8,10 @@ Update person
 			Map $expr_subquery.last_name:person.last_name' person.last_name'
 				NestedLoop Inner
 					Aggregate person.last_name'
-						Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Equal person.person_id 1)
+						Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
 							Map* person.person_id person.first_name person.last_name' person.modified_date person.$xmin person.$xmax person.$pid person.$tid
-								SeqScan person
+								IndexScan person(person.person_id:1)
 					TableFreeScan
-			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Equal person.person_id 1)
+			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
 				Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax person.$pid person.$tid
-					SeqScan person
+					IndexScan person(person.person_id:1)

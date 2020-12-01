@@ -393,8 +393,9 @@ impl Rule {
                     table,
                 } = bind
                 {
+                    // TODO return multiple indexes!
                     if let Some((index_predicates, predicates)) =
-                        stats.find_index_scan(&predicates, &table)
+                        stats.find_index_scan(&predicates, &table).pop()
                     {
                         return Some(IndexScan {
                             projects,
@@ -469,11 +470,12 @@ impl Rule {
                     {
                         let mut predicates = join.predicates().clone();
                         predicates.extend(table_predicates);
-                        if let Some((index_predicates, predicates)) =
-                            stats.find_index_scan(&predicates, &table)
+                        // TODO return multiple indexes!
+                        if let Some((index_predicates, remaining_predicates)) =
+                            stats.find_index_scan(&predicates, &table).pop()
                         {
                             return Some(LookupJoin {
-                                join: join.replace(predicates),
+                                join: join.replace(remaining_predicates),
                                 projects,
                                 table,
                                 index_predicates,
