@@ -7,9 +7,14 @@ pub struct Art {
 }
 
 impl Art {
-    pub fn new() -> Self {
+    pub fn empty() -> Self {
         Art { root: Node::Null }
     }
+
+    pub fn truncate(&mut self) {
+        self.root = Node::Null;
+    }
+
     pub fn insert(&mut self, key: &[u8], value: Value) -> Option<Value> {
         self.root.insert(key, value)
     }

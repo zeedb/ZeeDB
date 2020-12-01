@@ -127,6 +127,24 @@ fn test_execute() {
         ],
         &mut errors,
     );
+    run(
+        "examples/create_index.txt",
+        vec![
+            "create table foo (id int64);",
+            "create index foo_id on foo (id);",
+        ],
+        &mut errors,
+    );
+    run(
+        "examples/lookup_join.txt",
+        vec![
+            "create table foo (id int64);",
+            "create index foo_id on foo (id);",
+            "insert into foo (id) values (1), (2);",
+            "select * from foo where id = 1;",
+        ],
+        &mut errors,
+    );
     if !errors.is_empty() {
         panic!("{:#?}", errors);
     }

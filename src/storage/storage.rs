@@ -1,9 +1,11 @@
+use crate::art::Art;
 use crate::heap::*;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering};
 
 pub struct Storage {
     tables: Vec<Heap>,
+    indexes: Vec<Art>,
     sequences: Vec<AtomicI64>,
 }
 
@@ -19,7 +21,13 @@ impl Storage {
         for (table_id, values) in catalog::bootstrap_tables() {
             tables[table_id as usize].insert(&values, 0);
         }
-        Self { tables, sequences }
+        // Initially there are no indexes. TODO index system tables.
+        let indexes = vec![];
+        Self {
+            tables,
+            indexes,
+            sequences,
+        }
     }
 
     pub fn table(&self, id: i64) -> &Heap {
@@ -36,6 +44,14 @@ impl Storage {
 
     pub fn drop_table(&mut self, id: i64) {
         self.tables[id as usize].truncate()
+    }
+
+    pub fn create_index(&mut self, id: i64) {
+        self.indexes.resize_with(id as usize + 1, Art::empty);
+    }
+
+    pub fn drop_index(&mut self, id: i64) {
+        self.indexes[id as usize].truncate()
     }
 
     pub fn next_val(&self, id: i64) -> i64 {

@@ -708,8 +708,14 @@ impl Input {
                         let id = crate::eval::eval(id, &input, state)?;
                         state.storage.drop_table(kernel::int64(&id));
                     }
-                    Procedure::CreateIndex(id) => todo!(),
-                    Procedure::DropIndex(id) => todo!(),
+                    Procedure::CreateIndex(id) => {
+                        let id = crate::eval::eval(id, &input, state)?;
+                        state.storage.create_index(kernel::int64(&id));
+                    }
+                    Procedure::DropIndex(id) => {
+                        let id = crate::eval::eval(id, &input, state)?;
+                        state.storage.drop_index(kernel::int64(&id));
+                    }
                 };
                 Ok(dummy_row(self.schema.clone()))
             }

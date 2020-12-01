@@ -9,7 +9,7 @@ fn set() {
 
     println!("insert into empty tree");
     {
-        let mut trie = Art::new();
+        let mut trie = Art::empty();
         assert_eq!(None, trie.get("abc".as_bytes()));
         trie.insert("abc".as_bytes(), dummy_value_1);
         assert_eq!(Some(dummy_value_1), trie.get("abc".as_bytes()));
@@ -17,7 +17,7 @@ fn set() {
 
     println!("insert into empty tree & replace");
     {
-        let mut trie = Art::new();
+        let mut trie = Art::empty();
         trie.insert("abc".as_bytes(), dummy_value_1);
         trie.insert("abc".as_bytes(), dummy_value_2);
         assert_eq!(Some(dummy_value_2), trie.get("abc".as_bytes()));
@@ -25,7 +25,7 @@ fn set() {
 
     println!("insert value s.t. existing value is a prefix");
     {
-        let mut trie = Art::new();
+        let mut trie = Art::empty();
         let prefix_key = "abc".as_bytes();
         let key = "abcde".as_bytes();
         trie.insert(prefix_key, dummy_value_1);
@@ -36,7 +36,7 @@ fn set() {
 
     println!("insert value s.t. new value is a prefix");
     {
-        let mut trie = Art::new();
+        let mut trie = Art::empty();
         trie.insert("abcde".as_bytes(), dummy_value_1);
         trie.insert("abc".as_bytes(), dummy_value_2);
         assert_eq!(Some(dummy_value_1), trie.get("abcde".as_bytes()));
@@ -45,7 +45,7 @@ fn set() {
 
     println!("insert key s.t. it mismatches existing key");
     {
-        let mut trie = Art::new();
+        let mut trie = Art::empty();
         let key1 = "aaaaa".as_bytes();
         let key2 = "aabaa".as_bytes();
         trie.insert(key1, dummy_value_1);
@@ -70,7 +70,7 @@ fn set() {
                 values[i].tid = i as u32;
             }
 
-            let mut m = Art::new();
+            let mut m = Art::empty();
 
             for i in 0..N {
                 // println!("insert {:?} {:?}", &keys[i], &values[i]);
@@ -113,7 +113,7 @@ fn delete_value() {
     let int9 = Value { pid: 0, tid: 9 };
 
     let setup = || -> Art {
-        let mut m = Art::new();
+        let mut m = Art::empty();
 
         m.insert(key0, int0);
         m.insert(key1, int1);
@@ -284,7 +284,7 @@ fn delete_value() {
 
 #[test]
 fn monte_carlo_delete() {
-    let mut m = Art::new();
+    let mut m = Art::empty();
     let mut rng1 = rand::rngs::StdRng::from_seed([0; 32]);
     for i in 0..1000000 {
         let k: [u8; 10] = rng1.gen();
@@ -313,7 +313,7 @@ fn full_range() {
     let int5 = Value { pid: 0, tid: 5 };
     let int6 = Value { pid: 0, tid: 6 };
 
-    let mut m = Art::new();
+    let mut m = Art::empty();
 
     m.insert("aa".as_bytes(), int0);
     m.insert("aaaa".as_bytes(), int1);
@@ -345,7 +345,7 @@ fn full_range() {
 #[test]
 fn count_full_range() {
     let n = 0x10000;
-    let mut m = Art::new();
+    let mut m = Art::empty();
     for i in 0..n {
         let key = format!("{:04X}", i);
         m.insert(
@@ -371,7 +371,7 @@ fn partial_range() {
         let int5 = Value { pid: 0, tid: 5 };
         let int6 = Value { pid: 0, tid: 6 };
 
-        let mut m = Art::new();
+        let mut m = Art::empty();
 
         m.insert("aa".as_bytes(), int0);
         m.insert("aaaa".as_bytes(), int1);
@@ -403,7 +403,7 @@ fn partial_range() {
     println!("monte carlo");
     {
         let mut rng = rand::thread_rng();
-        let mut m = Art::new();
+        let mut m = Art::empty();
         const N: usize = 10000;
         let mut keys: Vec<Vec<u8>> = Vec::with_capacity(N);
         for i in 0..N {
