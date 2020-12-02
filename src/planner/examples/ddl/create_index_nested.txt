@@ -1,7 +1,7 @@
 create index nested.foo_index on person (person_id)
 
 Script
-	Assign index_catalog_id 1
+	Assign index_catalog_id 0
 		TableFreeScan
 	Assign index_catalog_id catalog.catalog_id
 		NestedLoop Single
@@ -9,7 +9,7 @@ Script
 				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name catalog.$xmin catalog.$xmax
 					SeqScan catalog
 			TableFreeScan
-	Assign table_catalog_id 1
+	Assign table_catalog_id 0
 		TableFreeScan
 	Assign index_sequence_id sequence.sequence_id
 		NestedLoop Single

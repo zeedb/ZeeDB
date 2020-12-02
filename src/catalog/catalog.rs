@@ -3,12 +3,16 @@ use std::collections::HashMap;
 use zetasql::SimpleCatalogProto;
 use zetasql::*;
 
+pub const ROOT_CATALOG_ID: i64 = 0;
+
 pub struct Catalog {
     pub catalog_id: i64,
     /// Catalog in ZetaSQL format.
     pub catalog: SimpleCatalogProto,
-    /// Indexes, organized by table id.
+    /// Indexes, by table id.
     pub indexes: HashMap<i64, Vec<Index>>,
+    /// Table statistics, by table id.
+    pub statistics: HashMap<i64, TableStatistics>,
 }
 
 pub struct Index {
@@ -17,22 +21,60 @@ pub struct Index {
     pub columns: Vec<String>,
 }
 
+pub struct TableStatistics {
+    pub table_id: i64,
+    pub cardinality: usize,
+    pub column_unique_cardinality: HashMap<String, usize>,
+}
+
 impl Catalog {
-    pub fn empty(catalog_id: i64) -> Self {
+    pub fn empty() -> Self {
+        let mut catalog = Catalog::zetasql();
+        catalog.catalog.push(Self::metadata());
         Self {
-            catalog_id,
-            catalog: empty(),
+            catalog_id: crate::ROOT_CATALOG_ID,
+            catalog,
             indexes: HashMap::new(),
+            statistics: crate::bootstrap::bootstrap_statistics(),
         }
     }
 
+    pub fn zetasql() -> SimpleCatalogProto {
+        SimpleCatalogProto {
+            builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
+                language_options: Some(LanguageOptionsProto {
+                    enabled_language_features: enabled_language_features(),
+                    supported_statement_kinds: supported_statement_kinds(),
+                    ..Default::default()
+                }),
+                include_function_ids: enabled_functions(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    pub fn metadata() -> SimpleCatalogProto {
+        crate::bootstrap::bootstrap_metadata_catalog()
+    }
+
     pub fn table_cardinality(&self, table: &Table) -> usize {
-        // TODO
-        match table.name.as_str() {
-            "store" => 1000,
-            "customer" => 100000,
-            "person" => 10000000,
-            _ => 1000,
+        self.statistics
+            .get(&table.id)
+            .expect(&table.name)
+            .cardinality
+    }
+
+    pub fn column_unique_cardinality(&self, table: &Table, column: &String) -> usize {
+        match column.as_str() {
+            "$xmin" | "$xmax" | "$pid" | "$tid" => self.table_cardinality(table),
+            _ => *self
+                .statistics
+                .get(&table.id)
+                .expect(&table.name)
+                .column_unique_cardinality
+                .get(column)
+                .expect(format!("{}.{}", table.name, column).as_str()),
         }
     }
 
@@ -79,18 +121,17 @@ impl Index {
     }
 }
 
-pub fn empty() -> SimpleCatalogProto {
-    SimpleCatalogProto {
-        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
-            language_options: Some(LanguageOptionsProto {
-                enabled_language_features: enabled_language_features(),
-                supported_statement_kinds: supported_statement_kinds(),
-                ..Default::default()
-            }),
-            include_function_ids: enabled_functions(),
-            ..Default::default()
-        }),
-        ..Default::default()
+impl TableStatistics {
+    pub fn empty(table_id: i64, columns: Vec<&str>) -> Self {
+        let mut column_unique_cardinality = HashMap::new();
+        for c in columns {
+            column_unique_cardinality.insert(c.to_string(), 0);
+        }
+        Self {
+            table_id,
+            cardinality: 0,
+            column_unique_cardinality,
+        }
     }
 }
 

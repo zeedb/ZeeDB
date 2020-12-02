@@ -6,7 +6,7 @@ use catalog::Catalog;
 fn test_analyze() {
     let mut parser = ParseProvider::new();
     let expr = parser
-        .analyze(&"select 1".to_string(), &Catalog::empty(1))
+        .analyze(&"select 1".to_string(), &Catalog::empty())
         .unwrap();
     if let LogicalOut { input, .. } = &expr {
         if let LogicalMap { .. } = input.as_ref() {
@@ -20,13 +20,13 @@ fn test_analyze() {
 fn test_split() {
     let mut parser = ParseProvider::new();
     let sql = "select 1; select 2".to_string();
-    parser.analyze(&sql, &Catalog::empty(1)).unwrap();
+    parser.analyze(&sql, &Catalog::empty()).unwrap();
 }
 
 #[test]
 fn test_not_available_fn() {
     let mut parser = ParseProvider::new();
-    match parser.analyze(&"select to_proto(true)".to_string(), &Catalog::empty(1)) {
+    match parser.analyze(&"select to_proto(true)".to_string(), &Catalog::empty()) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
     }
@@ -37,12 +37,10 @@ fn test_metadata() {
     let mut parser = ParseProvider::new();
     let q = "
         select * 
-        from column 
-        join table using (table_id) 
-        join catalog using (catalog_id)";
-    parser
-        .analyze(&q.to_string(), &catalog::bootstrap())
-        .unwrap();
+        from metadata.column 
+        join metadata.table using (table_id) 
+        join metadata.catalog using (catalog_id)";
+    parser.analyze(&q.to_string(), &Catalog::empty()).unwrap();
 }
 
 #[test]
@@ -57,19 +55,19 @@ fn test_format() {
 fn test_script() {
     let mut parser = ParseProvider::new();
     let sql = "set x = 1;".to_string();
-    parser.analyze(&sql, &Catalog::empty(1)).unwrap();
+    parser.analyze(&sql, &Catalog::empty()).unwrap();
 }
 
 #[test]
 fn test_custom_function() {
     let mut parser = ParseProvider::new();
-    let sql = "select next_val(1);".to_string();
-    parser.analyze(&sql, &catalog::bootstrap()).unwrap();
+    let sql = "select metadata.next_val(1);".to_string();
+    parser.analyze(&sql, &Catalog::empty()).unwrap();
 }
 
 #[test]
 fn test_call() {
     let mut parser = ParseProvider::new();
-    let sql = "call create_table(1);".to_string();
-    parser.analyze(&sql, &catalog::bootstrap()).unwrap();
+    let sql = "call metadata.create_table(1);".to_string();
+    parser.analyze(&sql, &Catalog::empty()).unwrap();
 }

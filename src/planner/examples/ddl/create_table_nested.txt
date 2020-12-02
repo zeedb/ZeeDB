@@ -1,7 +1,7 @@
 create table nested.foo (person_id int64 primary key, store_id int64)
 
 Script
-	Assign catalog_id 1
+	Assign catalog_id 0
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
@@ -18,13 +18,13 @@ Script
 	Assign next_table_id (NextVal @table_sequence_id)
 		TableFreeScan
 	Insert table
-		Values table.catalog_id table.table_id table.table_name [@catalog_id @next_table_id "foo"]
+		Values table.catalog_id table.table_id table.table_name table.table_cardinality [@catalog_id @next_table_id "foo" 0]
 			TableFreeScan
 	Insert column
-		Values column.table_id column.column_id column.column_name column.column_type [@next_table_id 0 "person_id" "INT64"]
+		Values column.table_id column.column_id column.column_name column.column_type column.column_unique_cardinality [@next_table_id 0 "person_id" "INT64" 0]
 			TableFreeScan
 	Insert column
-		Values column.table_id column.column_id column.column_name column.column_type [@next_table_id 1 "store_id" "INT64"]
+		Values column.table_id column.column_id column.column_name column.column_type column.column_unique_cardinality [@next_table_id 1 "store_id" "INT64" 0]
 			TableFreeScan
 	Call create_table @next_table_id
 		TableFreeScan

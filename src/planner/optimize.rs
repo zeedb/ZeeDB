@@ -1,5 +1,5 @@
 use crate::cost::*;
-use crate::rewrite::*;
+use crate::rewrite::RewriteProvider;
 use crate::rule::*;
 use crate::search_space::*;
 use ast::*;
@@ -14,7 +14,7 @@ use std::ops::Deref;
 
 pub fn optimize(expr: Expr, catalog: &Catalog, parser: &mut ParseProvider) -> Expr {
     let mut optimizer = Optimizer::new(catalog);
-    let expr = rewrite(expr, parser);
+    let expr = RewriteProvider::new(catalog, parser).rewrite(expr);
     let gid = optimizer.copy_in_new(expr);
     optimizer.optimize_group(gid);
     optimizer.winner(gid)
@@ -229,11 +229,10 @@ impl<'a> Optimizer<'a> {
                 // Scan
                 cardinality = self.catalog.table_cardinality(table);
                 for c in projects {
-                    if c.name.ends_with("id") {
-                        column_unique_cardinality.insert(c.clone(), cardinality);
-                    } else {
-                        column_unique_cardinality.insert(c.clone(), cardinality / 10);
-                    }
+                    column_unique_cardinality.insert(
+                        c.clone(),
+                        self.catalog.column_unique_cardinality(table, &c.name),
+                    );
                 }
                 // Filter
                 let selectivity = total_selectivity(predicates, &column_unique_cardinality);

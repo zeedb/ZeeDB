@@ -1,7 +1,7 @@
 drop table foo
 
 Script
-	Assign catalog_id 1
+	Assign catalog_id 0
 		TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single

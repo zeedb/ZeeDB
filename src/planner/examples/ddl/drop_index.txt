@@ -1,7 +1,7 @@
 drop index foo_index
 
 Script
-	Assign catalog_id 1
+	Assign catalog_id 0
 		TableFreeScan
 	Assign index_id index.index_id
 		NestedLoop Single

@@ -9,36 +9,12 @@ use zetasql::function_enums::*;
 use zetasql::SimpleCatalogProto;
 use zetasql::*;
 
-pub const ROOT_CATALOG_PARENT_ID: i64 = -1;
-pub const ROOT_CATALOG_ID: i64 = 0;
-
-pub fn bootstrap() -> Catalog {
-    Catalog {
-        catalog_id: ROOT_CATALOG_ID,
-        catalog: bootstrap_zetasql(),
-        indexes: HashMap::new(),
-    }
-}
-
 pub fn bootstrap_sequences() -> Vec<AtomicI64> {
     let table_id = AtomicI64::new(100);
     vec![table_id]
 }
 
 pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
-    let catalog = RecordBatch::try_new(
-        Arc::new(Schema::new(vec![
-            Field::new("parent_catalog_id", DataType::Int64, true),
-            Field::new("catalog_id", DataType::Int64, true),
-            Field::new("catalog_name", DataType::Utf8, true),
-        ])),
-        vec![
-            Arc::new(Int64Array::from(vec![ROOT_CATALOG_PARENT_ID])),
-            Arc::new(Int64Array::from(vec![ROOT_CATALOG_ID])),
-            Arc::new(StringArray::from(vec!["root"])),
-        ],
-    )
-    .unwrap();
     let sequence = RecordBatch::try_new(
         Arc::new(Schema::new(vec![
             Field::new("sequence_id", DataType::Int64, true),
@@ -51,12 +27,54 @@ pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
     )
     .unwrap();
     let mut tables = HashMap::new();
-    tables.insert(0, catalog);
     tables.insert(5, sequence);
     tables
 }
 
-fn bootstrap_zetasql() -> SimpleCatalogProto {
+pub(crate) fn bootstrap_statistics() -> HashMap<i64, TableStatistics> {
+    let mut map = HashMap::new();
+
+    map.insert(
+        0,
+        TableStatistics::empty(0, vec!["parent_catalog_id", "catalog_id", "catalog_name"]),
+    ); // catalog
+    map.insert(
+        1,
+        TableStatistics::empty(
+            1,
+            vec!["catalog_id", "table_id", "table_name", "table_cardinality"],
+        ),
+    ); // table
+    map.insert(
+        2,
+        TableStatistics::empty(
+            2,
+            vec![
+                "table_id",
+                "column_id",
+                "column_name",
+                "column_type",
+                "column_unique_cardinality",
+            ],
+        ),
+    ); // column
+    map.insert(
+        3,
+        TableStatistics::empty(3, vec!["catalog_id", "index_id", "table_id", "index_name"]),
+    ); // index
+    map.insert(
+        4,
+        TableStatistics::empty(4, vec!["index_id", "column_id", "index_order"]),
+    ); // index_column
+    map.insert(
+        5,
+        TableStatistics::empty(5, vec!["sequence_id", "sequence_name"]),
+    ); // sequence
+
+    map
+}
+
+pub(crate) fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;
     let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {
         let serialization_id = count;
@@ -104,6 +122,7 @@ fn bootstrap_zetasql() -> SimpleCatalogProto {
                     column("catalog_id", TypeKind::TypeInt64),
                     column("table_id", TypeKind::TypeInt64),
                     column("table_name", TypeKind::TypeString),
+                    column("table_cardinality", TypeKind::TypeInt64),
                 ],
             ),
             table(
@@ -113,6 +132,7 @@ fn bootstrap_zetasql() -> SimpleCatalogProto {
                     column("column_id", TypeKind::TypeInt64),
                     column("column_name", TypeKind::TypeString),
                     column("column_type", TypeKind::TypeString),
+                    column("column_unique_cardinality", TypeKind::TypeInt64),
                 ],
             ),
             table(

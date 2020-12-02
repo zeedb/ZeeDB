@@ -1,4 +1,5 @@
 use catalog::*;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
@@ -25,7 +26,7 @@ pub fn matches_expected(path: &String, found: String) -> bool {
 }
 
 pub fn adventure_works() -> Catalog {
-    let mut table_count = 0;
+    let mut table_count = 100;
     let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {
         let serialization_id = table_count;
         table_count += 1;
@@ -46,7 +47,7 @@ pub fn adventure_works() -> Catalog {
             ..Default::default()
         }
     };
-    let mut index_count = 0;
+    let mut index_count = 100;
     let mut index = |table_id: i64, column_name: &str| -> Index {
         let index_id = index_count;
         index_count += 1;
@@ -89,8 +90,7 @@ pub fn adventure_works() -> Catalog {
     let store = table("store", vec![store_id, name, modified_date]);
     let store_table_id = store.serialization_id.unwrap();
 
-    let mut cat = Catalog::empty(1);
-    cat.catalog.name = Some(String::from("aw"));
+    let mut cat = Catalog::empty();
     cat.catalog.table = vec![customer, person, store];
     cat.indexes.insert(
         customer_table_id,
@@ -104,6 +104,65 @@ pub fn adventure_works() -> Catalog {
         .insert(person_table_id, vec![index(customer_table_id, "person_id")]);
     cat.indexes
         .insert(store_table_id, vec![index(customer_table_id, "store_id")]);
+
+    let mut customer_table_stats = TableStatistics {
+        table_id: customer_table_id,
+        cardinality: 100_000,
+        column_unique_cardinality: HashMap::new(),
+    };
+    customer_table_stats
+        .column_unique_cardinality
+        .insert("customer_id".to_string(), 100_000);
+    customer_table_stats
+        .column_unique_cardinality
+        .insert("person_id".to_string(), 100_000);
+    customer_table_stats
+        .column_unique_cardinality
+        .insert("store_id".to_string(), 1_000);
+    customer_table_stats
+        .column_unique_cardinality
+        .insert("account_number".to_string(), 100_000);
+    customer_table_stats
+        .column_unique_cardinality
+        .insert("modified_date".to_string(), 100_000);
+    cat.statistics
+        .insert(customer_table_id, customer_table_stats);
+
+    let mut person_table_stats = TableStatistics {
+        table_id: person_table_id,
+        cardinality: 10_000_000,
+        column_unique_cardinality: HashMap::new(),
+    };
+    person_table_stats
+        .column_unique_cardinality
+        .insert("person_id".to_string(), 10_000_000);
+    person_table_stats
+        .column_unique_cardinality
+        .insert("first_name".to_string(), 100_000);
+    person_table_stats
+        .column_unique_cardinality
+        .insert("last_name".to_string(), 100_000);
+    person_table_stats
+        .column_unique_cardinality
+        .insert("modified_date".to_string(), 10_000_000);
+    cat.statistics.insert(person_table_id, person_table_stats);
+
+    let mut store_table_statistics = TableStatistics {
+        table_id: store_table_id,
+        cardinality: 1_000,
+        column_unique_cardinality: HashMap::new(),
+    };
+    store_table_statistics
+        .column_unique_cardinality
+        .insert("store_id".to_string(), 1_000);
+    store_table_statistics
+        .column_unique_cardinality
+        .insert("name".to_string(), 1_000);
+    store_table_statistics
+        .column_unique_cardinality
+        .insert("modified_date".to_string(), 1_000);
+    cat.statistics
+        .insert(store_table_id, store_table_statistics);
 
     cat
 }

@@ -192,7 +192,7 @@ impl Rule {
         binds
     }
 
-    pub fn apply(&self, ss: &SearchSpace, stats: &Catalog, bind: Expr) -> Option<Expr> {
+    pub fn apply(&self, ss: &SearchSpace, catalog: &Catalog, bind: Expr) -> Option<Expr> {
         match self {
             Rule::InnerJoinCommutivity => {
                 if let LogicalJoin {
@@ -395,7 +395,7 @@ impl Rule {
                 {
                     // TODO return multiple indexes!
                     if let Some((index_predicates, predicates)) =
-                        stats.find_index_scan(&predicates, &table).pop()
+                        catalog.find_index_scan(&predicates, &table).pop()
                     {
                         return Some(IndexScan {
                             projects,
@@ -472,7 +472,7 @@ impl Rule {
                         predicates.extend(table_predicates);
                         // TODO return multiple indexes!
                         if let Some((index_predicates, remaining_predicates)) =
-                            stats.find_index_scan(&predicates, &table).pop()
+                            catalog.find_index_scan(&predicates, &table).pop()
                         {
                             return Some(LookupJoin {
                                 join: join.replace(remaining_predicates),

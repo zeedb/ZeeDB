@@ -1,9 +1,9 @@
 create index foo_index on person (person_id)
 
 Script
-	Assign index_catalog_id 1
+	Assign index_catalog_id 0
 		TableFreeScan
-	Assign table_catalog_id 1
+	Assign table_catalog_id 0
 		TableFreeScan
 	Assign index_sequence_id sequence.sequence_id
 		NestedLoop Single
