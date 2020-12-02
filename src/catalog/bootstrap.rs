@@ -3,16 +3,10 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use std::collections::HashMap;
-use std::sync::atomic::AtomicI64;
 use std::sync::Arc;
 use zetasql::function_enums::*;
 use zetasql::SimpleCatalogProto;
 use zetasql::*;
-
-pub fn bootstrap_sequences() -> Vec<AtomicI64> {
-    let table_id = AtomicI64::new(100);
-    vec![table_id]
-}
 
 pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
     let sequence = RecordBatch::try_new(

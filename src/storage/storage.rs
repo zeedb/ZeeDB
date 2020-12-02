@@ -16,7 +16,9 @@ impl Storage {
         tables.resize_with(100, Heap::empty);
         // First 100 sequences are reserved for system use.
         let mut sequences = Vec::with_capacity(0);
-        sequences.resize_with(100, || AtomicI64::new(100));
+        sequences.resize_with(100, || AtomicI64::new(0));
+        // Table sequence starts at 100.
+        sequences[0] = AtomicI64::new(100);
         // Bootstrap tables.
         for (table_id, values) in catalog::bootstrap_tables() {
             tables[table_id as usize].insert(&values, 0);
