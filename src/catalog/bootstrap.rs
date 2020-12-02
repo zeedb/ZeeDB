@@ -25,23 +25,23 @@ pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
     tables
 }
 
-pub(crate) fn bootstrap_statistics() -> HashMap<i64, TableStatistics> {
+pub(crate) fn bootstrap_statistics() -> HashMap<i64, Statistics> {
     let mut map = HashMap::new();
 
     map.insert(
         0,
-        TableStatistics::empty(0, vec!["parent_catalog_id", "catalog_id", "catalog_name"]),
+        Statistics::empty(0, vec!["parent_catalog_id", "catalog_id", "catalog_name"]),
     ); // catalog
     map.insert(
         1,
-        TableStatistics::empty(
+        Statistics::empty(
             1,
             vec!["catalog_id", "table_id", "table_name", "table_cardinality"],
         ),
     ); // table
     map.insert(
         2,
-        TableStatistics::empty(
+        Statistics::empty(
             2,
             vec![
                 "table_id",
@@ -54,15 +54,15 @@ pub(crate) fn bootstrap_statistics() -> HashMap<i64, TableStatistics> {
     ); // column
     map.insert(
         3,
-        TableStatistics::empty(3, vec!["catalog_id", "index_id", "table_id", "index_name"]),
+        Statistics::empty(3, vec!["catalog_id", "index_id", "table_id", "index_name"]),
     ); // index
     map.insert(
         4,
-        TableStatistics::empty(4, vec!["index_id", "column_id", "index_order"]),
+        Statistics::empty(4, vec!["index_id", "column_id", "index_order"]),
     ); // index_column
     map.insert(
         5,
-        TableStatistics::empty(5, vec!["sequence_id", "sequence_name"]),
+        Statistics::empty(5, vec!["sequence_id", "sequence_name"]),
     ); // sequence
 
     map

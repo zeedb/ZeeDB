@@ -12,7 +12,7 @@ pub struct Catalog {
     /// Indexes, by table id.
     pub indexes: HashMap<i64, Vec<Index>>,
     /// Table statistics, by table id.
-    pub statistics: HashMap<i64, TableStatistics>,
+    pub statistics: HashMap<i64, Statistics>,
 }
 
 pub struct Index {
@@ -21,7 +21,7 @@ pub struct Index {
     pub columns: Vec<String>,
 }
 
-pub struct TableStatistics {
+pub struct Statistics {
     pub table_id: i64,
     pub cardinality: usize,
     pub column_unique_cardinality: HashMap<String, usize>,
@@ -121,7 +121,7 @@ impl Index {
     }
 }
 
-impl TableStatistics {
+impl Statistics {
     pub fn empty(table_id: i64, columns: Vec<&str>) -> Self {
         let mut column_unique_cardinality = HashMap::new();
         for c in columns {

@@ -2,7 +2,7 @@ use crate::execute;
 use arrow::array::*;
 use arrow::record_batch::*;
 use ast::data_type;
-use catalog::{Catalog, Index, TableStatistics};
+use catalog::{Catalog, Index, Statistics};
 use parser::ParseProvider;
 use planner::optimize;
 use std::collections::{BTreeMap, HashMap};
@@ -177,7 +177,7 @@ impl CatalogProvider {
         txn: u64,
         catalog: &Catalog,
         storage: &mut storage::Storage,
-    ) -> Vec<TableStatistics> {
+    ) -> Vec<Statistics> {
         let q = "
             select table_id, table_cardinality, column_name, column_unique_cardinality
             from metadata.table
@@ -200,14 +200,14 @@ impl CatalogProvider {
         statistics
     }
 
-    fn read_statistics(batch: &RecordBatch, offset: &mut usize) -> TableStatistics {
+    fn read_statistics(batch: &RecordBatch, offset: &mut usize) -> Statistics {
         let table_id_column = kernel::coerce::<Int64Array>(batch.column(0));
         let table_id = table_id_column.value(*offset);
         let table_cardinality = kernel::coerce::<Int64Array>(batch.column(1)).value(0);
         let column_name_column = kernel::coerce::<StringArray>(batch.column(2));
         let column_unique_cardinality_column = kernel::coerce::<Int64Array>(batch.column(3));
 
-        let mut stats = TableStatistics {
+        let mut stats = Statistics {
             table_id,
             cardinality: table_cardinality as usize,
             column_unique_cardinality: HashMap::new(),

@@ -329,10 +329,6 @@ fn zeros(capacity: usize) -> Buffer {
     buffer.freeze()
 }
 
-fn xcolumn(name: &str) -> Field {
-    Field::new(name, DataType::UInt64, false)
-}
-
 fn head(
     field: &Field,
     mut column_offset: usize,

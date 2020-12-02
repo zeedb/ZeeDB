@@ -105,7 +105,7 @@ pub fn adventure_works() -> Catalog {
     cat.indexes
         .insert(store_table_id, vec![index(customer_table_id, "store_id")]);
 
-    let mut customer_table_stats = TableStatistics {
+    let mut customer_table_stats = Statistics {
         table_id: customer_table_id,
         cardinality: 100_000,
         column_unique_cardinality: HashMap::new(),
@@ -128,7 +128,7 @@ pub fn adventure_works() -> Catalog {
     cat.statistics
         .insert(customer_table_id, customer_table_stats);
 
-    let mut person_table_stats = TableStatistics {
+    let mut person_table_stats = Statistics {
         table_id: person_table_id,
         cardinality: 10_000_000,
         column_unique_cardinality: HashMap::new(),
@@ -147,7 +147,7 @@ pub fn adventure_works() -> Catalog {
         .insert("modified_date".to_string(), 10_000_000);
     cat.statistics.insert(person_table_id, person_table_stats);
 
-    let mut store_table_statistics = TableStatistics {
+    let mut store_table_statistics = Statistics {
         table_id: store_table_id,
         cardinality: 1_000,
         column_unique_cardinality: HashMap::new(),
