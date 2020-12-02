@@ -12,7 +12,7 @@ use storage::*;
 
 pub fn execute(expr: Expr, txn: u64, storage: &mut Storage) -> Program<'_> {
     let state = State::new(txn, storage);
-    let input = compile(expr);
+    let input = Input::compile(expr);
     Program { state, input }
 }
 
@@ -161,185 +161,187 @@ impl<'a> Iterator for Program<'a> {
     }
 }
 
-fn compile(expr: Expr) -> Input {
-    let node = compile_node(expr);
-    let schema = node.schema();
-    Input {
-        node: Box::new(node),
-        schema: Arc::new(schema),
-    }
-}
-
-fn compile_node(expr: Expr) -> Node {
-    match expr {
-        TableFreeScan => Node::TableFreeScan { empty: false },
-        SeqScan {
-            projects,
-            predicates,
-            table,
-        } => Node::SeqScan {
-            projects,
-            predicates,
-            table,
-            scan: None,
-        },
-        IndexScan {
-            projects,
-            predicates,
-            index_predicates,
-            table,
-        } => todo!(),
-        Filter { predicates, input } => Node::Filter {
-            predicates,
-            input: compile(*input),
-        },
-        Out { projects, input } => Node::Out {
-            projects,
-            input: compile(*input),
-        },
-        Map {
-            include_existing,
-            projects,
-            input,
-        } => Node::Map {
-            include_existing,
-            projects,
-            input: compile(*input),
-        },
-        NestedLoop { join, left, right } => Node::NestedLoop {
-            join,
-            left: compile(*left),
-            build_left: None,
-            right: compile(*right),
-        },
-        HashJoin {
-            join,
-            partition_left,
-            partition_right,
-            left,
-            right,
-        } => {
-            let left = compile(*left);
-            let right = compile(*right);
-            Node::HashJoin {
-                join,
-                partition_left,
-                partition_right,
-                left,
-                build_left: None,
-                right,
-            }
+impl Input {
+    fn compile(expr: Expr) -> Self {
+        let node = Node::compile(expr);
+        let schema = node.schema();
+        Input {
+            node: Box::new(node),
+            schema: Arc::new(schema),
         }
-        LookupJoin {
-            join,
-            projects,
-            index_predicates,
-            table,
-            input,
-        } => todo!(),
-        CreateTempTable { .. } => todo!(),
-        GetTempTable { .. } => todo!(),
-        Aggregate {
-            group_by,
-            aggregate,
-            input,
-        } => todo!(),
-        Limit {
-            limit,
-            offset,
-            input,
-        } => todo!(),
-        Sort { order_by, input } => Node::Sort {
-            order_by,
-            input: compile(*input),
-        },
-        Union { .. } => todo!(),
-        Intersect { .. } => todo!(),
-        Except { .. } => todo!(),
-        Insert { table, input } => Node::Insert {
-            table,
-            input: compile(*input),
-        },
-        Values {
-            columns,
-            values,
-            input,
-        } => Node::Values {
-            columns,
-            values,
-            input: compile(*input),
-        },
-        Update {
-            table,
-            pid,
-            tid,
-            input,
-        } => Node::Update {
-            table,
-            pid,
-            tid,
-            input: compile(*input),
-        },
-        Delete { pid, tid, input } => Node::Delete {
-            pid,
-            tid,
-            input: compile(*input),
-        },
-        Script { statements } => {
-            let mut compiled = vec![];
-            for expr in statements {
-                compiled.push(compile(expr))
-            }
-            Node::Script {
-                offset: 0,
-                statements: compiled,
-            }
-        }
-        Assign {
-            variable,
-            value,
-            input,
-        } => Node::Assign {
-            variable,
-            value,
-            input: compile(*input),
-        },
-        Call { procedure, input } => Node::Call {
-            procedure,
-            input: compile(*input),
-        },
-        Leaf { .. }
-        | LogicalSingleGet
-        | LogicalGet { .. }
-        | LogicalFilter { .. }
-        | LogicalOut { .. }
-        | LogicalMap { .. }
-        | LogicalJoin { .. }
-        | LogicalDependentJoin { .. }
-        | LogicalWith { .. }
-        | LogicalGetWith { .. }
-        | LogicalAggregate { .. }
-        | LogicalLimit { .. }
-        | LogicalSort { .. }
-        | LogicalUnion { .. }
-        | LogicalIntersect { .. }
-        | LogicalExcept { .. }
-        | LogicalInsert { .. }
-        | LogicalValues { .. }
-        | LogicalUpdate { .. }
-        | LogicalDelete { .. }
-        | LogicalCreateDatabase { .. }
-        | LogicalCreateTable { .. }
-        | LogicalCreateIndex { .. }
-        | LogicalDrop { .. }
-        | LogicalScript { .. }
-        | LogicalRewrite { .. }
-        | LogicalAssign { .. }
-        | LogicalCall { .. } => panic!("logical operation"),
     }
 }
 
 impl Node {
+    fn compile(expr: Expr) -> Self {
+        match expr {
+            TableFreeScan => Node::TableFreeScan { empty: false },
+            SeqScan {
+                projects,
+                predicates,
+                table,
+            } => Node::SeqScan {
+                projects,
+                predicates,
+                table,
+                scan: None,
+            },
+            IndexScan {
+                projects,
+                predicates,
+                index_predicates,
+                table,
+            } => todo!(),
+            Filter { predicates, input } => Node::Filter {
+                predicates,
+                input: Input::compile(*input),
+            },
+            Out { projects, input } => Node::Out {
+                projects,
+                input: Input::compile(*input),
+            },
+            Map {
+                include_existing,
+                projects,
+                input,
+            } => Node::Map {
+                include_existing,
+                projects,
+                input: Input::compile(*input),
+            },
+            NestedLoop { join, left, right } => Node::NestedLoop {
+                join,
+                left: Input::compile(*left),
+                build_left: None,
+                right: Input::compile(*right),
+            },
+            HashJoin {
+                join,
+                partition_left,
+                partition_right,
+                left,
+                right,
+            } => {
+                let left = Input::compile(*left);
+                let right = Input::compile(*right);
+                Node::HashJoin {
+                    join,
+                    partition_left,
+                    partition_right,
+                    left,
+                    build_left: None,
+                    right,
+                }
+            }
+            LookupJoin {
+                join,
+                projects,
+                index_predicates,
+                table,
+                input,
+            } => todo!(),
+            CreateTempTable { .. } => todo!(),
+            GetTempTable { .. } => todo!(),
+            Aggregate {
+                group_by,
+                aggregate,
+                input,
+            } => todo!(),
+            Limit {
+                limit,
+                offset,
+                input,
+            } => todo!(),
+            Sort { order_by, input } => Node::Sort {
+                order_by,
+                input: Input::compile(*input),
+            },
+            Union { .. } => todo!(),
+            Intersect { .. } => todo!(),
+            Except { .. } => todo!(),
+            Insert { table, input } => Node::Insert {
+                table,
+                input: Input::compile(*input),
+            },
+            Values {
+                columns,
+                values,
+                input,
+            } => Node::Values {
+                columns,
+                values,
+                input: Input::compile(*input),
+            },
+            Update {
+                table,
+                pid,
+                tid,
+                input,
+            } => Node::Update {
+                table,
+                pid,
+                tid,
+                input: Input::compile(*input),
+            },
+            Delete { pid, tid, input } => Node::Delete {
+                pid,
+                tid,
+                input: Input::compile(*input),
+            },
+            Script { statements } => {
+                let mut compiled = vec![];
+                for expr in statements {
+                    compiled.push(Input::compile(expr))
+                }
+                Node::Script {
+                    offset: 0,
+                    statements: compiled,
+                }
+            }
+            Assign {
+                variable,
+                value,
+                input,
+            } => Node::Assign {
+                variable,
+                value,
+                input: Input::compile(*input),
+            },
+            Call { procedure, input } => Node::Call {
+                procedure,
+                input: Input::compile(*input),
+            },
+            Leaf { .. }
+            | LogicalSingleGet
+            | LogicalGet { .. }
+            | LogicalFilter { .. }
+            | LogicalOut { .. }
+            | LogicalMap { .. }
+            | LogicalJoin { .. }
+            | LogicalDependentJoin { .. }
+            | LogicalWith { .. }
+            | LogicalGetWith { .. }
+            | LogicalAggregate { .. }
+            | LogicalLimit { .. }
+            | LogicalSort { .. }
+            | LogicalUnion { .. }
+            | LogicalIntersect { .. }
+            | LogicalExcept { .. }
+            | LogicalInsert { .. }
+            | LogicalValues { .. }
+            | LogicalUpdate { .. }
+            | LogicalDelete { .. }
+            | LogicalCreateDatabase { .. }
+            | LogicalCreateTable { .. }
+            | LogicalCreateIndex { .. }
+            | LogicalDrop { .. }
+            | LogicalScript { .. }
+            | LogicalRewrite { .. }
+            | LogicalAssign { .. }
+            | LogicalCall { .. } => panic!("logical operation"),
+        }
+    }
+
     fn schema(&self) -> Schema {
         match self {
             Node::TableFreeScan { .. } => dummy_schema(),
