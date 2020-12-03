@@ -4,19 +4,24 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
+use catalog::Catalog;
 use kernel::Error;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use storage::*;
 
-pub fn execute(expr: Expr, txn: u64, storage: &mut Storage) -> Program<'_> {
-    let state = State::new(txn, storage);
+pub fn execute<'a>(
+    expr: Expr,
+    txn: u64,
+    catalog: &'a Catalog,
+    storage: &'a mut Storage,
+) -> Program<'a> {
+    let state = State::new(txn, catalog, storage);
     let input = Input::compile(expr);
     Program { state, input }
 }
 
-#[derive(Debug)]
 pub struct Program<'a> {
     state: State<'a>,
     input: Input,
@@ -567,7 +572,18 @@ impl Input {
             Node::Except { left, right } => todo!(),
             Node::Insert { table, input } => {
                 let input = input.next(state)?;
-                state.storage.table_mut(table.id).insert(&input, state.txn);
+                // Append rows to the table heap.
+                let (pids, tids) = state.storage.table_mut(table.id).insert(&input, state.txn);
+                // Append entries to each index.
+                for index in state.catalog.indexes.get(&table.id).unwrap_or(&vec![]) {
+                    crate::index::insert(
+                        state.storage.index_mut(index.index_id),
+                        &index.columns,
+                        &input,
+                        &pids,
+                        &tids,
+                    );
+                }
                 Ok(dummy_row(self.schema.clone()))
             }
             Node::Values { values, input, .. } => {
@@ -630,10 +646,20 @@ impl Input {
                             page.delete(*tid as usize, state.txn);
                         }
                     }
-                    // ...upsert new row versions.
+                    // ...upsert new row versions.,,
                     let tids: Arc<dyn Array> = Arc::new(UInt32Array::from(tids));
                     let input = kernel::gather(&input, &tids);
-                    state.storage.table_mut(table.id).insert(&input, state.txn);
+                    let (pids, tids) = state.storage.table_mut(table.id).insert(&input, state.txn);
+                    // ..update the indexes.
+                    for index in state.catalog.indexes.get(&table.id).unwrap_or(&vec![]) {
+                        crate::index::insert(
+                            state.storage.index_mut(index.index_id),
+                            &index.columns,
+                            &input,
+                            &pids,
+                            &tids,
+                        );
+                    }
                 }
                 Ok(dummy_row(self.schema.clone()))
             }

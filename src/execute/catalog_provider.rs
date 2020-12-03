@@ -84,7 +84,7 @@ impl CatalogProvider {
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
         let expr = optimize(expr, catalog, &mut self.parser);
-        let program = execute(expr, txn, storage);
+        let program = execute(expr, txn, catalog, storage);
 
         let mut catalogs = vec![];
         for batch_or_err in program {
@@ -125,7 +125,7 @@ impl CatalogProvider {
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
         let expr = optimize(expr, catalog, &mut self.parser);
-        let program = execute(expr, txn, storage);
+        let program = execute(expr, txn, catalog, storage);
 
         let mut tables = vec![];
         for batch_or_err in program {
@@ -186,7 +186,7 @@ impl CatalogProvider {
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
         let expr = optimize(expr, catalog, &mut self.parser);
-        let program = execute(expr, txn, storage);
+        let program = execute(expr, txn, catalog, storage);
 
         let mut statistics = vec![];
         for batch_or_err in program {
@@ -239,7 +239,7 @@ impl CatalogProvider {
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
         let expr = optimize(expr, catalog, &mut self.parser);
-        let program = execute(expr, txn, storage);
+        let program = execute(expr, txn, catalog, storage);
 
         let mut indexes = vec![];
         for batch_or_err in program {

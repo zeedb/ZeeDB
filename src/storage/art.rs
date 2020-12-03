@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Bound, Range, RangeBounds};
+use std::ops::{Bound, RangeBounds};
 
 pub struct Art {
     root: Node,

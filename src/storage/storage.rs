@@ -48,6 +48,14 @@ impl Storage {
         self.tables[id as usize].truncate()
     }
 
+    pub fn index(&self, id: i64) -> &Art {
+        &self.indexes[id as usize]
+    }
+
+    pub fn index_mut(&mut self, id: i64) -> &mut Art {
+        &mut self.indexes[id as usize]
+    }
+
     pub fn create_index(&mut self, id: i64) {
         self.indexes.resize_with(id as usize + 1, Art::empty);
     }

@@ -1,11 +1,6 @@
 use crate::byte_key::*;
 
 #[test]
-fn test_bool() {
-    assert_ordered(vec![ByteKey::key(false), ByteKey::key(true)]);
-}
-
-#[test]
 fn test_i32() {
     assert_ordered(vec![
         ByteKey::key(i32::MIN),
@@ -32,6 +27,16 @@ fn test_i64() {
 }
 
 #[test]
+fn test_u64() {
+    assert_ordered(vec![
+        ByteKey::key(u64::MIN),
+        ByteKey::key(1u64),
+        ByteKey::key(2u64),
+        ByteKey::key(u64::MAX),
+    ]);
+}
+
+#[test]
 fn test_f64() {
     assert_ordered(vec![
         ByteKey::key(f64::NEG_INFINITY),
@@ -50,13 +55,15 @@ fn test_f64() {
     ])
 }
 
-fn assert_ordered(examples: Vec<[u8; 8]>) {
+fn assert_ordered(examples: Vec<Vec<u8>>) {
     for i in 0..examples.len() {
         for j in 0..examples.len() {
             if i < j {
                 assert!(examples[i] < examples[j]);
             } else if j < i {
                 assert!(examples[j] < examples[i]);
+            } else {
+                assert!(examples[i] == examples[j]);
             }
         }
     }

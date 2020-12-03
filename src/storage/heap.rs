@@ -1,4 +1,5 @@
 use crate::page::*;
+use arrow::array::*;
 use arrow::datatypes::Schema;
 use arrow::record_batch::*;
 use std::fmt;
@@ -22,17 +23,35 @@ impl Heap {
         self.pages.iter().map(|page| page.clone()).collect()
     }
 
-    pub fn insert(&mut self, records: &RecordBatch, txn: u64) {
+    pub fn insert(&mut self, records: &RecordBatch, txn: u64) -> (Arc<dyn Array>, Arc<dyn Array>) {
         if self.pages.is_empty() {
             self.pages.push(Page::empty(records.schema()));
         }
+        // Allocate arrays to keep track of where we insert the rows.
+        let mut pids = UInt64Builder::new(records.num_rows());
+        let mut tids = UInt32Builder::new(records.num_rows());
+        // Insert, adding new pages if needed.
+        let mut offset = 0;
+        self.insert_more(records, txn, &mut pids, &mut tids, &mut offset);
+
+        (Arc::new(pids.finish()), Arc::new(tids.finish()))
+    }
+
+    pub fn insert_more(
+        &mut self,
+        records: &RecordBatch,
+        txn: u64,
+        pids: &mut UInt64Builder,
+        tids: &mut UInt32Builder,
+        offset: &mut usize,
+    ) {
         // Insert however many records fit in the last page.
         let last = self.pages.last().unwrap();
-        let offset = last.insert(records, txn);
+        last.insert(records, txn, pids, tids, offset);
         // If there are leftover records, add a page and try again.
-        if offset < records.num_rows() {
+        if *offset < records.num_rows() {
             self.pages.push(Page::empty(records.schema()));
-            self.insert(&slice(records, offset, records.num_rows() - offset), txn);
+            self.insert_more(records, txn, pids, tids, offset);
         }
     }
 
@@ -60,13 +79,4 @@ impl std::fmt::Debug for Heap {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.print(f, 0)
     }
-}
-
-fn slice(records: &RecordBatch, offset: usize, length: usize) -> RecordBatch {
-    let columns = records
-        .columns()
-        .iter()
-        .map(|column| column.slice(offset, length))
-        .collect();
-    RecordBatch::try_new(records.schema().clone(), columns).unwrap()
 }

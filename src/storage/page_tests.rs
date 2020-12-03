@@ -29,12 +29,20 @@ fn test_fixed_types() {
         ],
     )
     .unwrap();
-    assert_eq!(1, page.insert(&input, 1000));
+    let mut offset = 0;
+    let mut pids = UInt64Builder::new(1);
+    let mut tids = UInt32Builder::new(1);
+    page.insert(&input, 1000, &mut pids, &mut tids, &mut offset);
+    assert_eq!(1, offset);
     assert_eq!(
         "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\n",
         format!("{:?}", page)
     );
-    assert_eq!(1, page.insert(&input, 2000));
+    let mut offset = 0;
+    let mut pids = UInt64Builder::new(1);
+    let mut tids = UInt32Builder::new(1);
+    page.insert(&input, 2000, &mut pids, &mut tids, &mut offset);
+    assert_eq!(1, offset);
     assert_eq!(
         "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,2000,18446744073709551615\n",
         format!("{:?}", page)
@@ -56,12 +64,20 @@ fn test_var_types() {
         ],
     )
     .unwrap();
-    assert_eq!(2, page.insert(&input, 1000));
+    let mut offset = 0;
+    let mut pids = UInt64Builder::new(1);
+    let mut tids = UInt32Builder::new(1);
+    page.insert(&input, 1000, &mut pids, &mut tids, &mut offset);
+    assert_eq!(2, offset);
     assert_eq!(
         "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n",
         format!("{:?}", page)
     );
-    assert_eq!(2, page.insert(&input, 2000));
+    let mut offset = 0;
+    let mut pids = UInt64Builder::new(1);
+    let mut tids = UInt32Builder::new(1);
+    page.insert(&input, 2000, &mut pids, &mut tids, &mut offset);
+    assert_eq!(2, offset);
     assert_eq!(
         "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n1,foo,2000,18446744073709551615\n2,bar,2000,18446744073709551615\n",
         format!("{:?}", page)
@@ -83,7 +99,11 @@ fn test_insert_delete() {
         ],
     )
     .unwrap();
-    assert_eq!(2, page.insert(&input, 1000));
+    let mut offset = 0;
+    let mut pids = UInt64Builder::new(1);
+    let mut tids = UInt32Builder::new(1);
+    page.insert(&input, 1000, &mut pids, &mut tids, &mut offset);
+    assert_eq!(2, offset);
     assert!(page.delete(1, 2000));
     assert!(!page.delete(1, 2001));
     assert_eq!(

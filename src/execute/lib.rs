@@ -1,3 +1,6 @@
+mod byte_key;
+#[cfg(test)]
+mod byte_key_tests;
 mod catalog_provider;
 mod eval;
 mod execute;
@@ -6,6 +9,7 @@ mod execute_tests;
 mod hash_table;
 #[cfg(test)]
 mod hash_table_tests;
+mod index;
 mod join;
 mod sort;
 mod state;

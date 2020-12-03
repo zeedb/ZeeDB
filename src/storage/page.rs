@@ -159,9 +159,16 @@ impl Page {
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
     }
 
-    pub fn insert(&self, records: &RecordBatch, txn: u64) -> usize {
+    pub fn insert(
+        &self,
+        records: &RecordBatch,
+        txn: u64,
+        pids: &mut UInt64Builder,
+        tids: &mut UInt32Builder,
+        offset: &mut usize,
+    ) {
         let (start, end) = self.reserve(records.num_rows());
-        // Write the new row in the reserved slot.
+        // Write the new rows in the reserved slots.
         for (dst, dst_field) in self.inner.schema.fields().iter().enumerate() {
             for (src, src_field) in records.schema().fields().iter().enumerate() {
                 if base_name(src_field.name()) == base_name(dst_field.name()) {
@@ -183,12 +190,15 @@ impl Page {
                 }
             }
         }
-        // Make the rows visible to subsequent transactions.
         for i in start..end {
+            // Make the rows visible to subsequent transactions.
             self.xmin(i).store(txn, Ordering::Relaxed);
             self.xmax(i).store(u64::MAX, Ordering::Relaxed);
+            // Write locations of new pids and tids.
+            pids.append_value(self.pid()).unwrap();
+            tids.append_value(i as u32).unwrap();
         }
-        end - start
+        *offset += end - start;
     }
 
     pub fn delete(&self, row: usize, txn: u64) -> bool {
@@ -520,7 +530,7 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
     }
 }
 
-fn base_name(field: &String) -> &str {
+pub fn base_name(field: &String) -> &str {
     if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
         captures.get(1).unwrap().as_str()
     } else {
