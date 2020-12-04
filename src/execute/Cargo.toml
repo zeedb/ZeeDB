@@ -20,4 +20,5 @@ storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
 
 [dev-dependencies]
+rand = "0.7.3"
 test_fixtures = { path = "../test_fixtures" }

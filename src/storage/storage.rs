@@ -1,5 +1,6 @@
 use crate::art::Art;
 use crate::heap::*;
+use ast::Table;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering};
 
@@ -66,6 +67,17 @@ impl Storage {
 
     pub fn next_val(&self, id: i64) -> i64 {
         self.sequences[id as usize].fetch_add(1, Ordering::Relaxed)
+    }
+
+    pub fn table_cardinality(&self, id: i64) -> usize {
+        self.table(id).approx_cardinality()
+    }
+
+    pub fn column_unique_cardinality(&self, id: i64, column: &String) -> usize {
+        match column.as_str() {
+            "$xmin" | "$xmax" | "$pid" | "$tid" => self.table_cardinality(id),
+            _ => self.table(id).approx_unique_cardinality(column),
+        }
     }
 }
 

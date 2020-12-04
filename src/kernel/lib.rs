@@ -1,4 +1,6 @@
 mod array;
+#[cfg(test)]
+mod array_tests;
 mod batch;
 mod kernel;
 mod scatter;

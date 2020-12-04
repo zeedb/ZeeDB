@@ -1,7 +1,3 @@
-create table foo (id int64);
-create index foo_id on foo (id);
-insert into foo (id) values (1), (2);
-select * from foo where id = 1;
+select * from fact join dim using (dim_id) where fact_id = 1
 
-id
-1
+dim_id,fact_id,fact_attr,dim_attr

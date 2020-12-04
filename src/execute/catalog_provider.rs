@@ -2,10 +2,10 @@ use crate::execute;
 use arrow::array::*;
 use arrow::record_batch::*;
 use ast::data_type;
-use catalog::{Catalog, Index, Statistics};
+use catalog::{Catalog, Index};
 use parser::ParseProvider;
 use planner::optimize;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
 pub struct CatalogProvider {
@@ -47,10 +47,6 @@ impl CatalogProvider {
         Self::catalog_tree(root.catalog_id, &mut root.catalog, &mut catalogs);
         // Add tables to the root catalog.
         root.catalog.table = tables.remove(&catalog::ROOT_CATALOG_ID).unwrap_or(vec![]);
-        // Add statistics.
-        for table_stats in self.read_all_statistics(txn, &root, storage) {
-            root.statistics.insert(table_stats.table_id, table_stats);
-        }
         // Add indexes.
         for index in self.read_all_indexes(txn, &root, storage) {
             if !root.indexes.contains_key(&index.table_id) {
@@ -83,7 +79,7 @@ impl CatalogProvider {
                 from metadata.catalog"
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
-        let expr = optimize(expr, catalog, &mut self.parser);
+        let expr = optimize(expr, catalog, &storage, &mut self.parser);
         let program = execute(expr, txn, catalog, storage);
 
         let mut catalogs = vec![];
@@ -124,7 +120,7 @@ impl CatalogProvider {
             order by catalog_id, table_id, column_id"
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
-        let expr = optimize(expr, catalog, &mut self.parser);
+        let expr = optimize(expr, catalog, &storage, &mut self.parser);
         let program = execute(expr, txn, catalog, storage);
 
         let mut tables = vec![];
@@ -172,58 +168,6 @@ impl CatalogProvider {
         }
     }
 
-    fn read_all_statistics(
-        &mut self,
-        txn: u64,
-        catalog: &Catalog,
-        storage: &mut storage::Storage,
-    ) -> Vec<Statistics> {
-        let q = "
-            select table_id, table_cardinality, column_name, column_unique_cardinality
-            from metadata.table
-            join metadata.column using (table_id)
-            order by table_id"
-            .to_string();
-        let expr = self.parser.analyze(&q, &catalog).unwrap();
-        let expr = optimize(expr, catalog, &mut self.parser);
-        let program = execute(expr, txn, catalog, storage);
-
-        let mut statistics = vec![];
-        for batch_or_err in program {
-            let batch = batch_or_err.unwrap();
-            let mut offset = 0;
-            while offset < batch.num_rows() {
-                statistics.push(Self::read_statistics(&batch, &mut offset));
-            }
-        }
-
-        statistics
-    }
-
-    fn read_statistics(batch: &RecordBatch, offset: &mut usize) -> Statistics {
-        let table_id_column = kernel::coerce::<Int64Array>(batch.column(0));
-        let table_id = table_id_column.value(*offset);
-        let table_cardinality = kernel::coerce::<Int64Array>(batch.column(1)).value(0);
-        let column_name_column = kernel::coerce::<StringArray>(batch.column(2));
-        let column_unique_cardinality_column = kernel::coerce::<Int64Array>(batch.column(3));
-
-        let mut stats = Statistics {
-            table_id,
-            cardinality: table_cardinality as usize,
-            column_unique_cardinality: HashMap::new(),
-        };
-        while *offset < batch.num_rows() && table_id == table_id_column.value(*offset) {
-            let column_name = column_name_column.value(*offset).to_string();
-            stats.column_unique_cardinality.insert(
-                column_name,
-                column_unique_cardinality_column.value(*offset) as usize,
-            );
-            *offset += 1;
-        }
-
-        stats
-    }
-
     fn read_all_indexes(
         &mut self,
         txn: u64,
@@ -238,9 +182,9 @@ impl CatalogProvider {
             order by index_id, index_order"
             .to_string();
         let expr = self.parser.analyze(&q, &catalog).unwrap();
-        let expr = optimize(expr, catalog, &mut self.parser);
+        let expr = optimize(expr, catalog, &storage, &mut self.parser);
         let program = execute(expr, txn, catalog, storage);
-
+        let program: Vec<_> = program.collect();
         let mut indexes = vec![];
         for batch_or_err in program {
             let batch = batch_or_err.unwrap();

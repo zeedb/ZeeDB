@@ -1,5 +1,6 @@
 use crate::optimize::*;
 use regex::Regex;
+use storage::Storage;
 use test_fixtures::*;
 
 macro_rules! ok {
@@ -8,8 +9,9 @@ macro_rules! ok {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
         let catalog = adventure_works();
+        let storage = Storage::new(); // TODO need to populate with adventure works data
         let expr = parser.analyze(&sql, &catalog).unwrap();
-        let expr = optimize(expr, &catalog, &mut parser);
+        let expr = optimize(expr, &catalog, &storage, &mut parser);
         let found = format!("{}\n\n{}", sql, expr);
         if !matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());

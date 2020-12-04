@@ -25,49 +25,6 @@ pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
     tables
 }
 
-pub(crate) fn bootstrap_statistics() -> HashMap<i64, Statistics> {
-    let mut map = HashMap::new();
-
-    map.insert(
-        0,
-        Statistics::empty(0, vec!["parent_catalog_id", "catalog_id", "catalog_name"]),
-    ); // catalog
-    map.insert(
-        1,
-        Statistics::empty(
-            1,
-            vec!["catalog_id", "table_id", "table_name", "table_cardinality"],
-        ),
-    ); // table
-    map.insert(
-        2,
-        Statistics::empty(
-            2,
-            vec![
-                "table_id",
-                "column_id",
-                "column_name",
-                "column_type",
-                "column_unique_cardinality",
-            ],
-        ),
-    ); // column
-    map.insert(
-        3,
-        Statistics::empty(3, vec!["catalog_id", "index_id", "table_id", "index_name"]),
-    ); // index
-    map.insert(
-        4,
-        Statistics::empty(4, vec!["index_id", "column_id", "index_order"]),
-    ); // index_column
-    map.insert(
-        5,
-        Statistics::empty(5, vec!["sequence_id", "sequence_name"]),
-    ); // sequence
-
-    map
-}
-
 pub(crate) fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;
     let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {

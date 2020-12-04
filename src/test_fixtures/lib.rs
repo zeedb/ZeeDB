@@ -1,5 +1,4 @@
 use catalog::*;
-use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::io::{Read, Write};
@@ -104,65 +103,6 @@ pub fn adventure_works() -> Catalog {
         .insert(person_table_id, vec![index(customer_table_id, "person_id")]);
     cat.indexes
         .insert(store_table_id, vec![index(customer_table_id, "store_id")]);
-
-    let mut customer_table_stats = Statistics {
-        table_id: customer_table_id,
-        cardinality: 100_000,
-        column_unique_cardinality: HashMap::new(),
-    };
-    customer_table_stats
-        .column_unique_cardinality
-        .insert("customer_id".to_string(), 100_000);
-    customer_table_stats
-        .column_unique_cardinality
-        .insert("person_id".to_string(), 100_000);
-    customer_table_stats
-        .column_unique_cardinality
-        .insert("store_id".to_string(), 1_000);
-    customer_table_stats
-        .column_unique_cardinality
-        .insert("account_number".to_string(), 100_000);
-    customer_table_stats
-        .column_unique_cardinality
-        .insert("modified_date".to_string(), 100_000);
-    cat.statistics
-        .insert(customer_table_id, customer_table_stats);
-
-    let mut person_table_stats = Statistics {
-        table_id: person_table_id,
-        cardinality: 10_000_000,
-        column_unique_cardinality: HashMap::new(),
-    };
-    person_table_stats
-        .column_unique_cardinality
-        .insert("person_id".to_string(), 10_000_000);
-    person_table_stats
-        .column_unique_cardinality
-        .insert("first_name".to_string(), 100_000);
-    person_table_stats
-        .column_unique_cardinality
-        .insert("last_name".to_string(), 100_000);
-    person_table_stats
-        .column_unique_cardinality
-        .insert("modified_date".to_string(), 10_000_000);
-    cat.statistics.insert(person_table_id, person_table_stats);
-
-    let mut store_table_statistics = Statistics {
-        table_id: store_table_id,
-        cardinality: 1_000,
-        column_unique_cardinality: HashMap::new(),
-    };
-    store_table_statistics
-        .column_unique_cardinality
-        .insert("store_id".to_string(), 1_000);
-    store_table_statistics
-        .column_unique_cardinality
-        .insert("name".to_string(), 1_000);
-    store_table_statistics
-        .column_unique_cardinality
-        .insert("modified_date".to_string(), 1_000);
-    cat.statistics
-        .insert(store_table_id, store_table_statistics);
 
     cat
 }

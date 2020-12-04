@@ -196,7 +196,12 @@ impl Node {
                 predicates,
                 index_predicates,
                 table,
-            } => todo!(),
+            } => Node::IndexScan {
+                projects,
+                predicates,
+                index_predicates,
+                table,
+            },
             Filter { predicates, input } => Node::Filter {
                 predicates,
                 input: Input::compile(*input),

@@ -213,6 +213,7 @@ dependencies = [
  "num-traits",
  "parser",
  "planner",
+ "rand",
  "regex",
  "storage",
  "test_fixtures",
@@ -454,6 +455,15 @@ dependencies = [
  "tower-service",
  "tracing",
  "want",
+]
+
+[[package]]
+name = "hyperloglogplus"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "73dd1d391ce6dccb6eac2a62226c66d6f91b75a5309ef6bb1522931b19952053"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -774,6 +784,7 @@ dependencies = [
  "encoding",
  "parser",
  "regex",
+ "storage",
  "test_fixtures",
  "zetasql",
 ]
@@ -1041,6 +1052,7 @@ dependencies = [
  "arrow",
  "ast",
  "catalog",
+ "hyperloglogplus",
  "packed_simd_2",
  "rand",
  "regex",

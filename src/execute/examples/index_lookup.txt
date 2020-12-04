@@ -1,0 +1,4 @@
+select * from fact where fact_id = 1
+
+fact_id,dim_id,fact_attr
+1,6792,563445

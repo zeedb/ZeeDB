@@ -253,7 +253,7 @@ fn fnv(bytes: &[u8]) -> u64 {
 }
 
 pub fn bit_or(left: &Arc<dyn Array>, right: &Arc<dyn Array>) -> Arc<dyn Array> {
-    let mut builder = ArrayData::builder(left.data_type().clone());
+    let mut builder = ArrayData::builder(left.data_type().clone()).len(left.len());
     let left_data = left.data();
     let right_data = right.data();
     let left_buffer = left_data.buffers().first().unwrap();

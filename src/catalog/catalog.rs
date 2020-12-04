@@ -5,26 +5,20 @@ use zetasql::*;
 
 pub const ROOT_CATALOG_ID: i64 = 0;
 
+#[derive(Debug)]
 pub struct Catalog {
     pub catalog_id: i64,
     /// Catalog in ZetaSQL format.
     pub catalog: SimpleCatalogProto,
     /// Indexes, by table id.
     pub indexes: HashMap<i64, Vec<Index>>,
-    /// Table statistics, by table id.
-    pub statistics: HashMap<i64, Statistics>,
 }
 
+#[derive(Debug)]
 pub struct Index {
     pub index_id: i64,
     pub table_id: i64,
     pub columns: Vec<String>,
-}
-
-pub struct Statistics {
-    pub table_id: i64,
-    pub cardinality: usize,
-    pub column_unique_cardinality: HashMap<String, usize>,
 }
 
 impl Catalog {
@@ -35,7 +29,6 @@ impl Catalog {
             catalog_id: crate::ROOT_CATALOG_ID,
             catalog,
             indexes: HashMap::new(),
-            statistics: crate::bootstrap::bootstrap_statistics(),
         }
     }
 
@@ -56,26 +49,6 @@ impl Catalog {
 
     pub fn metadata() -> SimpleCatalogProto {
         crate::bootstrap::bootstrap_metadata_catalog()
-    }
-
-    pub fn table_cardinality(&self, table: &Table) -> usize {
-        self.statistics
-            .get(&table.id)
-            .expect(&table.name)
-            .cardinality
-    }
-
-    pub fn column_unique_cardinality(&self, table: &Table, column: &String) -> usize {
-        match column.as_str() {
-            "$xmin" | "$xmax" | "$pid" | "$tid" => self.table_cardinality(table),
-            _ => *self
-                .statistics
-                .get(&table.id)
-                .expect(&table.name)
-                .column_unique_cardinality
-                .get(column)
-                .expect(format!("{}.{}", table.name, column).as_str()),
-        }
     }
 
     pub fn find_index_scan(
@@ -117,20 +90,6 @@ impl Index {
             Some((index_predicates, remaining_predicates))
         } else {
             None
-        }
-    }
-}
-
-impl Statistics {
-    pub fn empty(table_id: i64, columns: Vec<&str>) -> Self {
-        let mut column_unique_cardinality = HashMap::new();
-        for c in columns {
-            column_unique_cardinality.insert(c.to_string(), 0);
-        }
-        Self {
-            table_id,
-            cardinality: 0,
-            column_unique_cardinality,
         }
     }
 }

@@ -7,13 +7,19 @@ use catalog::Catalog;
 use parser::ParseProvider;
 use std::collections::HashMap;
 use std::ops::Deref;
+use storage::Storage;
 
 // Our implementation of tasks differs from Columbia/Cascades:
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
 // However, the logic and the order of invocation should be exactly the same.
 
-pub fn optimize(expr: Expr, catalog: &Catalog, parser: &mut ParseProvider) -> Expr {
-    let mut optimizer = Optimizer::new(catalog);
+pub fn optimize(
+    expr: Expr,
+    catalog: &Catalog,
+    storage: &Storage,
+    parser: &mut ParseProvider,
+) -> Expr {
+    let mut optimizer = Optimizer::new(catalog, storage);
     let expr = RewriteProvider::new(catalog, parser).rewrite(expr);
     let gid = optimizer.copy_in_new(expr);
     optimizer.optimize_group(gid);
@@ -23,13 +29,15 @@ pub fn optimize(expr: Expr, catalog: &Catalog, parser: &mut ParseProvider) -> Ex
 struct Optimizer<'a> {
     ss: SearchSpace,
     catalog: &'a Catalog,
+    storage: &'a Storage,
 }
 
 impl<'a> Optimizer<'a> {
-    fn new(catalog: &Catalog) -> Optimizer<'_> {
+    fn new(catalog: &'a Catalog, storage: &'a Storage) -> Self {
         Optimizer {
             ss: SearchSpace::new(),
             catalog,
+            storage,
         }
     }
 
@@ -110,7 +118,7 @@ impl<'a> Optimizer<'a> {
         // and inputCosts are the total physical cost of the winning strategy for each input group.
         // If we don't yet have a winner for an inputGroup, we use the lower bound.
         // Thus, physicalCost + sum(inputCosts) = a lower-bound for the total cost of the best strategy for this group.
-        let physical_cost = physical_cost(&self.ss, &self.catalog, mid);
+        let physical_cost = physical_cost(&self.ss, &self.storage, mid);
         let mut input_costs = self.init_costs_using_lower_bound(mid);
         for i in 0..self.ss[mid].expr.len() {
             let input = leaf(&self.ss[mid].expr[i]);
@@ -227,11 +235,11 @@ impl<'a> Optimizer<'a> {
                 table,
             } => {
                 // Scan
-                cardinality = self.catalog.table_cardinality(table);
+                cardinality = self.storage.table_cardinality(table.id);
                 for c in projects {
                     column_unique_cardinality.insert(
                         c.clone(),
-                        self.catalog.column_unique_cardinality(table, &c.name),
+                        self.storage.column_unique_cardinality(table.id, &c.name),
                     );
                 }
                 // Filter

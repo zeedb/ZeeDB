@@ -198,11 +198,14 @@ impl IndentPrint for Expr {
                     write!(f, " {}", column)?;
                 }
                 let num_rows = values.first().map(|column| column.len()).unwrap_or(0);
-                let rows: Vec<Vec<Scalar>> = (0..num_rows)
+                let rows: Vec<Vec<Scalar>> = (0..num_rows.min(3))
                     .map(|i| values.iter().map(|column| column[i].clone()).collect())
                     .collect();
                 for row in rows {
                     write!(f, " [{}]", join_scalars(&row))?;
+                }
+                if num_rows > 3 {
+                    write!(f, " ...{} additional rows", num_rows - 3)?;
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)

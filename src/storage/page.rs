@@ -310,11 +310,17 @@ impl Page {
             .write(&record_batch)
             .unwrap();
         let csv = String::from_utf8(csv_bytes).unwrap();
-        for line in csv.lines() {
+        for line in csv.lines().take(10) {
             for _ in 0..indent {
                 write!(f, "\t")?;
             }
             writeln!(f, "{}", line.trim())?;
+        }
+        if record_batch.num_rows() > 10 {
+            for _ in 0..indent {
+                write!(f, "\t")?;
+            }
+            writeln!(f, "...{} additional rows", record_batch.num_rows() - 10)?;
         }
         Ok(())
     }
