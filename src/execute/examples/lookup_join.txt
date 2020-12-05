@@ -1,3 +1,4 @@
 select * from fact join dim using (dim_id) where fact_id = 1
 
 dim_id,fact_id,fact_attr,dim_attr
+563,1,896154,600340

@@ -33,9 +33,49 @@ impl Heap {
         self.pages.iter().map(|page| page.clone()).collect()
     }
 
+    pub fn bitmap_scan(&self, mut tids: Vec<u64>, projects: &Vec<String>) -> RecordBatch {
+        if tids.is_empty() {
+            return self.none(projects);
+        }
+        // Sort tids so we can access pages in-order.
+        tids.sort();
+        // Collect tids into 1 batch per page, and scan each page.
+        let mut batches = vec![];
+        let mut i = 0;
+        while i < tids.len() {
+            let pid = tids[i] as usize / PAGE_SIZE;
+            let mut rids = vec![];
+            while i < tids.len() && pid == tids[i] as usize / PAGE_SIZE {
+                let rid = tids[i] as usize % PAGE_SIZE;
+                rids.push(rid as u32);
+                i += 1;
+            }
+            let batch = self.page(pid).select(projects);
+            let map: Arc<dyn Array> = Arc::new(UInt32Array::from(rids));
+            batches.push(kernel::gather(&batch, &map));
+        }
+        // Combine results from each page.
+        kernel::cat(&batches)
+    }
+
+    fn none(&self, projects: &Vec<String>) -> RecordBatch {
+        let schema = self.schema().unwrap();
+        let empty_field = |name: &String| match base_name(name) {
+            "$xmin" | "$xmax" | "$tid" => Field::new(name, DataType::UInt64, false),
+            base_name => {
+                let field = schema.field_with_name(base_name).unwrap();
+                Field::new(name, field.data_type().clone(), field.is_nullable())
+            }
+        };
+        let fields: Vec<Field> = projects.iter().map(empty_field).collect();
+        let columns: Vec<Arc<dyn Array>> = fields.iter().map(|f| empty(f.data_type())).collect();
+        RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
+    }
+
     pub fn insert(&mut self, records: &RecordBatch, txn: u64) -> UInt64Array {
         if self.pages.is_empty() {
-            self.pages.push(Page::empty(records.schema()));
+            self.pages
+                .push(Page::empty(self.pages.len(), records.schema()));
             for column in records.schema().fields() {
                 self.counters.insert(
                     base_name(column.name()).to_string(),
@@ -64,7 +104,8 @@ impl Heap {
         last.insert(records, txn, tids, offset);
         // If there are leftover records, add a page and try again.
         if *offset < records.num_rows() {
-            self.pages.push(Page::empty(records.schema()));
+            self.pages
+                .push(Page::empty(self.pages.len(), records.schema()));
             self.insert_more(records, txn, tids, offset);
         }
         // Update counters.
@@ -80,8 +121,8 @@ impl Heap {
         }
     }
 
-    pub fn update(&self, pid: usize) -> &Page {
-        todo!()
+    pub fn page(&self, pid: usize) -> &Page {
+        &self.pages[pid]
     }
 
     pub fn truncate(&mut self) {
@@ -182,4 +223,37 @@ fn update_counter_utf8(counter: &mut Counter, column: &Arc<dyn Array>) {
             counter.add(column.value(i).as_bytes())
         }
     }
+}
+
+pub fn empty(as_type: &DataType) -> Arc<dyn Array> {
+    match as_type {
+        DataType::Boolean => empty_boolean(),
+        DataType::Int64 => empty_generic::<Int64Type>(),
+        DataType::UInt64 => empty_generic::<UInt64Type>(),
+        DataType::Float64 => empty_generic::<Float64Type>(),
+        DataType::Date32(DateUnit::Day) => empty_generic::<Date32Type>(),
+        DataType::Timestamp(TimeUnit::Microsecond, None) => {
+            empty_generic::<TimestampMicrosecondType>()
+        }
+        DataType::FixedSizeBinary(16) => todo!(),
+        DataType::Utf8 => empty_utf8(),
+        DataType::Struct(fields) => todo!(),
+        DataType::List(element) => todo!(),
+        other => panic!("{:?} not supported", other),
+    }
+}
+
+fn empty_boolean() -> Arc<dyn Array> {
+    let mut array = BooleanBuilder::new(0);
+    Arc::new(array.finish())
+}
+
+fn empty_generic<T: ArrowNumericType>() -> Arc<dyn Array> {
+    let mut array = PrimitiveArray::<T>::builder(0);
+    Arc::new(array.finish())
+}
+
+fn empty_utf8() -> Arc<dyn Array> {
+    let mut array = StringBuilder::new(0);
+    Arc::new(array.finish())
 }

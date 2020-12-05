@@ -6,7 +6,6 @@ use arrow::record_batch::RecordBatch;
 use ast::*;
 use catalog::{Catalog, Index};
 use kernel::Error;
-use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use storage::*;
@@ -409,9 +408,8 @@ impl Node {
                     .map(|column| column.into_query_field())
                     .collect(),
             ),
-            Node::Delete { .. } | Node::Script { .. } | Node::Assign { .. } | Node::Call { .. } => {
-                dummy_schema()
-            }
+            Node::Delete { input, .. } => input.schema.as_ref().clone(),
+            Node::Script { .. } | Node::Assign { .. } | Node::Call { .. } => dummy_schema(),
         }
     }
 }
@@ -452,7 +450,30 @@ impl Input {
                 index,
                 table,
                 input,
-            } => todo!(),
+            } => {
+                // Evaluate lookup scalars.
+                let input = input.next(state)?;
+                let mut keys = vec![];
+                for scalar in lookup {
+                    let column = crate::eval::eval(scalar, &input, state)?;
+                    let key_part = crate::index::bytes(&column);
+                    keys.push(key_part);
+                }
+                let keys = crate::index::zip(&keys);
+                // Look up scalars in the index.
+                let index = state.storage.index(index.index_id);
+                let mut tids = vec![];
+                for i in 0..keys.len() {
+                    let start = keys.value(i);
+                    let end = crate::index::upper_bound(start);
+                    tids.extend(index.range(start..end.as_slice()));
+                }
+                // Perform a selective scan of the table.
+                let projects = projects.iter().map(|c| c.canonical_name()).collect();
+                let output = state.storage.table(table.id).bitmap_scan(tids, &projects);
+                let boolean = crate::eval::all(predicates, &output, state)?;
+                Ok(kernel::gather_logical(&output, &boolean))
+            }
             Node::Filter { predicates, input } => {
                 let input = input.next(state)?;
                 let boolean = crate::eval::all(predicates, &input, state)?;
@@ -464,7 +485,7 @@ impl Input {
                 for column in projects {
                     columns.push(kernel::find(&input, column));
                 }
-                Ok(RecordBatch::try_new(self.schema.clone(), columns)?)
+                Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
             Node::Map {
                 include_existing,
@@ -476,10 +497,10 @@ impl Input {
                 if *include_existing {
                     columns.extend_from_slice(input.columns());
                 }
-                for (scalar, column) in projects {
+                for (scalar, _) in projects {
                     columns.push(crate::eval::eval(scalar, &input, state)?);
                 }
-                Ok(RecordBatch::try_new(self.schema.clone(), columns)?)
+                Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
             Node::NestedLoop {
                 join,
@@ -540,7 +561,8 @@ impl Input {
             Node::Insert { table, input } => {
                 let input = input.next(state)?;
                 // Append rows to the table heap.
-                let tids = state.storage.table_mut(table.id).insert(&input, state.txn);
+                let heap = state.storage.table_mut(table.id);
+                let tids = heap.insert(&input, state.txn);
                 // Append entries to each index.
                 for index in state.catalog.indexes.get(&table.id).unwrap_or(&vec![]) {
                     crate::index::insert(
@@ -566,32 +588,27 @@ impl Input {
                 if input.num_rows() == 0 {
                     return self.next(state);
                 }
-                // Identify rows to be updated by tid.
-                let tids: &UInt64Array = input
-                    .column(
-                        input
-                            .schema()
-                            .fields()
-                            .iter()
-                            .position(|f| f.name() == &tid.canonical_name())
-                            .expect(&tid.canonical_name()),
-                    )
-                    .as_any()
-                    .downcast_ref::<UInt64Array>()
-                    .unwrap();
-                // Read the input sequentially, looking up the appropriate page, and invalidating the old row versions.
+                // Identify rows to be updated by tid and sort them.
+                let tids = input.column(
+                    input
+                        .schema()
+                        .fields()
+                        .iter()
+                        .position(|f| f.name() == &tid.canonical_name())
+                        .expect(&tid.canonical_name()),
+                );
+                let tids = kernel::gather(tids, &kernel::sort(tids));
+                let tids: &UInt64Array = tids.as_any().downcast_ref::<UInt64Array>().unwrap();
+                // Invalidate the old row versions.
                 let heap = state.storage.table(table.id);
-                let mut pid = tids.value(0) as usize / storage::PAGE_SIZE;
-                let mut page = heap.update(pid);
-                for i in 0..tids.len() {
-                    // If we've moved into a different page, look it up.
-                    // We're relying on the input to the delete being approximately in page-order.
-                    if tids.value(0) as usize / storage::PAGE_SIZE != pid {
-                        pid = tids.value(0) as usize / storage::PAGE_SIZE;
-                        page = heap.update(pid);
+                let mut i = 0;
+                while i < tids.len() {
+                    let pid = tids.value(0) as usize / storage::PAGE_SIZE;
+                    let page = heap.page(pid);
+                    while i < tids.len() && pid == tids.value(i) as usize / storage::PAGE_SIZE {
+                        page.delete(tids.value(i) as usize % storage::PAGE_SIZE, state.txn);
+                        i += 1;
                     }
-                    // Mark previous row versions as invalid.
-                    page.delete(tids.value(i) as usize, state.txn);
                 }
                 Ok(input)
             }
@@ -665,6 +682,7 @@ fn dummy_schema() -> Schema {
     )])
 }
 
+// TODO instead of calling a function, insert a Build operator into the tree.
 fn build(input: &mut Input, state: &mut State) -> Result<RecordBatch, Error> {
     let mut batches = vec![];
     loop {

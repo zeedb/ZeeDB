@@ -122,7 +122,7 @@ impl Converter {
         let table = Table::from(q);
         let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
         let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
-        let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt32);
+        let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),

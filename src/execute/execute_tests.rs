@@ -15,10 +15,10 @@ fn run(path: &str, script: Vec<&str>, storage: &mut Storage, errors: &mut Vec<St
         let sql = trim.replace_all(sql, "").trim().to_string();
         let catalog = CatalogProvider::new().catalog((txn + 100) as u64, storage);
         let program = compile(&sql, (txn + 100) as u64, &catalog, storage);
-        if let Some(Ok(last)) = program.last() {
-            output = csv(last);
-        } else {
-            output = "".to_string();
+        match program.last() {
+            Some(Ok(last)) => output = csv(last),
+            Some(Err(err)) => output = format!("{:?}", err),
+            None => output = "".to_string(),
         }
     }
     let found = format!("{}\n\n{}", script.join("\n"), output);
@@ -75,7 +75,7 @@ fn csv(record_batch: RecordBatch) -> String {
 }
 
 #[test]
-fn test_execute() {
+fn test_select() {
     let mut errors = vec![];
     run(
         "examples/select_1.txt",
@@ -83,64 +83,17 @@ fn test_execute() {
         &mut Storage::new(),
         &mut errors,
     );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_ddl() {
+    let mut errors = vec![];
     run(
         "examples/create_table.txt",
         vec!["create table foo (id int64)"],
-        &mut Storage::new(),
-        &mut errors,
-    );
-    run(
-        "examples/insert.txt",
-        vec![
-            "create table foo (id int64);",
-            "insert into foo (id) values (1);",
-            "select * from foo;",
-        ],
-        &mut Storage::new(),
-        &mut errors,
-    );
-    run(
-        "examples/insert_vary_order.txt",
-        vec![
-            "create table foo (id int64, ok bool);",
-            "insert into foo (id, ok) values (1, false);",
-            "insert into foo (ok, id) values (true, 2);",
-            "select * from foo;",
-        ],
-        &mut Storage::new(),
-        &mut errors,
-    );
-    run(
-        "examples/delete.txt",
-        vec![
-            "create table foo (id int64);",
-            "insert into foo (id) values (1);",
-            "delete from foo where id = 1;",
-            "select * from foo;",
-        ],
-        &mut Storage::new(),
-        &mut errors,
-    );
-    run(
-        "examples/delete_then_insert.txt",
-        vec![
-            "create table foo (id int64);",
-            "insert into foo (id) values (1);",
-            "delete from foo where id = 1;",
-            "insert into foo (id) values (2);",
-            "select * from foo;",
-        ],
-        &mut Storage::new(),
-        &mut errors,
-    );
-    run(
-        "examples/update.txt",
-        vec![
-            "create table foo (id int64);",
-            "insert into foo (id) values (1);",
-            "update foo set id = 2 where id = 1;",
-            "select * from foo;",
-        ],
         &mut Storage::new(),
         &mut errors,
     );
@@ -166,12 +119,101 @@ fn test_execute() {
         &mut errors,
     );
     run(
+        "examples/drop_index.txt",
+        vec![
+            "create table foo (id int64);",
+            "create index foo_id on foo (id);",
+            "drop index foo_id;",
+        ],
+        &mut Storage::new(),
+        &mut errors,
+    );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_insert() {
+    let mut errors = vec![];
+    run(
+        "examples/insert.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "select * from foo;",
+        ],
+        &mut Storage::new(),
+        &mut errors,
+    );
+    run(
+        "examples/insert_vary_order.txt",
+        vec![
+            "create table foo (id int64, ok bool);",
+            "insert into foo (id, ok) values (1, false);",
+            "insert into foo (ok, id) values (true, 2);",
+            "select * from foo;",
+        ],
+        &mut Storage::new(),
+        &mut errors,
+    );
+    run(
         "examples/insert_into_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
             "insert into foo (id) values (1);",
             "select * from foo where id = 1",
+        ],
+        &mut Storage::new(),
+        &mut errors,
+    );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_delete() {
+    let mut errors = vec![];
+    run(
+        "examples/delete.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "delete from foo where id = 1;",
+            "select * from foo;",
+        ],
+        &mut Storage::new(),
+        &mut errors,
+    );
+    run(
+        "examples/delete_then_insert.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "delete from foo where id = 1;",
+            "insert into foo (id) values (2);",
+            "select * from foo;",
+        ],
+        &mut Storage::new(),
+        &mut errors,
+    );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
+#[test]
+fn test_update() {
+    let mut errors = vec![];
+    run(
+        "examples/update.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo (id) values (1);",
+            "update foo set id = 2 where id = 1;",
+            "select * from foo;",
         ],
         &mut Storage::new(),
         &mut errors,
@@ -194,18 +236,20 @@ fn test_execute() {
 }
 
 #[test]
-fn test_indexes() {
+fn test_index_scan() {
     let mut storage = Storage::new();
     // Setup.
     let mut rng = rand::rngs::StdRng::from_seed([0; 32]);
     let mut populate_fact = vec![];
     let mut populate_dim = vec![];
-    for fact_id in 1..10_000 {
-        let dim_id = rng.gen_range(0, 10_000);
+    const N_DIM: usize = 1_000;
+    const N_FACT: usize = 10_000;
+    for fact_id in 1..N_FACT {
+        let dim_id = rng.gen_range(0, N_DIM);
         let fact_attr = rng.gen_range(0, 1_000_000);
         populate_fact.push(format!("({}, {}, {})", fact_id, dim_id, fact_attr));
     }
-    for dim_id in 1..1_000 {
+    for dim_id in 1..N_DIM {
         let dim_attr = rng.gen_range(0, 1_000_000);
         populate_dim.push(format!("({}, {})", dim_id, dim_attr));
     }

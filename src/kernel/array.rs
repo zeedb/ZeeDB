@@ -31,8 +31,8 @@ impl crate::Kernel for Arc<dyn Array> {
     }
 
     fn sort(any: &Self) -> Arc<dyn Array> {
-        let u32 = arrow::compute::sort_to_indices(any, None).unwrap();
-        Arc::new(u32)
+        let uint32 = arrow::compute::sort_to_indices(any, None).unwrap();
+        Arc::new(uint32)
     }
 }
 

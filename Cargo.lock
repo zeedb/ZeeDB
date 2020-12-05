@@ -1052,6 +1052,7 @@ dependencies = [
  "arrow",
  "catalog",
  "hyperloglogplus",
+ "kernel",
  "packed_simd_2",
  "rand",
  "regex",

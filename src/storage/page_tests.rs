@@ -17,7 +17,7 @@ fn test_fixed_types() {
             true,
         ),
     ]));
-    let page = Page::empty(schema.clone());
+    let page = Page::empty(0, schema.clone());
     let input = RecordBatch::try_new(
         schema.clone(),
         vec![
@@ -53,7 +53,7 @@ fn test_var_types() {
         Field::new("int64", DataType::Int64, true),
         Field::new("string", DataType::Utf8, true),
     ]));
-    let page = Page::empty(schema.clone());
+    let page = Page::empty(0, schema.clone());
     let input = RecordBatch::try_new(
         schema.clone(),
         vec![
@@ -86,7 +86,7 @@ fn test_insert_delete() {
         Field::new("a", DataType::Int64, true),
         Field::new("b", DataType::Int64, true),
     ]));
-    let page = Page::empty(schema.clone());
+    let page = Page::empty(0, schema.clone());
     let input = RecordBatch::try_new(
         schema.clone(),
         vec![

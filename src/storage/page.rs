@@ -33,6 +33,7 @@ pub struct Page {
 //
 // Stats are stored at the end of the page.
 struct Inner {
+    pid: usize,
     schema: Arc<Schema>,
     columns: Vec<usize>,
     xmin: usize,
@@ -44,7 +45,7 @@ struct Inner {
 
 impl Page {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
-    pub fn empty(schema: Arc<Schema>) -> Self {
+    pub fn empty(pid: usize, schema: Arc<Schema>) -> Self {
         let schema = Schema::new(schema.fields().iter().map(with_base_name).collect());
         let mut capacity = 0;
         let mut columns = vec![];
@@ -71,6 +72,7 @@ impl Page {
             .map(|field| string_buffer(field.data_type()))
             .collect();
         let inner = Inner {
+            pid,
             schema: Arc::new(schema),
             columns,
             string_buffers,
@@ -118,10 +120,11 @@ impl Page {
                     fields.push(Field::new(project, DataType::UInt64, false));
                 }
                 "$tid" => {
-                    columns.push(Arc::new(UInt32Array::from(
-                        (0u32..num_rows as u32).collect::<Vec<u32>>(),
-                    )));
-                    fields.push(Field::new(project, DataType::UInt32, false));
+                    let start = self.inner.pid * PAGE_SIZE;
+                    let end = start + num_rows;
+                    let tids: Vec<u64> = (start as u64..end as u64).collect();
+                    columns.push(Arc::new(UInt64Array::from(tids)));
+                    fields.push(Field::new(project, DataType::UInt64, false));
                 }
                 name => {
                     if let Some(i) = self
@@ -154,6 +157,15 @@ impl Page {
         }
         // Wrap RecordBatch in a reference that ensures the underlying buffer doesn't get destroyed.
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
+    }
+
+    pub fn star(&self) -> Vec<String> {
+        self.inner
+            .schema
+            .fields()
+            .iter()
+            .map(|field| base_name(field.name()).to_string())
+            .collect()
     }
 
     pub fn insert(
@@ -255,13 +267,7 @@ impl Page {
     }
 
     pub(crate) fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        let mut star: Vec<String> = self
-            .inner
-            .schema
-            .fields()
-            .iter()
-            .map(|field| base_name(field.name()).to_string())
-            .collect();
+        let mut star: Vec<String> = self.star();
         star.push("$xmin".to_string());
         star.push("$xmax".to_string());
         let record_batch = self.select(&star);

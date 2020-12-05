@@ -271,6 +271,7 @@ impl IndentPrint for Expr {
                     table.name,
                     join_index_lookups(index, lookup)
                 )?;
+                newline(f, indent + 1)?;
                 input.indent_print(f, indent + 1)
             }
             Expr::HashJoin {

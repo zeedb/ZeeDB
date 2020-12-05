@@ -29,15 +29,25 @@ pub(crate) fn insert(
     }
 }
 
-pub fn key(columns: &Vec<Arc<dyn Array>>) -> GenericBinaryArray<i32> {
-    todo!()
+pub(crate) fn upper_bound(prefix: &[u8]) -> Vec<u8> {
+    let mut end = prefix.to_vec();
+    let mut i = end.len();
+    loop {
+        if i == 0 {
+            end.push(u8::MAX);
+            return end;
+        } else if end[i - 1] < u8::MAX {
+            end[i - 1] += 1;
+            return end;
+        } else {
+            end[i - 1] = 0;
+            i -= 1;
+            continue;
+        }
+    }
 }
 
-pub fn prefix(key: &[u8]) -> Range<&[u8]> {
-    todo!()
-}
-
-fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
+pub(crate) fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
     match column.data_type() {
         DataType::Boolean => bytes_bool(column),
         DataType::Int64 => bytes_generic::<Int64Type>(column),
@@ -100,7 +110,7 @@ fn bytes_utf8(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
     )
 }
 
-fn zip(columns: &Vec<GenericBinaryArray<i32>>) -> GenericBinaryArray<i32> {
+pub(crate) fn zip(columns: &Vec<GenericBinaryArray<i32>>) -> GenericBinaryArray<i32> {
     let len = columns.iter().map(|c| c.len()).sum();
     let mut buffer = BinaryBuilder::new(len);
     for i in 0..columns[0].len() {
