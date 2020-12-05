@@ -1,6 +1,7 @@
 use crate::data_type;
 use crate::values::*;
 use arrow::datatypes::*;
+use catalog::Index;
 use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -163,7 +164,8 @@ pub enum Expr {
     IndexScan {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
-        index_predicates: Vec<(Column, Scalar)>,
+        lookup: Vec<Scalar>,
+        index: Index,
         table: Table,
     },
     Filter {
@@ -194,7 +196,8 @@ pub enum Expr {
     LookupJoin {
         join: Join,
         projects: Vec<Column>,
-        index_predicates: Vec<(Column, Scalar)>,
+        lookup: Vec<Scalar>,
+        index: Index,
         table: Table,
         input: Box<Expr>,
     },
@@ -631,14 +634,16 @@ impl Expr {
             Expr::LookupJoin {
                 join,
                 projects,
+                lookup,
+                index,
                 table,
-                index_predicates,
                 input,
             } => Expr::LookupJoin {
                 join,
                 projects,
+                lookup,
+                index,
                 table,
-                index_predicates,
                 input: Box::new(visitor(*input)),
             },
             Expr::Aggregate {

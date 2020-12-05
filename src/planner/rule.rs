@@ -1,6 +1,6 @@
 use crate::search_space::*;
 use ast::*;
-use catalog::Catalog;
+use catalog::{Catalog, Index};
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
@@ -394,14 +394,15 @@ impl Rule {
                 } = bind
                 {
                     // TODO return multiple indexes!
-                    if let Some((index_predicates, predicates)) =
-                        catalog.find_index_scan(&predicates, &table).pop()
+                    if let Some((index, lookup, predicates)) =
+                        find_index(catalog, &predicates, &table).pop()
                     {
                         return Some(IndexScan {
                             projects,
                             predicates,
+                            lookup,
+                            index,
                             table,
-                            index_predicates,
                         });
                     }
                 }
@@ -471,14 +472,15 @@ impl Rule {
                         let mut predicates = join.predicates().clone();
                         predicates.extend(table_predicates);
                         // TODO return multiple indexes!
-                        if let Some((index_predicates, remaining_predicates)) =
-                            catalog.find_index_scan(&predicates, &table).pop()
+                        if let Some((index, lookup, predicates)) =
+                            find_index(catalog, &predicates, &table).pop()
                         {
                             return Some(LookupJoin {
-                                join: join.replace(remaining_predicates),
+                                join: join.replace(predicates),
                                 projects,
+                                lookup,
+                                index,
                                 table,
-                                index_predicates,
                                 input: right,
                             });
                         }
@@ -697,4 +699,48 @@ fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
     columns
         .iter()
         .all(|c| group.props.column_unique_cardinality.contains_key(c))
+}
+
+fn find_index(
+    catalog: &Catalog,
+    predicates: &Vec<Scalar>,
+    table: &Table,
+) -> Vec<(Index, Vec<Scalar>, Vec<Scalar>)> {
+    catalog
+        .indexes
+        .get(&table.id)
+        .unwrap_or(&vec![])
+        .iter()
+        .flat_map(|index| check_index(index, predicates))
+        .collect()
+}
+
+fn check_index(
+    index: &Index,
+    predicates: &Vec<Scalar>,
+) -> Option<(Index, Vec<Scalar>, Vec<Scalar>)> {
+    let mut index_predicates = vec![];
+    let mut remaining_predicates = vec![];
+    for column_name in &index.columns {
+        for predicate in predicates {
+            match predicate {
+                Scalar::Call(function) => match function.as_ref() {
+                    Function::Equal(Scalar::Column(column), lookup)
+                    | Function::Equal(lookup, Scalar::Column(column))
+                        if column_name == &column.name =>
+                    {
+                        // TODO need to check if table matches!!
+                        index_predicates.push(lookup.clone());
+                    }
+                    _ => remaining_predicates.push(predicate.clone()),
+                },
+                _ => remaining_predicates.push(predicate.clone()),
+            }
+        }
+    }
+    if index.columns.len() == index_predicates.len() {
+        Some((index.clone(), index_predicates, remaining_predicates))
+    } else {
+        None
+    }
 }

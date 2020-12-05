@@ -4,7 +4,7 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
-use catalog::Catalog;
+use catalog::{Catalog, Index};
 use kernel::Error;
 use std::collections::HashMap;
 use std::fmt;
@@ -46,7 +46,8 @@ enum Node {
     IndexScan {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
-        index_predicates: Vec<(Column, Scalar)>,
+        lookup: Vec<Scalar>,
+        index: Index,
         table: Table,
     },
     Filter {
@@ -79,7 +80,8 @@ enum Node {
     LookupJoin {
         join: Join,
         projects: Vec<Column>,
-        index_predicates: Vec<(Column, Scalar)>,
+        lookup: Scalar,
+        index: Index,
         table: Table,
         input: Input,
     },
@@ -194,12 +196,14 @@ impl Node {
             IndexScan {
                 projects,
                 predicates,
-                index_predicates,
+                lookup,
+                index,
                 table,
             } => Node::IndexScan {
                 projects,
                 predicates,
-                index_predicates,
+                lookup,
+                index,
                 table,
             },
             Filter { predicates, input } => Node::Filter {
@@ -246,7 +250,8 @@ impl Node {
             LookupJoin {
                 join,
                 projects,
-                index_predicates,
+                lookup,
+                index,
                 table,
                 input,
             } => todo!(),
@@ -411,7 +416,8 @@ impl Node {
             Node::LookupJoin {
                 join,
                 projects,
-                index_predicates,
+                lookup,
+                index,
                 table,
                 input,
             } => todo!(),
@@ -471,7 +477,8 @@ impl Input {
                 }
                 match scan.as_mut().unwrap().pop() {
                     Some(page) => {
-                        let input = page.select(projects);
+                        let column_names = projects.iter().map(|c| c.canonical_name()).collect();
+                        let input = page.select(&column_names);
                         let boolean = crate::eval::all(predicates, &input, state)?;
                         Ok(kernel::gather_logical(&input, &boolean))
                     }
@@ -481,7 +488,8 @@ impl Input {
             Node::IndexScan {
                 projects,
                 predicates,
-                index_predicates,
+                lookup,
+                index,
                 table,
             } => todo!(),
             Node::Filter { predicates, input } => {
@@ -550,7 +558,8 @@ impl Input {
             Node::LookupJoin {
                 join,
                 projects,
-                index_predicates,
+                lookup,
+                index,
                 table,
                 input,
             } => todo!(),

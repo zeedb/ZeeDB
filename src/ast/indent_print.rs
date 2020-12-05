@@ -1,5 +1,6 @@
 use crate::data_type;
 use crate::expr::*;
+use catalog::Index;
 use std::fmt;
 
 pub trait IndentPrint {
@@ -252,8 +253,9 @@ impl IndentPrint for Expr {
             Expr::IndexScan {
                 projects,
                 predicates,
+                lookup,
+                index,
                 table,
-                index_predicates,
             } => {
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(predicates))?;
@@ -267,7 +269,7 @@ impl IndentPrint for Expr {
                     "{} {}({})",
                     self.name(),
                     table.name,
-                    join_index_lookups(index_predicates)
+                    join_index_lookups(index, lookup)
                 )?;
                 Ok(())
             }
@@ -291,8 +293,9 @@ impl IndentPrint for Expr {
             Expr::LookupJoin {
                 join,
                 projects,
+                lookup,
+                index,
                 table,
-                index_predicates,
                 input,
             } => {
                 write!(f, "{} {}", self.name(), join.replace(vec![]))?;
@@ -311,7 +314,7 @@ impl IndentPrint for Expr {
                     f,
                     "IndexScan* {}({})",
                     table.name,
-                    join_index_lookups(index_predicates)
+                    join_index_lookups(index, lookup)
                 )?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -485,10 +488,10 @@ fn join_scalars(xs: &Vec<Scalar>) -> String {
     strings.join(" ")
 }
 
-fn join_index_lookups(index_predicates: &Vec<(Column, Scalar)>) -> String {
+fn join_index_lookups(index: &Index, lookup: &Vec<Scalar>) -> String {
     let mut strings = vec![];
-    for (c, x) in index_predicates {
-        strings.push(format!("{}:{}", c, x));
+    for i in 0..index.columns.len() {
+        strings.push(format!("{}:{}", index.columns[i], lookup[i]));
     }
     strings.join(" ")
 }

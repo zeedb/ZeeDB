@@ -3,7 +3,6 @@ use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use arrow::util::bit_util::*;
-use ast::*;
 use regex::Regex;
 use std::fmt;
 use std::mem::size_of;
@@ -45,6 +44,7 @@ struct Inner {
 impl Page {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
     pub fn empty(schema: Arc<Schema>) -> Self {
+        let schema = Schema::new(schema.fields().iter().map(with_base_name).collect());
         let mut capacity = 0;
         let mut columns = vec![];
         for field in schema.fields() {
@@ -70,7 +70,7 @@ impl Page {
             .map(|field| string_buffer(field.data_type()))
             .collect();
         let inner = Inner {
-            schema,
+            schema: Arc::new(schema),
             columns,
             string_buffers,
             xmin,
@@ -97,63 +97,75 @@ impl Page {
         self.inner.schema.clone()
     }
 
-    pub fn select(&self, projects: &Vec<Column>) -> RecordBatch {
+    pub fn select(&self, projects: &Vec<String>) -> RecordBatch {
         let num_rows = self.num_rows().load(Ordering::Relaxed);
         // View data columns as arrow format.
         let mut columns = vec![];
         let mut fields = vec![];
-        for column in projects {
-            for (i, field) in self.inner.schema.fields().iter().enumerate() {
-                if base_name(field.name()) == base_name(&column.name) {
-                    let field = Field::new(
-                        column.canonical_name().as_str(),
-                        field.data_type().clone(),
-                        field.is_nullable(),
-                    );
-                    let column = head(
-                        &field,
-                        self.inner.columns[i],
+        for project in projects {
+            match base_name(project) {
+                "$xmin" => {
+                    columns.push(head(
+                        self.inner.xmin,
                         &self.inner.columns_buffer,
-                        self.inner.string_buffers[i].as_ref(),
+                        None,
                         num_rows,
-                    );
-                    columns.push(column);
-                    fields.push(field);
+                        DataType::UInt64,
+                        false,
+                    ));
+                    fields.push(Field::new(project, DataType::UInt64, false));
+                }
+                "$xmax" => {
+                    columns.push(head(
+                        self.inner.xmax,
+                        &self.inner.columns_buffer,
+                        None,
+                        num_rows,
+                        DataType::UInt64,
+                        false,
+                    ));
+                    fields.push(Field::new(project, DataType::UInt64, false));
+                }
+                "$pid" => {
+                    columns.push(Arc::new(UInt64Array::from(
+                        vec![self.pid()].repeat(num_rows),
+                    )));
+                    fields.push(Field::new(project, DataType::UInt64, false));
+                }
+                "$tid" => {
+                    columns.push(Arc::new(UInt32Array::from(
+                        (0u32..num_rows as u32).collect::<Vec<u32>>(),
+                    )));
+                    fields.push(Field::new(project, DataType::UInt32, false));
+                }
+                name => {
+                    if let Some(i) = self
+                        .inner
+                        .schema
+                        .fields()
+                        .iter()
+                        .position(|f| f.name() == name)
+                    {
+                        let field = self.inner.schema.field(i);
+                        let column = head(
+                            self.inner.columns[i],
+                            &self.inner.columns_buffer,
+                            self.inner.string_buffers[i].as_ref(),
+                            num_rows,
+                            field.data_type().clone(),
+                            field.is_nullable(),
+                        );
+                        columns.push(column);
+                        fields.push(Field::new(
+                            project,
+                            field.data_type().clone(),
+                            field.is_nullable(),
+                        ));
+                    } else {
+                        panic!("{} is not in {:?}", name, self.inner.schema.fields())
+                    }
                 }
             }
-        }
-        // Add system columns.
-        if let Some(xmin) = projects.iter().find(|c| c.name == "$xmin") {
-            columns.push(head(
-                &Field::new("$xmin", DataType::UInt64, false),
-                self.inner.xmin,
-                &self.inner.columns_buffer,
-                None,
-                num_rows,
-            ));
-            fields.push(xmin.into_query_field());
-        }
-        if let Some(xmax) = projects.iter().find(|c| c.name == "$xmax") {
-            columns.push(head(
-                &Field::new("$xmax", DataType::UInt64, false),
-                self.inner.xmax,
-                &self.inner.columns_buffer,
-                None,
-                num_rows,
-            ));
-            fields.push(xmax.into_query_field());
-        }
-        if let Some(pid) = projects.iter().find(|c| c.name == "$pid") {
-            columns.push(Arc::new(UInt64Array::from(
-                vec![self.pid()].repeat(num_rows),
-            )));
-            fields.push(pid.into_query_field());
-        }
-        if let Some(tid) = projects.iter().find(|c| c.name == "$tid") {
-            columns.push(Arc::new(UInt32Array::from(
-                (0u32..num_rows as u32).collect::<Vec<u32>>(),
-            )));
-            fields.push(tid.into_query_field());
         }
         // Wrap RecordBatch in a reference that ensures the underlying buffer doesn't get destroyed.
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
@@ -260,33 +272,15 @@ impl Page {
     }
 
     pub(crate) fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
-        let mut star: Vec<Column> = self
+        let mut star: Vec<String> = self
             .inner
             .schema
             .fields()
             .iter()
-            .map(|field| Column {
-                created: ast::Phase::Plan,
-                id: 0,
-                name: field.name().clone(),
-                table: None,
-                data: field.data_type().clone(),
-            })
+            .map(|field| base_name(field.name()).to_string())
             .collect();
-        star.push(Column {
-            created: Phase::Plan,
-            id: 0,
-            name: "$xmin".to_string(),
-            table: None,
-            data: DataType::UInt64,
-        });
-        star.push(Column {
-            created: Phase::Plan,
-            id: 0,
-            name: "$xmax".to_string(),
-            table: None,
-            data: DataType::UInt64,
-        });
+        star.push("$xmin".to_string());
+        star.push("$xmax".to_string());
         let record_batch = self.select(&star);
         let trim = |field: &String| {
             if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
@@ -346,15 +340,16 @@ fn zeros(capacity: usize) -> Buffer {
 }
 
 fn head(
-    field: &Field,
     mut column_offset: usize,
     columns_buffer: &Buffer,
     string_buffer: Option<&Buffer>,
     len: usize,
+    data_type: DataType,
+    nullable: bool,
 ) -> Arc<dyn Array> {
-    let mut array = ArrayDataBuilder::new(field.data_type().clone()).len(len);
+    let mut array = ArrayDataBuilder::new(data_type.clone()).len(len);
     // If column is nullable, add a null buffer and offset the values buffer.
-    if field.is_nullable() {
+    if nullable {
         let nulls_buffer = columns_buffer.slice(column_offset);
         array = array.null_bit_buffer(nulls_buffer);
         column_offset = align(column_offset + pax_length(&DataType::Boolean, PAGE_SIZE))
@@ -542,4 +537,12 @@ pub fn base_name(field: &String) -> &str {
     } else {
         field
     }
+}
+
+fn with_base_name(field: &Field) -> Field {
+    Field::new(
+        base_name(field.name()),
+        field.data_type().clone(),
+        field.is_nullable(),
+    )
 }

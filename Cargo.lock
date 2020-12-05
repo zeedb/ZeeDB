@@ -41,6 +41,7 @@ name = "ast"
 version = "0.1.0"
 dependencies = [
  "arrow",
+ "catalog",
  "chrono",
  "zetasql",
 ]
@@ -143,7 +144,6 @@ name = "catalog"
 version = "0.1.0"
 dependencies = [
  "arrow",
- "ast",
  "zetasql",
 ]
 
@@ -1050,7 +1050,6 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "arrow",
- "ast",
  "catalog",
  "hyperloglogplus",
  "packed_simd_2",

@@ -1,6 +1,5 @@
 use crate::art::Art;
 use crate::heap::*;
-use ast::Table;
 use std::fmt;
 use std::sync::atomic::{AtomicI64, Ordering};
 

@@ -1,4 +1,3 @@
-use ast::*;
 use std::collections::HashMap;
 use zetasql::SimpleCatalogProto;
 use zetasql::*;
@@ -14,7 +13,7 @@ pub struct Catalog {
     pub indexes: HashMap<i64, Vec<Index>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Index {
     pub index_id: i64,
     pub table_id: i64,
@@ -49,48 +48,6 @@ impl Catalog {
 
     pub fn metadata() -> SimpleCatalogProto {
         crate::bootstrap::bootstrap_metadata_catalog()
-    }
-
-    pub fn find_index_scan(
-        &self,
-        predicates: &Vec<Scalar>,
-        table: &Table,
-    ) -> Vec<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
-        self.indexes
-            .get(&table.id)
-            .unwrap_or(&vec![])
-            .iter()
-            .flat_map(|index| index.check(predicates))
-            .collect()
-    }
-}
-
-impl Index {
-    fn check(&self, predicates: &Vec<Scalar>) -> Option<(Vec<(Column, Scalar)>, Vec<Scalar>)> {
-        let mut index_predicates = vec![];
-        let mut remaining_predicates = vec![];
-        for column_name in &self.columns {
-            for predicate in predicates {
-                match predicate {
-                    Scalar::Call(function) => match function.as_ref() {
-                        Function::Equal(Scalar::Column(column), lookup)
-                        | Function::Equal(lookup, Scalar::Column(column))
-                            if column_name == &column.name =>
-                        {
-                            // TODO need to check if table matches!!
-                            index_predicates.push((column.clone(), lookup.clone()));
-                        }
-                        _ => remaining_predicates.push(predicate.clone()),
-                    },
-                    _ => remaining_predicates.push(predicate.clone()),
-                }
-            }
-        }
-        if self.columns.len() == index_predicates.len() {
-            Some((index_predicates, remaining_predicates))
-        } else {
-            None
-        }
     }
 }
 
