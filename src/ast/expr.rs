@@ -167,6 +167,7 @@ pub enum Expr {
         lookup: Vec<Scalar>,
         index: Index,
         table: Table,
+        input: Box<Expr>,
     },
     Filter {
         predicates: Vec<Scalar>,
@@ -192,14 +193,6 @@ pub enum Expr {
         partition_right: Vec<Scalar>,
         left: Box<Expr>,
         right: Box<Expr>,
-    },
-    LookupJoin {
-        join: Join,
-        projects: Vec<Column>,
-        lookup: Vec<Scalar>,
-        index: Index,
-        table: Table,
-        input: Box<Expr>,
     },
     CreateTempTable {
         name: String,
@@ -310,7 +303,6 @@ impl Expr {
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
-            | Expr::LookupJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
             | Expr::Aggregate { .. }
@@ -374,7 +366,6 @@ impl Expr {
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
-            | Expr::LookupJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
             | Expr::Aggregate { .. }
@@ -420,7 +411,7 @@ impl Expr {
             | Expr::Filter { .. }
             | Expr::Out { .. }
             | Expr::Map { .. }
-            | Expr::LookupJoin { .. }
+            | Expr::IndexScan { .. }
             | Expr::Aggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
@@ -442,7 +433,6 @@ impl Expr {
             | Expr::LogicalDrop { .. }
             | Expr::TableFreeScan
             | Expr::SeqScan { .. }
-            | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
             | Expr::LogicalRewrite { .. } => 0,
             Expr::LogicalScript { statements } | Expr::Script { statements } => statements.len(),
@@ -631,16 +621,16 @@ impl Expr {
                 right: Box::new(visitor(*right)),
             },
             Expr::GetTempTable { name, columns } => Expr::GetTempTable { name, columns },
-            Expr::LookupJoin {
-                join,
+            Expr::IndexScan {
                 projects,
+                predicates,
                 lookup,
                 index,
                 table,
                 input,
-            } => Expr::LookupJoin {
-                join,
+            } => Expr::IndexScan {
                 projects,
+                predicates,
                 lookup,
                 index,
                 table,
@@ -753,8 +743,7 @@ impl Expr {
             | Expr::LogicalDrop { .. }
             | Expr::LogicalRewrite { .. }
             | Expr::TableFreeScan { .. }
-            | Expr::SeqScan { .. }
-            | Expr::IndexScan { .. } => self,
+            | Expr::SeqScan { .. } => self,
         }
     }
 
@@ -889,7 +878,6 @@ impl Expr {
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
-            | Expr::LookupJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
             | Expr::Aggregate { .. }
@@ -992,7 +980,6 @@ impl Expr {
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
-            | Expr::LookupJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
             | Expr::Aggregate { .. }
@@ -1165,7 +1152,6 @@ impl Expr {
             | Expr::Map { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
-            | Expr::LookupJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
             | Expr::Aggregate { .. }
@@ -1226,7 +1212,7 @@ impl ops::Index<usize> for Expr {
             | Expr::Filter { input, .. }
             | Expr::Out { input, .. }
             | Expr::Map { input, .. }
-            | Expr::LookupJoin { input, .. }
+            | Expr::IndexScan { input, .. }
             | Expr::Aggregate { input, .. }
             | Expr::Limit { input, .. }
             | Expr::Sort { input, .. }
@@ -1251,7 +1237,6 @@ impl ops::Index<usize> for Expr {
             | Expr::LogicalDrop { .. }
             | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
-            | Expr::IndexScan { .. }
             | Expr::GetTempTable { .. }
             | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
             Expr::LogicalScript { statements } | Expr::Script { statements } => &statements[index],

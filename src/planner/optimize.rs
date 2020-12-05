@@ -417,7 +417,6 @@ impl<'a> Optimizer<'a> {
             | Map { .. }
             | NestedLoop { .. }
             | HashJoin { .. }
-            | LookupJoin { .. }
             | CreateTempTable { .. }
             | GetTempTable { .. }
             | Aggregate { .. }

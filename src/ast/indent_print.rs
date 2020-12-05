@@ -256,6 +256,7 @@ impl IndentPrint for Expr {
                 lookup,
                 index,
                 table,
+                input,
             } => {
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(predicates))?;
@@ -271,7 +272,7 @@ impl IndentPrint for Expr {
                     table.name,
                     join_index_lookups(index, lookup)
                 )?;
-                Ok(())
+                input.indent_print(f, indent + 1)
             }
             Expr::HashJoin {
                 join,
@@ -289,35 +290,6 @@ impl IndentPrint for Expr {
                 write!(f, "Partition* {}", join_scalars(partition_right))?;
                 newline(f, indent + 1)?;
                 right.indent_print(f, indent + 2)
-            }
-            Expr::LookupJoin {
-                join,
-                projects,
-                lookup,
-                index,
-                table,
-                input,
-            } => {
-                write!(f, "{} {}", self.name(), join.replace(vec![]))?;
-                newline(f, indent)?;
-                let predicates = join.predicates();
-                let extra_indent = if !predicates.is_empty() {
-                    write!(f, "Filter* {}", join_scalars(predicates))?;
-                    newline(f, indent + 1)?;
-                    1
-                } else {
-                    0
-                };
-                write!(f, "Map* {}", join_columns(projects))?;
-                newline(f, indent + 1 + extra_indent)?;
-                write!(
-                    f,
-                    "IndexScan* {}({})",
-                    table.name,
-                    join_index_lookups(index, lookup)
-                )?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
             }
             Expr::LogicalScript { statements } | Expr::Script { statements } => {
                 write!(f, "{}", self.name())?;
@@ -394,7 +366,6 @@ impl Expr {
             Expr::Map { .. } => "Map",
             Expr::NestedLoop { .. } => "NestedLoop",
             Expr::HashJoin { .. } => "HashJoin",
-            Expr::LookupJoin { .. } => "LookupJoin",
             Expr::CreateTempTable { .. } => "CreateTempTable",
             Expr::GetTempTable { .. } => "GetTempTable",
             Expr::Aggregate { .. } => "Aggregate",

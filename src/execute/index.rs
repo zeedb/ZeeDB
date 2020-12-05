@@ -2,6 +2,7 @@ use crate::byte_key::ByteKey;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
+use std::ops::Range;
 use std::sync::Arc;
 use storage::{Art, Value};
 
@@ -36,6 +37,14 @@ pub(crate) fn insert(
             },
         );
     }
+}
+
+pub fn key(columns: &Vec<Arc<dyn Array>>) -> GenericBinaryArray<i32> {
+    todo!()
+}
+
+pub fn prefix(key: &[u8]) -> Range<&[u8]> {
+    todo!()
 }
 
 fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {

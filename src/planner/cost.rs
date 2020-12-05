@@ -42,8 +42,10 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
             let count_predicates = predicates.len() as f64;
             read_blocks * COST_READ_BLOCK + count_predicates * table_cardinality * COST_CPU_PRED
         }
-        IndexScan { predicates, .. } => {
-            let index_cardinality = 1 as f64; // TODO real index cardinality
+        IndexScan {
+            predicates, input, ..
+        } => {
+            let index_cardinality = ss[leaf(input)].props.cardinality as f64;
             let count_predicates = predicates.len() as f64;
             index_cardinality * COST_READ_BLOCK
                 + count_predicates * index_cardinality * COST_CPU_PRED
@@ -76,12 +78,6 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
             build * COST_HASH_BUILD
                 + probe * COST_HASH_PROBE
                 + probe * count_predicates * COST_CPU_PRED
-        }
-        LookupJoin { join, input, .. } => {
-            let index_cardinality = ss[leaf(input)].props.cardinality as f64;
-            let count_predicates = join.predicates().len() as f64;
-            index_cardinality * COST_READ_BLOCK
-                + count_predicates * index_cardinality * COST_CPU_PRED
         }
         CreateTempTable { left, .. } => {
             let output = ss[leaf(left)].props.cardinality as f64;

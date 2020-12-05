@@ -20,7 +20,7 @@ pub enum Rule {
     LogicalMapToMap,
     LogicalJoinToNestedLoop,
     LogicalJoinToHashJoin,
-    LogicalJoinToLookupJoin,
+    LogicalJoinToIndexScan,
     LogicalAggregateToAggregate,
     LogicalLimitToLimit,
     LogicalSortToSort,
@@ -50,7 +50,7 @@ impl Rule {
             | Rule::LogicalMapToMap
             | Rule::LogicalJoinToNestedLoop
             | Rule::LogicalJoinToHashJoin
-            | Rule::LogicalJoinToLookupJoin
+            | Rule::LogicalJoinToIndexScan
             | Rule::LogicalAggregateToAggregate
             | Rule::LogicalLimitToLimit
             | Rule::LogicalSortToSort
@@ -101,7 +101,7 @@ impl Rule {
             | (Rule::LogicalMapToMap, LogicalMap { .. })
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
             | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
-            | (Rule::LogicalJoinToLookupJoin, LogicalJoin { .. })
+            | (Rule::LogicalJoinToIndexScan, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort { .. })
@@ -125,7 +125,7 @@ impl Rule {
     pub fn non_leaf(&self, child: usize) -> bool {
         match (self, child) {
             (Rule::InnerJoinAssociativity, 0) => true,
-            (Rule::LogicalJoinToLookupJoin, 0) => true,
+            (Rule::LogicalJoinToIndexScan, 0) => true,
             _ => false,
         }
     }
@@ -163,7 +163,7 @@ impl Rule {
                     }
                 }
             }
-            Rule::LogicalJoinToLookupJoin => {
+            Rule::LogicalJoinToIndexScan => {
                 if let LogicalJoin { join, left, right } = &ss[mid].expr {
                     if let Leaf { gid: left } = left.as_ref() {
                         for left in &ss[GroupID(*left)].logical {
@@ -403,6 +403,7 @@ impl Rule {
                             lookup,
                             index,
                             table,
+                            input: Box::new(LogicalSingleGet),
                         });
                     }
                 }
@@ -461,7 +462,7 @@ impl Rule {
                     }
                 }
             }
-            Rule::LogicalJoinToLookupJoin => {
+            Rule::LogicalJoinToIndexScan => {
                 if let LogicalJoin { join, left, right } = bind {
                     if let LogicalGet {
                         predicates: table_predicates,
@@ -475,8 +476,8 @@ impl Rule {
                         if let Some((index, lookup, predicates)) =
                             find_index(catalog, &predicates, &table).pop()
                         {
-                            return Some(LookupJoin {
-                                join: join.replace(predicates),
+                            return Some(IndexScan {
+                                predicates,
                                 projects,
                                 lookup,
                                 index,
@@ -643,7 +644,7 @@ impl Rule {
             Rule::LogicalMapToMap,
             Rule::LogicalJoinToNestedLoop,
             Rule::LogicalJoinToHashJoin,
-            Rule::LogicalJoinToLookupJoin,
+            Rule::LogicalJoinToIndexScan,
             Rule::LogicalAggregateToAggregate,
             Rule::LogicalLimitToLimit,
             Rule::LogicalSortToSort,

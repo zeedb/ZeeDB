@@ -49,6 +49,7 @@ enum Node {
         lookup: Vec<Scalar>,
         index: Index,
         table: Table,
+        input: Input,
     },
     Filter {
         predicates: Vec<Scalar>,
@@ -76,14 +77,6 @@ enum Node {
         left: Input,
         build_left: Option<HashTable>,
         right: Input,
-    },
-    LookupJoin {
-        join: Join,
-        projects: Vec<Column>,
-        lookup: Scalar,
-        index: Index,
-        table: Table,
-        input: Input,
     },
     CreateTempTable {
         name: String,
@@ -199,12 +192,14 @@ impl Node {
                 lookup,
                 index,
                 table,
+                input,
             } => Node::IndexScan {
                 projects,
                 predicates,
                 lookup,
                 index,
                 table,
+                input: Input::compile(*input),
             },
             Filter { predicates, input } => Node::Filter {
                 predicates,
@@ -247,14 +242,6 @@ impl Node {
                     right,
                 }
             }
-            LookupJoin {
-                join,
-                projects,
-                lookup,
-                index,
-                table,
-                input,
-            } => todo!(),
             CreateTempTable { .. } => todo!(),
             GetTempTable { .. } => todo!(),
             Aggregate {
@@ -413,14 +400,6 @@ impl Node {
                 }
                 Schema::new(fields)
             }
-            Node::LookupJoin {
-                join,
-                projects,
-                lookup,
-                index,
-                table,
-                input,
-            } => todo!(),
             Node::CreateTempTable {
                 name,
                 columns,
@@ -491,7 +470,20 @@ impl Input {
                 lookup,
                 index,
                 table,
-            } => todo!(),
+                input,
+            } => {
+                // let input = input.next(state)?;
+                // let keys = crate::index(&crate::eval::evals(lookup, &input, state));
+                // for i in 0..input.len() {
+                //     let range = crate::index::prefix(keys.value(i));
+                //     let rows = state.storage.index(index.index_id).range(range)?;
+                //     for Value { pid, tid } in rows {
+                //         Page::read(pid).get(tid)
+                //     }
+                // }
+                // let boolean = crate::eval::all(predicates, &input, state)?;
+                todo!()
+            }
             Node::Filter { predicates, input } => {
                 let input = input.next(state)?;
                 let boolean = crate::eval::all(predicates, &input, state)?;
@@ -555,14 +547,6 @@ impl Input {
                     state,
                 )
             }
-            Node::LookupJoin {
-                join,
-                projects,
-                lookup,
-                index,
-                table,
-                input,
-            } => todo!(),
             Node::CreateTempTable {
                 name,
                 columns,
