@@ -3,8 +3,8 @@ set first_name = "Foo"
 where person_id = 1
 
 LogicalUpdate person
-	LogicalMap person.person_id person.first_name:"Foo" person.last_name person.modified_date person.$pid person.$tid
+	LogicalMap person.person_id person.first_name:"Foo" person.last_name person.modified_date person.$tid
 		LogicalFilter (Equal person.person_id 1)
 			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-				Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax person.$pid person.$tid
+				Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax person.$tid
 					LogicalGet person

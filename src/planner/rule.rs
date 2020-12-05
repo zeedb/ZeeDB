@@ -31,7 +31,6 @@ pub enum Rule {
     LogicalGetWithToGetTempTable,
     LogicalInsertToInsert,
     LogicalValuesToValues,
-    LogicalUpdateToUpdate,
     LogicalDeleteToDelete,
     LogicalDropToDrop,
     LogicalAssignToAssign,
@@ -61,7 +60,6 @@ impl Rule {
             | Rule::LogicalGetWithToGetTempTable
             | Rule::LogicalInsertToInsert
             | Rule::LogicalValuesToValues
-            | Rule::LogicalUpdateToUpdate
             | Rule::LogicalDeleteToDelete
             | Rule::LogicalDropToDrop
             | Rule::LogicalAssignToAssign
@@ -112,7 +110,6 @@ impl Rule {
             | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith { .. })
             | (Rule::LogicalInsertToInsert, LogicalInsert { .. })
             | (Rule::LogicalValuesToValues, LogicalValues { .. })
-            | (Rule::LogicalUpdateToUpdate, LogicalUpdate { .. })
             | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
             | (Rule::LogicalDropToDrop, LogicalDrop { .. })
             | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
@@ -576,25 +573,9 @@ impl Rule {
                     });
                 }
             }
-            Rule::LogicalUpdateToUpdate => {
-                if let LogicalUpdate {
-                    table,
-                    pid,
-                    tid,
-                    input,
-                } = bind
-                {
-                    return Some(Update {
-                        table,
-                        pid,
-                        tid,
-                        input,
-                    });
-                }
-            }
             Rule::LogicalDeleteToDelete => {
-                if let LogicalDelete { pid, tid, input } = bind {
-                    return Some(Delete { pid, tid, input });
+                if let LogicalDelete { table, tid, input } = bind {
+                    return Some(Delete { table, tid, input });
                 }
             }
             Rule::LogicalDropToDrop => {
@@ -655,7 +636,6 @@ impl Rule {
             Rule::LogicalGetWithToGetTempTable,
             Rule::LogicalInsertToInsert,
             Rule::LogicalValuesToValues,
-            Rule::LogicalUpdateToUpdate,
             Rule::LogicalDeleteToDelete,
             Rule::LogicalDropToDrop,
             Rule::LogicalAssignToAssign,

@@ -33,7 +33,7 @@ impl Heap {
         self.pages.iter().map(|page| page.clone()).collect()
     }
 
-    pub fn insert(&mut self, records: &RecordBatch, txn: u64) -> (Arc<dyn Array>, Arc<dyn Array>) {
+    pub fn insert(&mut self, records: &RecordBatch, txn: u64) -> UInt64Array {
         if self.pages.is_empty() {
             self.pages.push(Page::empty(records.schema()));
             for column in records.schema().fields() {
@@ -44,35 +44,33 @@ impl Heap {
             }
         }
         // Allocate arrays to keep track of where we insert the rows.
-        let mut pids = UInt64Builder::new(records.num_rows());
-        let mut tids = UInt32Builder::new(records.num_rows());
+        let mut tids = UInt64Builder::new(records.num_rows());
         // Insert, adding new pages if needed.
         let mut offset = 0;
-        self.insert_more(records, txn, &mut pids, &mut tids, &mut offset);
+        self.insert_more(records, txn, &mut tids, &mut offset);
 
-        (Arc::new(pids.finish()), Arc::new(tids.finish()))
+        tids.finish()
     }
 
     pub fn insert_more(
         &mut self,
         records: &RecordBatch,
         txn: u64,
-        pids: &mut UInt64Builder,
-        tids: &mut UInt32Builder,
+        tids: &mut UInt64Builder,
         offset: &mut usize,
     ) {
         // Insert however many records fit in the last page.
         let last = self.pages.last().unwrap();
-        last.insert(records, txn, pids, tids, offset);
+        last.insert(records, txn, tids, offset);
         // If there are leftover records, add a page and try again.
         if *offset < records.num_rows() {
             self.pages.push(Page::empty(records.schema()));
-            self.insert_more(records, txn, pids, tids, offset);
+            self.insert_more(records, txn, tids, offset);
         }
         // Update counters.
         for (i, field) in records.schema().fields().iter().enumerate() {
             match base_name(field.name()) {
-                "$xmin" | "$xmax" | "$pid" | "$tid" => {}
+                "$xmin" | "$xmax" | "$tid" => {}
                 name => {
                     let mut counter = self.counters.get(name).expect(name).lock().unwrap();
                     let column = records.column(i);
@@ -80,6 +78,10 @@ impl Heap {
                 }
             }
         }
+    }
+
+    pub fn update(&self, pid: usize) -> &Page {
+        todo!()
     }
 
     pub fn truncate(&mut self) {

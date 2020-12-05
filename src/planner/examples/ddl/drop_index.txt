@@ -11,7 +11,7 @@ Script
 			TableFreeScan
 	Delete index
 		Filter* (LessOrEqual index.$xmin (Xid)) (Less (Xid) index.$xmax) (Equal index.index_id @index_id)
-			Map* index.index_id index.$xmin index.$xmax index.$pid index.$tid
+			Map* index.index_id index.$xmin index.$xmax index.$tid
 				SeqScan index
 	Call drop_index @index_id
 		TableFreeScan

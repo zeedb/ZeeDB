@@ -4,11 +4,11 @@ from person
 where customer.person_id = person.person_id
 
 LogicalUpdate customer
-	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:(Add customer.account_number 1) customer.modified_date customer.$pid customer.$tid
+	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:(Add customer.account_number 1) customer.modified_date customer.$tid
 		LogicalFilter (Equal customer.person_id person.person_id)
 			LogicalJoin Inner
 				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$pid customer.$tid
+					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$tid
 						LogicalGet customer
 				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
 					Map* person.person_id person.$xmin person.$xmax

@@ -211,15 +211,14 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalUpdate { pid, input, .. }
-            | Expr::Update { pid, input, .. }
-            | Expr::LogicalDelete { pid, input, .. }
-            | Expr::Delete { pid, input, .. } => {
+            Expr::LogicalUpdate { tid, input, .. }
+            | Expr::LogicalDelete { tid, input, .. }
+            | Expr::Delete { tid, input, .. } => {
                 write!(
                     f,
                     "{} {}",
                     self.name(),
-                    pid.table.as_ref().unwrap_or(&"".to_string())
+                    tid.table.as_ref().unwrap_or(&"".to_string())
                 )?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -376,7 +375,6 @@ impl Expr {
             Expr::Except { .. } => "Except",
             Expr::Insert { .. } => "Insert",
             Expr::Values { .. } => "Values",
-            Expr::Update { .. } => "Update",
             Expr::Delete { .. } => "Delete",
             Expr::Script { .. } => "Script",
             Expr::Assign { .. } => "Assign",

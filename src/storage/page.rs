@@ -11,6 +11,7 @@ use std::sync::atomic::*;
 use std::sync::Arc;
 
 pub const PAGE_SIZE: usize = 1024;
+
 const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
 
 #[derive(Clone)]
@@ -83,16 +84,6 @@ impl Page {
         }
     }
 
-    pub unsafe fn read(pid: u64) -> Self {
-        Page {
-            inner: crate::arc::read(pid as *const Inner),
-        }
-    }
-
-    fn pid(&self) -> u64 {
-        crate::arc::leak(&self.inner) as u64
-    }
-
     pub fn schema(&self) -> Arc<Schema> {
         self.inner.schema.clone()
     }
@@ -124,12 +115,6 @@ impl Page {
                         DataType::UInt64,
                         false,
                     ));
-                    fields.push(Field::new(project, DataType::UInt64, false));
-                }
-                "$pid" => {
-                    columns.push(Arc::new(UInt64Array::from(
-                        vec![self.pid()].repeat(num_rows),
-                    )));
                     fields.push(Field::new(project, DataType::UInt64, false));
                 }
                 "$tid" => {
@@ -175,8 +160,7 @@ impl Page {
         &self,
         records: &RecordBatch,
         txn: u64,
-        pids: &mut UInt64Builder,
-        tids: &mut UInt32Builder,
+        tids: &mut UInt64Builder,
         offset: &mut usize,
     ) {
         let (start, end) = self.reserve(records.num_rows());
@@ -206,9 +190,8 @@ impl Page {
             // Make the rows visible to subsequent transactions.
             self.xmin(i).store(txn, Ordering::Relaxed);
             self.xmax(i).store(u64::MAX, Ordering::Relaxed);
-            // Write locations of new pids and tids.
-            pids.append_value(self.pid()).unwrap();
-            tids.append_value(i as u32).unwrap();
+            // Write locations of new tids.
+            tids.append_value(i as u64).unwrap();
         }
         *offset += end - start;
     }

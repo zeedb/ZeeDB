@@ -74,7 +74,7 @@ impl Storage {
 
     pub fn column_unique_cardinality(&self, id: i64, column: &String) -> usize {
         match column.as_str() {
-            "$xmin" | "$xmax" | "$pid" | "$tid" => self.table_cardinality(id),
+            "$xmin" | "$xmax" | "$tid" => self.table_cardinality(id),
             _ => self.table(id).approx_unique_cardinality(column),
         }
     }

@@ -111,7 +111,7 @@ impl Converter {
         }
     }
 
-    fn table_scan_for_update(&mut self, q: &ResolvedTableScanProto) -> (Expr, Column, Column) {
+    fn table_scan_for_update(&mut self, q: &ResolvedTableScanProto) -> (Expr, Column) {
         let mut projects: Vec<Column> = q
             .parent
             .get()
@@ -122,7 +122,6 @@ impl Converter {
         let table = Table::from(q);
         let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
         let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
-        let pid = self.create_column(table.name.clone(), "$pid".to_string(), DataType::UInt64);
         let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt32);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
@@ -136,14 +135,13 @@ impl Converter {
         ];
         projects.push(xmin);
         projects.push(xmax);
-        projects.push(pid.clone());
         projects.push(tid.clone());
         let expr = LogicalGet {
             projects,
             predicates,
             table,
         };
-        (expr, pid, tid)
+        (expr, tid)
     }
 
     fn join(&mut self, q: &ResolvedJoinScanProto) -> Expr {
@@ -642,10 +640,10 @@ impl Converter {
     }
 
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
-        let (mut input, pid, tid) = self.table_scan_for_update(q.table_scan.get());
+        let (mut input, tid) = self.table_scan_for_update(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
         LogicalDelete {
-            pid,
+            table: Table::from(q.table_scan.get()),
             tid,
             input: Box::new(LogicalFilter {
                 predicates,
@@ -659,7 +657,7 @@ impl Converter {
             todo!("nested updates")
         }
         let table = Table::from(q.table_scan.get());
-        let (mut input, pid, tid) = self.table_scan_for_update(q.table_scan.get());
+        let (mut input, tid) = self.table_scan_for_update(q.table_scan.get());
         if let Some(from) = &q.from_scan {
             let from = self.any_resolved_scan(from);
             let predicates = vec![];
@@ -698,11 +696,9 @@ impl Converter {
             let value = updated_column(column).unwrap_or(Scalar::Column(as_column.clone()));
             projects.push((value, as_column))
         }
-        projects.push((Scalar::Column(pid.clone()), pid.clone()));
         projects.push((Scalar::Column(tid.clone()), tid.clone()));
         LogicalUpdate {
             table,
-            pid,
             tid,
             input: Box::new(LogicalMap {
                 include_existing: false,

@@ -104,7 +104,7 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
             let log = 2.0 * card * f64::log2(card);
             log * COST_CPU_COMP_MOVE
         }
-        Insert { input, .. } | Update { input, .. } | Delete { input, .. } => {
+        Insert { input, .. } | Delete { input, .. } => {
             let length = ss[leaf(input)].props.cardinality as f64;
             let blocks = f64::max(1.0, length * TUPLE_SIZE / BLOCK_SIZE);
             blocks * COST_WRITE_BLOCK

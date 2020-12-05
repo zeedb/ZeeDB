@@ -427,7 +427,6 @@ impl<'a> Optimizer<'a> {
             | Except { .. }
             | Insert { .. }
             | Values { .. }
-            | Update { .. }
             | Delete { .. }
             | Script { .. }
             | Assign { .. }

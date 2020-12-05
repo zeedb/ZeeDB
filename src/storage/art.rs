@@ -15,19 +15,19 @@ impl Art {
         self.root = Node::Null;
     }
 
-    pub fn insert(&mut self, key: &[u8], value: Value) -> Option<Value> {
+    pub fn insert(&mut self, key: &[u8], value: u64) -> Option<u64> {
         self.root.insert(key, value)
     }
 
-    pub fn get(&self, key: &[u8]) -> Option<Value> {
+    pub fn get(&self, key: &[u8]) -> Option<u64> {
         self.root.get(key)
     }
 
-    pub fn remove(&mut self, key: &[u8]) -> Option<Value> {
+    pub fn remove(&mut self, key: &[u8]) -> Option<u64> {
         self.root.remove(key)
     }
 
-    pub fn range<'a>(&self, bounds: impl RangeBounds<&'a [u8]>) -> Vec<Value> {
+    pub fn range<'a>(&self, bounds: impl RangeBounds<&'a [u8]>) -> Vec<u64> {
         fn inc(key: &[u8]) -> Vec<u8> {
             if key.is_empty() {
                 vec![0]
@@ -79,13 +79,13 @@ enum Node {
 #[derive(Debug)]
 struct Leaf {
     key: Vec<u8>,
-    value: Value,
+    value: u64,
 }
 
 #[derive(Debug)]
 struct Node4 {
     key: Vec<u8>,
-    value: Option<Value>,
+    value: Option<u64>,
     count: usize,
     digit: [u8; 4],
     child: [Node; 4],
@@ -94,7 +94,7 @@ struct Node4 {
 #[derive(Debug)]
 struct Node16 {
     key: Vec<u8>,
-    value: Option<Value>,
+    value: Option<u64>,
     count: usize,
     digit: [u8; 16],
     child: [Node; 16],
@@ -103,7 +103,7 @@ struct Node16 {
 #[derive(Debug)]
 struct Node48 {
     key: Vec<u8>,
-    value: Option<Value>,
+    value: Option<u64>,
     count: usize,
     /// Initially EMPTY.
     child_index: [u8; 256],
@@ -113,23 +113,15 @@ struct Node48 {
 #[derive(Debug)]
 struct Node256 {
     key: Vec<u8>,
-    value: Option<Value>,
+    value: Option<u64>,
     count: usize,
     child: [Node; 256],
 }
 
 const EMPTY: u8 = 255;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub struct Value {
-    // Page ID. Page can be retrieved with Page::read(pid).
-    pub pid: u64,
-    // Tuple ID.
-    pub tid: u32,
-}
-
 impl Node {
-    fn get(&self, key: &[u8]) -> Option<Value> {
+    fn get(&self, key: &[u8]) -> Option<u64> {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
@@ -186,7 +178,7 @@ impl Node {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Option<Value> {
+    fn remove(&mut self, key: &[u8]) -> Option<u64> {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
@@ -248,7 +240,7 @@ impl Node {
         &self,
         start_inclusive: LowerBound,
         end_exclusive: UpperBound,
-        acc: &mut Vec<Value>,
+        acc: &mut Vec<u64>,
     ) -> Option<()> {
         match self {
             Node::Null => Some(()),
@@ -337,7 +329,7 @@ impl Node {
         }
     }
 
-    fn insert(&mut self, key: &[u8], value: Value) -> Option<Value> {
+    fn insert(&mut self, key: &[u8], value: u64) -> Option<u64> {
         if let Some(key) = key.strip_prefix(self.key()) {
             if key.is_empty() {
                 self.store(value)
@@ -361,7 +353,7 @@ impl Node {
         }
     }
 
-    fn store(&mut self, value: Value) -> Option<Value> {
+    fn store(&mut self, value: u64) -> Option<u64> {
         match self {
             Node::Null => {
                 *self = Node::Leaf(Box::new(Leaf { key: vec![], value }));
@@ -375,7 +367,7 @@ impl Node {
         }
     }
 
-    fn take(&mut self) -> Option<Value> {
+    fn take(&mut self) -> Option<u64> {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
@@ -392,7 +384,7 @@ impl Node {
         }
     }
 
-    fn set(&mut self, digit: u8, key: &[u8], value: Value) -> Option<Value> {
+    fn set(&mut self, digit: u8, key: &[u8], value: u64) -> Option<u64> {
         match self {
             Node::Null => {
                 *self = Node::Leaf(Box::new(Leaf {
@@ -699,12 +691,6 @@ fn tail(slice: &[u8], n: usize) -> &[u8] {
 impl Default for Node {
     fn default() -> Self {
         Node::Null
-    }
-}
-
-impl Default for Value {
-    fn default() -> Self {
-        Value { pid: 0, tid: 0 }
     }
 }
 

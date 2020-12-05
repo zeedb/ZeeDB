@@ -123,14 +123,8 @@ enum Node {
         values: Vec<Vec<Scalar>>,
         input: Input,
     },
-    Update {
-        table: Table,
-        pid: Column,
-        tid: Column,
-        input: Input,
-    },
     Delete {
-        pid: Column,
+        table: Table,
         tid: Column,
         input: Input,
     },
@@ -274,19 +268,8 @@ impl Node {
                 values,
                 input: Input::compile(*input),
             },
-            Update {
+            Delete { table, tid, input } => Node::Delete {
                 table,
-                pid,
-                tid,
-                input,
-            } => Node::Update {
-                table,
-                pid,
-                tid,
-                input: Input::compile(*input),
-            },
-            Delete { pid, tid, input } => Node::Delete {
-                pid,
                 tid,
                 input: Input::compile(*input),
             },
@@ -426,11 +409,9 @@ impl Node {
                     .map(|column| column.into_query_field())
                     .collect(),
             ),
-            Node::Update { .. }
-            | Node::Delete { .. }
-            | Node::Script { .. }
-            | Node::Assign { .. }
-            | Node::Call { .. } => dummy_schema(),
+            Node::Delete { .. } | Node::Script { .. } | Node::Assign { .. } | Node::Call { .. } => {
+                dummy_schema()
+            }
         }
     }
 }
@@ -471,19 +452,7 @@ impl Input {
                 index,
                 table,
                 input,
-            } => {
-                // let input = input.next(state)?;
-                // let keys = crate::index(&crate::eval::evals(lookup, &input, state));
-                // for i in 0..input.len() {
-                //     let range = crate::index::prefix(keys.value(i));
-                //     let rows = state.storage.index(index.index_id).range(range)?;
-                //     for Value { pid, tid } in rows {
-                //         Page::read(pid).get(tid)
-                //     }
-                // }
-                // let boolean = crate::eval::all(predicates, &input, state)?;
-                todo!()
-            }
+            } => todo!(),
             Node::Filter { predicates, input } => {
                 let input = input.next(state)?;
                 let boolean = crate::eval::all(predicates, &input, state)?;
@@ -571,14 +540,13 @@ impl Input {
             Node::Insert { table, input } => {
                 let input = input.next(state)?;
                 // Append rows to the table heap.
-                let (pids, tids) = state.storage.table_mut(table.id).insert(&input, state.txn);
+                let tids = state.storage.table_mut(table.id).insert(&input, state.txn);
                 // Append entries to each index.
                 for index in state.catalog.indexes.get(&table.id).unwrap_or(&vec![]) {
                     crate::index::insert(
                         state.storage.index_mut(index.index_id),
                         &index.columns,
                         &input,
-                        &pids,
                         &tids,
                     );
                 }
@@ -592,27 +560,14 @@ impl Input {
                 }
                 Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
-            Node::Update {
-                table,
-                pid,
-                tid,
-                input,
-            } => {
+            Node::Delete { table, tid, input } => {
                 let input = input.next(state)?;
-                // Identify rows to be updated by (pid, tid) .
-                let pid: &UInt64Array = input
-                    .column(
-                        input
-                            .schema()
-                            .fields()
-                            .iter()
-                            .position(|f| f.name() == &pid.canonical_name())
-                            .expect(&pid.canonical_name()),
-                    )
-                    .as_any()
-                    .downcast_ref::<UInt64Array>()
-                    .unwrap();
-                let tid: &UInt32Array = input
+                // If no input, try next page.
+                if input.num_rows() == 0 {
+                    return self.next(state);
+                }
+                // Identify rows to be updated by tid.
+                let tids: &UInt64Array = input
                     .column(
                         input
                             .schema()
@@ -622,80 +577,23 @@ impl Input {
                             .expect(&tid.canonical_name()),
                     )
                     .as_any()
-                    .downcast_ref::<UInt32Array>()
-                    .unwrap();
-                // Partition by page.
-                let mut partitions: HashMap<u64, Vec<u32>> = HashMap::new();
-                for i in 0..pid.len() {
-                    let pid = pid.value(i);
-                    let tid = tid.value(i);
-                    if let Some(vec) = partitions.get_mut(&pid) {
-                        vec.push(tid);
-                    } else {
-                        partitions.insert(pid, vec![tid]);
-                    }
-                }
-                // For each page...
-                for (pid, tids) in partitions {
-                    // ...delete updated rows...
-                    unsafe {
-                        let page = Page::read(pid);
-                        for tid in &tids {
-                            page.delete(*tid as usize, state.txn);
-                        }
-                    }
-                    // ...upsert new row versions.,,
-                    let tids: Arc<dyn Array> = Arc::new(UInt32Array::from(tids));
-                    let input = kernel::gather(&input, &tids);
-                    let (pids, tids) = state.storage.table_mut(table.id).insert(&input, state.txn);
-                    // ..update the indexes.
-                    for index in state.catalog.indexes.get(&table.id).unwrap_or(&vec![]) {
-                        crate::index::insert(
-                            state.storage.index_mut(index.index_id),
-                            &index.columns,
-                            &input,
-                            &pids,
-                            &tids,
-                        );
-                    }
-                }
-                Ok(dummy_row(self.schema.clone()))
-            }
-            Node::Delete { pid, tid, input } => {
-                let input = input.next(state)?;
-                let pid: &UInt64Array = input
-                    .column(
-                        input
-                            .schema()
-                            .fields()
-                            .iter()
-                            .position(|f| f.name() == &pid.canonical_name())
-                            .expect(&pid.canonical_name()),
-                    )
-                    .as_any()
                     .downcast_ref::<UInt64Array>()
                     .unwrap();
-                let tid: &UInt32Array = input
-                    .column(
-                        input
-                            .schema()
-                            .fields()
-                            .iter()
-                            .position(|f| f.name() == &tid.canonical_name())
-                            .expect(&tid.canonical_name()),
-                    )
-                    .as_any()
-                    .downcast_ref::<UInt32Array>()
-                    .unwrap();
-                for i in 0..input.num_rows() {
-                    unsafe {
-                        let pid = pid.value(i);
-                        let tid = tid.value(i) as usize;
-                        let page = Page::read(pid);
-                        page.delete(tid, state.txn);
+                // Read the input sequentially, looking up the appropriate page, and invalidating the old row versions.
+                let heap = state.storage.table(table.id);
+                let mut pid = tids.value(0) as usize / storage::PAGE_SIZE;
+                let mut page = heap.update(pid);
+                for i in 0..tids.len() {
+                    // If we've moved into a different page, look it up.
+                    // We're relying on the input to the delete being approximately in page-order.
+                    if tids.value(0) as usize / storage::PAGE_SIZE != pid {
+                        pid = tids.value(0) as usize / storage::PAGE_SIZE;
+                        page = heap.update(pid);
                     }
+                    // Mark previous row versions as invalid.
+                    page.delete(tids.value(i) as usize, state.txn);
                 }
-                Ok(dummy_row(self.schema.clone()))
+                Ok(input)
             }
             Node::Script { offset, statements } => {
                 while *offset < statements.len() {

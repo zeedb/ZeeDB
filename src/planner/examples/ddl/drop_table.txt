@@ -11,7 +11,7 @@ Script
 			TableFreeScan
 	Delete table
 		Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.table_id @table_id)
-			Map* table.table_id table.$xmin table.$xmax table.$pid table.$tid
+			Map* table.table_id table.$xmin table.$xmax table.$tid
 				SeqScan table
 	Call drop_table @table_id
 		TableFreeScan

@@ -4,8 +4,8 @@ use rand::SeedableRng;
 
 #[test]
 fn set() {
-    let dummy_value_1 = Value { pid: 0, tid: 0 };
-    let dummy_value_2 = Value { pid: 0, tid: 1 };
+    let dummy_value_1 = 0;
+    let dummy_value_2 = 1;
 
     println!("insert into empty tree");
     {
@@ -59,7 +59,7 @@ fn set() {
         const N: usize = 1000;
         let mut keys: Vec<[u8; 8]> = Vec::with_capacity(N);
         keys.resize_with(N, Default::default);
-        let mut values: Vec<Value> = Vec::with_capacity(N);
+        let mut values: Vec<u64> = Vec::with_capacity(N);
         values.resize_with(N, Default::default);
         /* rng */
         let mut g = rand::thread_rng();
@@ -67,7 +67,7 @@ fn set() {
         for experiment in 0..10 {
             for i in 0..N {
                 keys[i] = g.gen();
-                values[i].tid = i as u32;
+                values[i] = i as u64;
             }
 
             let mut m = Art::empty();
@@ -92,25 +92,25 @@ fn set() {
 #[test]
 fn delete_value() {
     let key0 = "aa".as_bytes();
-    let int0 = Value { pid: 0, tid: 0 };
+    let int0 = 0;
     let key1 = "aaaa".as_bytes();
-    let int1 = Value { pid: 0, tid: 1 };
+    let int1 = 1;
     let key2 = "aaaaaaa".as_bytes();
-    let int2 = Value { pid: 0, tid: 2 };
+    let int2 = 2;
     let key3 = "aaaaaaaaaa".as_bytes();
-    let int3 = Value { pid: 0, tid: 3 };
+    let int3 = 3;
     let key4 = "aaaaaaaba".as_bytes();
-    let int4 = Value { pid: 0, tid: 4 };
+    let int4 = 4;
     let key5 = "aaaabaa".as_bytes();
-    let int5 = Value { pid: 0, tid: 5 };
+    let int5 = 5;
     let key6 = "aaaabaaaaa".as_bytes();
-    let int6 = Value { pid: 0, tid: 6 };
+    let int6 = 6;
     let key7 = "aaaaaaaaaaa".as_bytes();
-    let int7 = Value { pid: 0, tid: 7 };
+    let int7 = 7;
     let key8 = "aaaaaaaaaab".as_bytes();
-    let int8 = Value { pid: 0, tid: 8 };
+    let int8 = 8;
     let key9 = "aaaaaaaaaac".as_bytes();
-    let int9 = Value { pid: 0, tid: 9 };
+    let int9 = 9;
 
     let setup = || -> Art {
         let mut m = Art::empty();
@@ -288,7 +288,7 @@ fn monte_carlo_delete() {
     let mut rng1 = rand::rngs::StdRng::from_seed([0; 32]);
     for i in 0..1000000 {
         let k: [u8; 10] = rng1.gen();
-        let v = Value { pid: 0, tid: i };
+        let v = i;
         assert!(m.insert(&k, v) == None);
     }
     let mut rng2 = rand::rngs::StdRng::from_seed([0; 32]);
@@ -299,19 +299,19 @@ fn monte_carlo_delete() {
         assert!(m.get(&k) == None);
         assert!(get_res == del_res);
         assert!(del_res != None);
-        assert!(del_res == Some(Value { pid: 0, tid: i }));
+        assert!(del_res == Some(i));
     }
 }
 
 #[test]
 fn full_range() {
-    let int0 = Value { pid: 0, tid: 0 };
-    let int1 = Value { pid: 0, tid: 1 };
-    let int2 = Value { pid: 0, tid: 2 };
-    let int3 = Value { pid: 0, tid: 4 };
-    let int4 = Value { pid: 0, tid: 5 };
-    let int5 = Value { pid: 0, tid: 5 };
-    let int6 = Value { pid: 0, tid: 6 };
+    let int0 = 0;
+    let int1 = 1;
+    let int2 = 2;
+    let int3 = 4;
+    let int4 = 5;
+    let int5 = 5;
+    let int6 = 6;
 
     let mut m = Art::empty();
 
@@ -337,7 +337,7 @@ fn full_range() {
      *  ()->2 (aa$)->3 (a$)->4 ()->5 (aa$)->6
      *
      */
-    let found: Vec<Value> = m.range(..);
+    let found: Vec<u64> = m.range(..);
     let expected = vec![int0, int1, int2, int3, int4, int5, int6];
     assert_eq!(expected, found);
 }
@@ -348,13 +348,7 @@ fn count_full_range() {
     let mut m = Art::empty();
     for i in 0..n {
         let key = format!("{:04X}", i);
-        m.insert(
-            key.as_bytes(),
-            Value {
-                pid: 0,
-                tid: i as u32,
-            },
-        );
+        m.insert(key.as_bytes(), i as u64);
     }
     assert_eq!(n, m.range(..).len());
 }
@@ -363,13 +357,13 @@ fn count_full_range() {
 fn partial_range() {
     println!("controlled test");
     {
-        let int0 = Value { pid: 0, tid: 0 };
-        let int1 = Value { pid: 0, tid: 1 };
-        let int2 = Value { pid: 0, tid: 2 };
-        let int3 = Value { pid: 0, tid: 3 };
-        let int4 = Value { pid: 0, tid: 4 };
-        let int5 = Value { pid: 0, tid: 5 };
-        let int6 = Value { pid: 0, tid: 6 };
+        let int0 = 0;
+        let int1 = 1;
+        let int2 = 2;
+        let int3 = 3;
+        let int4 = 4;
+        let int5 = 5;
+        let int6 = 6;
 
         let mut m = Art::empty();
 
@@ -395,7 +389,7 @@ fn partial_range() {
          *  ()->2 (aa$)->3 (a$)->4 ()->5 (aa$)->6
          *
          */
-        let found: Vec<Value> = m.range("aaaaaaaaaa".as_bytes().."aaaabaaaaa".as_bytes());
+        let found: Vec<u64> = m.range("aaaaaaaaaa".as_bytes().."aaaabaaaaa".as_bytes());
         let expected = vec![int3, int4, int5];
         assert_eq!(expected, found);
     }
@@ -408,13 +402,7 @@ fn partial_range() {
         let mut keys: Vec<Vec<u8>> = Vec::with_capacity(N);
         for i in 0..N {
             let key = format!("{:04X}", i).as_bytes().to_vec();
-            m.insert(
-                &key,
-                Value {
-                    pid: 0,
-                    tid: i as u32,
-                },
-            );
+            m.insert(&key, i as u64);
             keys.push(key);
         }
         for experiment in 0..1000 {

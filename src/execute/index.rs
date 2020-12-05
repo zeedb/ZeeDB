@@ -4,14 +4,13 @@ use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use std::ops::Range;
 use std::sync::Arc;
-use storage::{Art, Value};
+use storage::Art;
 
 pub(crate) fn insert(
     index: &mut Art,
     columns: &Vec<String>,
     input: &RecordBatch,
-    pids: &Arc<dyn Array>,
-    tids: &Arc<dyn Array>,
+    tids: &UInt64Array,
 ) {
     // Convert all the index columns into bytes, in lexicographic order.
     let mut index_columns = vec![];
@@ -22,20 +21,11 @@ pub(crate) fn insert(
             }
         }
     }
-    index_columns.push(bytes(pids));
-    index_columns.push(bytes(tids));
+    index_columns.push(bytes_static(tids));
     // Insert the keys into the index.
     let keys = zip(&index_columns);
-    let pids: &UInt64Array = pids.as_any().downcast_ref::<UInt64Array>().unwrap();
-    let tids: &UInt32Array = tids.as_any().downcast_ref::<UInt32Array>().unwrap();
     for i in 0..keys.len() {
-        index.insert(
-            keys.value(i),
-            Value {
-                pid: pids.value(i),
-                tid: tids.value(i),
-            },
-        );
+        index.insert(keys.value(i), tids.value(i));
     }
 }
 
@@ -50,15 +40,15 @@ pub fn prefix(key: &[u8]) -> Range<&[u8]> {
 fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
     match column.data_type() {
         DataType::Boolean => bytes_bool(column),
-        DataType::Int64 => bytes_numeric::<Int64Type>(column),
-        DataType::UInt32 => bytes_numeric::<UInt32Type>(column),
-        DataType::UInt64 => bytes_numeric::<UInt64Type>(column),
-        DataType::Float64 => bytes_numeric::<Float64Type>(column),
+        DataType::Int64 => bytes_generic::<Int64Type>(column),
+        DataType::UInt32 => bytes_generic::<UInt32Type>(column),
+        DataType::UInt64 => bytes_generic::<UInt64Type>(column),
+        DataType::Float64 => bytes_generic::<Float64Type>(column),
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
-            bytes_numeric::<TimestampMicrosecondType>(column)
+            bytes_generic::<TimestampMicrosecondType>(column)
         }
-        DataType::Date32(DateUnit::Day) => bytes_numeric::<Date32Type>(column),
+        DataType::Date32(DateUnit::Day) => bytes_generic::<Date32Type>(column),
         DataType::Utf8 => bytes_utf8(column),
         other => panic!("type {:?} is not supported", other),
     }
@@ -76,13 +66,21 @@ fn bytes_bool(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
     buffer.finish()
 }
 
-fn bytes_numeric<T>(column: &Arc<dyn Array>) -> GenericBinaryArray<i32>
+fn bytes_generic<T>(column: &Arc<dyn Array>) -> GenericBinaryArray<i32>
 where
     T: ArrowNumericType,
     T::Native: ByteKey,
 {
     // TODO deal with nulls somehow. Encode as 0 and accept collisions? Encode as empty array?
     let column: &PrimitiveArray<T> = column.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
+    bytes_static(column)
+}
+
+fn bytes_static<T>(column: &PrimitiveArray<T>) -> GenericBinaryArray<i32>
+where
+    T: ArrowNumericType,
+    T::Native: ByteKey,
+{
     let mut buffer = BinaryBuilder::new(column.len() * std::mem::size_of::<T::Native>());
     for i in 0..column.len() {
         buffer

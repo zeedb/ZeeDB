@@ -10,6 +10,7 @@ enum RewriteRule {
     CreateTableToScript,
     CreateIndexToScript,
     DropToScript,
+    UpdateToDeleteThenInsert,
     // Unnest meta rule:
     PushDependentJoin,
     // Unnesting implementation rules:
@@ -137,6 +138,18 @@ impl RewriteRule {
                     };
                     return Some(LogicalRewrite {
                         sql: lines.join("\n"),
+                    });
+                }
+            }
+            RewriteRule::UpdateToDeleteThenInsert => {
+                if let LogicalUpdate { table, tid, input } = expr {
+                    return Some(LogicalInsert {
+                        table: table.clone(),
+                        input: Box::new(LogicalDelete {
+                            table: table.clone(),
+                            tid: tid.clone(),
+                            input: input.clone(),
+                        }),
                     });
                 }
             }
@@ -1019,6 +1032,7 @@ impl<'a> RewriteProvider<'a> {
                     RewriteRule::CreateTableToScript,
                     RewriteRule::CreateIndexToScript,
                     RewriteRule::DropToScript,
+                    RewriteRule::UpdateToDeleteThenInsert,
                 ],
             )
         })

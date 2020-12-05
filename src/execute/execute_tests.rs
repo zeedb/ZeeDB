@@ -230,12 +230,12 @@ fn test_indexes() {
     );
     // Tests.
     let mut errors = vec![];
-    // run(
-    //     "examples/index_lookup.txt",
-    //     vec!["select * from fact where fact_id = 1"],
-    //     &mut storage,
-    //     &mut errors,
-    // );
+    run(
+        "examples/index_lookup.txt",
+        vec!["select * from fact where fact_id = 1"],
+        &mut storage,
+        &mut errors,
+    );
     run(
         "examples/lookup_join.txt",
         vec!["select * from fact join dim using (dim_id) where fact_id = 1"],

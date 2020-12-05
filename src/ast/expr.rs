@@ -106,17 +106,15 @@ pub enum Expr {
         values: Vec<Vec<Scalar>>,
         input: Box<Expr>,
     },
-    // LogicalUpdate { sets } implements the UPDATE operation.
-    // (column, None) indicates set column to default value.
+    // LogicalUpdate { tid } implements the UPDATE operation.
     LogicalUpdate {
         table: Table,
-        pid: Column,
         tid: Column,
         input: Box<Expr>,
     },
     // LogicalDelete { table } implements the DELETE operation.
     LogicalDelete {
-        pid: Column,
+        table: Table,
         tid: Column,
         input: Box<Expr>,
     },
@@ -239,14 +237,8 @@ pub enum Expr {
         values: Vec<Vec<Scalar>>,
         input: Box<Expr>,
     },
-    Update {
-        table: Table,
-        pid: Column,
-        tid: Column,
-        input: Box<Expr>,
-    },
     Delete {
-        pid: Column,
+        table: Table,
         tid: Column,
         input: Box<Expr>,
     },
@@ -313,7 +305,6 @@ impl Expr {
             | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
-            | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
@@ -376,7 +367,6 @@ impl Expr {
             | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
-            | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
@@ -417,7 +407,6 @@ impl Expr {
             | Expr::Sort { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
-            | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::LogicalAssign { .. }
             | Expr::Assign { .. }
@@ -555,22 +544,12 @@ impl Expr {
                     input,
                 }
             }
-            Expr::LogicalUpdate {
-                table,
-                pid,
-                tid,
-                input,
-            } => {
+            Expr::LogicalUpdate { table, tid, input } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalUpdate {
-                    table,
-                    pid,
-                    tid,
-                    input,
-                }
+                Expr::LogicalUpdate { table, tid, input }
             }
-            Expr::LogicalDelete { pid, tid, input } => Expr::LogicalDelete {
-                pid,
+            Expr::LogicalDelete { table, tid, input } => Expr::LogicalDelete {
+                table,
                 tid,
                 input: Box::new(visitor(*input)),
             },
@@ -683,21 +662,8 @@ impl Expr {
                 values,
                 input: Box::new(visitor(*input)),
             },
-            Expr::Update {
+            Expr::Delete { table, tid, input } => Expr::Delete {
                 table,
-                pid,
-                tid,
-
-                input,
-            } => Expr::Update {
-                table,
-                pid,
-                tid,
-
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Delete { pid, tid, input } => Expr::Delete {
-                pid,
                 tid,
                 input: Box::new(visitor(*input)),
             },
@@ -888,7 +854,6 @@ impl Expr {
             | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
-            | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
@@ -990,7 +955,6 @@ impl Expr {
             | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
-            | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
@@ -1115,19 +1079,13 @@ impl Expr {
                 projects: projects.iter().map(subst_c).collect(),
                 input: Box::new(input.subst(map)),
             },
-            Expr::LogicalUpdate {
+            Expr::LogicalUpdate { table, tid, input } => Expr::LogicalUpdate {
                 table,
-                pid,
-                tid,
-                input,
-            } => Expr::LogicalUpdate {
-                table,
-                pid: subst_c(&pid),
                 tid: subst_c(&tid),
                 input: Box::new(input.subst(map)),
             },
-            Expr::LogicalDelete { pid, tid, input } => Expr::LogicalDelete {
-                pid: subst_c(&pid),
+            Expr::LogicalDelete { table, tid, input } => Expr::LogicalDelete {
+                table,
                 tid: subst_c(&tid),
                 input: Box::new(input.subst(map)),
             },
@@ -1162,7 +1120,6 @@ impl Expr {
             | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
-            | Expr::Update { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
@@ -1218,7 +1175,6 @@ impl ops::Index<usize> for Expr {
             | Expr::Sort { input, .. }
             | Expr::Insert { input, .. }
             | Expr::Values { input, .. }
-            | Expr::Update { input, .. }
             | Expr::Delete { input, .. }
             | Expr::LogicalAssign { input, .. }
             | Expr::Assign { input, .. }
