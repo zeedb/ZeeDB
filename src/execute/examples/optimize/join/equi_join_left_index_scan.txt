@@ -4,10 +4,10 @@ where customer.store_id = store.store_id
 and customer.customer_id = 1
 
 Map customer.customer_id store.store_id
-	LookupJoin Inner
-		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-			Map* store.store_id store.$xmin store.$xmax
-				IndexScan* store(customer.store_id:store.store_id)
-		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-			Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
-				IndexScan customer(customer.customer_id:1)
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+		Map* store.store_id $xmin $xmax, ..
+			IndexScan store(store_id:customer.store_id)
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.customer_id customer.store_id $xmin $xmax
+						IndexScan customer(customer_id:1)
+							TableFreeScan

@@ -43,6 +43,7 @@ enum Node {
         scan: Option<Vec<Page>>,
     },
     IndexScan {
+        include_existing: bool,
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
         lookup: Vec<Scalar>,
@@ -180,6 +181,7 @@ impl Node {
                 scan: None,
             },
             IndexScan {
+                include_existing,
                 projects,
                 predicates,
                 lookup,
@@ -187,6 +189,7 @@ impl Node {
                 table,
                 input,
             } => Node::IndexScan {
+                include_existing,
                 projects,
                 predicates,
                 lookup,
@@ -332,11 +335,26 @@ impl Node {
             Node::Filter { input, .. } | Node::Limit { input, .. } | Node::Sort { input, .. } => {
                 input.node.schema()
             }
-            Node::SeqScan { projects, .. } | Node::IndexScan { projects, .. } => {
+            Node::SeqScan { projects, .. } => {
                 let fields = projects
                     .iter()
                     .map(|column| column.into_query_field())
                     .collect();
+                Schema::new(fields)
+            }
+            Node::IndexScan {
+                include_existing,
+                projects,
+                input,
+                ..
+            } => {
+                let mut fields = vec![];
+                for column in projects {
+                    fields.push(column.into_query_field())
+                }
+                if *include_existing {
+                    fields.extend_from_slice(input.node.schema().fields());
+                }
                 Schema::new(fields)
             }
             Node::Out { projects, .. } => {
@@ -444,6 +462,7 @@ impl Input {
                 }
             }
             Node::IndexScan {
+                include_existing,
                 projects,
                 predicates,
                 lookup,
@@ -470,7 +489,10 @@ impl Input {
                 }
                 // Perform a selective scan of the table.
                 let projects = projects.iter().map(|c| c.canonical_name()).collect();
-                let output = state.storage.table(table.id).bitmap_scan(tids, &projects);
+                let mut output = state.storage.table(table.id).bitmap_scan(tids, &projects);
+                if *include_existing {
+                    output = kernel::zip(&output, &input);
+                }
                 let boolean = crate::eval::all(predicates, &output, state)?;
                 Ok(kernel::gather_logical(&output, &boolean))
             }
@@ -643,19 +665,19 @@ impl Input {
                 match procedure {
                     Procedure::CreateTable(id) => {
                         let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.create_table(kernel::int64(&id));
+                        state.storage.create_table(kernel::int64(&id).unwrap());
                     }
                     Procedure::DropTable(id) => {
                         let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.drop_table(kernel::int64(&id));
+                        state.storage.drop_table(kernel::int64(&id).unwrap());
                     }
                     Procedure::CreateIndex(id) => {
                         let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.create_index(kernel::int64(&id));
+                        state.storage.create_index(kernel::int64(&id).unwrap());
                     }
                     Procedure::DropIndex(id) => {
                         let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.drop_index(kernel::int64(&id));
+                        state.storage.drop_index(kernel::int64(&id).unwrap());
                     }
                 };
                 Ok(dummy_row(self.schema.clone()))

@@ -164,6 +164,7 @@ pub enum Expr {
         table: Table,
     },
     IndexScan {
+        include_existing: bool,
         projects: Vec<Column>,
         // TODO pushing predicates into scan operators is probably not worth it,
         // because there is no benefit to actually implementing predicate pushdown in the execution layer.
@@ -607,6 +608,7 @@ impl Expr {
             },
             Expr::GetTempTable { name, columns } => Expr::GetTempTable { name, columns },
             Expr::IndexScan {
+                include_existing,
                 projects,
                 predicates,
                 lookup,
@@ -614,6 +616,7 @@ impl Expr {
                 table,
                 input,
             } => Expr::IndexScan {
+                include_existing,
                 projects,
                 predicates,
                 lookup,
@@ -1260,7 +1263,6 @@ impl Join {
 pub struct Table {
     pub id: i64,
     pub name: String,
-    pub columns: Vec<Column>,
 }
 
 impl Table {
@@ -1275,19 +1277,24 @@ impl Table {
                         ..
                     }),
                 ..
-            } => {
-                let mut columns = Vec::with_capacity(column_list.len());
-                for c in column_list {
-                    columns.push(Column::from(c));
-                }
-                Table {
-                    id: *id,
-                    name: name.clone(),
-                    columns,
-                }
-            }
+            } => Table {
+                id: *id,
+                name: name.clone(),
+            },
             other => panic!("{:?}", other),
         }
+    }
+}
+
+impl cmp::PartialOrd for Table {
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl cmp::Ord for Table {
+    fn cmp(&self, other: &Self) -> cmp::Ordering {
+        self.id.cmp(&other.id)
     }
 }
 
@@ -1345,10 +1352,9 @@ impl cmp::PartialOrd for Column {
 
 impl cmp::Ord for Column {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        let table = self.table.cmp(&other.table);
         let name = self.name.cmp(&other.name);
         let id = self.id.cmp(&other.id);
-        table.then(name).then(id)
+        name.then(id)
     }
 }
 

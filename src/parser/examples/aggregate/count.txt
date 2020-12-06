@@ -3,6 +3,6 @@ from person
 
 LogicalMap $aggregate.$agg1
 	LogicalAggregate $aggregate.$agg1:(CountStar)
-		Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-			Map* person.$xmin person.$xmax
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* $xmin $xmax
 				LogicalGet person

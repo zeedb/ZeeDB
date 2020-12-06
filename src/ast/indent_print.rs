@@ -211,15 +211,10 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalUpdate { tid, input, .. }
-            | Expr::LogicalDelete { tid, input, .. }
-            | Expr::Delete { tid, input, .. } => {
-                write!(
-                    f,
-                    "{} {}",
-                    self.name(),
-                    tid.table.as_ref().unwrap_or(&"".to_string())
-                )?;
+            Expr::LogicalUpdate { table, input, .. }
+            | Expr::LogicalDelete { table, input, .. }
+            | Expr::Delete { table, input, .. } => {
+                write!(f, "{} {}", self.name(), table.name)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
@@ -250,6 +245,7 @@ impl IndentPrint for Expr {
             }
             Expr::LogicalRewrite { sql } => write!(f, "{} {:?}", self.name(), sql),
             Expr::IndexScan {
+                include_existing,
                 projects,
                 predicates,
                 lookup,
@@ -263,6 +259,9 @@ impl IndentPrint for Expr {
                     indent += 1;
                 }
                 write!(f, "Map* {}", join_columns(projects))?;
+                if *include_existing {
+                    write!(f, ", ..")?;
+                }
                 newline(f, indent)?;
                 write!(
                     f,
@@ -272,7 +271,7 @@ impl IndentPrint for Expr {
                     join_index_lookups(index, lookup)
                 )?;
                 newline(f, indent + 1)?;
-                input.indent_print(f, indent + 1)
+                input.indent_print(f, indent + 2)
             }
             Expr::HashJoin {
                 join,

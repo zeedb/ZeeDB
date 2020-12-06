@@ -3,18 +3,18 @@ from person, store
 where person.person_id in (select person_id from customer where customer.store_id = store.store_id)
 
 Map $query.$col1:1
-	HashJoin Semi (Equal store.store_id store.store_id') (Equal person.person_id customer.person_id)
-		Partition* store.store_id' customer.person_id
-			Map customer.person_id store.store_id'
-				Map store.store_id':customer.store_id, ..
-					Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-						Map* customer.person_id customer.store_id customer.$xmin customer.$xmax
+	HashJoin Semi (Equal store.store_id store_id') (Equal person.person_id customer.person_id)
+		Partition* store_id' customer.person_id
+			Map customer.person_id store_id'
+				Map store_id':customer.store_id, ..
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* customer.person_id customer.store_id $xmin $xmax
 							SeqScan customer
 		Partition* store.store_id person.person_id
 			NestedLoop Inner
-				Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-					Map* store.store_id store.$xmin store.$xmax
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* store.store_id $xmin $xmax
 						SeqScan store
-				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-					Map* person.person_id person.$xmin person.$xmax
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* person.person_id $xmin $xmax
 						SeqScan person

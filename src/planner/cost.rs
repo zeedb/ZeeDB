@@ -1,6 +1,5 @@
 use crate::search_space::*;
 use ast::*;
-use std::collections::HashMap;
 use storage::Storage;
 
 pub type Cost = f64;
@@ -45,6 +44,7 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         IndexScan {
             predicates, input, ..
         } => {
+            // TODO this doesn't reflect the batching / bitmap scan that we're doing, it should be more optimistic.
             let index_cardinality = ss[leaf(input)].props.cardinality as f64;
             let count_predicates = predicates.len() as f64;
             index_cardinality * COST_READ_BLOCK
@@ -140,32 +140,23 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
     }
 }
 
-// compute_lower_bound estimates a minimum possible physical cost for mexpr,
-// based on a hypothetical idealized query plan that only has to pay
-// the cost of joins and reading from disk.
-pub fn compute_lower_bound(column_unique_cardinality: &HashMap<Column, usize>) -> Cost {
-    // TODO estimate a lower-bound for joins
-    fetching_cost(column_unique_cardinality)
-}
-
-fn fetching_cost(column_unique_cardinality: &HashMap<Column, usize>) -> Cost {
-    let mut total = 0.0;
-    for (_, cost) in table_max_cu_cards(column_unique_cardinality) {
-        total += cost as Cost * COST_READ_BLOCK;
-    }
-    total
-}
-
-fn table_max_cu_cards(
-    column_unique_cardinality: &HashMap<Column, usize>,
-) -> HashMap<String, usize> {
-    let mut max = HashMap::new();
-    for (column, cost) in column_unique_cardinality {
-        if let Some(table) = &column.table {
-            if cost > max.get(table).unwrap_or(&0) {
-                max.insert(table.clone(), *cost);
+pub(crate) fn compute_lower_bound(
+    ss: &SearchSpace,
+    mexpr: &MultiExpr,
+    props: &LogicalProps,
+) -> Cost {
+    match &mexpr.expr {
+        LogicalGet { .. } => props.cardinality as Cost * COST_READ_BLOCK,
+        expr => {
+            let mut cost = 0 as Cost;
+            for i in 0..expr.len() {
+                if let Leaf { gid } = &expr[i] {
+                    cost += ss[GroupID(*gid)].lower_bound;
+                } else {
+                    panic!("expected Leaf but found {:?}", &expr[i])
+                }
             }
+            cost
         }
     }
-    max
 }

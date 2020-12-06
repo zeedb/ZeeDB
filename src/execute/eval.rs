@@ -44,14 +44,7 @@ pub fn eval(
         Scalar::Column(column) => {
             let i = (0..input.num_columns())
                 .find(|i| input.schema().field(*i).name() == &column.canonical_name())
-                .expect(
-                    format!(
-                        "no column {} in {}",
-                        column.canonical_name(),
-                        input.schema()
-                    )
-                    .as_str(),
-                );
+                .expect(format!("no column {} in {}", column, input.schema()).as_str());
             Ok(input.column(i).clone())
         }
         Scalar::Parameter(name, _) => {
@@ -96,6 +89,7 @@ pub fn eval(
                 let input: &Int64Array = input.as_any().downcast_ref::<Int64Array>().unwrap();
                 let mut output = Int64Builder::new(input.len());
                 for i in 0..input.len() {
+                    assert!(!input.is_null(i));
                     let next = state.storage.next_val(input.value(i));
                     output.append_value(next).unwrap();
                 }

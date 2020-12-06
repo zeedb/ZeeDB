@@ -2,8 +2,7 @@
 
 mod cost;
 mod optimize;
-#[cfg(test)]
-mod optimize_tests;
+// optimize_tests are in execute, so we can use real data for testing.
 mod rewrite;
 mod rule;
 mod search_space;

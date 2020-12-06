@@ -7,14 +7,14 @@ Script
 		TableFreeScan
 	Assign index_sequence_id sequence.sequence_id
 		NestedLoop Single
-			Filter* (LessOrEqual sequence.$xmin (Xid)) (Less (Xid) sequence.$xmax) (Equal sequence.sequence_name "index")
-				Map* sequence.sequence_id sequence.sequence_name sequence.$xmin sequence.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "index")
+				Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 					SeqScan sequence
 			TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single
-			Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.catalog_id @table_catalog_id) (Equal table.table_name "person")
-				Map* table.catalog_id table.table_id table.table_name table.$xmin table.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @table_catalog_id) (Equal table.table_name "person")
+				Map* table.catalog_id table.table_id table.table_name $xmin $xmax
 					SeqScan table
 			TableFreeScan
 	Assign next_index_id (NextVal @index_sequence_id)
@@ -24,8 +24,8 @@ Script
 			TableFreeScan
 	Assign column_id column.column_id
 		NestedLoop Single
-			Filter* (LessOrEqual column.$xmin (Xid)) (Less (Xid) column.$xmax) (Equal column.table_id @table_id) (Equal column.column_name "person_id")
-				Map* column.table_id column.column_id column.column_name column.$xmin column.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal column.table_id @table_id) (Equal column.column_name "person_id")
+				Map* column.table_id column.column_id column.column_name $xmin $xmax
 					SeqScan column
 			TableFreeScan
 	Insert index_column

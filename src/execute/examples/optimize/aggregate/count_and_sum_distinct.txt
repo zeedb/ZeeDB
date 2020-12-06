@@ -1,8 +1,8 @@
 select count(distinct account_number), sum(distinct account_number)
 from customer
 
-Aggregate $aggregate.$agg1:(Count (Distinct $proj.$count)) $aggregate.$agg2:(Sum (Distinct $proj.$sum))
-	Map $proj.$count:customer.account_number $proj.$sum:customer.account_number
-		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-			Map* customer.account_number customer.$xmin customer.$xmax
+Aggregate $aggregate.$agg1:(Count (Distinct $count)) $aggregate.$agg2:(Sum (Distinct $sum))
+	Map $count:customer.account_number $sum:customer.account_number
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* customer.account_number $xmin $xmax
 				SeqScan customer

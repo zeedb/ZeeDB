@@ -209,7 +209,7 @@ impl<'a> Optimizer<'a> {
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
             let props = self.compute_logical_props(&self.ss[mid]);
-            let lower_bound = compute_lower_bound(&props.column_unique_cardinality);
+            let lower_bound = compute_lower_bound(&self.ss, &self.ss[mid], &props);
             let group = Group {
                 logical: vec![mid],
                 physical: vec![],

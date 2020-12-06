@@ -2,14 +2,13 @@ update customer
 set account_number = 0
 where person_id in (select person_id from person where first_name = "Joe")
 
-Update customer
-	Map customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date customer.$pid customer.$tid
-		HashJoin Semi (Equal customer.person_id person.person_id)
-			Partition* person.person_id
-				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Equal person.first_name "Joe")
-					Map* person.person_id person.first_name person.$xmin person.$xmax
+Insert customer
+	Delete customer
+		Map customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date $tid
+			NestedLoop Semi (Equal customer.person_id person.person_id)
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal person.first_name "Joe")
+					Map* person.person_id person.first_name $xmin $xmax
 						SeqScan person
-			Partition* customer.person_id
-				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$pid customer.$tid
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
 						SeqScan customer

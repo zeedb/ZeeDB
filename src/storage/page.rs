@@ -3,16 +3,15 @@ use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use arrow::util::bit_util::*;
-use regex::Regex;
 use std::fmt;
 use std::mem::size_of;
 use std::ops::Deref;
 use std::sync::atomic::*;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 pub const PAGE_SIZE: usize = 1024;
 
-const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
+pub const INITIAL_STRING_CAPACITY: usize = PAGE_SIZE * 10;
 
 #[derive(Clone)]
 pub struct Page {
@@ -40,7 +39,7 @@ struct Inner {
     xmax: usize,
     num_rows: usize,
     columns_buffer: Buffer,
-    string_buffers: Vec<Option<Buffer>>,
+    string_buffers: Vec<Option<RwLock<Buffer>>>,
 }
 
 impl Page {
@@ -63,10 +62,10 @@ impl Page {
         let xmax = capacity;
         capacity = align(capacity + PAGE_SIZE * size_of::<u64>());
         let num_rows = capacity;
-        capacity = capacity + size_of::<u64>();
+        capacity = align(capacity + size_of::<u64>());
         // Allocate memory.
         let columns_buffer = zeros(capacity);
-        let string_buffers: Vec<Option<Buffer>> = schema
+        let string_buffers: Vec<Option<RwLock<Buffer>>> = schema
             .fields()
             .iter()
             .map(|field| string_buffer(field.data_type()))
@@ -101,7 +100,7 @@ impl Page {
                     columns.push(head(
                         self.inner.xmin,
                         &self.inner.columns_buffer,
-                        None,
+                        &None,
                         num_rows,
                         DataType::UInt64,
                         false,
@@ -112,7 +111,7 @@ impl Page {
                     columns.push(head(
                         self.inner.xmax,
                         &self.inner.columns_buffer,
-                        None,
+                        &None,
                         num_rows,
                         DataType::UInt64,
                         false,
@@ -138,7 +137,7 @@ impl Page {
                         let column = head(
                             self.inner.columns[i],
                             &self.inner.columns_buffer,
-                            self.inner.string_buffers[i].as_ref(),
+                            &self.inner.string_buffers[i],
                             num_rows,
                             field.data_type().clone(),
                             field.is_nullable(),
@@ -190,7 +189,7 @@ impl Page {
                         nulls_offset,
                         columns_offset,
                         &self.inner.columns_buffer,
-                        self.inner.string_buffers[dst].as_ref(),
+                        &self.inner.string_buffers[dst],
                         start,
                         end,
                         records.column(src).deref(),
@@ -241,28 +240,23 @@ impl Page {
     }
 
     fn num_rows(&self) -> &AtomicUsize {
-        self.stat::<AtomicUsize>(self.inner.num_rows)
+        self.atomic::<AtomicUsize>(self.inner.num_rows, 0)
     }
 
     fn xmin(&self, row: usize) -> &AtomicU64 {
-        self.column::<AtomicU64>(self.inner.xmin, row)
+        self.atomic::<AtomicU64>(self.inner.xmin, row)
     }
 
     fn xmax(&self, row: usize) -> &AtomicU64 {
-        self.column::<AtomicU64>(self.inner.xmax, row)
+        self.atomic::<AtomicU64>(self.inner.xmax, row)
     }
 
-    fn stat<T>(&self, offset: usize) -> &T {
+    fn atomic<T>(&self, column_offset: usize, row: usize) -> &T {
+        assert!(column_offset + (row + 1) * size_of::<T>() < self.inner.columns_buffer.capacity());
         unsafe {
-            let ptr = self.inner.columns_buffer.raw_data().offset(offset as isize) as *const T;
+            let row_offset = column_offset + row * size_of::<T>();
+            let ptr = self.inner.columns_buffer.slice(row_offset).raw_data() as *const T;
             ptr.as_ref().unwrap()
-        }
-    }
-
-    fn column<T>(&self, offset: usize, row: usize) -> &T {
-        unsafe {
-            let ptr = self.inner.columns_buffer.raw_data().offset(offset as isize) as *const T;
-            ptr.offset(row as isize).as_ref().unwrap()
         }
     }
 
@@ -271,18 +265,11 @@ impl Page {
         star.push("$xmin".to_string());
         star.push("$xmax".to_string());
         let record_batch = self.select(&star);
-        let trim = |field: &String| {
-            if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
-                captures.get(1).unwrap().as_str().to_string()
-            } else {
-                field.clone()
-            }
-        };
         let header: Vec<String> = record_batch
             .schema()
             .fields()
             .iter()
-            .map(|field| trim(field.name()))
+            .map(|field| base_name(field.name()).to_string())
             .collect();
         let mut csv_bytes = vec![];
         csv_bytes.extend_from_slice(header.join(",").as_bytes());
@@ -315,9 +302,9 @@ impl fmt::Debug for Page {
     }
 }
 
-fn string_buffer(data: &DataType) -> Option<Buffer> {
+fn string_buffer(data: &DataType) -> Option<RwLock<Buffer>> {
     match data {
-        DataType::Utf8 => Some(zeros(INITIAL_STRING_CAPACITY)),
+        DataType::Utf8 => Some(RwLock::new(zeros(INITIAL_STRING_CAPACITY))),
         _ => None,
     }
 }
@@ -331,7 +318,7 @@ fn zeros(capacity: usize) -> Buffer {
 fn head(
     mut column_offset: usize,
     columns_buffer: &Buffer,
-    string_buffer: Option<&Buffer>,
+    string_buffer: &Option<RwLock<Buffer>>,
     len: usize,
     data_type: DataType,
     nullable: bool,
@@ -348,7 +335,7 @@ fn head(
     array = array.add_buffer(values_buffer);
     // If column is a string, add a string buffer.
     if let Some(string_buffer) = string_buffer {
-        array = array.add_buffer(string_buffer.clone());
+        array = array.add_buffer(string_buffer.read().unwrap().clone());
     }
     make_array(array.build())
 }
@@ -357,7 +344,7 @@ fn extend(
     nulls_offset: Option<usize>,
     column_offset: usize,
     columns_buffer: &Buffer,
-    string_buffer: Option<&Buffer>,
+    string_buffer: &Option<RwLock<Buffer>>,
     start: usize,
     end: usize,
     values: &dyn Array,
@@ -388,7 +375,7 @@ fn extend(
         DataType::Utf8 => extend_string(
             column_offset,
             columns_buffer,
-            string_buffer.unwrap(),
+            string_buffer.as_ref().unwrap(),
             start,
             end,
             values,
@@ -404,14 +391,13 @@ fn extend_nulls(
     end: usize,
     values: &dyn Array,
 ) {
+    assert!(nulls_offset + (end + 7) / 8 < columns_buffer.capacity());
+
     let dst = columns_buffer.slice(nulls_offset).raw_data() as *mut u8;
-    if let Some(nulls_buffer) = values.data_ref().null_buffer() {
-        let src = nulls_buffer.raw_data();
-        unsafe {
-            for i in 0..(end - start) {
-                if get_bit_raw(src, i) {
-                    set_bit_raw(dst, start + i)
-                }
+    if let Some(null_bitmap) = values.data_ref().null_bitmap() {
+        for i in 0..(end - start) {
+            if null_bitmap.is_set(i) {
+                unsafe { set_bit_raw(dst, start + i) }
             }
         }
     } else {
@@ -428,15 +414,17 @@ fn extend_primitive<T: ArrowNumericType>(
     end: usize,
     values: &dyn Array,
 ) {
-    let dst = columns_buffer.slice(column_offset).raw_data() as *mut T::Native;
+    assert!(column_offset + end * size_of::<T::Native>() < columns_buffer.capacity());
+
+    let row_offset = column_offset + start * size_of::<T::Native>();
+    let dst = columns_buffer.slice(row_offset).raw_data() as *mut T::Native;
     let src = values
         .as_any()
         .downcast_ref::<PrimitiveArray<T>>()
         .unwrap()
         .raw_values();
-    let dst = dst as *mut <T as ArrowPrimitiveType>::Native;
     unsafe {
-        std::ptr::copy_nonoverlapping(src, dst.offset(start as isize), end - start);
+        std::ptr::copy_nonoverlapping(src, dst, end - start);
     }
 }
 
@@ -447,6 +435,8 @@ fn extend_boolean(
     end: usize,
     src: &dyn Array,
 ) {
+    assert!(column_offset + (end + 7) / 8 < columns_buffer.capacity());
+
     let dst = columns_buffer.slice(column_offset).raw_data() as *mut u8;
     let src = src
         .as_any()
@@ -466,32 +456,48 @@ fn extend_boolean(
 fn extend_string(
     column_offset: usize,
     columns_buffer: &Buffer,
-    string_buffer: &Buffer,
+    string_buffer: &RwLock<Buffer>,
     start: usize,
     end: usize,
     src: &dyn Array,
 ) {
-    let dst_offsets = columns_buffer.slice(column_offset).raw_data() as *mut i32;
     let src: &StringArray = src.as_any().downcast_ref::<StringArray>().unwrap();
-    let src_data = src.value_data().raw_data();
-    // Copy offsets.
+    let dst_data_start = extend_string_offsets(column_offset, columns_buffer, start, end, src);
+    extend_string_values(string_buffer, dst_data_start, src);
+}
+
+fn extend_string_offsets(
+    column_offset: usize,
+    columns_buffer: &Buffer,
+    start: usize,
+    end: usize,
+    src: &StringArray,
+) -> i32 {
+    assert!(column_offset + end * size_of::<i32>() < columns_buffer.capacity());
+
+    let dst_offsets = columns_buffer.slice(column_offset).raw_data() as *mut i32;
     for i in start..end {
         unsafe {
             *dst_offsets.offset((i + 1) as isize) =
                 *dst_offsets.offset(i as isize) + src.value_length(i - start);
         }
     }
-    // Copy data.
-    let dst_data = string_buffer.raw_data() as *mut u8;
     // Start position in dst_data is given by the offset of the end of the last string, dst_offsets[start].
-    let dst_data_start = if start == 0 {
-        0
-    } else {
-        unsafe { *dst_offsets.offset(start as isize) }
-    };
-    // Length in dst_data is given by the total length of all strings in src.
+    unsafe { *dst_offsets.offset(start as isize) }
+}
+
+fn extend_string_values(string_buffer: &RwLock<Buffer>, dst_data_start: i32, src: &StringArray) {
     let src_data_len = src.value_offset(src.len());
-    // Copy value bytes from src to dest.
+    let needs_capacity = (dst_data_start + src_data_len) as usize;
+
+    if needs_capacity > string_buffer.read().unwrap().capacity() {
+        resize_string_buffer(string_buffer, needs_capacity.next_power_of_two());
+    }
+
+    assert!(needs_capacity <= string_buffer.read().unwrap().capacity());
+
+    let src_data = src.value_data().raw_data();
+    let dst_data = string_buffer.read().unwrap().raw_data() as *mut u8;
     unsafe {
         std::ptr::copy_nonoverlapping(
             src_data,
@@ -501,13 +507,20 @@ fn extend_string(
     }
 }
 
+fn resize_string_buffer(string_buffer: &RwLock<Buffer>, new_capacity: usize) {
+    let mut lock = string_buffer.write().unwrap();
+    let mut bigger = MutableBuffer::new(new_capacity);
+    bigger.write_bytes(lock.data(), lock.len()).unwrap();
+    *lock = bigger.freeze();
+}
+
 fn align(offset: usize) -> usize {
     ((offset + arrow::memory::ALIGNMENT - 1) / arrow::memory::ALIGNMENT) * arrow::memory::ALIGNMENT
 }
 
 fn pax_length(data: &DataType, num_rows: usize) -> usize {
     match data {
-        DataType::Boolean => (num_rows + 8 - 1) / 8,
+        DataType::Boolean => (num_rows + 7) / 8,
         DataType::Int64 => Int64Type::get_bit_width() / 8 * num_rows,
         DataType::UInt64 => UInt64Type::get_bit_width() / 8 * num_rows,
         DataType::Float64 => Float64Type::get_bit_width() / 8 * num_rows,
@@ -520,12 +533,17 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
     }
 }
 
-pub fn base_name(field: &String) -> &str {
-    if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
-        captures.get(1).unwrap().as_str()
-    } else {
-        field
+pub fn base_name(field: &str) -> &str {
+    for (n, c) in field.char_indices().rev() {
+        if c == '#' {
+            return &field[0..n];
+        } else if ('0'..='9').contains(&c) {
+            continue;
+        } else {
+            break;
+        }
     }
+    field
 }
 
 fn with_base_name(field: &Field) -> Field {

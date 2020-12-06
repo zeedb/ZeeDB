@@ -10,6 +10,8 @@ use zetasql::analyzer_options_proto::QueryParameterProto;
 use zetasql::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
 use zetasql::*;
 
+pub const MAX_QUERY: usize = 4_194_304;
+
 pub struct ParseProvider {
     runtime: Runtime,
     client: ZetaSqlLocalServiceClient<Channel>,
@@ -35,7 +37,7 @@ impl ParseProvider {
         }
     }
 
-    pub fn analyze(&mut self, sql: &String, catalog: &Catalog) -> Result<Expr, String> {
+    pub fn analyze(&mut self, sql: &str, catalog: &Catalog) -> Result<Expr, String> {
         let mut offset = 0;
         let mut exprs = vec![];
         let mut variables = vec![];
@@ -68,7 +70,7 @@ impl ParseProvider {
 
     fn analyze_next(
         &mut self,
-        sql: &String,
+        sql: &str,
         offset: i32,
         catalog: &Catalog,
         variables: &Vec<(String, DataType)>,
@@ -94,7 +96,7 @@ impl ParseProvider {
             }),
             target: Some(analyze_request::Target::ParseResumeLocation(
                 ParseResumeLocationProto {
-                    input: Some(sql.clone()),
+                    input: Some(sql.to_string()),
                     byte_position: Some(offset),
                     ..Default::default()
                 },

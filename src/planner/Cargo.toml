@@ -9,7 +9,7 @@ path = "lib.rs"
 
 [dependencies]
 arrow = { version = "2.0.0", features = ["simd"] }
-regex = "1"
+regex = "1.4.2"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
 encoding = { path = "../encoding" }

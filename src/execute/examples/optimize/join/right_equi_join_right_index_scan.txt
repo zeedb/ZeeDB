@@ -4,10 +4,13 @@ right join store on customer.store_id = store.store_id
 where store.store_id = 1
 
 Map customer.customer_id store.store_id
-	LookupJoin Right
-		Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-			Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
-				IndexScan* customer(customer.store_id:store.store_id)
-		Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-			Map* store.store_id store.$xmin store.$xmax
-				IndexScan store(store.store_id:1)
+	HashJoin Right (Equal customer.store_id store.store_id)
+		Partition* customer.store_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.customer_id customer.store_id $xmin $xmax
+					SeqScan customer
+		Partition* store.store_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* store.store_id $xmin $xmax
+					IndexScan store(store_id:1)
+						TableFreeScan

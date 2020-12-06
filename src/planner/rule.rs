@@ -390,19 +390,19 @@ impl Rule {
                     table,
                 } = bind
                 {
+                    let indexes = catalog.indexes.get(&table.id)?;
                     // TODO return multiple indexes!
-                    if let Some((index, lookup, predicates)) =
-                        find_index(catalog, &predicates, &table).pop()
-                    {
-                        return Some(IndexScan {
-                            projects,
-                            predicates,
-                            lookup,
-                            index,
-                            table,
-                            input: Box::new(LogicalSingleGet),
-                        });
-                    }
+                    let (index, lookup, predicates) =
+                        find_index(indexes, &projects, &predicates).pop()?;
+                    return Some(IndexScan {
+                        include_existing: false,
+                        projects,
+                        predicates,
+                        lookup,
+                        index,
+                        table,
+                        input: Box::new(LogicalSingleGet),
+                    });
                 }
             }
             Rule::LogicalFilterToFilter => {
@@ -469,19 +469,19 @@ impl Rule {
                     {
                         let mut predicates = join.predicates().clone();
                         predicates.extend(table_predicates);
+                        let indexes = catalog.indexes.get(&table.id)?;
                         // TODO return multiple indexes!
-                        if let Some((index, lookup, predicates)) =
-                            find_index(catalog, &predicates, &table).pop()
-                        {
-                            return Some(IndexScan {
-                                predicates,
-                                projects,
-                                lookup,
-                                index,
-                                table,
-                                input: right,
-                            });
-                        }
+                        let (index, lookup, predicates) =
+                            find_index(indexes, &projects, &predicates).pop()?;
+                        return Some(IndexScan {
+                            include_existing: true,
+                            projects,
+                            predicates,
+                            lookup,
+                            index,
+                            table,
+                            input: right,
+                        });
                     }
                 }
             }
@@ -683,21 +683,19 @@ fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
 }
 
 fn find_index(
-    catalog: &Catalog,
+    indexes: &Vec<Index>,
+    table_columns: &Vec<Column>,
     predicates: &Vec<Scalar>,
-    table: &Table,
 ) -> Vec<(Index, Vec<Scalar>, Vec<Scalar>)> {
-    catalog
-        .indexes
-        .get(&table.id)
-        .unwrap_or(&vec![])
+    indexes
         .iter()
-        .flat_map(|index| check_index(index, predicates))
+        .flat_map(|index| check_index(index, table_columns, predicates))
         .collect()
 }
 
 fn check_index(
     index: &Index,
+    table_columns: &Vec<Column>,
     predicates: &Vec<Scalar>,
 ) -> Option<(Index, Vec<Scalar>, Vec<Scalar>)> {
     let mut index_predicates = vec![];
@@ -708,9 +706,8 @@ fn check_index(
                 Scalar::Call(function) => match function.as_ref() {
                     Function::Equal(Scalar::Column(column), lookup)
                     | Function::Equal(lookup, Scalar::Column(column))
-                        if column_name == &column.name =>
+                        if column_name == &column.name && table_columns.contains(column) =>
                     {
-                        // TODO need to check if table matches!!
                         index_predicates.push(lookup.clone());
                     }
                     _ => remaining_predicates.push(predicate.clone()),

@@ -2,21 +2,21 @@ select (select max(modified_date) from customer where customer.store_id = store.
 from store
 
 Map $query.$col1:$aggregate.$agg1
-	HashJoin Single (Equal store.store_id store.store_id') (Equal store.name store.name')
-		Partition* store.store_id' store.name'
-			Aggregate store.store_id' store.name' $aggregate.$agg1:(Max $proj.$max)
-				Map $proj.$max:customer.modified_date store.store_id' store.name'
-					HashJoin Inner (Equal customer.store_id store.store_id')
-						Partition* store.store_id'
-							Aggregate store.store_id' store.name'
-								Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax) (Like store.name' "A%")
-									Map* store.store_id' store.name' store.$xmin store.$xmax
+	HashJoin Single (Equal store.store_id store_id') (Equal store.name name')
+		Partition* store_id' name'
+			Aggregate store_id' name' $aggregate.$agg1:(Max $max)
+				Map $max:customer.modified_date store_id' name'
+					HashJoin Inner (Equal customer.store_id store_id')
+						Partition* store_id'
+							Aggregate store_id' name'
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like name' "A%")
+									Map* store_id' name' $xmin $xmax
 										SeqScan store
 						Partition* customer.store_id
-							Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-								Map* customer.store_id customer.modified_date customer.$xmin customer.$xmax
+							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+								Map* customer.store_id customer.modified_date $xmin $xmax
 									SeqScan customer
 		Partition* store.store_id store.name
-			Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-				Map* store.store_id store.name store.$xmin store.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* store.store_id store.name $xmin $xmax
 					SeqScan store

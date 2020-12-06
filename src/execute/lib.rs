@@ -11,6 +11,8 @@ mod hash_table;
 mod hash_table_tests;
 mod index;
 mod join;
+#[cfg(test)]
+mod optimize_tests;
 mod sort;
 mod state;
 

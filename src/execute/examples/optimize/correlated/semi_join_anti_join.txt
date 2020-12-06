@@ -3,37 +3,37 @@ where exists (select 1 from person where person.person_id = customer.person_id)
 and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
 
 Map $query.$col1:1
-	HashJoin Anti (Equal customer.store_id customer.store_id') (Equal customer.modified_date customer.modified_date')
-		Partition* customer.store_id' customer.modified_date'
-			Map $expr_subquery.$col1:1 customer.store_id' customer.modified_date'
-				HashJoin Inner (Equal store.store_id customer.store_id') (Greater customer.modified_date' store.modified_date)
-					Partition* customer.store_id'
-						Aggregate customer.store_id' customer.modified_date'
-							HashJoin Mark $mark.$exists (Equal customer.person_id customer.person_id')
-								Partition* customer.person_id'
-									Map $expr_subquery.$col1:1 customer.person_id'
-										Map customer.person_id':person.person_id, ..
-											Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-												Map* person.person_id person.$xmin person.$xmax
+	HashJoin Anti (Equal customer.store_id store_id') (Equal customer.modified_date modified_date')
+		Partition* store_id' modified_date'
+			Map $expr_subquery.$col1:1 store_id' modified_date'
+				HashJoin Inner (Equal store.store_id store_id') (Greater modified_date' store.modified_date)
+					Partition* store_id'
+						Aggregate store_id' modified_date'
+							HashJoin Mark $exists (Equal customer.person_id person_id')
+								Partition* person_id'
+									Map $expr_subquery.$col1:1 person_id'
+										Map person_id':person.person_id, ..
+											Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+												Map* person.person_id $xmin $xmax
 													SeqScan person
 								Partition* customer.person_id
-									Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-										Map* customer.person_id customer.store_id' customer.modified_date' customer.$xmin customer.$xmax
+									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+										Map* customer.person_id store_id' modified_date' $xmin $xmax
 											SeqScan customer
 					Partition* store.store_id
-						Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-							Map* store.store_id store.modified_date store.$xmin store.$xmax
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* store.store_id store.modified_date $xmin $xmax
 								SeqScan store
 		Partition* customer.store_id customer.modified_date
-			Map $expr_subquery.$col1 $mark.$exists:true customer.$xmax customer.$xmin customer.modified_date customer.person_id' customer.person_id customer.store_id
-				HashJoin Semi (Equal customer.person_id customer.person_id')
-					Partition* customer.person_id'
-						Map $expr_subquery.$col1:1 customer.person_id'
-							Map customer.person_id':person.person_id, ..
-								Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-									Map* person.person_id person.$xmin person.$xmax
+			Map $expr_subquery.$col1 $exists:true $xmax $xmin customer.modified_date person_id' customer.person_id customer.store_id
+				HashJoin Semi (Equal customer.person_id person_id')
+					Partition* person_id'
+						Map $expr_subquery.$col1:1 person_id'
+							Map person_id':person.person_id, ..
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* person.person_id $xmin $xmax
 										SeqScan person
 					Partition* customer.person_id
-						Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-							Map* customer.person_id customer.store_id customer.modified_date customer.$xmin customer.$xmax
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* customer.person_id customer.store_id customer.modified_date $xmin $xmax
 								SeqScan customer

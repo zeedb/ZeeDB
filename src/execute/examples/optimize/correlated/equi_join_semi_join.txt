@@ -6,16 +6,16 @@ and customer.store_id in (select store_id from store)
 Map $query.$col1:1
 	HashJoin Semi (Equal customer.store_id store.store_id)
 		Partition* store.store_id
-			Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-				Map* store.store_id store.$xmin store.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* store.store_id $xmin $xmax
 					SeqScan store
 		Partition* customer.store_id
 			HashJoin Inner (Equal person.person_id customer.person_id)
 				Partition* customer.person_id
-					Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-						Map* customer.person_id customer.store_id customer.$xmin customer.$xmax
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* customer.person_id customer.store_id $xmin $xmax
 							SeqScan customer
 				Partition* person.person_id
-					Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-						Map* person.person_id person.$xmin person.$xmax
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* person.person_id $xmin $xmax
 							SeqScan person

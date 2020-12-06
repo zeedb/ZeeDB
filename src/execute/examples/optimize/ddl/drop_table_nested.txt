@@ -5,19 +5,19 @@ Script
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
-			Filter* (LessOrEqual catalog.$xmin (Xid)) (Less (Xid) catalog.$xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
-				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name catalog.$xmin catalog.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 					SeqScan catalog
 			TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single
-			Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
-				Map* table.catalog_id table.table_id table.table_name table.$xmin table.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
+				Map* table.catalog_id table.table_id table.table_name $xmin $xmax
 					SeqScan table
 			TableFreeScan
 	Delete table
-		Filter* (LessOrEqual table.$xmin (Xid)) (Less (Xid) table.$xmax) (Equal table.table_id @table_id)
-			Map* table.table_id table.$xmin table.$xmax table.$tid
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.table_id @table_id)
+			Map* table.table_id $xmin $xmax $tid
 				SeqScan table
 	Call drop_table @table_id
 		TableFreeScan

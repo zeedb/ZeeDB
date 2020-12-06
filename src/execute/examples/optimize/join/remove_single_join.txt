@@ -2,6 +2,6 @@ select (select 1)
 from customer
 
 Map $query.$col1:1
-	Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-		Map* customer.$xmin customer.$xmax
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+		Map* $xmin $xmax
 			SeqScan customer

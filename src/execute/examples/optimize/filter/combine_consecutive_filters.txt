@@ -3,6 +3,6 @@ from (select * from person where first_name like "A%")
 where last_name like "A%"
 
 Map $query.$col1:1
-	Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax) (Like person.last_name "A%") (Like person.first_name "A%")
-		Map* person.person_id person.first_name person.last_name person.modified_date person.$xmin person.$xmax
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like person.last_name "A%") (Like person.first_name "A%")
+		Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax
 			SeqScan person

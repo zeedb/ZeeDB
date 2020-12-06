@@ -1,8 +1,9 @@
 select *
-from (select *, store_id + 1 from customer)
-where store_id = 1
+from (select *, customer_id + 1 from customer)
+where customer_id = 1
 
-Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(Add customer.store_id 1)
-	Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-		Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax
-			IndexScan customer(customer.store_id:1)
+Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(Add customer.customer_id 1)
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+		Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
+			IndexScan customer(customer_id:1)
+				TableFreeScan

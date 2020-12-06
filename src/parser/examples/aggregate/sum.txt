@@ -2,8 +2,8 @@ select sum(1)
 from person
 
 LogicalMap $aggregate.$agg1
-	LogicalAggregate $aggregate.$agg1:(Sum $proj.$sum)
-		LogicalMap $proj.$sum:1
-			Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-				Map* person.$xmin person.$xmax
+	LogicalAggregate $aggregate.$agg1:(Sum $sum)
+		LogicalMap $sum:1
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* $xmin $xmax
 					LogicalGet person

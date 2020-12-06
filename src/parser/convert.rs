@@ -90,8 +90,8 @@ impl Converter {
             .map(|c| Column::from(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
-        let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
+        let xmin = self.create_column("$xmin".to_string(), DataType::UInt64);
+        let xmax = self.create_column("$xmax".to_string(), DataType::UInt64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -120,9 +120,9 @@ impl Converter {
             .map(|c| Column::from(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column(table.name.clone(), "$xmin".to_string(), DataType::UInt64);
-        let xmax = self.create_column(table.name.clone(), "$xmax".to_string(), DataType::UInt64);
-        let tid = self.create_column(table.name.clone(), "$tid".to_string(), DataType::UInt64);
+        let xmin = self.create_column("$xmin".to_string(), DataType::UInt64);
+        let xmax = self.create_column("$xmax".to_string(), DataType::UInt64);
+        let tid = self.create_column("$tid".to_string(), DataType::UInt64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -484,11 +484,7 @@ impl Converter {
             None
         } else if arguments.len() == 1 {
             let argument = self.expr(arguments.first().get(), input);
-            let column = self.create_column(
-                String::from("$proj"),
-                function_name(&function),
-                argument.data(),
-            );
+            let column = self.create_column(function_name(&function), argument.data());
             project.push((argument, column.clone()));
             Some(column.clone())
         } else {
@@ -840,19 +836,14 @@ impl Converter {
             1 => unimplemented!(),
             // Exists
             2 => {
-                let mark = self.create_column(
-                    "$mark".to_string(),
-                    "$exists".to_string(),
-                    DataType::Boolean,
-                );
+                let mark = self.create_column("$exists".to_string(), DataType::Boolean);
                 let join = Join::Mark(mark.clone(), vec![]);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
             }
             // In
             3 => {
-                let mark =
-                    self.create_column("$mark".to_string(), "$in".to_string(), DataType::Boolean);
+                let mark = self.create_column("$in".to_string(), DataType::Boolean);
                 let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
@@ -873,12 +864,12 @@ impl Converter {
         scalar
     }
 
-    fn create_column(&mut self, table: String, name: String, data: DataType) -> Column {
+    fn create_column(&mut self, name: String, data: DataType) -> Column {
         let column = Column {
             created: Phase::Convert,
             id: self.next_column_id,
             name,
-            table: Some(table),
+            table: None,
             data,
         };
         self.next_column_id += 1;
@@ -950,7 +941,7 @@ fn create_dependent_join(
             created: Phase::Plan,
             id: fresh_column + i as i64,
             name: subquery_parameters[i].name.clone(),
-            table: subquery_parameters[i].table.clone(),
+            table: None,
             data: subquery_parameters[i].data.clone(),
         })
         .collect();

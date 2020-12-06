@@ -98,9 +98,8 @@ impl RewriteRule {
                         lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (@next_index_id, @column_id, {:?});", index_order));
                     }
                     lines.push("call metadata.create_index(@next_index_id);".to_string());
-                    return Some(LogicalRewrite {
-                        sql: lines.join("\n"),
-                    });
+                    let sql = lines.join("\n");
+                    return Some(LogicalRewrite { sql });
                 }
             }
             RewriteRule::DropToScript => {

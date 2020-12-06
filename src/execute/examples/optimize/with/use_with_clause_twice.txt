@@ -4,8 +4,8 @@ from foo f1, foo f2
 where f1.store_id = f2.store_id
 
 CreateTempTable foo
-	Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-		Map* customer.customer_id customer.store_id customer.$xmin customer.$xmax
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+		Map* customer.customer_id customer.store_id $xmin $xmax
 			SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.store_id foo.store_id)

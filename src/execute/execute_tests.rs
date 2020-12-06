@@ -50,18 +50,11 @@ fn compile<'a>(
 }
 
 fn csv(record_batch: RecordBatch) -> String {
-    let trim = |field: &String| {
-        if let Some(captures) = Regex::new(r"(.*)#\d+").unwrap().captures(field) {
-            captures.get(1).unwrap().as_str().to_string()
-        } else {
-            field.clone()
-        }
-    };
     let header: Vec<String> = record_batch
         .schema()
         .fields()
         .iter()
-        .map(|field| trim(field.name()))
+        .map(|field| storage::base_name(field.name()).to_string())
         .collect();
     let mut csv_bytes = vec![];
     csv_bytes.extend_from_slice(header.join(",").as_bytes());
@@ -78,7 +71,7 @@ fn csv(record_batch: RecordBatch) -> String {
 fn test_select() {
     let mut errors = vec![];
     run(
-        "examples/select_1.txt",
+        "examples/execute/select_1.txt",
         vec!["select 1;"],
         &mut Storage::new(),
         &mut errors,
@@ -92,13 +85,13 @@ fn test_select() {
 fn test_ddl() {
     let mut errors = vec![];
     run(
-        "examples/create_table.txt",
+        "examples/execute/create_table.txt",
         vec!["create table foo (id int64)"],
         &mut Storage::new(),
         &mut errors,
     );
     run(
-        "examples/drop_table.txt",
+        "examples/execute/drop_table.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -110,7 +103,7 @@ fn test_ddl() {
         &mut errors,
     );
     run(
-        "examples/create_index.txt",
+        "examples/execute/create_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
@@ -119,7 +112,7 @@ fn test_ddl() {
         &mut errors,
     );
     run(
-        "examples/drop_index.txt",
+        "examples/execute/drop_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
@@ -137,7 +130,7 @@ fn test_ddl() {
 fn test_insert() {
     let mut errors = vec![];
     run(
-        "examples/insert.txt",
+        "examples/execute/insert.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -147,7 +140,7 @@ fn test_insert() {
         &mut errors,
     );
     run(
-        "examples/insert_vary_order.txt",
+        "examples/execute/insert_vary_order.txt",
         vec![
             "create table foo (id int64, ok bool);",
             "insert into foo (id, ok) values (1, false);",
@@ -158,7 +151,7 @@ fn test_insert() {
         &mut errors,
     );
     run(
-        "examples/insert_into_index.txt",
+        "examples/execute/insert_into_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
@@ -177,7 +170,7 @@ fn test_insert() {
 fn test_delete() {
     let mut errors = vec![];
     run(
-        "examples/delete.txt",
+        "examples/execute/delete.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -188,7 +181,7 @@ fn test_delete() {
         &mut errors,
     );
     run(
-        "examples/delete_then_insert.txt",
+        "examples/execute/delete_then_insert.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -208,7 +201,7 @@ fn test_delete() {
 fn test_update() {
     let mut errors = vec![];
     run(
-        "examples/update.txt",
+        "examples/execute/update.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -219,7 +212,7 @@ fn test_update() {
         &mut errors,
     );
     run(
-        "examples/update_index.txt",
+        "examples/execute/update_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
@@ -239,7 +232,7 @@ fn test_update() {
 fn test_index_scan() {
     let mut storage = Storage::new();
     // Setup.
-    let mut rng = rand::rngs::StdRng::from_seed([0; 32]);
+    let mut rng = rand::rngs::SmallRng::from_seed([0; 16]);
     let mut populate_fact = vec![];
     let mut populate_dim = vec![];
     const N_DIM: usize = 1_000;
@@ -275,13 +268,13 @@ fn test_index_scan() {
     // Tests.
     let mut errors = vec![];
     run(
-        "examples/index_lookup.txt",
+        "examples/execute/index_lookup.txt",
         vec!["select * from fact where fact_id = 1"],
         &mut storage,
         &mut errors,
     );
     run(
-        "examples/lookup_join.txt",
+        "examples/execute/lookup_join.txt",
         vec!["select * from fact join dim using (dim_id) where fact_id = 1"],
         &mut storage,
         &mut errors,

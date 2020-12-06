@@ -106,3 +106,36 @@ fn test_insert_delete() {
         format!("{:?}", page)
     );
 }
+
+#[test]
+fn test_expand_string_pool() {
+    let schema = Arc::new(Schema::new(vec![Field::new("a", DataType::Utf8, true)]));
+    let page = Page::empty(0, schema.clone());
+    let strings: Vec<String> = (0..PAGE_SIZE)
+        .map(|i| format!("1234567890-{}", i))
+        .collect();
+    let total: usize = strings.iter().map(|s| s.len()).sum();
+    assert!(total > INITIAL_STRING_CAPACITY);
+    let strs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
+    let input =
+        RecordBatch::try_new(schema.clone(), vec![Arc::new(StringArray::from(strs))]).unwrap();
+    let mut offset = 0;
+    let mut tids = UInt64Builder::new(1);
+    page.insert(&input, 1000, &mut tids, &mut offset);
+    let batch = page.select(&page.star());
+    let column: &StringArray = batch
+        .column(0)
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .unwrap();
+    for i in 0..PAGE_SIZE {
+        assert_eq!(&strings[i], column.value(i));
+    }
+}
+
+#[test]
+fn test_base_name() {
+    assert_eq!("foo", base_name("foo"));
+    assert_eq!("foo", base_name("foo#1"));
+    assert_eq!("foo", base_name("foo#123"));
+}

@@ -2,15 +2,15 @@ select (select max(modified_date) from customer where customer.store_id = store.
 from store
 
 Map $query.$col1:$aggregate.$agg1
-	HashJoin Single (Equal store.store_id store.store_id')
-		Partition* store.store_id'
-			Aggregate store.store_id' $aggregate.$agg1:(Max $proj.$max)
-				Map $proj.$max:customer.modified_date store.store_id'
-					Map store.store_id':customer.store_id, ..
-						Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax) (Greater customer.account_number 100)
-							Map* customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax
+	HashJoin Single (Equal store.store_id store_id')
+		Partition* store_id'
+			Aggregate store_id' $aggregate.$agg1:(Max $max)
+				Map $max:customer.modified_date store_id'
+					Map store_id':customer.store_id, ..
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Greater customer.account_number 100)
+							Map* customer.store_id customer.account_number customer.modified_date $xmin $xmax
 								SeqScan customer
 		Partition* store.store_id
-			Filter* (LessOrEqual store.$xmin (Xid)) (Less (Xid) store.$xmax)
-				Map* store.store_id store.$xmin store.$xmax
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* store.store_id $xmin $xmax
 					SeqScan store

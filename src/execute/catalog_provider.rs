@@ -200,7 +200,7 @@ impl CatalogProvider {
     fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
         let index_id_column = kernel::coerce::<Int64Array>(batch.column(0));
         let index_id = index_id_column.value(*offset);
-        let table_id = kernel::coerce::<Int64Array>(batch.column(1)).value(0);
+        let table_id = kernel::coerce::<Int64Array>(batch.column(1)).value(*offset);
         let column_name_column = kernel::coerce::<StringArray>(batch.column(2));
 
         let mut index = Index {
@@ -208,6 +208,7 @@ impl CatalogProvider {
             table_id,
             columns: vec![],
         };
+
         while *offset < batch.num_rows() && index_id == index_id_column.value(*offset) {
             let column_name = column_name_column.value(*offset).to_string();
             index.columns.push(column_name);

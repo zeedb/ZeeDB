@@ -2,27 +2,28 @@ use crate::catalog::*;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
-use std::collections::HashMap;
 use std::sync::Arc;
 use zetasql::function_enums::*;
 use zetasql::SimpleCatalogProto;
 use zetasql::*;
 
-pub fn bootstrap_tables() -> HashMap<i64, RecordBatch> {
+pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
     let sequence = RecordBatch::try_new(
         Arc::new(Schema::new(vec![
             Field::new("sequence_id", DataType::Int64, true),
             Field::new("sequence_name", DataType::Utf8, true),
         ])),
         vec![
-            Arc::new(Int64Array::from(vec![0])),
-            Arc::new(StringArray::from(vec!["table"])),
+            Arc::new(Int64Array::from(vec![0, 1])),
+            Arc::new(StringArray::from(vec!["table", "index"])),
         ],
     )
     .unwrap();
-    let mut tables = HashMap::new();
-    tables.insert(5, sequence);
-    tables
+    vec![(5, sequence)]
+}
+
+pub fn bootstrap_sequences() -> Vec<(i64, i64)> {
+    vec![(0, 100), (1, 100)]
 }
 
 pub(crate) fn bootstrap_metadata_catalog() -> SimpleCatalogProto {

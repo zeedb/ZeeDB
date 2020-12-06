@@ -4,13 +4,13 @@ where person_id in (select person_id from customer)
 or person_id = 1
 
 Map person.first_name
-	Filter (Or $mark.$in (Equal person.person_id 1))
-		HashJoin Mark $mark.$in (Equal person.person_id customer.person_id)
+	Filter (Or $in (Equal person.person_id 1))
+		HashJoin Mark $in (Equal person.person_id customer.person_id)
 			Partition* customer.person_id
-				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-					Map* customer.person_id customer.$xmin customer.$xmax
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id $xmin $xmax
 						SeqScan customer
 			Partition* person.person_id
-				Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-					Map* person.person_id person.first_name person.$xmin person.$xmax
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* person.person_id person.first_name $xmin $xmax
 						SeqScan person

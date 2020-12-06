@@ -17,11 +17,13 @@ impl Storage {
         // First 100 sequences are reserved for system use.
         let mut sequences = Vec::with_capacity(0);
         sequences.resize_with(100, || AtomicI64::new(0));
-        // Table sequence starts at 100.
-        sequences[0] = AtomicI64::new(100);
         // Bootstrap tables.
         for (table_id, values) in catalog::bootstrap_tables() {
             tables[table_id as usize].insert(&values, 0);
+        }
+        // Bootstrap sequences.
+        for (sequence_id, value) in catalog::bootstrap_sequences() {
+            sequences[sequence_id as usize].store(value, Ordering::Relaxed);
         }
         // Initially there are no indexes. TODO index system tables.
         let indexes = vec![];

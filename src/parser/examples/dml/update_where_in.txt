@@ -3,14 +3,14 @@ set account_number = 0
 where person_id in (select person_id from person where first_name = "Joe")
 
 LogicalUpdate customer
-	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date customer.$tid
-		LogicalFilter $mark.$in
-			LogicalJoin Mark $mark.$in (Equal customer.person_id person.person_id)
+	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date $tid
+		LogicalFilter $in
+			LogicalJoin Mark $in (Equal customer.person_id person.person_id)
 				LogicalMap person.person_id
 					LogicalFilter (Equal person.first_name "Joe")
-						Filter* (LessOrEqual person.$xmin (Xid)) (Less (Xid) person.$xmax)
-							Map* person.person_id person.first_name person.$xmin person.$xmax
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* person.person_id person.first_name $xmin $xmax
 								LogicalGet person
-				Filter* (LessOrEqual customer.$xmin (Xid)) (Less (Xid) customer.$xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date customer.$xmin customer.$xmax customer.$tid
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
 						LogicalGet customer

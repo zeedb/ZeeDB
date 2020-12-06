@@ -1,8 +1,6 @@
 #![feature(slice_strip)]
 #![feature(is_sorted)]
 
-mod arc;
-mod arc_tests;
 mod art;
 #[cfg(test)]
 mod art_tests;

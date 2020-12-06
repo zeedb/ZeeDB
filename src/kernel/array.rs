@@ -205,8 +205,14 @@ fn null_string_array(num_rows: usize) -> Arc<dyn Array> {
     Arc::new(array.finish())
 }
 
-pub fn int64(int64: &Arc<dyn Array>) -> i64 {
-    coerce::<Int64Array>(int64).value(0)
+pub fn int64(int64: &Arc<dyn Array>) -> Option<i64> {
+    let int64 = coerce::<Int64Array>(int64);
+    assert!(int64.len() == 1);
+    if int64.is_null(0) {
+        None
+    } else {
+        Some(int64.value(0))
+    }
 }
 
 pub fn coerce<T: 'static>(any: &Arc<dyn Array>) -> &T {
