@@ -5,16 +5,18 @@ where person_id = 1
 Insert person
 	Delete person
 		Map person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
-			NestedLoop Single (Equal person.last_name last_name')
-				Map $expr_subquery.last_name:last_name' last_name'
-					NestedLoop Inner
-						TableFreeScan
-						Aggregate last_name'
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* person.person_id person.first_name last_name' person.modified_date $xmin $xmax $tid
-									IndexScan person(person_id:1)
-										TableFreeScan
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
-						IndexScan person(person_id:1)
+			HashJoin Single (Equal person.last_name last_name')
+				Partition* last_name'
+					Map $expr_subquery.last_name:last_name' last_name'
+						NestedLoop Inner
 							TableFreeScan
+							Aggregate last_name'
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* person.person_id person.first_name last_name' person.modified_date $xmin $xmax $tid
+										IndexScan person(person_id:1)
+											TableFreeScan
+				Partition* person.last_name
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
+							IndexScan person(person_id:1)
+								TableFreeScan

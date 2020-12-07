@@ -1,15 +1,13 @@
 use crate::parser::*;
-use catalog::*;
 use regex::Regex;
 use zetasql::*;
 
 macro_rules! ok {
     ($path:expr, $sql:expr, $errors:expr) => {
-        let mut parser = ParseProvider::new();
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
         let catalog = adventure_works();
-        let found = parser.analyze(&sql, &catalog).unwrap();
+        let found = analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).unwrap();
         let found = format!("{}\n\n{}", &sql, found);
         if !test_fixtures::matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
@@ -617,7 +615,7 @@ fn test_script() {
 //     }
 // }
 
-pub fn adventure_works() -> Catalog {
+pub fn adventure_works() -> SimpleCatalogProto {
     let mut table_count = 100;
     let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {
         let serialization_id = table_count;
@@ -639,16 +637,6 @@ pub fn adventure_works() -> Catalog {
             ..Default::default()
         }
     };
-    let mut index_count = 100;
-    let mut index = |table_id: i64, column_name: &str| -> Index {
-        let index_id = index_count;
-        index_count += 1;
-        Index {
-            table_id,
-            index_id,
-            columns: vec![column_name.to_string()],
-        }
-    };
     let customer_id = column("customer_id", TypeKind::TypeInt64);
     let person_id = column("person_id", TypeKind::TypeInt64);
     let store_id = column("store_id", TypeKind::TypeInt64);
@@ -664,7 +652,6 @@ pub fn adventure_works() -> Catalog {
             modified_date,
         ],
     );
-    let customer_table_id = customer.serialization_id.unwrap();
 
     let person_id = column("person_id", TypeKind::TypeInt64);
     let last_name = column("first_name", TypeKind::TypeString);
@@ -674,28 +661,13 @@ pub fn adventure_works() -> Catalog {
         "person",
         vec![person_id, last_name, first_name, modified_date],
     );
-    let person_table_id = person.serialization_id.unwrap();
 
     let store_id = column("store_id", TypeKind::TypeInt64);
     let name = column("name", TypeKind::TypeString);
     let modified_date = column("modified_date", TypeKind::TypeTimestamp);
     let store = table("store", vec![store_id, name, modified_date]);
-    let store_table_id = store.serialization_id.unwrap();
 
-    let mut cat = Catalog::empty();
-    cat.catalog.table = vec![customer, person, store];
-    cat.indexes.insert(
-        customer_table_id,
-        vec![
-            index(customer_table_id, "customer_id"),
-            index(customer_table_id, "person_id"),
-            index(customer_table_id, "store_id"),
-        ],
-    );
-    cat.indexes
-        .insert(person_table_id, vec![index(customer_table_id, "person_id")]);
-    cat.indexes
-        .insert(store_table_id, vec![index(customer_table_id, "store_id")]);
-
+    let mut cat = catalog::default_catalog();
+    cat.table = vec![customer, person, store];
     cat
 }

@@ -2,7 +2,6 @@ use crate::byte_key::ByteKey;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
-use std::ops::Range;
 use std::sync::Arc;
 use storage::Art;
 
@@ -118,8 +117,8 @@ pub(crate) fn zip(columns: &Vec<GenericBinaryArray<i32>>) -> GenericBinaryArray<
             for b in column.value(i) {
                 buffer.append_byte(*b).unwrap();
             }
-            buffer.append(true).unwrap();
         }
+        buffer.append(true).unwrap();
     }
     buffer.finish()
 }

@@ -1,4 +1,4 @@
-select * from fact join dim using (dim_id) where fact_id = 1
+select * from customer join store using (store_id) where customer_id = 1
 
-dim_id,fact_id,fact_attr,dim_attr
-880,1,531193,115558
+store_id,customer_id,person_id,account_number,modified_date,name,modified_date
+465,1,3164,59301,2012-03-03T05:22:24.000000000,641765,2000-05-29T13:07:33.000000000

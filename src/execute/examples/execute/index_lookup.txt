@@ -1,4 +1,4 @@
-select * from fact where fact_id = 1
+select * from customer where customer_id = 1
 
-fact_id,dim_id,fact_attr
-1,880,531193
+customer_id,person_id,store_id,account_number,modified_date
+1,3164,465,59301,2012-03-03T05:22:24.000000000

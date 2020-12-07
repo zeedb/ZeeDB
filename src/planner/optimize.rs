@@ -1,46 +1,43 @@
 use crate::cost::*;
-use crate::rewrite::RewriteProvider;
+use crate::rewrite::rewrite;
 use crate::rule::*;
 use crate::search_space::*;
 use ast::*;
-use catalog::Catalog;
-use parser::ParseProvider;
+use catalog::Index;
 use std::collections::HashMap;
 use std::ops::Deref;
 use storage::Storage;
+use zetasql::SimpleCatalogProto;
 
 // Our implementation of tasks differs from Columbia/Cascades:
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
 // However, the logic and the order of invocation should be exactly the same.
 
 pub fn optimize(
+    catalog_id: i64,
+    catalog: &SimpleCatalogProto,
+    indexes: &HashMap<i64, Vec<Index>>,
+    statistics: &Storage,
     expr: Expr,
-    catalog: &Catalog,
-    storage: &Storage,
-    parser: &mut ParseProvider,
 ) -> Expr {
-    let mut optimizer = Optimizer::new(catalog, storage);
-    let expr = RewriteProvider::new(catalog, parser).rewrite(expr);
+    let mut optimizer = Optimizer {
+        indexes,
+        statistics,
+        ss: SearchSpace::new(),
+    };
+    let expr = rewrite(catalog_id, catalog, expr);
     let gid = optimizer.copy_in_new(expr);
     optimizer.optimize_group(gid);
     optimizer.winner(gid)
 }
 
 struct Optimizer<'a> {
+    indexes: &'a HashMap<i64, Vec<Index>>,
+    statistics: &'a Storage,
     ss: SearchSpace,
-    catalog: &'a Catalog,
-    storage: &'a Storage,
 }
 
 impl<'a> Optimizer<'a> {
-    fn new(catalog: &'a Catalog, storage: &'a Storage) -> Self {
-        Optimizer {
-            ss: SearchSpace::new(),
-            catalog,
-            storage,
-        }
-    }
-
     fn optimize_group(&mut self, gid: GroupID) {
         if self.ss[gid].lower_bound >= self.ss[gid].upper_bound || self.ss[gid].winner.is_some() {
             return;
@@ -85,7 +82,7 @@ impl<'a> Optimizer<'a> {
     // If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
     fn apply_rule(&mut self, rule: Rule, mid: MultiExprID, explore: bool) {
         for expr in rule.bind(&self.ss, mid) {
-            if let Some(expr) = rule.apply(&self.ss, &self.catalog, expr) {
+            if let Some(expr) = rule.apply(&self.ss, &self.indexes, expr) {
                 // Add mexpr if it isn't already present in the group.
                 if let Some(mid) = self.copy_in(expr, self.ss[mid].parent) {
                     if !self.ss[mid].expr.is_logical() {
@@ -118,7 +115,7 @@ impl<'a> Optimizer<'a> {
         // and inputCosts are the total physical cost of the winning strategy for each input group.
         // If we don't yet have a winner for an inputGroup, we use the lower bound.
         // Thus, physicalCost + sum(inputCosts) = a lower-bound for the total cost of the best strategy for this group.
-        let physical_cost = physical_cost(&self.ss, &self.storage, mid);
+        let physical_cost = physical_cost(&self.ss, &self.statistics, mid);
         let mut input_costs = self.init_costs_using_lower_bound(mid);
         for i in 0..self.ss[mid].expr.len() {
             let input = leaf(&self.ss[mid].expr[i]);
@@ -235,11 +232,11 @@ impl<'a> Optimizer<'a> {
                 table,
             } => {
                 // Scan
-                cardinality = self.storage.table_cardinality(table.id);
+                cardinality = self.statistics.table_cardinality(table.id);
                 for c in projects {
                     column_unique_cardinality.insert(
                         c.clone(),
-                        self.storage.column_unique_cardinality(table.id, &c.name),
+                        self.statistics.column_unique_cardinality(table.id, &c.name),
                     );
                 }
                 // Filter

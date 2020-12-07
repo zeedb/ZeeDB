@@ -237,6 +237,7 @@ pub enum Expr {
     },
     Insert {
         table: Table,
+        indexes: Vec<Index>,
         input: Box<Expr>,
     },
     Values {
@@ -658,8 +659,13 @@ impl Expr {
                 left: Box::new(visitor(*left)),
                 right: Box::new(visitor(*right)),
             },
-            Expr::Insert { table, input } => Expr::Insert {
+            Expr::Insert {
                 table,
+                indexes,
+                input,
+            } => Expr::Insert {
+                table,
+                indexes,
                 input: Box::new(visitor(*input)),
             },
             Expr::Values {
@@ -1269,7 +1275,6 @@ impl Table {
     pub fn from(table: &zetasql::ResolvedTableScanProto) -> Self {
         match table {
             zetasql::ResolvedTableScanProto {
-                parent: Some(zetasql::ResolvedScanProto { column_list, .. }),
                 table:
                     Some(zetasql::TableRefProto {
                         serialization_id: Some(id),

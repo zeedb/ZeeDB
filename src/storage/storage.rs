@@ -94,3 +94,17 @@ impl fmt::Debug for Storage {
         Ok(())
     }
 }
+
+impl Clone for Storage {
+    fn clone(&self) -> Self {
+        Self {
+            tables: self.tables.clone(),
+            indexes: self.indexes.clone(),
+            sequences: self
+                .sequences
+                .iter()
+                .map(|i| AtomicI64::new(i.load(Ordering::Relaxed)))
+                .collect(),
+        }
+    }
+}

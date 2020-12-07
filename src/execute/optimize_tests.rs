@@ -1,15 +1,11 @@
-use crate::catalog_provider::CatalogProvider;
+use arrow::record_batch::RecordBatch;
 use ast::Expr;
-use catalog::Catalog;
-use chrono::*;
-use once_cell::sync::OnceCell;
-use parser::ParseProvider;
-use planner::*;
-use rand::*;
+use catalog::Index;
 use regex::Regex;
-use std::sync::Mutex;
+use std::collections::HashMap;
 use storage::Storage;
 use test_fixtures::*;
+use zetasql::SimpleCatalogProto;
 
 #[test]
 fn test_aggregate() {
@@ -630,150 +626,50 @@ fn test_with() {
     test.finish();
 }
 
-struct TestProvider {
-    txn: u64,
-    storage: &'static Mutex<Storage>,
-    parser: ParseProvider,
-    catalog: CatalogProvider,
+pub struct TestProvider {
+    storage: Storage,
     errors: Vec<String>,
 }
 
 impl TestProvider {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            txn: 100,
-            storage: adventure_works(),
-            parser: ParseProvider::new(),
-            catalog: CatalogProvider::new(),
+            storage: crate::adventure_works::copy(),
             errors: vec![],
         }
     }
 
-    fn test(&mut self, path: &str, sql: &str) {
+    pub fn test(&mut self, path: &str, sql: &str) {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all(sql, "").trim().to_string();
-        let catalog = self
-            .catalog
-            .catalog(self.txn, &mut self.storage.lock().unwrap());
-        let expr = self.parse(&catalog, &sql);
+        let catalog = crate::catalog::catalog(&mut self.storage, 100);
+        let indexes = crate::catalog::indexes(&mut self.storage, 100);
+        let expr = self.plan(&catalog, &indexes, &sql);
         let found = format!("{}\n\n{}", sql, expr);
         if !matches_expected(&path.to_string(), found) {
             self.errors.push(path.to_string());
         }
     }
 
-    fn finish(&mut self) {
+    pub fn finish(&mut self) {
         if !self.errors.is_empty() {
             panic!("{:#?}", self.errors);
         }
     }
 
-    fn parse(&mut self, catalog: &Catalog, sql: &str) -> Expr {
-        let expr = self.parser.analyze(&sql.to_string(), catalog).unwrap();
-        optimize(
-            expr,
+    fn plan(
+        &mut self,
+        catalog: &SimpleCatalogProto,
+        indexes: &HashMap<i64, Vec<Index>>,
+        sql: &str,
+    ) -> Expr {
+        let expr = parser::analyze(catalog::ROOT_CATALOG_ID, catalog, sql).expect(sql);
+        planner::optimize(
+            catalog::ROOT_CATALOG_ID,
             catalog,
-            &self.storage.lock().unwrap(),
-            &mut self.parser,
+            indexes,
+            &self.storage,
+            expr,
         )
     }
-}
-
-fn timestamp(secs: i64) -> DateTime<Utc> {
-    DateTime::from_utc(NaiveDateTime::from_timestamp(secs, 0), Utc)
-}
-
-static ADVENTURE_WORKS: OnceCell<Mutex<Storage>> = OnceCell::new();
-
-fn adventure_works() -> &'static Mutex<Storage> {
-    ADVENTURE_WORKS.get_or_init(|| {
-        println!("Initialize adventure_works database...");
-        let mut storage = Storage::new();
-        let mut catalog_provider = CatalogProvider::new();
-        let mut parse_provider = ParseProvider::new();
-        let mut txn = 0;
-        let mut execute = |sql: &str| {
-            let catalog = catalog_provider.catalog(txn, &mut storage);
-            let expr = parse_provider.analyze(sql, &catalog).unwrap();
-            let expr = optimize(expr, &catalog, &storage, &mut parse_provider);
-            crate::execute(expr, txn, &catalog, &mut storage)
-                .last()
-                .unwrap()
-                .unwrap();
-            txn += 1;
-        };
-        // Create tables.
-        execute(vec![
-            "create table store (store_id int64, name string, modified_date timestamp);",
-            "create table customer (customer_id int64, person_id int64, store_id int64, account_number int64, modified_date timestamp);",
-            "create table person (person_id int64, first_name string, last_name string, modified_date timestamp);",
-        ].join("\n").as_str());
-        // Create indexes.
-        execute(vec![
-            "create index store_id on store (store_id);",
-            "create index customer_id on customer (customer_id);",
-            "create index person_id on person (person_id);",
-        ].join("\n").as_str());
-        // Populate tables.
-        const N_STORE: usize = 1000;
-        const N_CUSTOMER: usize = 10_000;
-        const N_PERSON: usize = 20_000;
-        const LOW_TIME: i64 = 946688400;
-        const HIGH_TIME: i64 = 1577840400;
-        let mut rng = rngs::SmallRng::from_seed([0; 16]);
-        // Store.
-        let lines: Vec<_> = (0..N_STORE)
-            .map(|store_id| {
-                let store_name = rng.gen_range(0, 1_000_000);
-                let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
-                format!(
-                    "({}, '{}', timestamp '{}')",
-                    store_id, store_name, modified_date
-                )
-            })
-            .collect();
-        execute(
-            format!("insert into store values\n{};", lines.join(",\n")).as_str(),
-        );
-        println!("...wrote {} rows into store", N_STORE);
-        // Customer.
-        let lines: Vec<_> = (0..N_CUSTOMER)
-            .map(|customer_id| {
-                let person_id = rng.gen_range(0, N_PERSON);
-                let store_id = rng.gen_range(0, N_STORE);
-                let account_number = rng.gen_range(0, N_CUSTOMER * 10);
-                let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
-                format!(
-                    "({}, {}, {}, {}, timestamp '{}')",
-                    customer_id, person_id, store_id, account_number, modified_date
-                )
-            })
-            .collect();
-        execute(
-            format!("insert into customer values\n{};", lines.join(",\n")).as_str(),
-        );
-        println!("...wrote {} rows into customer", N_CUSTOMER);
-        // Person.
-        let mut remaining = N_PERSON;
-        while remaining > 0 {
-            let queued = remaining.min(10_000);
-            let lines: Vec<_> = (0..queued)
-                .map(|person_id| {
-                    let first_name = rng.gen_range(0, 1_000_000);
-                    let last_name = rng.gen_range(0, 1_000_000);
-                    let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
-                    format!(
-                        "({}, '{}', '{}', timestamp '{}')",
-                        person_id, first_name, last_name, modified_date
-                    )
-                })
-                .collect();
-            execute(
-                format!("insert into person values\n{};", lines.join(",\n")).as_str(),
-            );
-            remaining -= queued;
-            println!("...wrote {} rows into person", queued);
-        }
-        Mutex::new(storage)
-    })
 }

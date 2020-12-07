@@ -1,6 +1,6 @@
 use crate::search_space::*;
 use ast::*;
-use catalog::{Catalog, Index};
+use catalog::Index;
 use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 
@@ -189,7 +189,12 @@ impl Rule {
         binds
     }
 
-    pub fn apply(&self, ss: &SearchSpace, catalog: &Catalog, bind: Expr) -> Option<Expr> {
+    pub fn apply(
+        &self,
+        ss: &SearchSpace,
+        indexes: &HashMap<i64, Vec<Index>>,
+        bind: Expr,
+    ) -> Option<Expr> {
         match self {
             Rule::InnerJoinCommutivity => {
                 if let LogicalJoin {
@@ -390,7 +395,7 @@ impl Rule {
                     table,
                 } = bind
                 {
-                    let indexes = catalog.indexes.get(&table.id)?;
+                    let indexes = indexes.get(&table.id)?;
                     // TODO return multiple indexes!
                     let (index, lookup, predicates) =
                         find_index(indexes, &projects, &predicates).pop()?;
@@ -469,7 +474,7 @@ impl Rule {
                     {
                         let mut predicates = join.predicates().clone();
                         predicates.extend(table_predicates);
-                        let indexes = catalog.indexes.get(&table.id)?;
+                        let indexes = indexes.get(&table.id)?;
                         // TODO return multiple indexes!
                         let (index, lookup, predicates) =
                             find_index(indexes, &projects, &predicates).pop()?;
@@ -556,7 +561,12 @@ impl Rule {
             }
             Rule::LogicalInsertToInsert => {
                 if let LogicalInsert { table, input } = bind {
-                    return Some(Insert { table, input });
+                    let indexes = indexes.get(&table.id).cloned().unwrap_or(vec![]);
+                    return Some(Insert {
+                        table,
+                        indexes,
+                        input,
+                    });
                 }
             }
             Rule::LogicalValuesToValues => {

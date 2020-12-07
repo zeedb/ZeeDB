@@ -1,53 +1,25 @@
-use std::collections::HashMap;
-use zetasql::SimpleCatalogProto;
 use zetasql::*;
 
 pub const ROOT_CATALOG_ID: i64 = 0;
 
-#[derive(Debug)]
-pub struct Catalog {
-    pub catalog_id: i64,
-    /// Catalog in ZetaSQL format.
-    pub catalog: SimpleCatalogProto,
-    /// Indexes, by table id.
-    pub indexes: HashMap<i64, Vec<Index>>,
+pub fn default_catalog() -> SimpleCatalogProto {
+    let mut cat = empty_catalog();
+    cat.catalog.push(crate::bootstrap_metadata_catalog());
+    cat
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Index {
-    pub index_id: i64,
-    pub table_id: i64,
-    pub columns: Vec<String>,
-}
-
-impl Catalog {
-    pub fn empty() -> Self {
-        let mut catalog = Catalog::zetasql();
-        catalog.catalog.push(Self::metadata());
-        Self {
-            catalog_id: crate::ROOT_CATALOG_ID,
-            catalog,
-            indexes: HashMap::new(),
-        }
-    }
-
-    pub fn zetasql() -> SimpleCatalogProto {
-        SimpleCatalogProto {
-            builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
-                language_options: Some(LanguageOptionsProto {
-                    enabled_language_features: enabled_language_features(),
-                    supported_statement_kinds: supported_statement_kinds(),
-                    ..Default::default()
-                }),
-                include_function_ids: enabled_functions(),
+pub fn empty_catalog() -> SimpleCatalogProto {
+    SimpleCatalogProto {
+        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
+            language_options: Some(LanguageOptionsProto {
+                enabled_language_features: enabled_language_features(),
+                supported_statement_kinds: supported_statement_kinds(),
                 ..Default::default()
             }),
+            include_function_ids: enabled_functions(),
             ..Default::default()
-        }
-    }
-
-    pub fn metadata() -> SimpleCatalogProto {
-        crate::bootstrap::bootstrap_metadata_catalog()
+        }),
+        ..Default::default()
     }
 }
 

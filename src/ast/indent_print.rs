@@ -179,7 +179,7 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::LogicalInsert { table, input } | Expr::Insert { table, input } => {
+            Expr::LogicalInsert { table, input } | Expr::Insert { table, input, .. } => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)

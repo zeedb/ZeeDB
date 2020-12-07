@@ -4,6 +4,9 @@
 mod art;
 #[cfg(test)]
 mod art_tests;
+mod counter;
+#[cfg(test)]
+mod counter_tests;
 mod heap;
 #[cfg(test)]
 mod heap_tests;

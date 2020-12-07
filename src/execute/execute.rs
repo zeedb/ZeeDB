@@ -4,19 +4,19 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
-use catalog::{Catalog, Index};
+use catalog::Index;
 use kernel::Error;
+use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
 use storage::*;
 
-pub fn execute<'a>(
-    expr: Expr,
-    txn: u64,
-    catalog: &'a Catalog,
-    storage: &'a mut Storage,
-) -> Program<'a> {
-    let state = State::new(txn, catalog, storage);
+pub fn execute<'a>(storage: &'a mut Storage, txn: u64, expr: Expr) -> Program<'a> {
+    let state = State {
+        storage,
+        txn,
+        variables: HashMap::new(),
+    };
     let input = Input::compile(expr);
     Program { state, input }
 }
@@ -116,6 +116,7 @@ enum Node {
     },
     Insert {
         table: Table,
+        indexes: Vec<Index>,
         input: Input,
     },
     Values {
@@ -257,8 +258,13 @@ impl Node {
             Union { .. } => todo!(),
             Intersect { .. } => todo!(),
             Except { .. } => todo!(),
-            Insert { table, input } => Node::Insert {
+            Insert {
                 table,
+                indexes,
+                input,
+            } => Node::Insert {
+                table,
+                indexes,
                 input: Input::compile(*input),
             },
             Values {
@@ -480,12 +486,13 @@ impl Input {
                 }
                 let keys = crate::index::zip(&keys);
                 // Look up scalars in the index.
-                let index = state.storage.index(index.index_id);
+                let art = state.storage.index(index.index_id);
                 let mut tids = vec![];
                 for i in 0..keys.len() {
                     let start = keys.value(i);
                     let end = crate::index::upper_bound(start);
-                    tids.extend(index.range(start..end.as_slice()));
+                    let next = art.range(start..end.as_slice());
+                    tids.extend(next);
                 }
                 // Perform a selective scan of the table.
                 let projects = projects.iter().map(|c| c.canonical_name()).collect();
@@ -580,13 +587,17 @@ impl Input {
             Node::Union { left, right } => todo!(),
             Node::Intersect { left, right } => todo!(),
             Node::Except { left, right } => todo!(),
-            Node::Insert { table, input } => {
+            Node::Insert {
+                table,
+                indexes,
+                input,
+            } => {
                 let input = input.next(state)?;
                 // Append rows to the table heap.
                 let heap = state.storage.table_mut(table.id);
                 let tids = heap.insert(&input, state.txn);
                 // Append entries to each index.
-                for index in state.catalog.indexes.get(&table.id).unwrap_or(&vec![]) {
+                for index in indexes {
                     crate::index::insert(
                         state.storage.index_mut(index.index_id),
                         &index.columns,

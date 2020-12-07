@@ -26,7 +26,7 @@ pub fn bootstrap_sequences() -> Vec<(i64, i64)> {
     vec![(0, 100), (1, 100)]
 }
 
-pub(crate) fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
+pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;
     let mut table = |name: &str, columns: Vec<SimpleColumnProto>| -> SimpleTableProto {
         let serialization_id = count;

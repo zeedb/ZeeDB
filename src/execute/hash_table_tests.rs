@@ -4,7 +4,7 @@ use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
 use ast::*;
-use catalog::Catalog;
+use std::collections::HashMap;
 use std::sync::Arc;
 use storage::Storage;
 
@@ -27,8 +27,11 @@ fn test_hash_table() {
     })];
     let input = RecordBatch::try_new(schema, columns).unwrap();
     let mut storage = Storage::new();
-    let catalog = Catalog::empty();
-    let mut state = State::new(100, &catalog, &mut storage);
+    let mut state = State {
+        storage: &mut storage,
+        variables: HashMap::new(),
+        txn: 0,
+    };
     let table = HashTable::new(&scalars, &mut state, &input).unwrap();
     let buckets = crate::eval::hash(&scalars, table.n_buckets(), &input, &mut state).unwrap();
     let (left, right_index) = table.probe(&buckets);

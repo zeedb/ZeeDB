@@ -1,7 +1,9 @@
+#[cfg(test)]
+mod adventure_works;
 mod byte_key;
 #[cfg(test)]
 mod byte_key_tests;
-mod catalog_provider;
+mod catalog;
 mod eval;
 mod execute;
 #[cfg(test)]

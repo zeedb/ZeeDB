@@ -197,12 +197,13 @@ impl Page {
                 }
             }
         }
-        for i in start..end {
+        for rid in start..end {
             // Make the rows visible to subsequent transactions.
-            self.xmin(i).store(txn, Ordering::Relaxed);
-            self.xmax(i).store(u64::MAX, Ordering::Relaxed);
-            // Write locations of new tids.
-            tids.append_value(i as u64).unwrap();
+            self.xmin(rid).store(txn, Ordering::Relaxed);
+            self.xmax(rid).store(u64::MAX, Ordering::Relaxed);
+            // Write new tids.
+            let tid = self.inner.pid * PAGE_SIZE + rid;
+            tids.append_value(tid as u64).unwrap();
         }
         *offset += end - start;
     }

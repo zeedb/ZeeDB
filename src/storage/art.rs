@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Bound, RangeBounds};
 
+#[derive(Clone)]
 pub struct Art {
     root: Node,
 }
@@ -66,7 +67,7 @@ impl Art {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Node {
     Null,
     Leaf(Box<Leaf>),
@@ -76,13 +77,13 @@ enum Node {
     Node256(Box<Node256>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Leaf {
     key: Vec<u8>,
     value: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node4 {
     key: Vec<u8>,
     value: Option<u64>,
@@ -91,7 +92,7 @@ struct Node4 {
     child: [Node; 4],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node16 {
     key: Vec<u8>,
     value: Option<u64>,
@@ -100,7 +101,7 @@ struct Node16 {
     child: [Node; 16],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node48 {
     key: Vec<u8>,
     value: Option<u64>,
@@ -110,7 +111,7 @@ struct Node48 {
     child: [Node; 48],
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Node256 {
     key: Vec<u8>,
     value: Option<u64>,

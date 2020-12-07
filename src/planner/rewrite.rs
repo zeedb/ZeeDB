@@ -1,7 +1,6 @@
 use arrow::datatypes::*;
 use ast::*;
-use catalog::Catalog;
-use parser::ParseProvider;
+use zetasql::SimpleCatalogProto;
 
 #[derive(Debug)]
 enum RewriteRule {
@@ -1002,98 +1001,87 @@ fn apply_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
     expr
 }
 
-pub struct RewriteProvider<'a> {
-    catalog: &'a Catalog,
-    parser: &'a mut ParseProvider,
+pub fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
+    let expr = rewrite_ddl(expr);
+    let expr = general_unnest(expr);
+    let expr = predicate_push_down(expr);
+    let expr = optimize_join_type(expr);
+    let expr = projection_push_down(expr);
+    let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
+    expr
 }
 
-impl<'a> RewriteProvider<'a> {
-    pub fn new(catalog: &'a Catalog, parser: &'a mut ParseProvider) -> Self {
-        Self { catalog, parser }
-    }
+fn rewrite_ddl(expr: Expr) -> Expr {
+    expr.top_down_rewrite(&mut |expr| {
+        apply_all(
+            expr,
+            &vec![
+                RewriteRule::CreateDatabaseToScript,
+                RewriteRule::CreateTableToScript,
+                RewriteRule::CreateIndexToScript,
+                RewriteRule::DropToScript,
+                RewriteRule::UpdateToDeleteThenInsert,
+            ],
+        )
+    })
+}
 
-    pub fn rewrite(&mut self, expr: Expr) -> Expr {
-        let expr = self.rewrite_ddl(expr);
-        let expr = self.general_unnest(expr);
-        let expr = self.predicate_push_down(expr);
-        let expr = self.optimize_join_type(expr);
-        let expr = self.projection_push_down(expr);
-        let expr = self.rewrite_logical_rewrite(expr);
-        expr
-    }
+// Unnest all dependent joins, and simplify joins where possible.
+fn general_unnest(expr: Expr) -> Expr {
+    expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
+}
 
-    fn rewrite_ddl(&mut self, expr: Expr) -> Expr {
-        expr.top_down_rewrite(&mut |expr| {
-            apply_all(
-                expr,
-                &vec![
-                    RewriteRule::CreateDatabaseToScript,
-                    RewriteRule::CreateTableToScript,
-                    RewriteRule::CreateIndexToScript,
-                    RewriteRule::DropToScript,
-                    RewriteRule::UpdateToDeleteThenInsert,
-                ],
-            )
-        })
-    }
+fn rewrite_logical_rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
+    expr.bottom_up_rewrite(&mut |expr| match expr {
+        LogicalRewrite { sql } => {
+            let expr = parser::analyze(catalog_id, &catalog, &sql).expect(&sql);
+            rewrite(catalog_id, catalog, expr)
+        }
+        other => other,
+    })
+}
 
-    // Unnest all dependent joins, and simplify joins where possible.
-    fn general_unnest(&mut self, expr: Expr) -> Expr {
-        expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
-    }
+fn optimize_join_type(expr: Expr) -> Expr {
+    expr.bottom_up_rewrite(&mut |expr| {
+        apply_all(
+            expr,
+            &vec![
+                RewriteRule::MarkJoinToSemiJoin,
+                RewriteRule::SingleJoinToInnerJoin,
+                RewriteRule::RemoveInnerJoin,
+                RewriteRule::RemoveWith,
+                RewriteRule::RemoveTableFreeScan,
+            ],
+        )
+    })
+}
 
-    fn rewrite_logical_rewrite(&mut self, expr: Expr) -> Expr {
-        expr.bottom_up_rewrite(&mut |expr| match expr {
-            LogicalRewrite { sql } => {
-                let expr = self.parser.analyze(&sql, &self.catalog).expect(&sql);
-                self.rewrite(expr)
-            }
-            other => other,
-        })
-    }
+// Push predicates into metadata.joins and scans.
+fn predicate_push_down(expr: Expr) -> Expr {
+    expr.top_down_rewrite(&mut |expr| {
+        apply_all(
+            expr,
+            &vec![
+                RewriteRule::PushExplicitFilterIntoInnerJoin,
+                RewriteRule::PushImplicitFilterThroughInnerJoin,
+                RewriteRule::PushExplicitFilterThroughOuterJoin,
+                RewriteRule::PushFilterThroughMap,
+                RewriteRule::CombineConsecutiveFilters,
+                RewriteRule::EmbedFilterIntoGet,
+            ],
+        )
+    })
+}
 
-    fn optimize_join_type(&mut self, expr: Expr) -> Expr {
-        expr.bottom_up_rewrite(&mut |expr| {
-            apply_all(
-                expr,
-                &vec![
-                    RewriteRule::MarkJoinToSemiJoin,
-                    RewriteRule::SingleJoinToInnerJoin,
-                    RewriteRule::RemoveInnerJoin,
-                    RewriteRule::RemoveWith,
-                    RewriteRule::RemoveTableFreeScan,
-                ],
-            )
-        })
-    }
-
-    // Push predicates into metadata.joins and scans.
-    fn predicate_push_down(&mut self, expr: Expr) -> Expr {
-        expr.top_down_rewrite(&mut |expr| {
-            apply_all(
-                expr,
-                &vec![
-                    RewriteRule::PushExplicitFilterIntoInnerJoin,
-                    RewriteRule::PushImplicitFilterThroughInnerJoin,
-                    RewriteRule::PushExplicitFilterThroughOuterJoin,
-                    RewriteRule::PushFilterThroughMap,
-                    RewriteRule::CombineConsecutiveFilters,
-                    RewriteRule::EmbedFilterIntoGet,
-                ],
-            )
-        })
-    }
-
-    fn projection_push_down(&mut self, expr: Expr) -> Expr {
-        expr.top_down_rewrite(&mut |expr| {
-            apply_all(
-                expr,
-                &vec![
-                    RewriteRule::CombineConsecutiveMaps,
-                    RewriteRule::EmbedMapIntoGet,
-                    RewriteRule::RemoveMap,
-                ],
-            )
-        })
-    }
+fn projection_push_down(expr: Expr) -> Expr {
+    expr.top_down_rewrite(&mut |expr| {
+        apply_all(
+            expr,
+            &vec![
+                RewriteRule::CombineConsecutiveMaps,
+                RewriteRule::EmbedMapIntoGet,
+                RewriteRule::RemoveMap,
+            ],
+        )
+    })
 }

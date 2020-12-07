@@ -1,4 +1,9 @@
+use once_cell::sync::Lazy;
 use std::process::Command;
+use std::sync::Mutex;
+use tokio::runtime::Runtime;
+use tonic::transport::channel::Channel;
+use zetasql::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;
 
 const SCRIPT: &str = r"
 if [[ `docker ps --filter name=test-zetasql-server -q` ]]; then 
@@ -27,11 +32,16 @@ do
 done
 ";
 
-pub fn create_zetasql_server() {
-    Command::new("sh")
-        .arg("-c")
-        .arg(SCRIPT)
-        .output()
-        .expect("failed to start docker");
-    // TODO server is not yet accepting connections when we first call this function
-}
+pub static ZETASQL_SERVER: Lazy<Mutex<(Runtime, ZetaSqlLocalServiceClient<Channel>)>> =
+    Lazy::new(|| {
+        Command::new("sh")
+            .arg("-c")
+            .arg(SCRIPT)
+            .output()
+            .expect("failed to start docker");
+        let mut runtime = Runtime::new().expect("runtime failed to start");
+        let client = runtime
+            .block_on(ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051"))
+            .expect("client failed to connect");
+        Mutex::new((runtime, client))
+    });

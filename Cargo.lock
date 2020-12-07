@@ -705,6 +705,7 @@ dependencies = [
  "chrono",
  "encoding",
  "futures",
+ "once_cell",
  "prost-types",
  "regex",
  "test_fixtures",

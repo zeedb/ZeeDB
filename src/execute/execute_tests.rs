@@ -1,96 +1,27 @@
-use crate::catalog_provider::CatalogProvider;
 use crate::execute::*;
 use arrow::record_batch::RecordBatch;
-use catalog::Catalog;
-use rand::Rng;
-use rand::SeedableRng;
+use catalog::Index;
 use regex::Regex;
+use std::collections::HashMap;
 use storage::Storage;
 use test_fixtures::*;
-
-fn run(path: &str, script: Vec<&str>, storage: &mut Storage, errors: &mut Vec<String>) {
-    let trim = Regex::new(r"(?m)^\s+").unwrap();
-    let mut output = "".to_string();
-    for (txn, sql) in script.iter().enumerate() {
-        let sql = trim.replace_all(sql, "").trim().to_string();
-        let catalog = CatalogProvider::new().catalog((txn + 100) as u64, storage);
-        let program = compile(&sql, (txn + 100) as u64, &catalog, storage);
-        match program.last() {
-            Some(Ok(last)) => output = csv(last),
-            Some(Err(err)) => output = format!("{:?}", err),
-            None => output = "".to_string(),
-        }
-    }
-    let found = format!("{}\n\n{}", script.join("\n"), output);
-    if !matches_expected(&path.to_string(), found) {
-        errors.push(path.to_string());
-    }
-}
-
-fn setup(script: Vec<&str>, storage: &mut Storage) {
-    let trim = Regex::new(r"(?m)^\s+").unwrap();
-    for (txn, sql) in script.iter().enumerate() {
-        let sql = trim.replace_all(sql, "").trim().to_string();
-        let catalog = CatalogProvider::new().catalog(txn as u64, storage);
-        let program = compile(&sql, txn as u64, &catalog, storage);
-        program.last().unwrap().unwrap();
-    }
-}
-
-fn compile<'a>(
-    sql: &String,
-    txn: u64,
-    catalog: &'a Catalog,
-    storage: &'a mut Storage,
-) -> Program<'a> {
-    let mut parser = parser::ParseProvider::new();
-    let expr = parser.analyze(sql, &catalog).expect(sql.as_str());
-    let expr = planner::optimize(expr, &catalog, &storage, &mut parser);
-    execute(expr, txn, &catalog, storage)
-}
-
-fn csv(record_batch: RecordBatch) -> String {
-    let header: Vec<String> = record_batch
-        .schema()
-        .fields()
-        .iter()
-        .map(|field| storage::base_name(field.name()).to_string())
-        .collect();
-    let mut csv_bytes = vec![];
-    csv_bytes.extend_from_slice(header.join(",").as_bytes());
-    csv_bytes.extend_from_slice("\n".as_bytes());
-    arrow::csv::WriterBuilder::new()
-        .has_headers(false)
-        .build(&mut csv_bytes)
-        .write(&record_batch)
-        .unwrap();
-    String::from_utf8(csv_bytes).unwrap()
-}
+use zetasql::SimpleCatalogProto;
 
 #[test]
 fn test_select() {
-    let mut errors = vec![];
-    run(
-        "examples/execute/select_1.txt",
-        vec!["select 1;"],
-        &mut Storage::new(),
-        &mut errors,
-    );
-    if !errors.is_empty() {
-        panic!("{:#?}", errors);
-    }
+    let mut test = TestProvider::new(None);
+    test.test("examples/execute/select_1.txt", vec!["select 1;"]);
+    test.finish();
 }
 
 #[test]
 fn test_ddl() {
-    let mut errors = vec![];
-    run(
+    let mut test = TestProvider::new(None);
+    test.test(
         "examples/execute/create_table.txt",
         vec!["create table foo (id int64)"],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/drop_table.txt",
         vec![
             "create table foo (id int64);",
@@ -99,47 +30,37 @@ fn test_ddl() {
             "create table foo (id int64);",
             "select * from foo;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/create_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/drop_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
             "drop index foo_id;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    if !errors.is_empty() {
-        panic!("{:#?}", errors);
-    }
+    test.finish();
 }
 
 #[test]
 fn test_insert() {
-    let mut errors = vec![];
-    run(
+    let mut test = TestProvider::new(None);
+    test.test(
         "examples/execute/insert.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
             "select * from foo;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/insert_vary_order.txt",
         vec![
             "create table foo (id int64, ok bool);",
@@ -147,10 +68,8 @@ fn test_insert() {
             "insert into foo (ok, id) values (true, 2);",
             "select * from foo;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/insert_into_index.txt",
         vec![
             "create table foo (id int64);",
@@ -158,18 +77,14 @@ fn test_insert() {
             "insert into foo (id) values (1);",
             "select * from foo where id = 1",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    if !errors.is_empty() {
-        panic!("{:#?}", errors);
-    }
+    test.finish();
 }
 
 #[test]
 fn test_delete() {
-    let mut errors = vec![];
-    run(
+    let mut test = TestProvider::new(None);
+    test.test(
         "examples/execute/delete.txt",
         vec![
             "create table foo (id int64);",
@@ -177,10 +92,8 @@ fn test_delete() {
             "delete from foo where id = 1;",
             "select * from foo;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/delete_then_insert.txt",
         vec![
             "create table foo (id int64);",
@@ -189,18 +102,14 @@ fn test_delete() {
             "insert into foo (id) values (2);",
             "select * from foo;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    if !errors.is_empty() {
-        panic!("{:#?}", errors);
-    }
+    test.finish();
 }
 
 #[test]
 fn test_update() {
-    let mut errors = vec![];
-    run(
+    let mut test = TestProvider::new(None);
+    test.test(
         "examples/execute/update.txt",
         vec![
             "create table foo (id int64);",
@@ -208,10 +117,8 @@ fn test_update() {
             "update foo set id = 2 where id = 1;",
             "select * from foo;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    run(
+    test.test(
         "examples/execute/update_index.txt",
         vec![
             "create table foo (id int64);",
@@ -220,66 +127,97 @@ fn test_update() {
             "update foo set id = 2 where id = 1;",
             "select * from foo where id = 2;",
         ],
-        &mut Storage::new(),
-        &mut errors,
     );
-    if !errors.is_empty() {
-        panic!("{:#?}", errors);
-    }
+    test.finish();
 }
 
 #[test]
 fn test_index_scan() {
-    let mut storage = Storage::new();
-    // Setup.
-    let mut rng = rand::rngs::SmallRng::from_seed([0; 16]);
-    let mut populate_fact = vec![];
-    let mut populate_dim = vec![];
-    const N_DIM: usize = 1_000;
-    const N_FACT: usize = 10_000;
-    for fact_id in 1..N_FACT {
-        let dim_id = rng.gen_range(0, N_DIM);
-        let fact_attr = rng.gen_range(0, 1_000_000);
-        populate_fact.push(format!("({}, {}, {})", fact_id, dim_id, fact_attr));
-    }
-    for dim_id in 1..N_DIM {
-        let dim_attr = rng.gen_range(0, 1_000_000);
-        populate_dim.push(format!("({}, {})", dim_id, dim_attr));
-    }
-    setup(
-        vec![
-            "create table fact (fact_id int64, dim_id int64, fact_attr int64);
-            create table dim(dim_id int64, dim_attr int64);",
-            "create index fact_id_index on fact (fact_id);
-            create index dim_id_index on dim (dim_id);",
-            format!(
-                "insert into fact (fact_id, dim_id, fact_attr) values {};",
-                populate_fact.join(", ")
-            )
-            .as_str(),
-            format!(
-                "insert into dim (dim_id, dim_attr) values {};",
-                populate_dim.join(", ")
-            )
-            .as_str(),
-        ],
-        &mut storage,
-    );
-    // Tests.
-    let mut errors = vec![];
-    run(
+    let mut test = TestProvider::new(Some(crate::adventure_works::copy()));
+    test.test(
         "examples/execute/index_lookup.txt",
-        vec!["select * from fact where fact_id = 1"],
-        &mut storage,
-        &mut errors,
+        vec!["select * from customer where customer_id = 1"],
     );
-    run(
+    test.test(
         "examples/execute/lookup_join.txt",
-        vec!["select * from fact join dim using (dim_id) where fact_id = 1"],
-        &mut storage,
-        &mut errors,
+        vec!["select * from customer join store using (store_id) where customer_id = 1"],
     );
-    if !errors.is_empty() {
-        panic!("{:#?}", errors);
+    test.finish();
+}
+
+pub struct TestProvider {
+    persistent_storage: Option<Storage>,
+    errors: Vec<String>,
+}
+
+impl TestProvider {
+    pub fn new(persistent_storage: Option<Storage>) -> Self {
+        Self {
+            persistent_storage,
+            errors: vec![],
+        }
+    }
+
+    pub fn test(&mut self, path: &str, script: Vec<&str>) {
+        let trim = Regex::new(r"(?m)^\s+").unwrap();
+        let mut output = "".to_string();
+        let mut temporary_storage = Storage::new();
+        let storage = self
+            .persistent_storage
+            .as_mut()
+            .unwrap_or(&mut temporary_storage);
+        for (txn, sql) in script.iter().enumerate() {
+            let txn = 100 + txn as u64;
+            let sql = trim.replace_all(sql, "").trim().to_string();
+            let catalog = crate::catalog::catalog(storage, txn as u64);
+            let indexes = crate::catalog::indexes(storage, txn as u64);
+            let program = Self::execute(storage, &catalog, &indexes, txn as u64, &sql);
+            match program.last() {
+                Some(Ok(last)) => output = Self::csv(last),
+                Some(Err(err)) => output = format!("{:?}", err),
+                None => output = "".to_string(),
+            }
+        }
+        let found = format!("{}\n\n{}", script.join("\n"), output);
+        if !matches_expected(&path.to_string(), found) {
+            self.errors.push(path.to_string());
+        }
+    }
+
+    pub fn finish(&mut self) {
+        if !self.errors.is_empty() {
+            panic!("{:#?}", self.errors);
+        }
+    }
+
+    fn execute<'a>(
+        storage: &'a mut Storage,
+        catalog: &SimpleCatalogProto,
+        indexes: &HashMap<i64, Vec<Index>>,
+        txn: u64,
+        sql: &str,
+    ) -> Program<'a> {
+        let expr = parser::analyze(catalog::ROOT_CATALOG_ID, catalog, sql).expect(sql);
+        let expr = planner::optimize(catalog::ROOT_CATALOG_ID, catalog, indexes, storage, expr);
+        let program = execute(storage, txn, expr);
+        program
+    }
+
+    fn csv(record_batch: RecordBatch) -> String {
+        let header: Vec<String> = record_batch
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| storage::base_name(field.name()).to_string())
+            .collect();
+        let mut csv_bytes = vec![];
+        csv_bytes.extend_from_slice(header.join(",").as_bytes());
+        csv_bytes.extend_from_slice("\n".as_bytes());
+        arrow::csv::WriterBuilder::new()
+            .has_headers(false)
+            .build(&mut csv_bytes)
+            .write(&record_batch)
+            .unwrap();
+        String::from_utf8(csv_bytes).unwrap()
     }
 }

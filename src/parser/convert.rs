@@ -1,5 +1,6 @@
 use arrow::datatypes::*;
 use ast::*;
+use catalog::Index;
 use encoding::varint128;
 use std::borrow::Borrow;
 use std::collections::HashMap;
@@ -16,7 +17,11 @@ use zetasql::value_proto::Value::*;
 use zetasql::*;
 
 pub fn convert(catalog_id: i64, q: &AnyResolvedStatementProto) -> Expr {
-    Converter::new(catalog_id).any_stmt(q)
+    Converter {
+        catalog_id,
+        next_column_id: 0,
+    }
+    .any_stmt(q)
 }
 
 struct Converter {
@@ -25,13 +30,6 @@ struct Converter {
 }
 
 impl Converter {
-    fn new(catalog_id: i64) -> Converter {
-        Converter {
-            catalog_id,
-            next_column_id: 0,
-        }
-    }
-
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
         match q.node.get() {
             ResolvedQueryStmtNode(q) => self.query(q),
