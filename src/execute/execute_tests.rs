@@ -8,21 +8,14 @@ use test_fixtures::*;
 use zetasql::SimpleCatalogProto;
 
 #[test]
-fn test_select() {
-    let mut test = TestProvider::new(None);
-    test.test("examples/execute/select_1.txt", vec!["select 1;"]);
-    test.finish();
-}
-
-#[test]
 fn test_ddl() {
     let mut test = TestProvider::new(None);
     test.test(
-        "examples/execute/create_table.txt",
+        "examples/execute/ddl/create_table.txt",
         vec!["create table foo (id int64)"],
     );
     test.test(
-        "examples/execute/drop_table.txt",
+        "examples/execute/ddl/drop_table.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -32,14 +25,14 @@ fn test_ddl() {
         ],
     );
     test.test(
-        "examples/execute/create_index.txt",
+        "examples/execute/ddl/create_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
         ],
     );
     test.test(
-        "examples/execute/drop_index.txt",
+        "examples/execute/ddl/drop_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
@@ -50,10 +43,10 @@ fn test_ddl() {
 }
 
 #[test]
-fn test_insert() {
+fn test_dml() {
     let mut test = TestProvider::new(None);
     test.test(
-        "examples/execute/insert.txt",
+        "examples/execute/dml/insert.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -61,7 +54,7 @@ fn test_insert() {
         ],
     );
     test.test(
-        "examples/execute/insert_vary_order.txt",
+        "examples/execute/dml/insert_vary_order.txt",
         vec![
             "create table foo (id int64, ok bool);",
             "insert into foo (id, ok) values (1, false);",
@@ -70,22 +63,7 @@ fn test_insert() {
         ],
     );
     test.test(
-        "examples/execute/insert_into_index.txt",
-        vec![
-            "create table foo (id int64);",
-            "create index foo_id on foo (id);",
-            "insert into foo (id) values (1);",
-            "select * from foo where id = 1",
-        ],
-    );
-    test.finish();
-}
-
-#[test]
-fn test_delete() {
-    let mut test = TestProvider::new(None);
-    test.test(
-        "examples/execute/delete.txt",
+        "examples/execute/dml/delete.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -94,7 +72,7 @@ fn test_delete() {
         ],
     );
     test.test(
-        "examples/execute/delete_then_insert.txt",
+        "examples/execute/dml/delete_then_insert.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -103,14 +81,8 @@ fn test_delete() {
             "select * from foo;",
         ],
     );
-    test.finish();
-}
-
-#[test]
-fn test_update() {
-    let mut test = TestProvider::new(None);
     test.test(
-        "examples/execute/update.txt",
+        "examples/execute/dml/update.txt",
         vec![
             "create table foo (id int64);",
             "insert into foo (id) values (1);",
@@ -119,7 +91,16 @@ fn test_update() {
         ],
     );
     test.test(
-        "examples/execute/update_index.txt",
+        "examples/execute/dml/insert_into_index.txt",
+        vec![
+            "create table foo (id int64);",
+            "create index foo_id on foo (id);",
+            "insert into foo (id) values (1);",
+            "select * from foo where id = 1",
+        ],
+    );
+    test.test(
+        "examples/execute/dml/update_index.txt",
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
@@ -132,14 +113,14 @@ fn test_update() {
 }
 
 #[test]
-fn test_index_scan() {
+fn test_index() {
     let mut test = TestProvider::new(Some(crate::adventure_works::adventure_works()));
     test.test(
-        "examples/execute/index_lookup.txt",
+        "examples/execute/index/index_lookup.txt",
         vec!["select * from customer where customer_id = 1"],
     );
     test.test(
-        "examples/execute/lookup_join.txt",
+        "examples/execute/index/lookup_join.txt",
         vec!["select * from customer join store using (store_id) where customer_id = 1"],
     );
     test.finish();
@@ -171,7 +152,7 @@ impl TestProvider {
             let sql = trim.replace_all(sql, "").trim().to_string();
             let catalog = crate::catalog::catalog(storage, txn);
             let indexes = crate::catalog::indexes(storage, txn);
-            let program = Self::compile(storage, &catalog, &indexes, txn, &sql);
+            let program = Self::compile(storage, &catalog, &indexes, &sql);
             let execute = program.execute(storage, txn);
             match execute.last() {
                 Some(Ok(last)) => output = Self::csv(last),
@@ -195,7 +176,6 @@ impl TestProvider {
         storage: &'a mut Storage,
         catalog: &SimpleCatalogProto,
         indexes: &HashMap<i64, Vec<Index>>,
-        txn: u64,
         sql: &str,
     ) -> Program {
         let expr = parser::analyze(catalog::ROOT_CATALOG_ID, catalog, sql).expect(sql);
