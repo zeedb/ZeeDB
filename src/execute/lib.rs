@@ -15,8 +15,7 @@ mod join;
 #[cfg(test)]
 mod optimize_tests;
 mod sort;
-mod state;
 
 pub use crate::adventure_works::adventure_works;
 pub use crate::catalog::{catalog, indexes};
-pub use crate::execute::{execute, Program};
+pub use crate::execute::{compile, Execute, Program};

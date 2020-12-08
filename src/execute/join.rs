@@ -1,5 +1,5 @@
+use crate::execute::State;
 use crate::hash_table::HashTable;
-use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::Schema;
 use arrow::record_batch::RecordBatch;

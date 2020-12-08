@@ -64,9 +64,9 @@ fn catalog_tree(
 
 fn read_all_catalogs(storage: &mut Storage, txn: u64) -> Vec<(i64, i64, SimpleCatalogProto)> {
     let expr = read_all_catalogs_query(storage);
-    let program = execute(storage, txn, expr);
+    let program = crate::compile(expr);
     let mut catalogs = vec![];
-    for batch_or_err in program {
+    for batch_or_err in program.execute(storage, txn) {
         let batch = batch_or_err.unwrap();
         let mut offset = 0;
         while offset < batch.num_rows() {
@@ -100,9 +100,9 @@ fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCat
 
 fn read_all_tables(storage: &mut Storage, txn: u64) -> Vec<(i64, SimpleTableProto)> {
     let expr = read_all_tables_query(storage);
-    let program = execute(storage, txn, expr);
+    let program = crate::compile(expr);
     let mut tables = vec![];
-    for batch_or_err in program {
+    for batch_or_err in program.execute(storage, txn) {
         let batch = batch_or_err.unwrap();
         let mut offset = 0;
         while offset < batch.num_rows() {
@@ -158,8 +158,8 @@ fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
 
 fn read_all_indexes(storage: &mut Storage, txn: u64) -> Vec<Index> {
     let expr = read_all_indexes_query(storage);
-    let program = execute(storage, txn, expr);
-    let program: Vec<_> = program.collect();
+    let program = crate::compile(expr);
+    let program: Vec<_> = program.execute(storage, txn).collect();
     let mut indexes = vec![];
     for batch_or_err in program {
         let batch = batch_or_err.unwrap();

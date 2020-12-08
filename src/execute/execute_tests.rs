@@ -169,10 +169,11 @@ impl TestProvider {
         for (txn, sql) in script.iter().enumerate() {
             let txn = 100 + txn as u64;
             let sql = trim.replace_all(sql, "").trim().to_string();
-            let catalog = crate::catalog::catalog(storage, txn as u64);
-            let indexes = crate::catalog::indexes(storage, txn as u64);
-            let program = Self::execute(storage, &catalog, &indexes, txn as u64, &sql);
-            match program.last() {
+            let catalog = crate::catalog::catalog(storage, txn);
+            let indexes = crate::catalog::indexes(storage, txn);
+            let program = Self::compile(storage, &catalog, &indexes, txn, &sql);
+            let execute = program.execute(storage, txn);
+            match execute.last() {
                 Some(Ok(last)) => output = Self::csv(last),
                 Some(Err(err)) => output = format!("{:?}", err),
                 None => output = "".to_string(),
@@ -190,17 +191,16 @@ impl TestProvider {
         }
     }
 
-    fn execute<'a>(
+    fn compile<'a>(
         storage: &'a mut Storage,
         catalog: &SimpleCatalogProto,
         indexes: &HashMap<i64, Vec<Index>>,
         txn: u64,
         sql: &str,
-    ) -> Program<'a> {
+    ) -> Program {
         let expr = parser::analyze(catalog::ROOT_CATALOG_ID, catalog, sql).expect(sql);
         let expr = planner::optimize(catalog::ROOT_CATALOG_ID, catalog, indexes, storage, expr);
-        let program = execute(storage, txn, expr);
-        program
+        compile(expr)
     }
 
     fn csv(record_batch: RecordBatch) -> String {

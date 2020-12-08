@@ -1,5 +1,4 @@
 use crate::hash_table::HashTable;
-use crate::state::State;
 use arrow::array::*;
 use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
@@ -11,19 +10,36 @@ use std::fmt;
 use std::sync::Arc;
 use storage::*;
 
-pub fn execute<'a>(storage: &'a mut Storage, txn: u64, expr: Expr) -> Program<'a> {
-    let state = State {
-        storage,
-        txn,
-        variables: HashMap::new(),
-    };
-    let input = Input::compile(expr);
-    Program { state, input }
+pub fn compile(expr: Expr) -> Program {
+    Program { expr }
 }
 
-pub struct Program<'a> {
-    state: State<'a>,
+pub struct Program {
+    expr: Expr,
+}
+
+impl Program {
+    pub fn execute<'a>(&'a self, storage: &'a mut Storage, txn: u64) -> Execute<'a> {
+        Execute {
+            input: Input::compile(self.expr.clone()),
+            state: State {
+                storage,
+                txn,
+                variables: HashMap::new(),
+            },
+        }
+    }
+}
+
+pub struct Execute<'a> {
     input: Input,
+    state: State<'a>,
+}
+
+pub struct State<'a> {
+    pub storage: &'a mut Storage,
+    pub variables: HashMap<String, Arc<dyn Array>>,
+    pub txn: u64,
 }
 
 struct Input {
@@ -144,7 +160,7 @@ enum Node {
     },
 }
 
-impl<'a> Iterator for Program<'a> {
+impl<'a> Iterator for Execute<'a> {
     type Item = Result<RecordBatch, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
