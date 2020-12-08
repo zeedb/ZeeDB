@@ -15,8 +15,7 @@ fn main() {
         .start("./src/benchmarks/profiles/index-lookup.profile")
         .unwrap();
     let n = 100;
-    for i in 0..n {
-        println!("Iteration {}/{}", i, n);
+    for _ in 0..n {
         test.test("select * from person where person_id = 100");
     }
     PROFILER.lock().unwrap().stop().unwrap();

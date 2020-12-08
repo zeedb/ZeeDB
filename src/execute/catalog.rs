@@ -1,8 +1,9 @@
 use crate::execute;
 use arrow::array::*;
 use arrow::record_batch::*;
-use ast::data_type;
+use ast::*;
 use catalog::Index;
+use once_cell::sync::OnceCell;
 use planner::optimize;
 use std::collections::HashMap;
 use storage::Storage;
@@ -62,16 +63,8 @@ fn catalog_tree(
 }
 
 fn read_all_catalogs(storage: &mut Storage, txn: u64) -> Vec<(i64, i64, SimpleCatalogProto)> {
-    let q = "
-            select parent_catalog_id, catalog_id, catalog_name
-            from metadata.catalog"
-        .to_string();
-    let catalog = catalog::default_catalog();
-    let indexes = HashMap::new();
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &q).unwrap();
-    let expr = optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
+    let expr = read_all_catalogs_query(storage);
     let program = execute(storage, txn, expr);
-
     let mut catalogs = vec![];
     for batch_or_err in program {
         let batch = batch_or_err.unwrap();
@@ -82,6 +75,14 @@ fn read_all_catalogs(storage: &mut Storage, txn: u64) -> Vec<(i64, i64, SimpleCa
     }
 
     catalogs
+}
+
+fn read_all_catalogs_query(storage: &mut Storage) -> Expr {
+    let q = "
+        select parent_catalog_id, catalog_id, catalog_name 
+        from metadata.catalog";
+    static CACHE: OnceCell<Expr> = OnceCell::new();
+    CACHE.get_or_init(|| plan_query(storage, q)).clone()
 }
 
 fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCatalogProto) {
@@ -98,18 +99,8 @@ fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCat
 }
 
 fn read_all_tables(storage: &mut Storage, txn: u64) -> Vec<(i64, SimpleTableProto)> {
-    let q = "
-        select catalog_id, table_id, table_name, column_id, column_name, column_type
-        from metadata.table
-        join metadata.column using (table_id) 
-        order by catalog_id, table_id, column_id"
-        .to_string();
-    let catalog = catalog::default_catalog();
-    let indexes = HashMap::new();
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &q).unwrap();
-    let expr = optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
+    let expr = read_all_tables_query(storage);
     let program = execute(storage, txn, expr);
-
     let mut tables = vec![];
     for batch_or_err in program {
         let batch = batch_or_err.unwrap();
@@ -120,6 +111,16 @@ fn read_all_tables(storage: &mut Storage, txn: u64) -> Vec<(i64, SimpleTableProt
     }
 
     tables
+}
+
+fn read_all_tables_query(storage: &mut Storage) -> Expr {
+    let q = "
+        select catalog_id, table_id, table_name, column_id, column_name, column_type
+        from metadata.table
+        join metadata.column using (table_id) 
+        order by catalog_id, table_id, column_id";
+    static CACHE: OnceCell<Expr> = OnceCell::new();
+    CACHE.get_or_init(|| plan_query(storage, q)).clone()
 }
 
 fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto) {
@@ -156,17 +157,7 @@ fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
 }
 
 fn read_all_indexes(storage: &mut Storage, txn: u64) -> Vec<Index> {
-    let q = "
-        select index_id, table_id, column_name
-        from metadata.index
-        join metadata.index_column using (index_id)
-        join metadata.column using (table_id, column_id)
-        order by index_id, index_order"
-        .to_string();
-    let catalog = catalog::default_catalog();
-    let indexes = HashMap::new();
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &q).unwrap();
-    let expr = optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
+    let expr = read_all_indexes_query(storage);
     let program = execute(storage, txn, expr);
     let program: Vec<_> = program.collect();
     let mut indexes = vec![];
@@ -179,6 +170,17 @@ fn read_all_indexes(storage: &mut Storage, txn: u64) -> Vec<Index> {
     }
 
     indexes
+}
+
+fn read_all_indexes_query(storage: &mut Storage) -> Expr {
+    let q = "
+        select index_id, table_id, column_name
+        from metadata.index
+        join metadata.index_column using (index_id)
+        join metadata.column using (table_id, column_id)
+        order by index_id, index_order";
+    static CACHE: OnceCell<Expr> = OnceCell::new();
+    CACHE.get_or_init(|| plan_query(storage, q)).clone()
 }
 
 fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
@@ -200,4 +202,11 @@ fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
     }
 
     index
+}
+
+fn plan_query(storage: &mut Storage, q: &str) -> Expr {
+    let catalog = catalog::default_catalog();
+    let indexes = HashMap::new();
+    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, q).unwrap();
+    optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr)
 }
