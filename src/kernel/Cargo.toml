@@ -11,6 +11,3 @@ path = "lib.rs"
 arrow = { version = "2.0.0", features = ["simd"] }
 num = "0.3"
 ast = { path = "../ast" }
-
-[dev-dependencies]
-test_fixtures = { path = "../test_fixtures" }

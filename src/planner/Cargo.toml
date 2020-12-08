@@ -16,6 +16,3 @@ encoding = { path = "../encoding" }
 parser = { path = "../parser" }
 storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
-
-[dev-dependencies]
-test_fixtures = { path = "../test_fixtures" }
