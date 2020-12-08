@@ -14,7 +14,7 @@ fn main() {
         .unwrap()
         .start("./src/benchmarks/profiles/index-lookup.profile")
         .unwrap();
-    let n = 100;
+    let n = 1000;
     for _ in 0..n {
         test.test("select * from person where person_id = 100");
     }
@@ -37,13 +37,13 @@ impl BenchProvider {
         let sql = trim.replace_all(sql, "").trim().to_string();
         let catalog = execute::catalog(&mut self.storage, 100);
         let indexes = execute::indexes(&mut self.storage, 100);
-        let program = Self::execute(&mut self.storage, &catalog, &indexes, 100, &sql);
+        let program = Self::compile(&mut self.storage, &catalog, &indexes, 100, &sql);
         if let Some(Err(err)) = program.last() {
             panic!(err);
         }
     }
 
-    fn execute<'a>(
+    fn compile<'a>(
         storage: &'a mut Storage,
         catalog: &SimpleCatalogProto,
         indexes: &HashMap<i64, Vec<Index>>,
