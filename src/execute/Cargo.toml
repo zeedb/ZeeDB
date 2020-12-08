@@ -11,6 +11,8 @@ path = "lib.rs"
 arrow = { version = "2.0.0", features = ["simd"] }
 chrono = { version = "0.4.11", features = ["serde"] }
 num-traits = "0.2.14"
+once_cell = "1.5.2"
+rand = "0.7.3"
 regex = "1.4.2"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
@@ -21,6 +23,4 @@ storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
 
 [dev-dependencies]
-once_cell = "1.5.2"
-rand = "0.7.3"
 test_fixtures = { path = "../test_fixtures" }

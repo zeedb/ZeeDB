@@ -1,0 +1,19 @@
+[package]
+name = "benchmarks"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[dependencies]
+cpuprofiler = "0.0.4"
+regex = "1.4.2"
+catalog = { path = "../catalog" }
+execute = { path = "../execute" }
+parser = { path = "../parser" }
+planner = { path = "../planner" }
+storage = { path = "../storage" }
+zetasql = { path = "../zetasql" }
+
+[[bin]]
+name = "benchmarks"
+path = "main.rs"

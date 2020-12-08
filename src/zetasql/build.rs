@@ -1,7 +1,6 @@
 fn main() -> Result<(), std::io::Error> {
     println!("cargo:rerun-if-changed=protos");
     tonic_build::configure()
-        .out_dir(".")
         .build_client(true)
         .build_server(false)
         .compile(
