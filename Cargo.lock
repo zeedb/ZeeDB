@@ -509,7 +509,6 @@ dependencies = [
  "arrow",
  "ast",
  "num",
- "test_fixtures",
 ]
 
 [[package]]
@@ -794,7 +793,6 @@ dependencies = [
  "parser",
  "regex",
  "storage",
- "test_fixtures",
  "zetasql",
 ]
 

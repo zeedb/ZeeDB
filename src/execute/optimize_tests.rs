@@ -634,7 +634,7 @@ pub struct TestProvider {
 impl TestProvider {
     pub fn new() -> Self {
         Self {
-            storage: crate::adventure_works::copy(),
+            storage: crate::adventure_works::adventure_works(),
             errors: vec![],
         }
     }

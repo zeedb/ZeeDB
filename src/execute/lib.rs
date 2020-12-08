@@ -1,3 +1,5 @@
+#![feature(test)]
+
 #[cfg(test)]
 mod adventure_works;
 mod byte_key;
@@ -6,6 +8,8 @@ mod byte_key_tests;
 mod catalog;
 mod eval;
 mod execute;
+#[cfg(test)]
+mod execute_benches;
 #[cfg(test)]
 mod execute_tests;
 mod hash_table;
@@ -18,4 +22,4 @@ mod optimize_tests;
 mod sort;
 mod state;
 
-pub use execute::*;
+pub use crate::execute::{execute, Program};

@@ -133,7 +133,7 @@ fn test_update() {
 
 #[test]
 fn test_index_scan() {
-    let mut test = TestProvider::new(Some(crate::adventure_works::copy()));
+    let mut test = TestProvider::new(Some(crate::adventure_works::adventure_works()));
     test.test(
         "examples/execute/index_lookup.txt",
         vec!["select * from customer where customer_id = 1"],

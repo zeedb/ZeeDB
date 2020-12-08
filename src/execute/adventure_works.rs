@@ -1,17 +1,8 @@
-use crate::execute::*;
-use arrow::record_batch::RecordBatch;
-use ast::Expr;
-use catalog::Index;
 use chrono::*;
 use once_cell::sync::OnceCell;
 use planner::*;
 use rand::*;
-use regex::Regex;
-use std::collections::HashMap;
-use std::sync::Mutex;
 use storage::Storage;
-use test_fixtures::*;
-use zetasql::SimpleCatalogProto;
 
 fn generate_adventure_works() -> Storage {
     fn timestamp(secs: i64) -> DateTime<Utc> {
@@ -105,7 +96,7 @@ fn generate_adventure_works() -> Storage {
     storage
 }
 
-pub(crate) fn copy() -> Storage {
+pub fn adventure_works() -> Storage {
     static ADVENTURE_WORKS: OnceCell<Storage> = OnceCell::new();
 
     ADVENTURE_WORKS
