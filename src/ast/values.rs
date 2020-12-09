@@ -43,8 +43,6 @@ impl Value {
                 array.append_value(&bytes[..]).unwrap();
                 Arc::new(array.finish())
             }
-            DataType::List(_) => todo!(),
-            DataType::Struct(_) => todo!(),
             other => panic!("{:?} is not a supported type", other),
         };
         Self { inner }
@@ -140,8 +138,6 @@ impl fmt::Display for Value {
                 let number = numeric_value(bytes);
                 write!(f, "{}", number)
             }
-            DataType::List(_) => todo!(),
-            DataType::Struct(_) => todo!(),
             other => panic!("{:?} is not a supported type", other),
         }
     }

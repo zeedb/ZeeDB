@@ -27,16 +27,6 @@ fn test_i64() {
 }
 
 #[test]
-fn test_u64() {
-    assert_ordered(vec![
-        ByteKey::key(u64::MIN),
-        ByteKey::key(1u64),
-        ByteKey::key(2u64),
-        ByteKey::key(u64::MAX),
-    ]);
-}
-
-#[test]
 fn test_f64() {
     assert_ordered(vec![
         ByteKey::key(f64::NEG_INFINITY),

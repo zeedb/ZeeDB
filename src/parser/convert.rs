@@ -88,8 +88,8 @@ impl Converter {
             .map(|c| Column::from(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column("$xmin".to_string(), DataType::UInt64);
-        let xmax = self.create_column("$xmax".to_string(), DataType::UInt64);
+        let xmin = self.create_column("$xmin".to_string(), DataType::Int64);
+        let xmax = self.create_column("$xmax".to_string(), DataType::Int64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -118,9 +118,9 @@ impl Converter {
             .map(|c| Column::from(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column("$xmin".to_string(), DataType::UInt64);
-        let xmax = self.create_column("$xmax".to_string(), DataType::UInt64);
-        let tid = self.create_column("$tid".to_string(), DataType::UInt64);
+        let xmin = self.create_column("$xmin".to_string(), DataType::Int64);
+        let xmax = self.create_column("$xmax".to_string(), DataType::Int64);
+        let tid = self.create_column("$tid".to_string(), DataType::Int64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -1049,8 +1049,6 @@ fn literal(value: &ValueProto, data: &TypeProto) -> Value {
             varint128::write(&mut x, buf);
             Value::new(Box::new(x), as_type)
         }
-        ArrayValue(x) => todo!(),
-        StructValue(x) => todo!(),
         other => panic!("{:?}", other),
     }
 }

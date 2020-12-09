@@ -4,7 +4,6 @@ use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use arrow::record_batch::*;
 use ast::Column;
-use std::ops::BitOr;
 use std::sync::Arc;
 
 impl crate::Kernel for Arc<dyn Array> {
@@ -73,7 +72,6 @@ fn binary_operator<Op: BinaryOperator>(
     let output = match left.data_type() {
         DataType::Boolean => Op::bool(coerce(left), coerce(right))?,
         DataType::Int64 => Op::num::<Int64Type>(coerce(left), coerce(right))?,
-        DataType::UInt64 => Op::num::<UInt64Type>(coerce(left), coerce(right))?,
         DataType::Float64 => Op::num::<Float64Type>(coerce(left), coerce(right))?,
         DataType::Date32(DateUnit::Day) => Op::num::<Date32Type>(coerce(left), coerce(right))?,
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
@@ -81,8 +79,6 @@ fn binary_operator<Op: BinaryOperator>(
         }
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Utf8 => Op::utf8(coerce(left), coerce(right))?,
-        DataType::Struct(fields) => todo!(),
-        DataType::List(element) => todo!(),
         other => panic!("{:?} is not a supported type", other),
     };
     Ok(Arc::new(output))
@@ -175,12 +171,6 @@ pub fn add(
             let sum = arrow::compute::add(left, right)?;
             Ok(Arc::new(sum))
         }
-        DataType::UInt64 => {
-            let left = coerce::<UInt64Array>(left_any);
-            let right = coerce::<UInt64Array>(right_any);
-            let sum = arrow::compute::add(left, right)?;
-            Ok(Arc::new(sum))
-        }
         DataType::Float64 => {
             let left = coerce::<Float64Array>(left_any);
             let right = coerce::<Float64Array>(right_any);
@@ -195,7 +185,6 @@ pub fn nulls(len: usize, as_type: &DataType) -> Arc<dyn Array> {
     match as_type {
         DataType::Boolean => null_bool_array(len),
         DataType::Int64 => null_primitive_array::<Int64Type>(len),
-        DataType::UInt64 => null_primitive_array::<UInt64Type>(len),
         DataType::Float64 => null_primitive_array::<Float64Type>(len),
         DataType::Date32(DateUnit::Day) => null_primitive_array::<Date32Type>(len),
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
@@ -203,8 +192,6 @@ pub fn nulls(len: usize, as_type: &DataType) -> Arc<dyn Array> {
         }
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Utf8 => null_string_array(len),
-        DataType::Struct(fields) => todo!(),
-        DataType::List(element) => todo!(),
         other => panic!("{:?} not supported", other),
     }
 }
@@ -258,8 +245,6 @@ pub fn hash(any: &Arc<dyn Array>, buckets: usize) -> Arc<dyn Array> {
         }
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Utf8 => todo!(),
-        DataType::Struct(fields) => todo!(),
-        DataType::List(element) => todo!(),
         other => panic!("{:?} not supported", other),
     }
 }

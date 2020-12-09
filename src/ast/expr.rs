@@ -1764,7 +1764,7 @@ impl Function {
             | Function::Divide(_, _, returns)
             | Function::Default(_, returns) => returns.clone(),
             Function::NextVal(_) => DataType::Int64,
-            Function::Xid => DataType::UInt64,
+            Function::Xid => DataType::Int64,
         }
     }
 

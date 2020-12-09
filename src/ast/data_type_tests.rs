@@ -22,17 +22,6 @@ fn test_to_string() {
         "NUMERIC".to_string(),
         data_type::to_string(&DataType::FixedSizeBinary(16))
     );
-    assert_eq!(
-        "STRUCT<i INT64, s STRING>".to_string(),
-        data_type::to_string(&DataType::Struct(vec![
-            Field::new("i", DataType::Int64, true),
-            Field::new("s", DataType::Utf8, true),
-        ]))
-    );
-    assert_eq!(
-        "ARRAY<INT64>".to_string(),
-        data_type::to_string(&DataType::List(Box::from(DataType::Int64)))
-    );
 }
 
 #[test]
@@ -45,11 +34,6 @@ fn test_to_from_string() {
         DataType::Date32(DateUnit::Day),
         DataType::Timestamp(TimeUnit::Microsecond, None),
         DataType::FixedSizeBinary(16),
-        // DataType::Struct(vec![
-        //     Field::new("i", DataType::Int64, true),
-        //     Field::new("s", DataType::Utf8, true),
-        // ]),
-        // DataType::List(Box::from(DataType::Int64)),
     ];
     for data in examples {
         assert_eq!(
@@ -71,11 +55,6 @@ fn test_to_from_proto() {
         DataType::Date32(DateUnit::Day),
         DataType::Timestamp(TimeUnit::Microsecond, None),
         DataType::FixedSizeBinary(16),
-        // DataType::Struct(vec![
-        //     Field::new("i", DataType::Int64, true),
-        //     Field::new("s", DataType::Utf8, true),
-        // ]),
-        // DataType::List(Box::from(DataType::Int64)),
     ];
     for data in examples {
         assert_eq!(

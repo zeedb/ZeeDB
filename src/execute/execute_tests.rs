@@ -170,7 +170,7 @@ impl TestProvider {
             .as_mut()
             .unwrap_or(&mut temporary_storage);
         for (txn, sql) in script.iter().enumerate() {
-            let txn = 100 + txn as u64;
+            let txn = 100 + txn as i64;
             let sql = trim.replace_all(sql, "").trim().to_string();
             let catalog = crate::catalog::catalog(storage, txn);
             let indexes = crate::catalog::indexes(storage, txn);

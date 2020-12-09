@@ -59,7 +59,7 @@ fn set() {
         const N: usize = 1000;
         let mut keys: Vec<[u8; 8]> = Vec::with_capacity(N);
         keys.resize_with(N, Default::default);
-        let mut values: Vec<u64> = Vec::with_capacity(N);
+        let mut values: Vec<i64> = Vec::with_capacity(N);
         values.resize_with(N, Default::default);
         /* rng */
         let mut g = rand::thread_rng();
@@ -67,7 +67,7 @@ fn set() {
         for experiment in 0..10 {
             for i in 0..N {
                 keys[i] = g.gen();
-                values[i] = i as u64;
+                values[i] = i as i64;
             }
 
             let mut m = Art::empty();
@@ -337,7 +337,7 @@ fn full_range() {
      *  ()->2 (aa$)->3 (a$)->4 ()->5 (aa$)->6
      *
      */
-    let found: Vec<u64> = m.range(..);
+    let found: Vec<i64> = m.range(..);
     let expected = vec![int0, int1, int2, int3, int4, int5, int6];
     assert_eq!(expected, found);
 }
@@ -348,7 +348,7 @@ fn count_full_range() {
     let mut m = Art::empty();
     for i in 0..n {
         let key = format!("{:04X}", i);
-        m.insert(key.as_bytes(), i as u64);
+        m.insert(key.as_bytes(), i as i64);
     }
     assert_eq!(n, m.range(..).len());
 }
@@ -389,7 +389,7 @@ fn partial_range() {
          *  ()->2 (aa$)->3 (a$)->4 ()->5 (aa$)->6
          *
          */
-        let found: Vec<u64> = m.range("aaaaaaaaaa".as_bytes().."aaaabaaaaa".as_bytes());
+        let found: Vec<i64> = m.range("aaaaaaaaaa".as_bytes().."aaaabaaaaa".as_bytes());
         let expected = vec![int3, int4, int5];
         assert_eq!(expected, found);
     }
@@ -402,7 +402,7 @@ fn partial_range() {
         let mut keys: Vec<Vec<u8>> = Vec::with_capacity(N);
         for i in 0..N {
             let key = format!("{:04X}", i).as_bytes().to_vec();
-            m.insert(&key, i as u64);
+            m.insert(&key, i as i64);
             keys.push(key);
         }
         for experiment in 0..1000 {

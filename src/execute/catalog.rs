@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use storage::Storage;
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
-pub fn indexes(storage: &mut Storage, txn: u64) -> HashMap<i64, Vec<Index>> {
+pub fn indexes(storage: &mut Storage, txn: i64) -> HashMap<i64, Vec<Index>> {
     let mut indexes = HashMap::new();
     for index in read_all_indexes(storage, txn) {
         if !indexes.contains_key(&index.table_id) {
@@ -20,7 +20,7 @@ pub fn indexes(storage: &mut Storage, txn: u64) -> HashMap<i64, Vec<Index>> {
     indexes
 }
 
-pub fn catalog(storage: &mut Storage, txn: u64) -> SimpleCatalogProto {
+pub fn catalog(storage: &mut Storage, txn: i64) -> SimpleCatalogProto {
     let mut root = catalog::default_catalog();
     // Find all tables and organize by catalog.
     let mut tables = HashMap::new();
@@ -62,7 +62,7 @@ fn catalog_tree(
     }
 }
 
-fn read_all_catalogs(storage: &mut Storage, txn: u64) -> Vec<(i64, i64, SimpleCatalogProto)> {
+fn read_all_catalogs(storage: &mut Storage, txn: i64) -> Vec<(i64, i64, SimpleCatalogProto)> {
     let expr = read_all_catalogs_query(storage);
     let program = crate::compile(expr);
     let mut catalogs = vec![];
@@ -98,7 +98,7 @@ fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCat
     (parent_catalog_id, catalog_id, catalog)
 }
 
-fn read_all_tables(storage: &mut Storage, txn: u64) -> Vec<(i64, SimpleTableProto)> {
+fn read_all_tables(storage: &mut Storage, txn: i64) -> Vec<(i64, SimpleTableProto)> {
     let expr = read_all_tables_query(storage);
     let program = crate::compile(expr);
     let mut tables = vec![];
@@ -156,7 +156,7 @@ fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
     }
 }
 
-fn read_all_indexes(storage: &mut Storage, txn: u64) -> Vec<Index> {
+fn read_all_indexes(storage: &mut Storage, txn: i64) -> Vec<Index> {
     let expr = read_all_indexes_query(storage);
     let program = crate::compile(expr);
     let program: Vec<_> = program.execute(storage, txn).collect();

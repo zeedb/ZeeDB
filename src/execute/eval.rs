@@ -95,7 +95,7 @@ pub fn eval(
                 }
                 Ok(Arc::new(output.finish()))
             }
-            Function::Xid => Ok(Arc::new(UInt64Array::from(
+            Function::Xid => Ok(Arc::new(Int64Array::from(
                 vec![state.txn].repeat(input.num_rows()),
             ))),
         },

@@ -19,7 +19,7 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn execute<'a>(&'a self, storage: &'a mut Storage, txn: u64) -> Execute<'a> {
+    pub fn execute<'a>(&'a self, storage: &'a mut Storage, txn: i64) -> Execute<'a> {
         Execute {
             input: Input::compile(self.expr.clone()),
             state: State {
@@ -39,7 +39,7 @@ pub struct Execute<'a> {
 pub struct State<'a> {
     pub storage: &'a mut Storage,
     pub variables: HashMap<String, Arc<dyn Array>>,
-    pub txn: u64,
+    pub txn: i64,
 }
 
 struct Input {
@@ -696,7 +696,7 @@ impl Input {
                         .expect(&tid.canonical_name()),
                 );
                 let tids = kernel::gather(tids, &kernel::sort(tids));
-                let tids: &UInt64Array = tids.as_any().downcast_ref::<UInt64Array>().unwrap();
+                let tids: &Int64Array = tids.as_any().downcast_ref::<Int64Array>().unwrap();
                 // Invalidate the old row versions.
                 let heap = state.storage.table(table.id);
                 let mut i = 0;

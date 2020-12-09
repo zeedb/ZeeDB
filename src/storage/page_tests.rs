@@ -30,19 +30,19 @@ fn test_fixed_types() {
     )
     .unwrap();
     let mut offset = 0;
-    let mut tids = UInt64Builder::new(1);
+    let mut tids = Int64Builder::new(1);
     page.insert(&input, 1000, &mut tids, &mut offset);
     assert_eq!(1, offset);
     assert_eq!(
-        "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\n",
+        "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,9223372036854775807\n",
         format!("{:?}", page)
     );
     let mut offset = 0;
-    let mut tids = UInt64Builder::new(1);
+    let mut tids = Int64Builder::new(1);
     page.insert(&input, 2000, &mut tids, &mut offset);
     assert_eq!(1, offset);
     assert_eq!(
-        "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,18446744073709551615\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,2000,18446744073709551615\n",
+        "boolean,int64,float64,date32,timestamp,$xmin,$xmax\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,1000,9223372036854775807\ntrue,1,1.1,1970-01-02,1970-01-01T00:00:00.000001000,2000,9223372036854775807\n",
         format!("{:?}", page)
     );
 }
@@ -63,19 +63,19 @@ fn test_var_types() {
     )
     .unwrap();
     let mut offset = 0;
-    let mut tids = UInt64Builder::new(1);
+    let mut tids = Int64Builder::new(1);
     page.insert(&input, 1000, &mut tids, &mut offset);
     assert_eq!(2, offset);
     assert_eq!(
-        "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n",
+        "int64,string,$xmin,$xmax\n1,foo,1000,9223372036854775807\n2,bar,1000,9223372036854775807\n",
         format!("{:?}", page)
     );
     let mut offset = 0;
-    let mut tids = UInt64Builder::new(1);
+    let mut tids = Int64Builder::new(1);
     page.insert(&input, 2000, &mut tids, &mut offset);
     assert_eq!(2, offset);
     assert_eq!(
-        "int64,string,$xmin,$xmax\n1,foo,1000,18446744073709551615\n2,bar,1000,18446744073709551615\n1,foo,2000,18446744073709551615\n2,bar,2000,18446744073709551615\n",
+        "int64,string,$xmin,$xmax\n1,foo,1000,9223372036854775807\n2,bar,1000,9223372036854775807\n1,foo,2000,9223372036854775807\n2,bar,2000,9223372036854775807\n",
         format!("{:?}", page)
     );
 }
@@ -96,13 +96,13 @@ fn test_insert_delete() {
     )
     .unwrap();
     let mut offset = 0;
-    let mut tids = UInt64Builder::new(1);
+    let mut tids = Int64Builder::new(1);
     page.insert(&input, 1000, &mut tids, &mut offset);
     assert_eq!(2, offset);
     assert!(page.delete(1, 2000));
     assert!(!page.delete(1, 2001));
     assert_eq!(
-        "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,2000\n",
+        "a,b,$xmin,$xmax\n1,10,1000,9223372036854775807\n2,20,1000,2000\n",
         format!("{:?}", page)
     );
 }
@@ -120,7 +120,7 @@ fn test_expand_string_pool() {
     let input =
         RecordBatch::try_new(schema.clone(), vec![Arc::new(StringArray::from(strs))]).unwrap();
     let mut offset = 0;
-    let mut tids = UInt64Builder::new(1);
+    let mut tids = Int64Builder::new(1);
     page.insert(&input, 1000, &mut tids, &mut offset);
     let batch = page.select(&page.star());
     let column: &StringArray = batch

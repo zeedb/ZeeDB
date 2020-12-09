@@ -12,7 +12,6 @@ pub fn scatter(values: &Arc<dyn Array>, indexes: &UInt32Array) -> Arc<dyn Array>
     match values.data_type() {
         DataType::Boolean => scatter_boolean(values, indexes),
         DataType::Int64 => scatter_primitive::<Int64Type>(values, indexes),
-        DataType::UInt64 => scatter_primitive::<UInt64Type>(values, indexes),
         DataType::Float64 => scatter_primitive::<Float64Type>(values, indexes),
         DataType::Date32(_) => scatter_primitive::<Date32Type>(values, indexes),
         DataType::Timestamp(Microsecond, _) => {
@@ -20,8 +19,6 @@ pub fn scatter(values: &Arc<dyn Array>, indexes: &UInt32Array) -> Arc<dyn Array>
         }
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Utf8 => scatter_string::<i32>(values, indexes),
-        DataType::Struct(fields) => todo!(),
-        DataType::List(element) => todo!(),
         other => panic!("{:?} not supported", other),
     }
 }

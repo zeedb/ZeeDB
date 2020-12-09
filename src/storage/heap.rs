@@ -31,7 +31,7 @@ impl Heap {
         self.pages.iter().map(|page| page.clone()).collect()
     }
 
-    pub fn bitmap_scan(&self, mut tids: Vec<u64>, projects: &Vec<String>) -> RecordBatch {
+    pub fn bitmap_scan(&self, mut tids: Vec<i64>, projects: &Vec<String>) -> RecordBatch {
         if tids.is_empty() {
             return self.none(projects);
         }
@@ -59,7 +59,7 @@ impl Heap {
     fn none(&self, projects: &Vec<String>) -> RecordBatch {
         let schema = self.schema().unwrap();
         let empty_field = |name: &String| match base_name(name) {
-            "$xmin" | "$xmax" | "$tid" => Field::new(name, DataType::UInt64, false),
+            "$xmin" | "$xmax" | "$tid" => Field::new(name, DataType::Int64, false),
             base_name => {
                 let field = schema.field_with_name(base_name).unwrap();
                 Field::new(name, field.data_type().clone(), field.is_nullable())
@@ -70,7 +70,7 @@ impl Heap {
         RecordBatch::try_new(Arc::new(Schema::new(fields)), columns).unwrap()
     }
 
-    pub fn insert(&mut self, records: &RecordBatch, txn: u64) -> UInt64Array {
+    pub fn insert(&mut self, records: &RecordBatch, txn: i64) -> Int64Array {
         if self.pages.is_empty() {
             self.pages
                 .push(Page::empty(self.pages.len(), records.schema()));
@@ -80,7 +80,7 @@ impl Heap {
             }
         }
         // Allocate arrays to keep track of where we insert the rows.
-        let mut tids = UInt64Builder::new(records.num_rows());
+        let mut tids = Int64Builder::new(records.num_rows());
         // Insert, adding new pages if needed.
         let mut offset = 0;
         self.insert_more(records, txn, &mut tids, &mut offset);
@@ -91,8 +91,8 @@ impl Heap {
     pub fn insert_more(
         &mut self,
         records: &RecordBatch,
-        txn: u64,
-        tids: &mut UInt64Builder,
+        txn: i64,
+        tids: &mut Int64Builder,
         offset: &mut usize,
     ) {
         // Insert however many records fit in the last page.
@@ -162,7 +162,6 @@ pub fn empty(as_type: &DataType) -> Arc<dyn Array> {
     match as_type {
         DataType::Boolean => empty_boolean(),
         DataType::Int64 => empty_generic::<Int64Type>(),
-        DataType::UInt64 => empty_generic::<UInt64Type>(),
         DataType::Float64 => empty_generic::<Float64Type>(),
         DataType::Date32(DateUnit::Day) => empty_generic::<Date32Type>(),
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
@@ -170,8 +169,6 @@ pub fn empty(as_type: &DataType) -> Arc<dyn Array> {
         }
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Utf8 => empty_utf8(),
-        DataType::Struct(fields) => todo!(),
-        DataType::List(element) => todo!(),
         other => panic!("{:?} not supported", other),
     }
 }

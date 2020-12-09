@@ -58,11 +58,11 @@ impl Page {
             capacity = align(capacity + pax_length(field.data_type(), PAGE_SIZE));
         }
         let xmin = capacity;
-        capacity = align(capacity + PAGE_SIZE * size_of::<u64>());
+        capacity = align(capacity + PAGE_SIZE * size_of::<i64>());
         let xmax = capacity;
-        capacity = align(capacity + PAGE_SIZE * size_of::<u64>());
+        capacity = align(capacity + PAGE_SIZE * size_of::<i64>());
         let num_rows = capacity;
-        capacity = align(capacity + size_of::<u64>());
+        capacity = align(capacity + size_of::<i64>());
         // Allocate memory.
         let columns_buffer = zeros(capacity);
         let string_buffers: Vec<Option<RwLock<Buffer>>> = schema
@@ -102,10 +102,10 @@ impl Page {
                         &self.inner.columns_buffer,
                         &None,
                         num_rows,
-                        DataType::UInt64,
+                        DataType::Int64,
                         false,
                     ));
-                    fields.push(Field::new(project, DataType::UInt64, false));
+                    fields.push(Field::new(project, DataType::Int64, false));
                 }
                 "$xmax" => {
                     columns.push(head(
@@ -113,17 +113,17 @@ impl Page {
                         &self.inner.columns_buffer,
                         &None,
                         num_rows,
-                        DataType::UInt64,
+                        DataType::Int64,
                         false,
                     ));
-                    fields.push(Field::new(project, DataType::UInt64, false));
+                    fields.push(Field::new(project, DataType::Int64, false));
                 }
                 "$tid" => {
                     let start = self.inner.pid * PAGE_SIZE;
                     let end = start + num_rows;
-                    let tids: Vec<u64> = (start as u64..end as u64).collect();
-                    columns.push(Arc::new(UInt64Array::from(tids)));
-                    fields.push(Field::new(project, DataType::UInt64, false));
+                    let tids: Vec<i64> = (start as i64..end as i64).collect();
+                    columns.push(Arc::new(Int64Array::from(tids)));
+                    fields.push(Field::new(project, DataType::Int64, false));
                 }
                 name => {
                     if let Some(i) = self
@@ -170,8 +170,8 @@ impl Page {
     pub fn insert(
         &self,
         records: &RecordBatch,
-        txn: u64,
-        tids: &mut UInt64Builder,
+        txn: i64,
+        tids: &mut Int64Builder,
         offset: &mut usize,
     ) {
         let (start, end) = self.reserve(records.num_rows());
@@ -200,15 +200,15 @@ impl Page {
         for rid in start..end {
             // Make the rows visible to subsequent transactions.
             self.xmin(rid).store(txn, Ordering::Relaxed);
-            self.xmax(rid).store(u64::MAX, Ordering::Relaxed);
+            self.xmax(rid).store(i64::MAX, Ordering::Relaxed);
             // Write new tids.
             let tid = self.inner.pid * PAGE_SIZE + rid;
-            tids.append_value(tid as u64).unwrap();
+            tids.append_value(tid as i64).unwrap();
         }
         *offset += end - start;
     }
 
-    pub fn delete(&self, row: usize, txn: u64) -> bool {
+    pub fn delete(&self, row: usize, txn: i64) -> bool {
         let xmax = self.xmax(row);
         let current = xmax.load(Ordering::Relaxed);
         if current < txn {
@@ -244,12 +244,12 @@ impl Page {
         self.atomic::<AtomicUsize>(self.inner.num_rows, 0)
     }
 
-    fn xmin(&self, row: usize) -> &AtomicU64 {
-        self.atomic::<AtomicU64>(self.inner.xmin, row)
+    fn xmin(&self, row: usize) -> &AtomicI64 {
+        self.atomic::<AtomicI64>(self.inner.xmin, row)
     }
 
-    fn xmax(&self, row: usize) -> &AtomicU64 {
-        self.atomic::<AtomicU64>(self.inner.xmax, row)
+    fn xmax(&self, row: usize) -> &AtomicI64 {
+        self.atomic::<AtomicI64>(self.inner.xmax, row)
     }
 
     fn atomic<T>(&self, column_offset: usize, row: usize) -> &T {
@@ -523,7 +523,6 @@ fn pax_length(data: &DataType, num_rows: usize) -> usize {
     match data {
         DataType::Boolean => (num_rows + 7) / 8,
         DataType::Int64 => Int64Type::get_bit_width() / 8 * num_rows,
-        DataType::UInt64 => UInt64Type::get_bit_width() / 8 * num_rows,
         DataType::Float64 => Float64Type::get_bit_width() / 8 * num_rows,
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
             TimestampMicrosecondType::get_bit_width() / 8 * num_rows

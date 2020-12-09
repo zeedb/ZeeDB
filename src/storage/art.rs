@@ -16,19 +16,19 @@ impl Art {
         self.root = Node::Null;
     }
 
-    pub fn insert(&mut self, key: &[u8], value: u64) -> Option<u64> {
+    pub fn insert(&mut self, key: &[u8], value: i64) -> Option<i64> {
         self.root.insert(key, value)
     }
 
-    pub fn get(&self, key: &[u8]) -> Option<u64> {
+    pub fn get(&self, key: &[u8]) -> Option<i64> {
         self.root.get(key)
     }
 
-    pub fn remove(&mut self, key: &[u8]) -> Option<u64> {
+    pub fn remove(&mut self, key: &[u8]) -> Option<i64> {
         self.root.remove(key)
     }
 
-    pub fn range<'a>(&self, bounds: impl RangeBounds<&'a [u8]>) -> Vec<u64> {
+    pub fn range<'a>(&self, bounds: impl RangeBounds<&'a [u8]>) -> Vec<i64> {
         fn inc(key: &[u8]) -> Vec<u8> {
             if key.is_empty() {
                 vec![0]
@@ -80,13 +80,13 @@ enum Node {
 #[derive(Debug, Clone)]
 struct Leaf {
     key: Vec<u8>,
-    value: u64,
+    value: i64,
 }
 
 #[derive(Debug, Clone)]
 struct Node4 {
     key: Vec<u8>,
-    value: Option<u64>,
+    value: Option<i64>,
     count: usize,
     digit: [u8; 4],
     child: [Node; 4],
@@ -95,7 +95,7 @@ struct Node4 {
 #[derive(Debug, Clone)]
 struct Node16 {
     key: Vec<u8>,
-    value: Option<u64>,
+    value: Option<i64>,
     count: usize,
     digit: [u8; 16],
     child: [Node; 16],
@@ -104,7 +104,7 @@ struct Node16 {
 #[derive(Debug, Clone)]
 struct Node48 {
     key: Vec<u8>,
-    value: Option<u64>,
+    value: Option<i64>,
     count: usize,
     /// Initially EMPTY.
     child_index: [u8; 256],
@@ -114,7 +114,7 @@ struct Node48 {
 #[derive(Debug, Clone)]
 struct Node256 {
     key: Vec<u8>,
-    value: Option<u64>,
+    value: Option<i64>,
     count: usize,
     child: [Node; 256],
 }
@@ -122,7 +122,7 @@ struct Node256 {
 const EMPTY: u8 = 255;
 
 impl Node {
-    fn get(&self, key: &[u8]) -> Option<u64> {
+    fn get(&self, key: &[u8]) -> Option<i64> {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
@@ -179,7 +179,7 @@ impl Node {
         }
     }
 
-    fn remove(&mut self, key: &[u8]) -> Option<u64> {
+    fn remove(&mut self, key: &[u8]) -> Option<i64> {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
@@ -241,7 +241,7 @@ impl Node {
         &self,
         start_inclusive: LowerBound,
         end_exclusive: UpperBound,
-        acc: &mut Vec<u64>,
+        acc: &mut Vec<i64>,
     ) -> Option<()> {
         match self {
             Node::Null => Some(()),
@@ -330,7 +330,7 @@ impl Node {
         }
     }
 
-    fn insert(&mut self, key: &[u8], value: u64) -> Option<u64> {
+    fn insert(&mut self, key: &[u8], value: i64) -> Option<i64> {
         if let Some(key) = key.strip_prefix(self.key()) {
             if key.is_empty() {
                 self.store(value)
@@ -354,7 +354,7 @@ impl Node {
         }
     }
 
-    fn store(&mut self, value: u64) -> Option<u64> {
+    fn store(&mut self, value: i64) -> Option<i64> {
         match self {
             Node::Null => {
                 *self = Node::Leaf(Box::new(Leaf { key: vec![], value }));
@@ -368,7 +368,7 @@ impl Node {
         }
     }
 
-    fn take(&mut self) -> Option<u64> {
+    fn take(&mut self) -> Option<i64> {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
@@ -385,7 +385,7 @@ impl Node {
         }
     }
 
-    fn set(&mut self, digit: u8, key: &[u8], value: u64) -> Option<u64> {
+    fn set(&mut self, digit: u8, key: &[u8], value: i64) -> Option<i64> {
         match self {
             Node::Null => {
                 *self = Node::Leaf(Box::new(Leaf {

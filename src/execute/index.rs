@@ -9,7 +9,7 @@ pub(crate) fn insert(
     index: &mut Art,
     columns: &Vec<String>,
     input: &RecordBatch,
-    tids: &UInt64Array,
+    tids: &Int64Array,
 ) {
     // Convert all the index columns into bytes, in lexicographic order.
     let mut index_columns = vec![];
@@ -50,8 +50,6 @@ pub(crate) fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
     match column.data_type() {
         DataType::Boolean => bytes_bool(column),
         DataType::Int64 => bytes_generic::<Int64Type>(column),
-        DataType::UInt32 => bytes_generic::<UInt32Type>(column),
-        DataType::UInt64 => bytes_generic::<UInt64Type>(column),
         DataType::Float64 => bytes_generic::<Float64Type>(column),
         DataType::FixedSizeBinary(16) => todo!(),
         DataType::Timestamp(TimeUnit::Microsecond, None) => {

@@ -17,14 +17,14 @@ fn test_insert_delete() {
     let mut heap = Heap::empty();
     heap.insert(&RecordBatch::try_new(schema, columns).unwrap(), 1000);
     assert_eq!(
-        "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,18446744073709551615\n",
+        "a,b,$xmin,$xmax\n1,10,1000,9223372036854775807\n2,20,1000,9223372036854775807\n",
         format!("{:?}", heap)
     );
     for page in heap.scan().iter() {
         page.delete(1, 2000);
     }
     assert_eq!(
-        "a,b,$xmin,$xmax\n1,10,1000,18446744073709551615\n2,20,1000,2000\n",
+        "a,b,$xmin,$xmax\n1,10,1000,9223372036854775807\n2,20,1000,2000\n",
         format!("{:?}", heap)
     );
 }

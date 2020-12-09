@@ -1,1 +1,0 @@
-Get rid of UInt64, Struct, Array code.
