@@ -8,3 +8,4 @@ mod scatter;
 pub use array::*;
 pub use batch::*;
 pub use kernel::*;
+pub mod agg;

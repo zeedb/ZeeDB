@@ -1,4 +1,5 @@
 use arrow::array::*;
+use arrow::buffer::Buffer;
 use arrow::datatypes::*;
 use arrow::error::ArrowError;
 use arrow::record_batch::*;
@@ -163,6 +164,33 @@ impl BinaryOperator for LessEq {
     }
 }
 
+pub fn add(
+    left_any: &Arc<dyn Array>,
+    right_any: &Arc<dyn Array>,
+) -> Result<Arc<dyn Array>, ArrowError> {
+    match left_any.data_type() {
+        DataType::Int64 => {
+            let left = coerce::<Int64Array>(left_any);
+            let right = coerce::<Int64Array>(right_any);
+            let sum = arrow::compute::add(left, right)?;
+            Ok(Arc::new(sum))
+        }
+        DataType::UInt64 => {
+            let left = coerce::<UInt64Array>(left_any);
+            let right = coerce::<UInt64Array>(right_any);
+            let sum = arrow::compute::add(left, right)?;
+            Ok(Arc::new(sum))
+        }
+        DataType::Float64 => {
+            let left = coerce::<Float64Array>(left_any);
+            let right = coerce::<Float64Array>(right_any);
+            let sum = arrow::compute::add(left, right)?;
+            Ok(Arc::new(sum))
+        }
+        other => panic!("+({:?}) is not supported", other),
+    }
+}
+
 pub fn nulls(len: usize, as_type: &DataType) -> Arc<dyn Array> {
     match as_type {
         DataType::Boolean => null_bool_array(len),
@@ -265,15 +293,23 @@ pub fn bit_or(left: &Arc<dyn Array>, right: &Arc<dyn Array>) -> Arc<dyn Array> {
     let left_buffer = left_data.buffers().first().unwrap();
     let right_buffer = right_data.buffers().first().unwrap();
     let buffer = (left_buffer | right_buffer).unwrap();
+    if let Some(nulls) = null_or(left, right) {
+        builder = builder.null_bit_buffer(nulls);
+    }
     builder = builder.add_buffer(buffer);
+    make_array(builder.build())
+}
+
+pub fn null_or(left: &Arc<dyn Array>, right: &Arc<dyn Array>) -> Option<Buffer> {
+    let left_data = left.data();
     let left_nulls = left_data.null_buffer();
+    let right_data = right.data();
     let right_nulls = right_data.null_buffer();
     match (left_nulls, right_nulls) {
-        (Some(left), Some(right)) => builder = builder.null_bit_buffer((left | right).unwrap()),
-        (Some(bits), _) | (_, Some(bits)) => builder = builder.null_bit_buffer(bits.clone()),
-        (None, None) => {}
-    };
-    make_array(builder.build())
+        (Some(left), Some(right)) => Some((left | right).unwrap()),
+        (Some(bits), _) | (_, Some(bits)) => Some(bits.clone()),
+        (None, None) => None,
+    }
 }
 
 pub fn find(input: &RecordBatch, column: &Column) -> Arc<dyn Array> {

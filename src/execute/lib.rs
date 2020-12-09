@@ -1,4 +1,5 @@
 mod adventure_works;
+mod aggregate;
 mod byte_key;
 #[cfg(test)]
 mod byte_key_tests;

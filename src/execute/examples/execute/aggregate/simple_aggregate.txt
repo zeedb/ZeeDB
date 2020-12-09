@@ -1,0 +1,6 @@
+create table foo (id int64);
+insert into foo values (1), (2), (3)
+select sum(id) from foo
+
+$agg1
+6

@@ -105,6 +105,7 @@ enum Node {
         columns: Vec<Column>,
     },
     Aggregate {
+        finished: bool,
         group_by: Vec<Column>,
         aggregate: Vec<(AggregateFn, Column)>,
         input: Input,
@@ -261,7 +262,12 @@ impl Node {
                 group_by,
                 aggregate,
                 input,
-            } => todo!(),
+            } => Node::Aggregate {
+                finished: false,
+                group_by,
+                aggregate,
+                input: Input::compile(*input),
+            },
             Limit {
                 limit,
                 offset,
@@ -432,8 +438,17 @@ impl Node {
             Node::Aggregate {
                 group_by,
                 aggregate,
-                input,
-            } => todo!(),
+                ..
+            } => {
+                let mut fields = vec![];
+                for column in group_by {
+                    fields.push(column.into_query_field());
+                }
+                for (_, column) in aggregate {
+                    fields.push(column.into_query_field());
+                }
+                Schema::new(fields)
+            }
             Node::Union { left, right } => todo!(),
             Node::Intersect { left, right } => todo!(),
             Node::Except { left, right } => todo!(),
@@ -590,10 +605,44 @@ impl Input {
             } => todo!(),
             Node::GetTempTable { name, columns } => todo!(),
             Node::Aggregate {
+                finished,
                 group_by,
                 aggregate,
                 input,
-            } => todo!(),
+            } => {
+                if *finished {
+                    return Err(Error::Empty);
+                } else {
+                    *finished = true;
+                }
+                if group_by.is_empty() {
+                    // Allocate state for each aggregator.
+                    let mut states: Vec<_> = aggregate
+                        .iter()
+                        .map(|(aggregate, _)| crate::aggregate::SimpleAggregate::begin(aggregate))
+                        .collect();
+                    // Consume the entire input.
+                    loop {
+                        match input.next(state) {
+                            Ok(input) => {
+                                for state in &mut states {
+                                    state.update(&input)?;
+                                }
+                            }
+                            Err(Error::Empty) => {
+                                let columns: Vec<_> =
+                                    states.drain(..).map(|state| state.finish()).collect();
+                                return Ok(
+                                    RecordBatch::try_new(self.schema.clone(), columns).unwrap()
+                                );
+                            }
+                            error => return error,
+                        }
+                    }
+                } else {
+                    todo!()
+                }
+            }
             Node::Limit {
                 limit,
                 offset,

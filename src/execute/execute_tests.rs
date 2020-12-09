@@ -8,6 +8,28 @@ use test_fixtures::*;
 use zetasql::SimpleCatalogProto;
 
 #[test]
+fn test_aggregate() {
+    let mut test = TestProvider::new(None);
+    test.test(
+        "examples/execute/aggregate/simple_aggregate.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo values (1), (2), (3)",
+            "select sum(id) from foo",
+        ],
+    );
+    // test.test(
+    //     "examples/execute/aggregate/group_by.txt",
+    //     vec![
+    //         "create table foo (id int64);",
+    //         "insert into foo values (1), (2), (3), (1)",
+    //         "select id, sum(id) from foo",
+    //     ],
+    // );
+    test.finish();
+}
+
+#[test]
 fn test_ddl() {
     let mut test = TestProvider::new(None);
     test.test(
@@ -156,8 +178,8 @@ impl TestProvider {
             let execute = program.execute(storage, txn);
             match execute.last() {
                 Some(Ok(last)) => output = Self::csv(last),
-                Some(Err(err)) => output = format!("{:?}", err),
-                None => output = "".to_string(),
+                Some(Err(err)) => output = format!("Error: {:?}", err),
+                None => output = "Empty".to_string(),
             }
         }
         let found = format!("{}\n\n{}", script.join("\n"), output);

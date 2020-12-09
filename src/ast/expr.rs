@@ -1803,8 +1803,6 @@ impl Function {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum AggregateFn {
     AnyValue(Column),
-    ArrayAgg(Distinct, IgnoreNulls, Column),
-    ArrayConcatAgg(Column),
     Avg(Distinct, Column),
     BitAnd(Distinct, Column),
     BitOr(Distinct, Column),
@@ -1830,8 +1828,6 @@ impl AggregateFn {
         let ignore_nulls = IgnoreNulls(ignore_nulls);
         match name.as_str() {
             "ZetaSQL:any_value" => AggregateFn::AnyValue(argument.unwrap()),
-            "ZetaSQL:array_agg" => AggregateFn::ArrayAgg(distinct, ignore_nulls, argument.unwrap()),
-            "ZetaSQL:array_concat_agg" => AggregateFn::ArrayConcatAgg(argument.unwrap()),
             "ZetaSQL:avg" => AggregateFn::Avg(distinct, argument.unwrap()),
             "ZetaSQL:bit_and" => AggregateFn::BitAnd(distinct, argument.unwrap()),
             "ZetaSQL:bit_or" => AggregateFn::BitOr(distinct, argument.unwrap()),
@@ -1851,8 +1847,6 @@ impl AggregateFn {
     fn references(&self) -> Option<Column> {
         match self {
             AggregateFn::AnyValue(c) => Some(c.clone()),
-            AggregateFn::ArrayAgg(_, _, c) => Some(c.clone()),
-            AggregateFn::ArrayConcatAgg(c) => Some(c.clone()),
             AggregateFn::Avg(_, c) => Some(c.clone()),
             AggregateFn::BitAnd(_, c) => Some(c.clone()),
             AggregateFn::BitOr(_, c) => Some(c.clone()),
@@ -1873,19 +1867,6 @@ impl fmt::Display for AggregateFn {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             AggregateFn::AnyValue(column) => write!(f, "(AnyValue {})", column),
-            AggregateFn::ArrayAgg(Distinct(true), IgnoreNulls(true), column) => {
-                write!(f, "(ArrayAgg (Distinct {}))", column)
-            }
-            AggregateFn::ArrayAgg(Distinct(true), IgnoreNulls(false), column) => {
-                write!(f, "(ArrayAgg (Distinct (IgnoreNulls {})))", column)
-            }
-            AggregateFn::ArrayAgg(Distinct(false), IgnoreNulls(true), column) => {
-                write!(f, "(ArrayAgg IgnoreNulls({}))", column)
-            }
-            AggregateFn::ArrayAgg(Distinct(false), IgnoreNulls(false), column) => {
-                write!(f, "(ArrayAgg (IgnoreNulls {}))", column)
-            }
-            AggregateFn::ArrayConcatAgg(column) => write!(f, "(ArrayConcatAgg {})", column),
             AggregateFn::Avg(Distinct(true), column) => write!(f, "(Avg (Distinct {}))", column),
             AggregateFn::Avg(Distinct(false), column) => write!(f, "(Avg {})", column),
             AggregateFn::BitAnd(Distinct(true), column) => {
@@ -1920,7 +1901,7 @@ impl fmt::Display for AggregateFn {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Distinct(bool);
+pub struct Distinct(pub bool);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct IgnoreNulls(bool);
