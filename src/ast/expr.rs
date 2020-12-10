@@ -1804,17 +1804,13 @@ impl Function {
 pub enum AggregateFn {
     AnyValue(Column),
     Avg(Distinct, Column),
-    BitAnd(Distinct, Column),
-    BitOr(Distinct, Column),
-    BitXor(Distinct, Column),
     Count(Distinct, Column),
     CountStar,
     LogicalAnd(Column),
     LogicalOr(Column),
     Max(Column),
     Min(Column),
-    StringAgg(Distinct, Column),
-    Sum(Distinct, Column), // TODO what happens to string_agg(_, ', ')
+    Sum(Distinct, Column),
 }
 
 impl AggregateFn {
@@ -1825,20 +1821,16 @@ impl AggregateFn {
         argument: Option<Column>,
     ) -> Self {
         let distinct = Distinct(distinct);
-        let ignore_nulls = IgnoreNulls(ignore_nulls);
+        let ignore_nulls = IgnoreNulls(ignore_nulls); // TODO
         match name.as_str() {
             "ZetaSQL:any_value" => AggregateFn::AnyValue(argument.unwrap()),
             "ZetaSQL:avg" => AggregateFn::Avg(distinct, argument.unwrap()),
-            "ZetaSQL:bit_and" => AggregateFn::BitAnd(distinct, argument.unwrap()),
-            "ZetaSQL:bit_or" => AggregateFn::BitOr(distinct, argument.unwrap()),
-            "ZetaSQL:bit_xor" => AggregateFn::BitXor(distinct, argument.unwrap()),
             "ZetaSQL:count" => AggregateFn::Count(distinct, argument.unwrap()),
             "ZetaSQL:$count_star" => AggregateFn::CountStar,
             "ZetaSQL:logical_and" => AggregateFn::LogicalAnd(argument.unwrap()),
             "ZetaSQL:logical_or" => AggregateFn::LogicalOr(argument.unwrap()),
             "ZetaSQL:max" => AggregateFn::Max(argument.unwrap()),
             "ZetaSQL:min" => AggregateFn::Min(argument.unwrap()),
-            "ZetaSQL:string_agg" => AggregateFn::StringAgg(distinct, argument.unwrap()),
             "ZetaSQL:sum" => AggregateFn::Sum(distinct, argument.unwrap()),
             _ => panic!("{} is not supported", name),
         }
@@ -1848,17 +1840,25 @@ impl AggregateFn {
         match self {
             AggregateFn::AnyValue(c) => Some(c.clone()),
             AggregateFn::Avg(_, c) => Some(c.clone()),
-            AggregateFn::BitAnd(_, c) => Some(c.clone()),
-            AggregateFn::BitOr(_, c) => Some(c.clone()),
-            AggregateFn::BitXor(_, c) => Some(c.clone()),
             AggregateFn::Count(_, c) => Some(c.clone()),
             AggregateFn::CountStar => None,
             AggregateFn::LogicalAnd(c) => Some(c.clone()),
             AggregateFn::LogicalOr(c) => Some(c.clone()),
             AggregateFn::Max(c) => Some(c.clone()),
             AggregateFn::Min(c) => Some(c.clone()),
-            AggregateFn::StringAgg(_, c) => Some(c.clone()),
             AggregateFn::Sum(_, c) => Some(c.clone()),
+        }
+    }
+
+    pub fn data_type(&self) -> &DataType {
+        match self {
+            AggregateFn::AnyValue(column)
+            | AggregateFn::Avg(_, column)
+            | AggregateFn::Max(column)
+            | AggregateFn::Min(column)
+            | AggregateFn::Sum(_, column) => &column.data,
+            AggregateFn::Count(_, _) | AggregateFn::CountStar => &DataType::Int64,
+            AggregateFn::LogicalAnd(_) | AggregateFn::LogicalOr(_) => &DataType::Boolean,
         }
     }
 }
@@ -1869,18 +1869,6 @@ impl fmt::Display for AggregateFn {
             AggregateFn::AnyValue(column) => write!(f, "(AnyValue {})", column),
             AggregateFn::Avg(Distinct(true), column) => write!(f, "(Avg (Distinct {}))", column),
             AggregateFn::Avg(Distinct(false), column) => write!(f, "(Avg {})", column),
-            AggregateFn::BitAnd(Distinct(true), column) => {
-                write!(f, "(BitAnd (Distinct {}))", column)
-            }
-            AggregateFn::BitAnd(Distinct(false), column) => write!(f, "(BitAnd {})", column),
-            AggregateFn::BitOr(Distinct(true), column) => {
-                write!(f, "(BitOr (Distinct {}))", column)
-            }
-            AggregateFn::BitOr(Distinct(false), column) => write!(f, "(BitOr {})", column),
-            AggregateFn::BitXor(Distinct(true), column) => {
-                write!(f, "(BitXor (Distinct {}))", column)
-            }
-            AggregateFn::BitXor(Distinct(false), column) => write!(f, "(Avg {})", column),
             AggregateFn::Count(Distinct(true), column) => {
                 write!(f, "(Count (Distinct {}))", column)
             }
@@ -1890,10 +1878,6 @@ impl fmt::Display for AggregateFn {
             AggregateFn::LogicalOr(column) => write!(f, "(LogicalOr {})", column),
             AggregateFn::Max(column) => write!(f, "(Max {})", column),
             AggregateFn::Min(column) => write!(f, "(Min {})", column),
-            AggregateFn::StringAgg(Distinct(true), column) => {
-                write!(f, "(StringAgg (Distinct {}))", column)
-            }
-            AggregateFn::StringAgg(Distinct(false), column) => write!(f, "(Avg {})", column),
             AggregateFn::Sum(Distinct(true), column) => write!(f, "(Sum (Distinct {}))", column),
             AggregateFn::Sum(Distinct(false), column) => write!(f, "(Sum {})", column),
         }

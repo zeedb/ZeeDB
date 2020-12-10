@@ -465,10 +465,8 @@ impl RewriteRule {
                         for c in right.attributes() {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
                         }
-                        combined_attributes.push((
-                            Scalar::Literal(Value::new(Box::new(true), DataType::Boolean)),
-                            mark.clone(),
-                        ));
+                        combined_attributes
+                            .push((Scalar::Literal(Value::Boolean(true)), mark.clone()));
                         combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));
                         for i in 0..filter_predicates.len() {
                             if filter_predicates[i] == semi {

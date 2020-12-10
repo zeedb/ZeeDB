@@ -760,7 +760,7 @@ impl Converter {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
                 let data = x.value.get().r#type.get();
-                Scalar::Literal(literal(value, data))
+                Scalar::Literal(literal(value))
             }
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
@@ -1031,23 +1031,22 @@ fn function_name(name: &String) -> String {
     format!("${}", name.trim_start_matches("ZetaSQL:"))
 }
 
-fn literal(value: &ValueProto, data: &TypeProto) -> Value {
+fn literal(value: &ValueProto) -> Value {
     let value = match value {
         ValueProto { value: Some(value) } => value,
         other => panic!("{:?}", other),
     };
-    let as_type = data_type::from_proto(data);
     match value {
-        Int64Value(x) => Value::new(Box::new(*x), as_type),
-        BoolValue(x) => Value::new(Box::new(*x), as_type),
-        DoubleValue(x) => Value::new(Box::new(*x), as_type),
-        StringValue(x) => Value::new(Box::new(x.clone()), as_type),
-        DateValue(x) => Value::new(Box::new(*x), as_type),
-        TimestampValue(x) => Value::new(Box::new(microseconds_since_epoch(x)), as_type),
+        Int64Value(x) => Value::Int64(*x),
+        BoolValue(x) => Value::Boolean(*x),
+        DoubleValue(x) => Value::Float64(*x),
+        StringValue(x) => Value::Utf8(x.to_string()),
+        DateValue(x) => Value::Date(*x),
+        TimestampValue(x) => Value::Timestamp(microseconds_since_epoch(x)),
         NumericValue(buf) => {
             let mut x = 0i128;
             varint128::write(&mut x, buf);
-            Value::new(Box::new(x), as_type)
+            Value::Numeric(x)
         }
         other => panic!("{:?}", other),
     }

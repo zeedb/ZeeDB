@@ -13,9 +13,9 @@ fn test_aggregate() {
     test.test(
         "examples/execute/aggregate/simple_aggregate.txt",
         vec![
-            "create table foo (id int64);",
-            "insert into foo values (1), (2), (3)",
-            "select sum(id) from foo",
+            "create table foo (an_int int64, a_bool boolean);",
+            "insert into foo values (1, true), (2, true), (3, false)",
+            "select any_value(an_int), avg(an_int), count(an_int), count(*), logical_and(a_bool), logical_or(a_bool), max(an_int), min(an_int), sum(an_int) from foo",
         ],
     );
     // test.test(

@@ -1,4 +1,3 @@
-use crate::execute;
 use arrow::array::*;
 use arrow::record_batch::*;
 use ast::*;

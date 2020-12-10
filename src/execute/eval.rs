@@ -40,7 +40,7 @@ pub fn eval(
     state: &mut State,
 ) -> Result<Arc<dyn Array>, Error> {
     match scalar {
-        Scalar::Literal(value) => Ok(kernel::repeat(&value.inner, input.num_rows())),
+        Scalar::Literal(value) => Ok(kernel::repeat(&value.array(), input.num_rows())),
         Scalar::Column(column) => {
             let i = (0..input.num_columns())
                 .find(|i| input.schema().field(*i).name() == &column.canonical_name())
