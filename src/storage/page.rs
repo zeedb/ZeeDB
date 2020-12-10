@@ -303,8 +303,8 @@ impl fmt::Debug for Page {
     }
 }
 
-fn string_buffer(data: &DataType) -> Option<RwLock<Buffer>> {
-    match data {
+fn string_buffer(data_type: &DataType) -> Option<RwLock<Buffer>> {
+    match data_type {
         DataType::Utf8 => Some(RwLock::new(zeros(INITIAL_STRING_CAPACITY))),
         _ => None,
     }
@@ -519,8 +519,8 @@ fn align(offset: usize) -> usize {
     ((offset + arrow::memory::ALIGNMENT - 1) / arrow::memory::ALIGNMENT) * arrow::memory::ALIGNMENT
 }
 
-fn pax_length(data: &DataType, num_rows: usize) -> usize {
-    match data {
+fn pax_length(data_type: &DataType, num_rows: usize) -> usize {
+    match data_type {
         DataType::Boolean => (num_rows + 7) / 8,
         DataType::Int64 => Int64Type::get_bit_width() / 8 * num_rows,
         DataType::Float64 => Float64Type::get_bit_width() / 8 * num_rows,

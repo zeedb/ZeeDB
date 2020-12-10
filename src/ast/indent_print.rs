@@ -223,8 +223,8 @@ impl IndentPrint for Expr {
             }
             Expr::LogicalCreateTable { name, columns } => {
                 write!(f, "{} {}", self.name(), name)?;
-                for (name, data) in columns {
-                    write!(f, " {}:{}", name, data_type::to_string(data))?;
+                for (name, data_type) in columns {
+                    write!(f, " {}:{}", name, data_type::to_string(data_type))?;
                 }
                 Ok(())
             }
@@ -422,8 +422,8 @@ impl fmt::Display for Scalar {
                     write!(f, "({} {})", function.name(), arguments.join(" "))
                 }
             }
-            Scalar::Cast(value, data) => {
-                write!(f, "(Cast {} {})", value, data_type::to_string(data))
+            Scalar::Cast(value, data_type) => {
+                write!(f, "(Cast {} {})", value, data_type::to_string(data_type))
             }
         }
     }

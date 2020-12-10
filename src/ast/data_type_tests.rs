@@ -35,11 +35,11 @@ fn test_to_from_string() {
         DataType::Timestamp(TimeUnit::Microsecond, None),
         DataType::FixedSizeBinary(16),
     ];
-    for data in examples {
+    for data_type in examples {
         assert_eq!(
-            data_type::to_string(&data),
+            data_type::to_string(&data_type),
             data_type::to_string(&data_type::from_string(
-                data_type::to_string(&data).as_str()
+                data_type::to_string(&data_type).as_str()
             ))
         );
     }
@@ -56,10 +56,10 @@ fn test_to_from_proto() {
         DataType::Timestamp(TimeUnit::Microsecond, None),
         DataType::FixedSizeBinary(16),
     ];
-    for data in examples {
+    for data_type in examples {
         assert_eq!(
-            data_type::to_proto(&data),
-            data_type::to_proto(&data_type::from_proto(&data_type::to_proto(&data)))
+            data_type::to_proto(&data_type),
+            data_type::to_proto(&data_type::from_proto(&data_type::to_proto(&data_type)))
         );
     }
 }

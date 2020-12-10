@@ -158,8 +158,8 @@ impl std::fmt::Debug for Heap {
     }
 }
 
-pub fn empty(as_type: &DataType) -> Arc<dyn Array> {
-    match as_type {
+pub fn empty(data_type: &DataType) -> Arc<dyn Array> {
+    match data_type {
         DataType::Boolean => empty_boolean(),
         DataType::Int64 => empty_generic::<Int64Type>(),
         DataType::Float64 => empty_generic::<Float64Type>(),

@@ -99,7 +99,7 @@ pub fn eval(
                 vec![state.txn].repeat(input.num_rows()),
             ))),
         },
-        Scalar::Cast(scalar, as_type) => todo!(),
+        Scalar::Cast(scalar, data_type) => todo!(),
     }
 }
 

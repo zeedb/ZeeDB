@@ -1315,7 +1315,7 @@ pub struct Column {
     pub id: i64,
     pub name: String,
     pub table: Option<String>,
-    pub data: DataType,
+    pub data_type: DataType,
 }
 
 #[derive(Clone, Eq, PartialEq, Hash, Debug)]
@@ -1332,16 +1332,16 @@ impl Column {
             id: column.column_id.unwrap(),
             name: column.name.clone().unwrap(),
             table: column.table_name.clone(),
-            data: data_type::from_proto(column.r#type.as_ref().unwrap()),
+            data_type: data_type::from_proto(column.r#type.as_ref().unwrap()),
         }
     }
 
     pub fn into_query_field(&self) -> Field {
-        Field::new(self.canonical_name().as_str(), self.data.clone(), true)
+        Field::new(self.canonical_name().as_str(), self.data_type.clone(), true)
     }
 
     pub fn into_table_field(&self) -> Field {
-        Field::new(self.name.as_str(), self.data.clone(), true)
+        Field::new(self.name.as_str(), self.data_type.clone(), true)
     }
 
     pub fn canonical_name(&self) -> String {
@@ -1449,13 +1449,13 @@ pub enum Scalar {
 }
 
 impl Scalar {
-    pub fn data(&self) -> DataType {
+    pub fn data_type(&self) -> DataType {
         match self {
-            Scalar::Literal(value) => value.data().clone(),
-            Scalar::Column(column) => column.data.clone(),
-            Scalar::Parameter(_, data) => data.clone(),
+            Scalar::Literal(value) => value.data_type().clone(),
+            Scalar::Column(column) => column.data_type.clone(),
+            Scalar::Parameter(_, data_type) => data_type.clone(),
             Scalar::Call(function) => function.returns().clone(),
-            Scalar::Cast(_, data) => data.clone(),
+            Scalar::Cast(_, data_type) => data_type.clone(),
         }
     }
 
@@ -1493,8 +1493,8 @@ impl Scalar {
         match self {
             Scalar::Column(c) if &c == column => expr.clone(),
             Scalar::Call(f) => Scalar::Call(Box::new(f.map(|scalar| scalar.inline(expr, column)))),
-            Scalar::Cast(uncast, data) => {
-                Scalar::Cast(Box::new(uncast.inline(expr, column)), data.clone())
+            Scalar::Cast(uncast, data_type) => {
+                Scalar::Cast(Box::new(uncast.inline(expr, column)), data_type.clone())
             }
             _ => self.clone(),
         }
@@ -1757,7 +1757,7 @@ impl Function {
             | Function::Like(_, _)
             | Function::NotEqual(_, _)
             | Function::Or(_, _) => DataType::Boolean,
-            Function::UnaryMinus(argument) => argument.data(),
+            Function::UnaryMinus(argument) => argument.data_type(),
             Function::Add(_, _, returns)
             | Function::Multiply(_, _, returns)
             | Function::Subtract(_, _, returns)
@@ -1856,7 +1856,7 @@ impl AggregateFn {
             | AggregateFn::Avg(_, column)
             | AggregateFn::Max(column)
             | AggregateFn::Min(column)
-            | AggregateFn::Sum(_, column) => &column.data,
+            | AggregateFn::Sum(_, column) => &column.data_type,
             AggregateFn::Count(_, _) | AggregateFn::CountStar => &DataType::Int64,
             AggregateFn::LogicalAnd(_) | AggregateFn::LogicalOr(_) => &DataType::Boolean,
         }

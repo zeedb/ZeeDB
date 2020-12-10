@@ -37,7 +37,7 @@ pub fn analyze(catalog_id: i64, catalog: &SimpleCatalogProto, sql: &str) -> Resu
             if let Some(i) = variables.iter().position(|(name, _)| name == variable) {
                 variables.remove(i);
             }
-            variables.push((variable.clone(), value.data()))
+            variables.push((variable.clone(), value.data_type()))
         }
         // Add next_expr to list and prepare to continue parsing.
         offset = next_offset;
@@ -74,9 +74,9 @@ fn analyze_next(
             prune_unused_columns: Some(true),
             query_parameters: variables
                 .iter()
-                .map(|(name, data)| QueryParameterProto {
+                .map(|(name, data_type)| QueryParameterProto {
                     name: Some(name.clone()),
-                    r#type: Some(ast::data_type::to_proto(data)),
+                    r#type: Some(ast::data_type::to_proto(data_type)),
                 })
                 .collect(),
             ..Default::default()

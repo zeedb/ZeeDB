@@ -61,7 +61,7 @@ impl Value {
         }
     }
 
-    pub fn data(&self) -> &DataType {
+    pub fn data_type(&self) -> &DataType {
         match self {
             Value::Boolean(_) => &DataType::Boolean,
             Value::Int64(_) => &DataType::Int64,

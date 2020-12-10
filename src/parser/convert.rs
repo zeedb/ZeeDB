@@ -482,7 +482,7 @@ impl Converter {
             None
         } else if arguments.len() == 1 {
             let argument = self.expr(arguments.first().get(), input);
-            let column = self.create_column(function_name(&function), argument.data());
+            let column = self.create_column(function_name(&function), argument.data_type());
             project.push((argument, column.clone()));
             Some(column.clone())
         } else {
@@ -702,10 +702,10 @@ impl Converter {
         }
     }
 
-    fn default(&mut self, column: &ResolvedColumnProto, as_type: &TypeProto) -> Scalar {
+    fn default(&mut self, column: &ResolvedColumnProto, data_type: &TypeProto) -> Scalar {
         Scalar::Call(Box::new(Function::Default(
             Column::from(column),
-            data_type::from_proto(as_type),
+            data_type::from_proto(data_type),
         )))
     }
 
@@ -759,7 +759,7 @@ impl Converter {
         match x {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
-                let data = x.value.get().r#type.get();
+                let data_type = x.value.get().r#type.get();
                 Scalar::Literal(literal(value))
             }
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
@@ -862,13 +862,13 @@ impl Converter {
         scalar
     }
 
-    fn create_column(&mut self, name: String, data: DataType) -> Column {
+    fn create_column(&mut self, name: String, data_type: DataType) -> Column {
         let column = Column {
             created: Phase::Convert,
             id: self.next_column_id,
             name,
             table: None,
-            data,
+            data_type,
         };
         self.next_column_id += 1;
         column
@@ -940,7 +940,7 @@ fn create_dependent_join(
             id: fresh_column + i as i64,
             name: subquery_parameters[i].name.clone(),
             table: None,
-            data: subquery_parameters[i].data.clone(),
+            data_type: subquery_parameters[i].data_type.clone(),
         })
         .collect();
     let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())

@@ -181,8 +181,8 @@ pub fn add(
     }
 }
 
-pub fn nulls(len: usize, as_type: &DataType) -> Arc<dyn Array> {
-    match as_type {
+pub fn nulls(len: usize, data_type: &DataType) -> Arc<dyn Array> {
+    match data_type {
         DataType::Boolean => null_bool_array(len),
         DataType::Int64 => null_primitive_array::<Int64Type>(len),
         DataType::Float64 => null_primitive_array::<Float64Type>(len),

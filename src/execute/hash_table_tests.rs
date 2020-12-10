@@ -23,7 +23,7 @@ fn test_hash_table() {
         id: 0,
         name: "a".to_string(),
         table: None,
-        data: DataType::Int64,
+        data_type: DataType::Int64,
     })];
     let input = RecordBatch::try_new(schema, columns).unwrap();
     let mut storage = Storage::new();

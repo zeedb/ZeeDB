@@ -1,7 +1,7 @@
 use arrow::datatypes::*;
 
-pub fn to_proto(data: &DataType) -> zetasql::TypeProto {
-    match data {
+pub fn to_proto(data_type: &DataType) -> zetasql::TypeProto {
+    match data_type {
         DataType::Int64 => zetasql::TypeProto {
             type_kind: Some(2),
             ..Default::default()
@@ -47,8 +47,8 @@ pub fn from_proto(column_type: &zetasql::TypeProto) -> DataType {
     }
 }
 
-pub fn to_string(data: &DataType) -> String {
-    match data {
+pub fn to_string(data_type: &DataType) -> String {
+    match data_type {
         DataType::Boolean => "BOOL".to_string(),
         DataType::Int64 => "INT64".to_string(),
         DataType::Float64 => "DOUBLE".to_string(),
