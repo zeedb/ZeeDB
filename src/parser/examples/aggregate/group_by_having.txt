@@ -5,8 +5,8 @@ having count(*) > 1
 
 LogicalMap $groupby.store_id
 	LogicalFilter (Greater $aggregate.$agg1 1)
-		LogicalAggregate $groupby.store_id $aggregate.$agg1:(CountStar)
-			LogicalMap $groupby.store_id:customer.store_id
+		LogicalAggregate $groupby.store_id $aggregate.$agg1:(Count $star)
+			LogicalMap $groupby.store_id:customer.store_id $star:1
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 					Map* customer.store_id $xmin $xmax
 						LogicalGet customer

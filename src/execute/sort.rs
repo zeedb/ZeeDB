@@ -15,6 +15,5 @@ pub fn sort(input: RecordBatch, order_by: &Vec<OrderBy>) -> Result<RecordBatch, 
     };
     let order_by: Vec<arrow::compute::SortColumn> = order_by.iter().map(sort_column).collect();
     let indexes = arrow::compute::lexsort_to_indices(order_by.as_slice())?;
-    let indexes: Arc<dyn Array> = Arc::new(indexes);
     Ok(kernel::gather(&input, &indexes))
 }

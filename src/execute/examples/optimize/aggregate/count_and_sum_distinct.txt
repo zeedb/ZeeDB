@@ -1,7 +1,7 @@
 select count(distinct account_number), sum(distinct account_number)
 from customer
 
-Aggregate $aggregate.$agg1:(Count (Distinct $count)) $aggregate.$agg2:(Sum (Distinct $sum))
+Aggregate $aggregate.$agg1:(Count $count) $aggregate.$agg2:(Sum $sum)
 	Map $count:customer.account_number $sum:customer.account_number
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 			Map* customer.account_number $xmin $xmax

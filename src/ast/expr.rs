@@ -68,7 +68,7 @@ pub enum Expr {
     // LogicalAggregate { group_by, aggregate } implements the GROUP BY clause.
     LogicalAggregate {
         group_by: Vec<Column>,
-        aggregate: Vec<(AggregateFn, Column)>,
+        aggregate: Vec<(AggregateFn, Column, Column)>,
         input: Box<Expr>,
     },
     // LogicalLimit { n } implements the LIMIT / OFFSET / TOP clause.
@@ -211,7 +211,7 @@ pub enum Expr {
     },
     Aggregate {
         group_by: Vec<Column>,
-        aggregate: Vec<(AggregateFn, Column)>,
+        aggregate: Vec<(AggregateFn, Column, Column)>,
         input: Box<Expr>,
     },
     Limit {
@@ -835,7 +835,7 @@ impl Expr {
             } => {
                 let mut set = HashSet::new();
                 set.extend(group_by.clone());
-                for (_, c) in aggregate {
+                for (_, _, c) in aggregate {
                     set.insert(c.clone());
                 }
                 set
@@ -911,8 +911,8 @@ impl Expr {
                 ..
             } => {
                 set.extend(group_by.clone());
-                for (f, _) in aggregate {
-                    set.extend(f.references());
+                for (f, c, _) in aggregate {
+                    set.insert(c.clone());
                 }
             }
             Expr::LogicalSort { order_by, .. } => {
@@ -1057,7 +1057,7 @@ impl Expr {
                 group_by: group_by.iter().map(subst_c).collect(),
                 aggregate: aggregate
                     .iter()
-                    .map(|(f, c)| (f.clone(), subst_c(c)))
+                    .map(|(f, c_in, c_out)| (f.clone(), subst_c(c_in), subst_c(c_out)))
                     .collect(),
                 input: Box::new(input.subst(map)),
             },
@@ -1802,93 +1802,41 @@ impl Function {
 // Aggregate functions appear in GROUP BY expressions.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum AggregateFn {
-    AnyValue(Column),
-    Avg(Distinct, Column),
-    Count(Distinct, Column),
-    CountStar,
-    LogicalAnd(Column),
-    LogicalOr(Column),
-    Max(Column),
-    Min(Column),
-    Sum(Distinct, Column),
+    AnyValue,
+    Count,
+    LogicalAnd,
+    LogicalOr,
+    Max,
+    Min,
+    Sum,
 }
 
 impl AggregateFn {
-    pub fn from(
-        name: String,
-        distinct: bool,
-        ignore_nulls: bool,
-        argument: Option<Column>,
-    ) -> Self {
-        let distinct = Distinct(distinct);
-        let ignore_nulls = IgnoreNulls(ignore_nulls); // TODO
+    pub fn from(name: String) -> Self {
         match name.as_str() {
-            "ZetaSQL:any_value" => AggregateFn::AnyValue(argument.unwrap()),
-            "ZetaSQL:avg" => AggregateFn::Avg(distinct, argument.unwrap()),
-            "ZetaSQL:count" => AggregateFn::Count(distinct, argument.unwrap()),
-            "ZetaSQL:$count_star" => AggregateFn::CountStar,
-            "ZetaSQL:logical_and" => AggregateFn::LogicalAnd(argument.unwrap()),
-            "ZetaSQL:logical_or" => AggregateFn::LogicalOr(argument.unwrap()),
-            "ZetaSQL:max" => AggregateFn::Max(argument.unwrap()),
-            "ZetaSQL:min" => AggregateFn::Min(argument.unwrap()),
-            "ZetaSQL:sum" => AggregateFn::Sum(distinct, argument.unwrap()),
+            "ZetaSQL:any_value" => AggregateFn::AnyValue,
+            "ZetaSQL:avg" => panic!("avg should be converted into sum / count"),
+            "ZetaSQL:count" => AggregateFn::Count,
+            "ZetaSQL:$count_star" => AggregateFn::Count, // count(*) gets converted into count(1)
+            "ZetaSQL:logical_and" => AggregateFn::LogicalAnd,
+            "ZetaSQL:logical_or" => AggregateFn::LogicalOr,
+            "ZetaSQL:max" => AggregateFn::Max,
+            "ZetaSQL:min" => AggregateFn::Min,
+            "ZetaSQL:sum" => AggregateFn::Sum,
             _ => panic!("{} is not supported", name),
         }
     }
 
-    fn references(&self) -> Option<Column> {
+    pub fn data_type(&self, column_type: &DataType) -> DataType {
         match self {
-            AggregateFn::AnyValue(c) => Some(c.clone()),
-            AggregateFn::Avg(_, c) => Some(c.clone()),
-            AggregateFn::Count(_, c) => Some(c.clone()),
-            AggregateFn::CountStar => None,
-            AggregateFn::LogicalAnd(c) => Some(c.clone()),
-            AggregateFn::LogicalOr(c) => Some(c.clone()),
-            AggregateFn::Max(c) => Some(c.clone()),
-            AggregateFn::Min(c) => Some(c.clone()),
-            AggregateFn::Sum(_, c) => Some(c.clone()),
-        }
-    }
-
-    pub fn data_type(&self) -> &DataType {
-        match self {
-            AggregateFn::AnyValue(column)
-            | AggregateFn::Avg(_, column)
-            | AggregateFn::Max(column)
-            | AggregateFn::Min(column)
-            | AggregateFn::Sum(_, column) => &column.data_type,
-            AggregateFn::Count(_, _) | AggregateFn::CountStar => &DataType::Int64,
-            AggregateFn::LogicalAnd(_) | AggregateFn::LogicalOr(_) => &DataType::Boolean,
-        }
-    }
-}
-
-impl fmt::Display for AggregateFn {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            AggregateFn::AnyValue(column) => write!(f, "(AnyValue {})", column),
-            AggregateFn::Avg(Distinct(true), column) => write!(f, "(Avg (Distinct {}))", column),
-            AggregateFn::Avg(Distinct(false), column) => write!(f, "(Avg {})", column),
-            AggregateFn::Count(Distinct(true), column) => {
-                write!(f, "(Count (Distinct {}))", column)
+            AggregateFn::AnyValue | AggregateFn::Max | AggregateFn::Min | AggregateFn::Sum => {
+                column_type.clone()
             }
-            AggregateFn::Count(Distinct(false), column) => write!(f, "(Count {})", column),
-            AggregateFn::CountStar => write!(f, "(CountStar)"),
-            AggregateFn::LogicalAnd(column) => write!(f, "(LogicalAnd {})", column),
-            AggregateFn::LogicalOr(column) => write!(f, "(LogicalOr {})", column),
-            AggregateFn::Max(column) => write!(f, "(Max {})", column),
-            AggregateFn::Min(column) => write!(f, "(Min {})", column),
-            AggregateFn::Sum(Distinct(true), column) => write!(f, "(Sum (Distinct {}))", column),
-            AggregateFn::Sum(Distinct(false), column) => write!(f, "(Sum {})", column),
+            AggregateFn::Count => DataType::Int64,
+            AggregateFn::LogicalAnd | AggregateFn::LogicalOr => DataType::Boolean,
         }
     }
 }
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct Distinct(pub bool);
-
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct IgnoreNulls(bool);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Procedure {

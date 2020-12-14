@@ -1,7 +1,7 @@
 use crate::execute::State;
 use crate::hash_table::HashTable;
 use arrow::array::*;
-use arrow::datatypes::Schema;
+use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
 use kernel::Error;
@@ -32,8 +32,11 @@ fn hash_join_inner(
     partition_right: &Vec<Scalar>,
     state: &mut State,
 ) -> Result<RecordBatch, Error> {
-    let buckets = crate::eval::hash(partition_right, left.n_buckets(), right, state)?;
-    let (left, right_index) = left.probe(&buckets);
+    let partition_right: Result<Vec<_>, _> = partition_right
+        .iter()
+        .map(|x| crate::eval::eval(x, right, state))
+        .collect();
+    let (left, right_index) = left.probe(&partition_right?);
     let right = kernel::gather(right, &right_index);
     let input = kernel::zip(&left, &right);
     let mask = crate::eval::all(predicates, &input, state)?;
@@ -83,7 +86,7 @@ fn nested_loop_single(
     Ok(combined)
 }
 
-fn unmatched(left: &RecordBatch, right: &RecordBatch, mask: &Arc<dyn Array>) -> RecordBatch {
+fn unmatched(left: &RecordBatch, right: &RecordBatch, mask: &BooleanArray) -> RecordBatch {
     let mask = mask.as_any().downcast_ref::<BooleanArray>().unwrap();
     let mut unmatched = Vec::with_capacity(right.num_rows());
     unmatched.resize(right.num_rows(), true);
@@ -94,25 +97,60 @@ fn unmatched(left: &RecordBatch, right: &RecordBatch, mask: &Arc<dyn Array>) -> 
             }
         }
     }
-    let left = nulls(right.num_rows(), left.schema());
+    let left = null_batch(right.num_rows(), left.schema());
     let right = kernel::zip(&left, right);
-    let index: Arc<dyn Array> = Arc::new(BooleanArray::from(unmatched));
-    kernel::gather_logical(&right, &Arc::new(index))
+    kernel::gather_logical(&right, &BooleanArray::from(unmatched))
 }
 
-fn nulls(num_rows: usize, schema: Arc<Schema>) -> RecordBatch {
+fn null_batch(num_rows: usize, schema: Arc<Schema>) -> RecordBatch {
     let columns = schema
         .fields()
         .iter()
-        .map(|field| kernel::nulls(num_rows, field.data_type()))
+        .map(|field| null_array(num_rows, field.data_type()))
         .collect();
     RecordBatch::try_new(schema, columns).unwrap()
 }
 
+pub fn null_array(len: usize, data_type: &DataType) -> Arc<dyn Array> {
+    match data_type {
+        DataType::Boolean => null_bool_array(len),
+        DataType::Int64 => null_primitive_array::<Int64Type>(len),
+        DataType::Float64 => null_primitive_array::<Float64Type>(len),
+        DataType::Date32(DateUnit::Day) => null_primitive_array::<Date32Type>(len),
+        DataType::Timestamp(TimeUnit::Microsecond, None) => {
+            null_primitive_array::<TimestampMicrosecondType>(len)
+        }
+        DataType::Utf8 => null_string_array(len),
+        other => panic!("{:?} not supported", other),
+    }
+}
+
+fn null_bool_array(num_rows: usize) -> Arc<dyn Array> {
+    let mut array = BooleanArray::builder(num_rows);
+    for _ in 0..num_rows {
+        array.append_null().unwrap();
+    }
+    Arc::new(array.finish())
+}
+
+fn null_primitive_array<T: ArrowNumericType>(num_rows: usize) -> Arc<dyn Array> {
+    let mut array = PrimitiveArray::<T>::builder(num_rows);
+    for _ in 0..num_rows {
+        array.append_null().unwrap();
+    }
+    Arc::new(array.finish())
+}
+
+fn null_string_array(num_rows: usize) -> Arc<dyn Array> {
+    let mut array = StringBuilder::new(num_rows);
+    for _ in 0..num_rows {
+        array.append_null().unwrap();
+    }
+    Arc::new(array.finish())
+}
+
 fn cross_product(left: &RecordBatch, right: &RecordBatch) -> Result<RecordBatch, Error> {
     let (index_left, index_right) = index_cross_product(left.num_rows(), right.num_rows());
-    let index_left: Arc<dyn Array> = Arc::new(index_left);
-    let index_right: Arc<dyn Array> = Arc::new(index_right);
     let left = kernel::gather(left, &index_left);
     let right = kernel::gather(right, &index_right);
     Ok(kernel::zip(&left, &right))

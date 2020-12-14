@@ -1,21 +1,21 @@
 use crate::data_type;
 use crate::expr::*;
 use catalog::Index;
-use std::fmt;
+use std::fmt::{Display, Formatter};
 
 pub trait IndentPrint {
-    fn indent_print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result;
+    fn indent_print(&self, f: &mut Formatter<'_>, indent: usize) -> std::fmt::Result;
 }
 
-impl fmt::Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.indent_print(f, 0)
     }
 }
 
 impl IndentPrint for Expr {
-    fn indent_print(&self, f: &mut fmt::Formatter<'_>, mut indent: usize) -> fmt::Result {
-        let newline = |f: &mut fmt::Formatter<'_>, indent: usize| -> fmt::Result {
+    fn indent_print(&self, f: &mut Formatter<'_>, mut indent: usize) -> std::fmt::Result {
+        let newline = |f: &mut Formatter<'_>, indent: usize| -> std::fmt::Result {
             write!(f, "\n")?;
             for _ in 0..indent + 1 {
                 write!(f, "\t")?;
@@ -134,8 +134,8 @@ impl IndentPrint for Expr {
                 for column in group_by {
                     write!(f, " {}", column)?;
                 }
-                for (aggregate, column) in aggregate {
-                    write!(f, " {}:{}", column, aggregate)?;
+                for (aggregate, parameter, result) in aggregate {
+                    write!(f, " {}:({} {})", result, aggregate, parameter)?;
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -383,8 +383,8 @@ impl Expr {
     }
 }
 
-impl fmt::Display for Join {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Join {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         fn suffix(xs: &Vec<Scalar>) -> String {
             if xs.is_empty() {
                 "".to_string()
@@ -404,8 +404,8 @@ impl fmt::Display for Join {
     }
 }
 
-impl fmt::Display for Scalar {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Display for Scalar {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Scalar::Literal(value) => write!(f, "{}", value),
             Scalar::Column(column) => write!(f, "{}", column),
@@ -425,6 +425,20 @@ impl fmt::Display for Scalar {
             Scalar::Cast(value, data_type) => {
                 write!(f, "(Cast {} {})", value, data_type::to_string(data_type))
             }
+        }
+    }
+}
+
+impl Display for AggregateFn {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AggregateFn::AnyValue => write!(f, "AnyValue"),
+            AggregateFn::Count => write!(f, "Count"),
+            AggregateFn::LogicalAnd => write!(f, "LogicalAnd"),
+            AggregateFn::LogicalOr => write!(f, "LogicalOr"),
+            AggregateFn::Max => write!(f, "Max"),
+            AggregateFn::Min => write!(f, "Min"),
+            AggregateFn::Sum => write!(f, "Sum"),
         }
     }
 }

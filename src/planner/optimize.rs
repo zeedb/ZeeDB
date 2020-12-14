@@ -360,7 +360,7 @@ impl<'a> Optimizer<'a> {
                     cardinality *= n;
                 }
                 cardinality = self.ss[leaf(input)].props.cardinality.min(cardinality);
-                for (_, c) in aggregate {
+                for (_, _, c) in aggregate {
                     column_unique_cardinality.insert(c.clone(), cardinality);
                 }
             }

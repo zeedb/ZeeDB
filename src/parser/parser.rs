@@ -2,8 +2,6 @@ use crate::convert::convert;
 use crate::server::ZETASQL_SERVER;
 use arrow::datatypes::DataType;
 use ast::Expr;
-use catalog::Index;
-use std::collections::HashMap;
 use std::ops::DerefMut;
 use zetasql::analyze_response::Result::*;
 use zetasql::analyzer_options_proto::QueryParameterProto;
@@ -12,7 +10,10 @@ use zetasql::*;
 pub const MAX_QUERY: usize = 4_194_304;
 
 pub fn format(sql: &String) -> Result<String, String> {
-    let mut lock = ZETASQL_SERVER.lock().unwrap();
+    let mut lock = match ZETASQL_SERVER.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     let (runtime, client) = lock.deref_mut();
     let request = tonic::Request::new(FormatSqlRequest {
         sql: Some(sql.clone()),
@@ -60,7 +61,10 @@ fn analyze_next(
     sql: &str,
     offset: i32,
 ) -> Result<(i32, Expr), String> {
-    let mut lock = ZETASQL_SERVER.lock().unwrap();
+    let mut lock = match ZETASQL_SERVER.lock() {
+        Ok(lock) => lock,
+        Err(poisoned) => poisoned.into_inner(),
+    };
     let (runtime, client) = lock.deref_mut();
     let request = tonic::Request::new(AnalyzeRequest {
         simple_catalog: Some(catalog.clone()),

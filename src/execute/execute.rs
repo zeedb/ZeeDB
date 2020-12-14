@@ -107,7 +107,7 @@ enum Node {
     Aggregate {
         finished: bool,
         group_by: Vec<Column>,
-        aggregate: Vec<(AggregateFn, Column)>,
+        aggregate: Vec<(AggregateFn, Column, Column)>,
         input: Input,
     },
     Limit {
@@ -444,7 +444,7 @@ impl Node {
                 for column in group_by {
                     fields.push(column.into_query_field());
                 }
-                for (_, column) in aggregate {
+                for (_, _, column) in aggregate {
                     fields.push(column.into_query_field());
                 }
                 Schema::new(fields)
@@ -584,8 +584,12 @@ impl Input {
                 right,
             } => {
                 if build_left.is_none() {
-                    let input = build(left, state)?;
-                    let table = HashTable::new(partition_left, state, &input)?;
+                    let left = build(left, state)?;
+                    let partition_left: Result<Vec<_>, _> = partition_left
+                        .iter()
+                        .map(|x| crate::eval::eval(x, &left, state))
+                        .collect();
+                    let table = HashTable::new(&left, &partition_left?)?;
                     *build_left = Some(table);
                 }
                 let right = right.next(state)?;
@@ -615,33 +619,19 @@ impl Input {
                 } else {
                     *finished = true;
                 }
-                if group_by.is_empty() {
-                    // Allocate state for each aggregator.
-                    let mut states: Vec<_> = aggregate
-                        .iter()
-                        .map(|(aggregate, _)| crate::aggregate::SimpleAggregate::begin(aggregate))
-                        .collect();
-                    // Consume the entire input.
-                    loop {
-                        match input.next(state) {
-                            Ok(input) => {
-                                for state in &mut states {
-                                    state.update(&input)?;
-                                }
-                            }
-                            Err(Error::Empty) => {
-                                let columns: Vec<_> =
-                                    states.drain(..).map(|state| state.finish()).collect();
-                                return Ok(
-                                    RecordBatch::try_new(self.schema.clone(), columns).unwrap()
-                                );
-                            }
-                            error => return error,
-                        }
-                    }
-                } else {
-                    todo!()
-                }
+                let input = input.next(state)?;
+                let group_by_columns = group_by.iter().map(|c| kernel::find(&input, c)).collect();
+                let aggregate_columns = aggregate
+                    .iter()
+                    .map(|(_, c, _)| kernel::find(&input, c))
+                    .collect();
+                let aggregate_fns = aggregate.iter().map(|(f, _, _)| f.clone()).collect();
+                let operator = crate::aggregate::HashAggregate::new(
+                    group_by_columns,
+                    aggregate_fns,
+                    aggregate_columns,
+                );
+                Ok(RecordBatch::try_new(self.schema.clone(), operator.finish()).unwrap())
             }
             Node::Limit {
                 limit,
@@ -675,8 +665,17 @@ impl Input {
             Node::Values { values, input, .. } => {
                 let input = input.next(state)?;
                 let mut columns = vec![];
-                for i in 0..values.len() {
-                    columns.push(crate::eval::evals(&values[i], &input, state)?);
+                for column in values {
+                    let mut output = Vec::with_capacity(column.len());
+                    for value in column {
+                        let value = crate::eval::eval(value, &input, state)?;
+                        if value.len() != 1 {
+                            return Err(Error::MultipleRows);
+                        }
+                        output.push(value)
+                    }
+                    let next = arrow::compute::concat(&output[..])?;
+                    columns.push(next);
                 }
                 Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
@@ -740,26 +739,33 @@ impl Input {
                 let input = input.next(state)?;
                 match procedure {
                     Procedure::CreateTable(id) => {
-                        let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.create_table(kernel::int64(&id).unwrap());
+                        let id = eval_int64(id, &input, state)?;
+                        state.storage.create_table(id);
                     }
                     Procedure::DropTable(id) => {
-                        let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.drop_table(kernel::int64(&id).unwrap());
+                        let id = eval_int64(id, &input, state)?;
+                        state.storage.drop_table(id);
                     }
                     Procedure::CreateIndex(id) => {
-                        let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.create_index(kernel::int64(&id).unwrap());
+                        let id = eval_int64(id, &input, state)?;
+                        state.storage.create_index(id);
                     }
                     Procedure::DropIndex(id) => {
-                        let id = crate::eval::eval(id, &input, state)?;
-                        state.storage.drop_index(kernel::int64(&id).unwrap());
+                        let id = eval_int64(id, &input, state)?;
+                        state.storage.drop_index(id);
                     }
                 };
                 Ok(dummy_row(self.schema.clone()))
             }
         }
     }
+}
+
+fn eval_int64(id: &mut Scalar, input: &RecordBatch, state: &mut State) -> Result<i64, Error> {
+    let eval = crate::eval::eval(id, &input, state)?;
+    let cast = as_primitive_array::<Int64Type>(&eval);
+    let head = cast.value(0);
+    Ok(head)
 }
 
 impl fmt::Debug for Input {

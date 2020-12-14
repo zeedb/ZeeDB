@@ -1,4 +1,5 @@
 use arrow::array::*;
+use arrow::datatypes::*;
 use arrow::record_batch::*;
 use ast::*;
 use catalog::Index;
@@ -85,10 +86,10 @@ fn read_all_catalogs_query(storage: &mut Storage) -> Expr {
 }
 
 fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCatalogProto) {
-    let parent_catalog_id = kernel::coerce::<Int64Array>(batch.column(0)).value(*offset);
-    let catalog_id_column = kernel::coerce::<Int64Array>(batch.column(1));
+    let parent_catalog_id = as_primitive_array::<Int64Type>(batch.column(0)).value(*offset);
+    let catalog_id_column = as_primitive_array::<Int64Type>(batch.column(1));
     let catalog_id = catalog_id_column.value(*offset);
-    let catalog_name = kernel::coerce::<StringArray>(batch.column(2)).value(*offset);
+    let catalog_name = as_string_array(batch.column(2)).value(*offset);
 
     let mut catalog = catalog::empty_catalog();
     catalog.name = Some(catalog_name.to_string());
@@ -123,10 +124,10 @@ fn read_all_tables_query(storage: &mut Storage) -> Expr {
 }
 
 fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto) {
-    let catalog_id = kernel::coerce::<Int64Array>(batch.column(0)).value(*offset);
-    let table_id_column = kernel::coerce::<Int64Array>(batch.column(1));
+    let catalog_id = as_primitive_array::<Int64Type>(batch.column(0)).value(*offset);
+    let table_id_column = as_primitive_array::<Int64Type>(batch.column(1));
     let table_id = table_id_column.value(*offset);
-    let table_name = kernel::coerce::<StringArray>(batch.column(2)).value(*offset);
+    let table_name = as_string_array(batch.column(2)).value(*offset);
 
     let mut table = SimpleTableProto {
         name: Some(table_name.to_string()),
@@ -142,9 +143,9 @@ fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto
 }
 
 fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
-    let _column_id = kernel::coerce::<Int64Array>(batch.column(3)).value(*offset);
-    let column_name = kernel::coerce::<StringArray>(batch.column(4)).value(*offset);
-    let column_type = kernel::coerce::<StringArray>(batch.column(5)).value(*offset);
+    let _column_id = as_primitive_array::<Int64Type>(batch.column(3)).value(*offset);
+    let column_name = as_string_array(batch.column(4)).value(*offset);
+    let column_type = as_string_array(batch.column(5)).value(*offset);
 
     *offset += 1;
 
@@ -183,10 +184,10 @@ fn read_all_indexes_query(storage: &mut Storage) -> Expr {
 }
 
 fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
-    let index_id_column = kernel::coerce::<Int64Array>(batch.column(0));
+    let index_id_column = as_primitive_array::<Int64Type>(batch.column(0));
     let index_id = index_id_column.value(*offset);
-    let table_id = kernel::coerce::<Int64Array>(batch.column(1)).value(*offset);
-    let column_name_column = kernel::coerce::<StringArray>(batch.column(2));
+    let table_id = as_primitive_array::<Int64Type>(batch.column(1)).value(*offset);
+    let column_name_column = as_string_array(batch.column(2));
 
     let mut index = Index {
         index_id,

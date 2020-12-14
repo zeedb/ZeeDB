@@ -51,7 +51,6 @@ pub(crate) fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
         DataType::Boolean => bytes_bool(column),
         DataType::Int64 => bytes_generic::<Int64Type>(column),
         DataType::Float64 => bytes_generic::<Float64Type>(column),
-        DataType::FixedSizeBinary(16) => todo!(),
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
             bytes_generic::<TimestampMicrosecondType>(column)
         }

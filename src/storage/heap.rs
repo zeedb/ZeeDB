@@ -49,8 +49,7 @@ impl Heap {
                 i += 1;
             }
             let batch = self.page(pid).select(projects);
-            let map: Arc<dyn Array> = Arc::new(UInt32Array::from(rids));
-            batches.push(kernel::gather(&batch, &map));
+            batches.push(kernel::gather(&batch, &UInt32Array::from(rids)));
         }
         // Combine results from each page.
         kernel::cat(&batches)
@@ -167,7 +166,6 @@ pub fn empty(data_type: &DataType) -> Arc<dyn Array> {
         DataType::Timestamp(TimeUnit::Microsecond, None) => {
             empty_generic::<TimestampMicrosecondType>()
         }
-        DataType::FixedSizeBinary(16) => todo!(),
         DataType::Utf8 => empty_utf8(),
         other => panic!("{:?} not supported", other),
     }

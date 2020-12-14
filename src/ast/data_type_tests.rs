@@ -18,10 +18,6 @@ fn test_to_string() {
         "TIMESTAMP".to_string(),
         data_type::to_string(&DataType::Timestamp(TimeUnit::Microsecond, None))
     );
-    assert_eq!(
-        "NUMERIC".to_string(),
-        data_type::to_string(&DataType::FixedSizeBinary(16))
-    );
 }
 
 #[test]
@@ -33,7 +29,6 @@ fn test_to_from_string() {
         DataType::Utf8,
         DataType::Date32(DateUnit::Day),
         DataType::Timestamp(TimeUnit::Microsecond, None),
-        DataType::FixedSizeBinary(16),
     ];
     for data_type in examples {
         assert_eq!(
@@ -54,7 +49,6 @@ fn test_to_from_proto() {
         DataType::Utf8,
         DataType::Date32(DateUnit::Day),
         DataType::Timestamp(TimeUnit::Microsecond, None),
-        DataType::FixedSizeBinary(16),
     ];
     for data_type in examples {
         assert_eq!(

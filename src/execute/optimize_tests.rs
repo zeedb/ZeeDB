@@ -1,4 +1,3 @@
-use arrow::record_batch::RecordBatch;
 use ast::Expr;
 use catalog::Index;
 use regex::Regex;

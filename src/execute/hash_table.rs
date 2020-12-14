@@ -1,7 +1,5 @@
-use crate::execute::State;
 use arrow::array::*;
 use arrow::record_batch::*;
-use ast::*;
 use kernel::Error;
 use std::sync::Arc;
 
@@ -14,14 +12,11 @@ pub struct HashTable {
 }
 
 impl HashTable {
-    pub fn new(
-        scalars: &Vec<Scalar>,
-        state: &mut State,
-        input: &RecordBatch,
-    ) -> Result<Self, Error> {
+    pub fn new(input: &RecordBatch, partition_by: &Vec<Arc<dyn Array>>) -> Result<Self, Error> {
         let n_rows = input.num_rows();
         let n_buckets = size_hash_table(n_rows);
-        let buckets = crate::eval::hash(scalars, n_buckets, input, state)?;
+        let hashes = kernel::hash(partition_by);
+        let buckets = bucketize(&hashes, n_buckets as u32);
         let indexes = kernel::sort(&buckets);
         let tuples = kernel::gather(input, &indexes);
         let offsets = bucket_offsets(&buckets, n_buckets);
@@ -29,13 +24,14 @@ impl HashTable {
     }
 
     /// Identify matching rows from self (build side of join) and right (probe side of the join).
-    pub fn probe(&self, right_buckets: &Arc<dyn Array>) -> (RecordBatch, Arc<dyn Array>) {
-        let right_buckets = kernel::coerce::<UInt32Array>(right_buckets);
+    pub fn probe(&self, partition_by: &Vec<Arc<dyn Array>>) -> (RecordBatch, UInt32Array) {
+        let n_buckets = self.offsets.len() - 1;
+        let right_buckets = kernel::hash(partition_by);
         let mut left_index = vec![];
         let mut right_index = vec![];
         // For each row from the probe side of the join, get the bucket...
         for i_right in 0..right_buckets.len() {
-            let bucket = right_buckets.value(i_right) as usize;
+            let bucket = right_buckets.value(i_right) as usize % n_buckets;
             // ...for each row on the build side of the join with matching bucket...
             for i_left in self.offsets[bucket]..self.offsets[bucket + 1] {
                 // ...add a row to the output, effectively performing a cross-join.
@@ -45,19 +41,20 @@ impl HashTable {
         }
         let left_index = UInt32Array::from(left_index);
         let right_index = UInt32Array::from(right_index);
-        let left_index: Arc<dyn Array> = Arc::new(left_index);
-        let right_index: Arc<dyn Array> = Arc::new(right_index);
         let left = kernel::gather(&self.tuples, &left_index);
         (left, right_index)
     }
-
-    pub fn n_buckets(&self) -> usize {
-        self.offsets.len() - 1
-    }
 }
 
-fn bucket_offsets(buckets: &Arc<dyn Array>, n_buckets: usize) -> Vec<usize> {
-    let buckets = kernel::coerce::<UInt32Array>(buckets);
+fn bucketize(hashes: &UInt32Array, n_buckets: u32) -> UInt32Array {
+    let mut builder = UInt32Array::builder(hashes.len());
+    for i in 0..hashes.len() {
+        builder.append_value(hashes.value(i) % n_buckets);
+    }
+    builder.finish()
+}
+
+fn bucket_offsets(buckets: &UInt32Array, n_buckets: usize) -> Vec<usize> {
     // Compute a dense histogram of buckets in offsets[1..n_buckets+1].
     let mut offsets = Vec::with_capacity(n_buckets);
     offsets.resize_with(n_buckets + 1, usize::default);

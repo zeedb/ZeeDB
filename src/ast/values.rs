@@ -1,7 +1,6 @@
 use arrow::array::*;
 use arrow::datatypes::*;
 use chrono::*;
-use std::any::{Any, TypeId};
 use std::fmt;
 use std::hash;
 use std::sync::Arc;
@@ -11,7 +10,6 @@ pub enum Value {
     Boolean(bool),
     Int64(i64),
     Float64(f64),
-    Numeric(i128),
     Utf8(String),
     Timestamp(i64),
     Date(i32),
@@ -30,7 +28,6 @@ impl Value {
                 DataType::Float64 => {
                     Value::Float64(as_primitive_array::<Float64Type>(any).value(0))
                 }
-                DataType::FixedSizeBinary(16) => todo!(),
                 DataType::Utf8 => Value::Utf8(as_string_array(any).value(0).to_string()),
                 DataType::Timestamp(TimeUnit::Microsecond, None) => {
                     Value::Timestamp(as_primitive_array::<TimestampMicrosecondType>(any).value(0))
@@ -49,12 +46,6 @@ impl Value {
             Value::Boolean(value) => Arc::new(BooleanArray::from(vec![*value])),
             Value::Int64(value) => Arc::new(Int64Array::from(vec![*value])),
             Value::Float64(value) => Arc::new(Float64Array::from(vec![*value])),
-            Value::Numeric(value) => {
-                let bytes = value.to_be_bytes();
-                let mut array = FixedSizeBinaryBuilder::new(16, 16);
-                array.append_value(&bytes[..]).unwrap();
-                Arc::new(array.finish())
-            }
             Value::Utf8(value) => Arc::new(StringArray::from(vec![value.as_str()])),
             Value::Timestamp(value) => Arc::new(TimestampMicrosecondArray::from(vec![*value])),
             Value::Date(value) => Arc::new(Date32Array::from(vec![*value])),
@@ -66,7 +57,6 @@ impl Value {
             Value::Boolean(_) => &DataType::Boolean,
             Value::Int64(_) => &DataType::Int64,
             Value::Float64(_) => &DataType::Float64,
-            Value::Numeric(_) => &DataType::FixedSizeBinary(16),
             Value::Utf8(_) => &DataType::Utf8,
             Value::Timestamp(_) => &DataType::Timestamp(TimeUnit::Microsecond, None),
             Value::Date(_) => &DataType::Date32(DateUnit::Day),
@@ -88,7 +78,6 @@ impl fmt::Display for Value {
             Value::Boolean(value) => write!(f, "{}", value),
             Value::Int64(value) => write!(f, "{}", value),
             Value::Float64(value) => write!(f, "{}", value),
-            Value::Numeric(value) => write!(f, "{}", value), // TODO show decimal
             Value::Utf8(value) => write!(f, "{:?}", value),
             Value::Timestamp(value) => write!(f, "{}", timestamp_value(*value)),
             Value::Date(value) => write!(f, "{}", date_value(*value)),
@@ -103,7 +92,6 @@ impl PartialEq for Value {
             (Value::Boolean(left), Value::Boolean(right)) => *left == *right,
             (Value::Int64(left), Value::Int64(right)) => *left == *right,
             (Value::Float64(left), Value::Float64(right)) => *left == *right,
-            (Value::Numeric(left), Value::Numeric(right)) => *left == *right,
             (Value::Utf8(left), Value::Utf8(right)) => *left == *right,
             (Value::Timestamp(left), Value::Timestamp(right)) => *left == *right,
             (Value::Date(left), Value::Date(right)) => *left == *right,
@@ -117,7 +105,6 @@ impl hash::Hash for Value {
             Value::Boolean(value) => value.hash(state),
             Value::Int64(value) => value.hash(state),
             Value::Float64(value) => value.to_ne_bytes().hash(state),
-            Value::Numeric(value) => value.hash(state),
             Value::Utf8(value) => value.hash(state),
             Value::Timestamp(value) => value.hash(state),
             Value::Date(value) => value.hash(state),

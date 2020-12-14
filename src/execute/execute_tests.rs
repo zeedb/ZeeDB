@@ -8,6 +8,7 @@ use test_fixtures::*;
 use zetasql::SimpleCatalogProto;
 
 #[test]
+#[ignore]
 fn test_aggregate() {
     let mut test = TestProvider::new(None);
     test.test(

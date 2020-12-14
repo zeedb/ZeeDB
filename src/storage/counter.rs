@@ -31,7 +31,6 @@ impl Counter {
                 self.insert_generic::<TimestampMicrosecondType>(column)
             }
             DataType::Date32(DateUnit::Day) => self.insert_generic::<Date32Type>(column),
-            DataType::FixedSizeBinary(16) => todo!(),
             DataType::Utf8 => self.insert_utf8(column),
             other => panic!("type {:?} is not supported", other),
         }

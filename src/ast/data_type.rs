@@ -26,10 +26,6 @@ pub fn to_proto(data_type: &DataType) -> zetasql::TypeProto {
             type_kind: Some(19),
             ..Default::default()
         },
-        DataType::FixedSizeBinary(16) => zetasql::TypeProto {
-            type_kind: Some(23),
-            ..Default::default()
-        },
         other => panic!("{:?} not supported", other),
     }
 }
@@ -42,8 +38,7 @@ pub fn from_proto(column_type: &zetasql::TypeProto) -> DataType {
         8 => DataType::Utf8,
         10 => DataType::Date32(DateUnit::Day),
         19 => DataType::Timestamp(TimeUnit::Microsecond, None),
-        23 => DataType::FixedSizeBinary(16),
-        other => panic!("{:?} not supported", other),
+        other => panic!("type {:?} not supported", other),
     }
 }
 
@@ -55,7 +50,6 @@ pub fn to_string(data_type: &DataType) -> String {
         DataType::Utf8 => "STRING".to_string(),
         DataType::Date32(DateUnit::Day) => "DATE".to_string(),
         DataType::Timestamp(TimeUnit::Microsecond, None) => "TIMESTAMP".to_string(),
-        DataType::FixedSizeBinary(16) => "NUMERIC".to_string(),
         other => panic!("{:?}", other),
     }
 }
@@ -68,7 +62,6 @@ pub fn from_string(string: &str) -> DataType {
         "STRING" => DataType::Utf8,
         "DATE" => DataType::Date32(DateUnit::Day),
         "TIMESTAMP" => DataType::Timestamp(TimeUnit::Microsecond, None),
-        "NUMERIC" => DataType::FixedSizeBinary(16),
         other => panic!("{:?}", other),
     }
 }

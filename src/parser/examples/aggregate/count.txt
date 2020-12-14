@@ -2,7 +2,8 @@ select count(*)
 from person
 
 LogicalMap $aggregate.$agg1
-	LogicalAggregate $aggregate.$agg1:(CountStar)
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* $xmin $xmax
-				LogicalGet person
+	LogicalAggregate $aggregate.$agg1:(Count $star)
+		LogicalMap $star:1
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* $xmin $xmax
+					LogicalGet person

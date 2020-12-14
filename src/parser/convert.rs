@@ -418,16 +418,20 @@ impl Converter {
         let q = q.parent.get();
         let mut input = self.any_resolved_scan(q.input_scan.get());
         let mut projects = vec![];
-        let mut group_by = vec![];
-        let mut aggregate = vec![];
-        for c in &q.group_by_list {
-            group_by.push(self.compute(c, &mut projects, &mut input));
-        }
-        for c in &q.aggregate_list {
-            let expr = self.reduce(c, &mut projects, &mut input);
-            let column = Column::from(&c.column.get());
-            aggregate.push((expr, column));
-        }
+        let group_by = q
+            .group_by_list
+            .iter()
+            .map(|c| self.compute(c, &mut projects, &mut input))
+            .collect();
+        let aggregate = q
+            .aggregate_list
+            .iter()
+            .map(|c| {
+                let (aggregate, parameter) = self.reduce(c, &mut projects, &mut input);
+                let result = Column::from(&c.column.get());
+                (aggregate, parameter, result)
+            })
+            .collect();
         if projects.len() > 0 {
             input = LogicalMap {
                 include_existing: false,
@@ -459,7 +463,7 @@ impl Converter {
         aggregate: &ResolvedComputedColumnProto,
         project: &mut Vec<(Scalar, Column)>,
         input: &mut Expr,
-    ) -> AggregateFn {
+    ) -> (AggregateFn, Column) {
         let function = match aggregate.expr.get().node.get() {
             ResolvedFunctionCallBaseNode(function) => function,
             other => panic!("{:?}", other),
@@ -479,16 +483,19 @@ impl Converter {
         let arguments = &function.argument_list;
         let function = function.function.get().name.get().clone();
         let argument = if arguments.len() == 0 {
-            None
+            let argument = Scalar::Literal(Value::Int64(1));
+            let column = self.create_column("$star".to_string(), DataType::Int64);
+            project.push((argument, column.clone()));
+            column.clone()
         } else if arguments.len() == 1 {
             let argument = self.expr(arguments.first().get(), input);
             let column = self.create_column(function_name(&function), argument.data_type());
             project.push((argument, column.clone()));
-            Some(column.clone())
+            column.clone()
         } else {
             panic!("expected 1 or 0 arguments but found {:?}", arguments.len());
         };
-        AggregateFn::from(function, distinct, ignore_nulls, argument)
+        (AggregateFn::from(function), argument)
     }
 
     fn create(&mut self, q: &AnyResolvedCreateStatementProto) -> Expr {
@@ -1043,11 +1050,6 @@ fn literal(value: &ValueProto) -> Value {
         StringValue(x) => Value::Utf8(x.to_string()),
         DateValue(x) => Value::Date(*x),
         TimestampValue(x) => Value::Timestamp(microseconds_since_epoch(x)),
-        NumericValue(buf) => {
-            let mut x = 0i128;
-            varint128::write(&mut x, buf);
-            Value::Numeric(x)
-        }
         other => panic!("{:?}", other),
     }
 }

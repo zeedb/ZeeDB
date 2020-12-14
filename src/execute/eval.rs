@@ -9,29 +9,13 @@ pub fn all(
     predicates: &Vec<Scalar>,
     input: &RecordBatch,
     state: &mut State,
-) -> Result<Arc<dyn Array>, Error> {
+) -> Result<BooleanArray, Error> {
     let mut mask = BooleanArray::from(vec![true].repeat(input.num_rows()));
     for p in predicates {
         let next = crate::eval::eval(p, &input, state)?;
-        mask = arrow::compute::and(&mask, kernel::coerce(&next))?;
+        mask = arrow::compute::and(&mask, as_boolean_array(&next))?;
     }
-    Ok(Arc::new(mask))
-}
-
-pub fn evals(
-    values: &Vec<Scalar>,
-    input: &RecordBatch,
-    state: &mut State,
-) -> Result<Arc<dyn Array>, Error> {
-    let mut output = Vec::with_capacity(values.len());
-    for value in values {
-        let value = crate::eval::eval(value, input, state)?;
-        if value.len() != 1 {
-            return Err(Error::MultipleRows);
-        }
-        output.push(value)
-    }
-    Ok(arrow::compute::concat(&output[..])?)
+    Ok(mask)
 }
 
 pub fn eval(
@@ -40,7 +24,7 @@ pub fn eval(
     state: &mut State,
 ) -> Result<Arc<dyn Array>, Error> {
     match scalar {
-        Scalar::Literal(value) => Ok(kernel::repeat(&value.array(), input.num_rows())),
+        Scalar::Literal(value) => Ok(repeat(&value.array(), input.num_rows())),
         Scalar::Column(column) => {
             let i = (0..input.num_columns())
                 .find(|i| input.schema().field(*i).name() == &column.canonical_name())
@@ -50,7 +34,7 @@ pub fn eval(
         Scalar::Parameter(name, _) => {
             let value: &Arc<dyn Array> = state.variables.get(name).as_ref().expect(name);
             assert!(value.len() == 1);
-            Ok(kernel::repeat(value, input.num_rows()))
+            Ok(repeat(value, input.num_rows()))
         }
         Scalar::Call(function) => match function.as_ref() {
             Function::CurrentDate => todo!(),
@@ -58,24 +42,24 @@ pub fn eval(
             Function::Rand => todo!(),
             Function::Not(_) => todo!(),
             Function::UnaryMinus(_) => todo!(),
-            Function::And(left, right) => Ok(kernel::and(
+            Function::And(left, right) => Ok(Arc::new(arrow::compute::and(
+                &as_boolean_array(&eval(left, input, state)?),
+                &as_boolean_array(&eval(right, input, state)?),
+            )?)),
+            Function::Equal(left, right) => Ok(Arc::new(kernel::equal(
                 &eval(left, input, state)?,
                 &eval(right, input, state)?,
-            )?),
-            Function::Equal(left, right) => Ok(kernel::equal(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            )?),
+            ))),
             Function::Greater(_, _) => todo!(),
             Function::GreaterOrEqual(_, _) => todo!(),
-            Function::Less(left, right) => Ok(kernel::less(
+            Function::Less(left, right) => Ok(Arc::new(kernel::less(
                 &eval(left, input, state)?,
                 &eval(right, input, state)?,
-            )?),
-            Function::LessOrEqual(left, right) => Ok(kernel::less_equal(
+            ))),
+            Function::LessOrEqual(left, right) => Ok(Arc::new(kernel::less_equal(
                 &eval(left, input, state)?,
                 &eval(right, input, state)?,
-            )?),
+            ))),
             Function::Like(_, _) => todo!(),
             Function::NotEqual(_, _) => todo!(),
             Function::Or(_, _) => todo!(),
@@ -103,20 +87,8 @@ pub fn eval(
     }
 }
 
-pub fn hash(
-    scalars: &Vec<Scalar>,
-    n_buckets: usize,
-    input: &RecordBatch,
-    state: &mut State,
-) -> Result<Arc<dyn Array>, Error> {
-    let mut output = None;
-    for scalar in scalars {
-        let any = crate::eval::eval(scalar, input, state)?;
-        let next = kernel::hash(&any, n_buckets);
-        output = match output {
-            None => Some(next),
-            Some(prev) => Some(kernel::bit_or(&prev, &next)),
-        }
-    }
-    Ok(output.unwrap())
+pub fn repeat(any: &Arc<dyn Array>, len: usize) -> Arc<dyn Array> {
+    let mut alias = vec![];
+    alias.resize_with(len, || any.clone());
+    arrow::compute::concat(&alias[..]).unwrap()
 }

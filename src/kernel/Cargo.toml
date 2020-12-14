@@ -11,3 +11,4 @@ path = "lib.rs"
 arrow = { version = "2.0.0", features = ["simd"] }
 num = "0.3"
 ast = { path = "../ast" }
+twox-hash = "1.6.0"
