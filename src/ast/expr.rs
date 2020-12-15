@@ -1800,7 +1800,7 @@ impl Function {
 }
 
 // Aggregate functions appear in GROUP BY expressions.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum AggregateFn {
     AnyValue,
     Count,

@@ -8,7 +8,6 @@ use test_fixtures::*;
 use zetasql::SimpleCatalogProto;
 
 #[test]
-#[ignore]
 fn test_aggregate() {
     let mut test = TestProvider::new(None);
     test.test(
@@ -16,17 +15,18 @@ fn test_aggregate() {
         vec![
             "create table foo (an_int int64, a_bool boolean);",
             "insert into foo values (1, true), (2, true), (3, false)",
-            "select any_value(an_int), avg(an_int), count(an_int), count(*), logical_and(a_bool), logical_or(a_bool), max(an_int), min(an_int), sum(an_int) from foo",
+            "select any_value(an_int), count(an_int), count(*), logical_and(a_bool), logical_or(a_bool), max(an_int), min(an_int), sum(an_int) from foo",
         ],
     );
-    // test.test(
-    //     "examples/execute/aggregate/group_by.txt",
-    //     vec![
-    //         "create table foo (id int64);",
-    //         "insert into foo values (1), (2), (3), (1)",
-    //         "select id, sum(id) from foo",
-    //     ],
-    // );
+    test.test(
+        "examples/execute/aggregate/group_by.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo values (1), (2), (3), (1)",
+            "select id, sum(id) from foo group by id",
+        ],
+    );
+    // TODO test avg
     test.finish();
 }
 

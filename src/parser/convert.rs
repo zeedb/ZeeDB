@@ -477,8 +477,8 @@ impl Converter {
             other => panic!("{:?}", other),
         };
         let function = function.parent.get();
-        let distinct = function.distinct.unwrap_or(false);
-        let ignore_nulls = function.null_handling_modifier.unwrap_or(0) == 1;
+        let distinct = function.distinct.unwrap_or(false); // TODO
+        let ignore_nulls = function.null_handling_modifier.unwrap_or(0) == 1; // TODO
         let function = function.parent.get();
         let arguments = &function.argument_list;
         let function = function.function.get().name.get().clone();
@@ -495,6 +495,9 @@ impl Converter {
         } else {
             panic!("expected 1 or 0 arguments but found {:?}", arguments.len());
         };
+        if &function == "ZetaSQL:avg" {
+            todo!()
+        }
         (AggregateFn::from(function), argument)
     }
 

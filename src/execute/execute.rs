@@ -619,19 +619,26 @@ impl Input {
                 } else {
                     *finished = true;
                 }
-                let input = input.next(state)?;
-                let group_by_columns = group_by.iter().map(|c| kernel::find(&input, c)).collect();
-                let aggregate_columns = aggregate
-                    .iter()
-                    .map(|(_, c, _)| kernel::find(&input, c))
-                    .collect();
-                let aggregate_fns = aggregate.iter().map(|(f, _, _)| f.clone()).collect();
-                let operator = crate::aggregate::HashAggregate::new(
-                    group_by_columns,
-                    aggregate_fns,
-                    aggregate_columns,
-                );
-                Ok(RecordBatch::try_new(self.schema.clone(), operator.finish()).unwrap())
+                let mut operator = crate::aggregate::GroupByAggregate::new(aggregate);
+                loop {
+                    match input.next(state) {
+                        Err(Error::Empty) => {
+                            let schema = self.schema.clone();
+                            let columns = operator.finish();
+                            return Ok(RecordBatch::try_new(schema, columns).unwrap());
+                        }
+                        Err(other) => return Err(other),
+                        Ok(batch) => {
+                            let group_by_columns =
+                                group_by.iter().map(|c| kernel::find(&batch, c)).collect();
+                            let aggregate_columns = aggregate
+                                .iter()
+                                .map(|(_, c, _)| kernel::find(&batch, c))
+                                .collect();
+                            operator.insert(group_by_columns, aggregate_columns);
+                        }
+                    }
+                }
             }
             Node::Limit {
                 limit,
