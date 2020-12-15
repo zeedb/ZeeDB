@@ -9,7 +9,6 @@ pub struct GroupByAggregate {
     group_by_batches: Vec<Batch>,
     aggregate_slots: HashMap<Key, Vec<Acc>>,
     aggregate_slot_template: Vec<Acc>,
-    string_pool: Vec<String>,
 }
 
 struct Batch {
@@ -41,7 +40,7 @@ enum Val {
     Float64(Option<f64>),
     Timestamp(Option<i64>),
     Date(Option<i32>),
-    Utf8(Option<usize>),
+    Utf8(Option<*const str>),
 }
 
 impl GroupByAggregate {
@@ -53,7 +52,6 @@ impl GroupByAggregate {
                 .iter()
                 .map(|(operator, parameter, _)| Acc::new(operator, &parameter.data_type))
                 .collect(),
-            string_pool: vec![],
         }
     }
 
@@ -236,7 +234,11 @@ impl Acc {
                                 as_primitive_array::<Date32Type>(column).value(tuple as usize);
                             *val = Some(prev.max(next))
                         }
-                        Val::Utf8(val) => todo!("use string pool"),
+                        Val::Utf8(val) => {
+                            let prev = unsafe { val.unwrap_or("" as *const str).as_ref().unwrap() };
+                            let next = as_string_array(column).value(tuple as usize);
+                            *val = Some(prev.max(next) as *const str);
+                        }
                     }
                 }
             }
@@ -272,7 +274,11 @@ impl Acc {
                                 as_primitive_array::<Date32Type>(column).value(tuple as usize);
                             *val = Some(prev.min(next))
                         }
-                        Val::Utf8(val) => todo!("use string pool"),
+                        Val::Utf8(val) => {
+                            let prev = unsafe { val.unwrap_or("" as *const str).as_ref().unwrap() };
+                            let next = as_string_array(column).value(tuple as usize);
+                            *val = Some(prev.min(next) as *const str);
+                        }
                     }
                 }
             }
@@ -353,7 +359,9 @@ impl Val {
                 Val::Date(val) => {
                     *val = Some(as_primitive_array::<Date32Type>(column).value(tuple as usize))
                 }
-                Val::Utf8(val) => todo!("use string pool"),
+                Val::Utf8(val) => {
+                    *val = Some(as_string_array(column).value(tuple as usize) as *const str)
+                }
             }
         } else {
             match self {
@@ -375,18 +383,18 @@ impl Val {
                     .downcast_mut::<BooleanBuilder>()
                     .unwrap();
                 if let Some(val) = val {
-                    builder.append_value(*val);
+                    builder.append_value(*val).unwrap();
                 } else {
-                    builder.append_null();
+                    builder.append_null().unwrap();
                 }
             }
             Val::Int64(val) => {
                 let builder: &mut Int64Builder =
                     builder.as_any_mut().downcast_mut::<Int64Builder>().unwrap();
                 if let Some(val) = val {
-                    builder.append_value(*val);
+                    builder.append_value(*val).unwrap();
                 } else {
-                    builder.append_null();
+                    builder.append_null().unwrap();
                 }
             }
             Val::Float64(val) => {
@@ -395,9 +403,9 @@ impl Val {
                     .downcast_mut::<Float64Builder>()
                     .unwrap();
                 if let Some(val) = val {
-                    builder.append_value(*val);
+                    builder.append_value(*val).unwrap();
                 } else {
-                    builder.append_null();
+                    builder.append_null().unwrap();
                 }
             }
             Val::Date(val) => {
@@ -406,9 +414,9 @@ impl Val {
                     .downcast_mut::<Date32Builder>()
                     .unwrap();
                 if let Some(val) = val {
-                    builder.append_value(*val);
+                    builder.append_value(*val).unwrap();
                 } else {
-                    builder.append_null();
+                    builder.append_null().unwrap();
                 }
             }
             Val::Timestamp(val) => {
@@ -417,12 +425,24 @@ impl Val {
                     .downcast_mut::<TimestampMicrosecondBuilder>()
                     .unwrap();
                 if let Some(val) = val {
-                    builder.append_value(*val);
+                    builder.append_value(*val).unwrap();
                 } else {
-                    builder.append_null();
+                    builder.append_null().unwrap();
                 }
             }
-            Val::Utf8(val) => todo!("use string pool"),
+            Val::Utf8(val) => {
+                let builder: &mut StringBuilder = builder
+                    .as_any_mut()
+                    .downcast_mut::<StringBuilder>()
+                    .unwrap();
+                if let Some(val) = val {
+                    builder
+                        .append_value(unsafe { val.as_ref().unwrap() })
+                        .unwrap();
+                } else {
+                    builder.append_null().unwrap();
+                }
+            }
         }
     }
 

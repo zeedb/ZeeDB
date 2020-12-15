@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum Value {
+    Null(DataType),
     Boolean(bool),
     Int64(i64),
     Float64(f64),
@@ -16,11 +17,11 @@ pub enum Value {
 }
 
 impl Value {
-    pub fn from(any: &Arc<dyn Array>) -> Option<Self> {
+    pub fn from(any: &Arc<dyn Array>) -> Self {
         if any.is_null(0) {
-            None
+            Value::Null(any.data_type().clone())
         } else {
-            let value = match any.data_type() {
+            match any.data_type() {
                 DataType::Boolean => {
                     Value::Boolean(as_primitive_array::<BooleanType>(any).value(0))
                 }
@@ -36,13 +37,23 @@ impl Value {
                     Value::Date(as_primitive_array::<Date32Type>(any).value(0))
                 }
                 other => panic!("type {:?} is not supported", other),
-            };
-            Some(value)
+            }
         }
     }
 
     pub fn array(&self) -> Arc<dyn Array> {
         match self {
+            Value::Null(data_type) => match data_type {
+                DataType::Boolean => Arc::new(BooleanArray::from(vec![None])),
+                DataType::Int64 => Arc::new(Int64Array::from(vec![None])),
+                DataType::Float64 => Arc::new(Float64Array::from(vec![None])),
+                DataType::Utf8 => Arc::new(StringArray::from(vec![None])),
+                DataType::Timestamp(TimeUnit::Microsecond, None) => {
+                    Arc::new(TimestampMicrosecondArray::from(vec![None]))
+                }
+                DataType::Date32(DateUnit::Day) => Arc::new(Date32Array::from(vec![None])),
+                other => panic!("type {:?} is not supported", other),
+            },
             Value::Boolean(value) => Arc::new(BooleanArray::from(vec![*value])),
             Value::Int64(value) => Arc::new(Int64Array::from(vec![*value])),
             Value::Float64(value) => Arc::new(Float64Array::from(vec![*value])),
@@ -54,6 +65,7 @@ impl Value {
 
     pub fn data_type(&self) -> &DataType {
         match self {
+            Value::Null(data_type) => &data_type,
             Value::Boolean(_) => &DataType::Boolean,
             Value::Int64(_) => &DataType::Int64,
             Value::Float64(_) => &DataType::Float64,
@@ -75,6 +87,7 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Value::Null(_) => write!(f, "null"),
             Value::Boolean(value) => write!(f, "{}", value),
             Value::Int64(value) => write!(f, "{}", value),
             Value::Float64(value) => write!(f, "{}", value),
@@ -89,6 +102,8 @@ impl Eq for Value {}
 impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            // Note this is Rust semantics, not SQL semantics.
+            (Value::Null(left), Value::Null(right)) => *left == *right,
             (Value::Boolean(left), Value::Boolean(right)) => *left == *right,
             (Value::Int64(left), Value::Int64(right)) => *left == *right,
             (Value::Float64(left), Value::Float64(right)) => *left == *right,
@@ -102,6 +117,7 @@ impl PartialEq for Value {
 impl hash::Hash for Value {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         match self {
+            Value::Null(data_type) => data_type.hash(state),
             Value::Boolean(value) => value.hash(state),
             Value::Int64(value) => value.hash(state),
             Value::Float64(value) => value.to_ne_bytes().hash(state),

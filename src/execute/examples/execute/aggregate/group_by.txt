@@ -1,8 +1,8 @@
 create table foo (id int64);
 insert into foo values (1), (2), (3), (1)
-select id, sum(id) from foo group by id
+select id, sum(id) from foo group by id order by id
 
 id,$agg1
-3,3
 1,2
 2,2
+3,3

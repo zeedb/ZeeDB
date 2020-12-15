@@ -1,0 +1,6 @@
+create table foo (x boolean);
+insert into foo values (true), (true), (false), (null)
+select logical_and(x), logical_or(x), max(x), min(x) from foo
+
+$agg1,$agg2,$agg3,$agg4
+false,true,true,false

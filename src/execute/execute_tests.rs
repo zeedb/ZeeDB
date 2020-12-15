@@ -11,11 +11,43 @@ use zetasql::SimpleCatalogProto;
 fn test_aggregate() {
     let mut test = TestProvider::new(None);
     test.test(
-        "examples/execute/aggregate/simple_aggregate.txt",
+        "examples/execute/aggregate/simple_aggregate_count.txt",
         vec![
-            "create table foo (an_int int64, a_bool boolean);",
-            "insert into foo values (1, true), (2, true), (3, false)",
-            "select any_value(an_int), count(an_int), count(*), logical_and(a_bool), logical_or(a_bool), max(an_int), min(an_int), sum(an_int) from foo",
+            "create table foo (x int64);",
+            "insert into foo values (1), (2), (3), (null)",
+            "select any_value(x), count(x), count(*) from foo",
+        ],
+    );
+    test.test(
+        "examples/execute/aggregate/simple_aggregate_bool.txt",
+        vec![
+            "create table foo (x boolean);",
+            "insert into foo values (true), (true), (false), (null)",
+            "select logical_and(x), logical_or(x), max(x), min(x) from foo",
+        ],
+    );
+    test.test(
+        "examples/execute/aggregate/simple_aggregate_int.txt",
+        vec![
+            "create table foo (x int64);",
+            "insert into foo values (1), (2), (3), (null)",
+            "select max(x), min(x), sum(x) from foo",
+        ],
+    );
+    test.test(
+        "examples/execute/aggregate/simple_aggregate_float.txt",
+        vec![
+            "create table foo (x float64);",
+            "insert into foo values (1.0), (2.0), (3.0), (null)",
+            "select max(x), min(x), sum(x) from foo",
+        ],
+    );
+    test.test(
+        "examples/execute/aggregate/simple_aggregate_date.txt",
+        vec![
+            "create table foo (x date);",
+            "insert into foo values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null)",
+            "select max(x), min(x) from foo",
         ],
     );
     test.test(
@@ -23,7 +55,7 @@ fn test_aggregate() {
         vec![
             "create table foo (id int64);",
             "insert into foo values (1), (2), (3), (1)",
-            "select id, sum(id) from foo group by id",
+            "select id, sum(id) from foo group by id order by id",
         ],
     );
     // TODO test avg

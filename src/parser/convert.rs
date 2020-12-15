@@ -770,7 +770,7 @@ impl Converter {
             ResolvedLiteralNode(x) => {
                 let value = x.value.get().value.get();
                 let data_type = x.value.get().r#type.get();
-                Scalar::Literal(literal(value))
+                Scalar::Literal(literal(value, data_type))
             }
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
@@ -1041,10 +1041,10 @@ fn function_name(name: &String) -> String {
     format!("${}", name.trim_start_matches("ZetaSQL:"))
 }
 
-fn literal(value: &ValueProto) -> Value {
+fn literal(value: &ValueProto, data_type: &TypeProto) -> Value {
     let value = match value {
         ValueProto { value: Some(value) } => value,
-        other => panic!("{:?}", other),
+        other => return Value::Null(data_type::from_proto(data_type)),
     };
     match value {
         Int64Value(x) => Value::Int64(*x),

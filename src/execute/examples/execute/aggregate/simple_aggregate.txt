@@ -1,6 +1,0 @@
-create table foo (an_int int64, a_bool boolean);
-insert into foo values (1, true), (2, true), (3, false)
-select any_value(an_int), count(an_int), count(*), logical_and(a_bool), logical_or(a_bool), max(an_int), min(an_int), sum(an_int) from foo
-
-$agg1,$agg2,$agg3,$agg4,$agg5,$agg6,$agg7,$agg8
-3,3,3,false,true,3,1,6

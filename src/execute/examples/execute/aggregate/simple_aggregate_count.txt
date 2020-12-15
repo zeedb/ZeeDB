@@ -1,0 +1,6 @@
+create table foo (x int64);
+insert into foo values (1), (2), (3), (null)
+select any_value(x), count(x), count(*) from foo
+
+$agg1,$agg2,$agg3
+,3,4
