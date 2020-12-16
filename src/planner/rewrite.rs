@@ -45,7 +45,20 @@ impl RewriteRule {
         match self {
             RewriteRule::CreateDatabaseToScript => {
                 if let LogicalCreateDatabase { name } = expr {
-                    todo!()
+                    let mut lines = vec![];
+                    lines.push(format!("set parent_catalog_id = {:?};", name.catalog_id));
+                    for catalog_name in &name.path[0..name.path.len() - 1] {
+                        lines.push(format!("set parent_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @parent_catalog_id);", catalog_name));
+                    }
+                    lines.push("set catalog_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'catalog');".to_string());
+                    lines.push(
+                        "set next_catalog_id = metadata.next_val(@catalog_sequence_id);"
+                            .to_string(),
+                    );
+                    lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (@parent_catalog_id, @next_catalog_id, {:?});", name.path.last().unwrap()));
+                    return Some(LogicalRewrite {
+                        sql: lines.join("\n"),
+                    });
                 }
             }
             RewriteRule::CreateTableToScript => {
@@ -59,10 +72,10 @@ impl RewriteRule {
                     lines.push(
                         "set next_table_id = metadata.next_val(@table_sequence_id);".to_string(),
                     );
-                    lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name, table_cardinality) values (@catalog_id, @next_table_id, {:?}, 0);", name.path.last().unwrap()));
+                    lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (@catalog_id, @next_table_id, {:?});", name.path.last().unwrap()));
                     for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                         let column_type = data_type::to_string(column_type);
-                        lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type, column_unique_cardinality) values (@next_table_id, {:?}, {:?}, {:?}, 0);", column_id, column_name, column_type));
+                        lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
                     }
                     lines.push("call metadata.create_table(@next_table_id);".to_string());
                     return Some(LogicalRewrite {
@@ -105,7 +118,22 @@ impl RewriteRule {
                 if let LogicalDrop { object, name } = expr {
                     let mut lines = vec![];
                     match object {
-                        ObjectType::Database => todo!(),
+                        ObjectType::Database => {
+                            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                            for catalog_name in &name.path[0..name.path.len()] {
+                                lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                            }
+                            lines.push("call metadata.drop_table((select table_id from metadata.table where catalog_id = @catalog_id));".to_string());
+                            lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = @catalog_id);".to_string());
+                            lines.push(
+                                "delete from metadata.table where catalog_id = @catalog_id;"
+                                    .to_string(),
+                            );
+                            lines.push(
+                                "delete from metadata.catalog where catalog_id = @catalog_id;"
+                                    .to_string(),
+                            );
+                        }
                         ObjectType::Table => {
                             lines.push(format!("set catalog_id = {:?};", name.catalog_id));
                             for catalog_name in &name.path[0..name.path.len() - 1] {
@@ -464,9 +492,6 @@ impl RewriteRule {
                         let semi = Scalar::Column(mark.clone());
                         let anti = Scalar::Call(Box::new(Function::Not(semi.clone())));
                         let mut combined_attributes = vec![];
-                        for c in left.attributes() {
-                            combined_attributes.push((Scalar::Column(c.clone()), c));
-                        }
                         for c in right.attributes() {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
                         }

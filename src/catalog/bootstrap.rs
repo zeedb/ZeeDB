@@ -14,8 +14,8 @@ pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
             Field::new("sequence_name", DataType::Utf8, true),
         ])),
         vec![
-            Arc::new(Int64Array::from(vec![0, 1])),
-            Arc::new(StringArray::from(vec!["table", "index"])),
+            Arc::new(Int64Array::from(vec![0, 1, 2])),
+            Arc::new(StringArray::from(vec!["catalog", "table", "index"])),
         ],
     )
     .unwrap();
@@ -23,7 +23,7 @@ pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
 }
 
 pub fn bootstrap_sequences() -> Vec<(i64, i64)> {
-    vec![(0, 100), (1, 100)]
+    vec![(0, 100), (1, 100), (2, 100)]
 }
 
 pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
@@ -74,7 +74,6 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
                     column("catalog_id", TypeKind::TypeInt64),
                     column("table_id", TypeKind::TypeInt64),
                     column("table_name", TypeKind::TypeString),
-                    column("table_cardinality", TypeKind::TypeInt64),
                 ],
             ),
             table(
@@ -84,7 +83,6 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
                     column("column_id", TypeKind::TypeInt64),
                     column("column_name", TypeKind::TypeString),
                     column("column_type", TypeKind::TypeString),
-                    column("column_unique_cardinality", TypeKind::TypeInt64),
                 ],
             ),
             table(

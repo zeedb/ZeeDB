@@ -1,5 +1,5 @@
 create table foo (id int64);
-insert into foo (id) values (1);
+insert into foo values (1);
 update foo set id = 2 where id = 1;
 select * from foo;
 

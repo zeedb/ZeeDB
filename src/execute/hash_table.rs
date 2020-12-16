@@ -49,7 +49,7 @@ impl HashTable {
 fn bucketize(hashes: &UInt32Array, n_buckets: u32) -> UInt32Array {
     let mut builder = UInt32Array::builder(hashes.len());
     for i in 0..hashes.len() {
-        builder.append_value(hashes.value(i) % n_buckets);
+        builder.append_value(hashes.value(i) % n_buckets).unwrap();
     }
     builder.finish()
 }

@@ -66,14 +66,39 @@ fn test_aggregate() {
 fn test_ddl() {
     let mut test = TestProvider::new(None);
     test.test(
+        "examples/execute/ddl/create_catalog.txt",
+        vec![
+            "create database foo;",
+            "create table foo.bar (id int64);",
+            "insert into foo.bar values (1);",
+            "select * from foo.bar;",
+        ],
+    );
+    test.test(
+        "examples/execute/ddl/drop_catalog.txt",
+        vec![
+            "create database foo;",
+            "create table foo.bar (id int64); create table foo.doh (id int64);",
+            "insert into foo.bar values (1); insert into foo.doh values (2)",
+            "drop database foo;",
+            "create database foo;",
+            "create table foo.bar (id int64); create table foo.doh (id int64);",
+            "select * from foo.bar union all select * from foo.doh;",
+        ],
+    );
+    test.test(
         "examples/execute/ddl/create_table.txt",
-        vec!["create table foo (id int64)"],
+        vec![
+            "create table foo (id int64);",
+            "insert into foo values (1)",
+            "select * from foo;",
+        ],
     );
     test.test(
         "examples/execute/ddl/drop_table.txt",
         vec![
             "create table foo (id int64);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "drop table foo;",
             "create table foo (id int64);",
             "select * from foo;",
@@ -104,7 +129,7 @@ fn test_dml() {
         "examples/execute/dml/insert.txt",
         vec![
             "create table foo (id int64);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "select * from foo;",
         ],
     );
@@ -121,7 +146,7 @@ fn test_dml() {
         "examples/execute/dml/delete.txt",
         vec![
             "create table foo (id int64);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "delete from foo where id = 1;",
             "select * from foo;",
         ],
@@ -130,9 +155,9 @@ fn test_dml() {
         "examples/execute/dml/delete_then_insert.txt",
         vec![
             "create table foo (id int64);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "delete from foo where id = 1;",
-            "insert into foo (id) values (2);",
+            "insert into foo values (2);",
             "select * from foo;",
         ],
     );
@@ -140,7 +165,7 @@ fn test_dml() {
         "examples/execute/dml/update.txt",
         vec![
             "create table foo (id int64);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "update foo set id = 2 where id = 1;",
             "select * from foo;",
         ],
@@ -150,7 +175,7 @@ fn test_dml() {
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "select * from foo where id = 1",
         ],
     );
@@ -159,7 +184,7 @@ fn test_dml() {
         vec![
             "create table foo (id int64);",
             "create index foo_id on foo (id);",
-            "insert into foo (id) values (1);",
+            "insert into foo values (1);",
             "update foo set id = 2 where id = 1;",
             "select * from foo where id = 2;",
         ],
@@ -240,11 +265,13 @@ impl TestProvider {
             let catalog = crate::catalog::catalog(storage, txn);
             let indexes = crate::catalog::indexes(storage, txn);
             let program = Self::compile(storage, &catalog, &indexes, &sql);
-            let execute = program.execute(storage, txn);
-            match execute.last() {
-                Some(Ok(last)) => output = Self::csv(last),
-                Some(Err(err)) => output = format!("Error: {:?}", err),
-                None => output = "Empty".to_string(),
+            let results: Result<Vec<_>, _> = program.execute(storage, txn).collect();
+            match results {
+                Ok(batches) => match batches.last() {
+                    Some(last) => output = Self::csv(last),
+                    None => output = "Empty".to_string(),
+                },
+                Err(err) => output = format!("Error: {:?}", err),
             }
         }
         let found = format!("{}\n\n{}", script.join("\n"), output);
@@ -270,7 +297,7 @@ impl TestProvider {
         compile(expr)
     }
 
-    fn csv(record_batch: RecordBatch) -> String {
+    fn csv(record_batch: &RecordBatch) -> String {
         let header: Vec<String> = record_batch
             .schema()
             .fields()

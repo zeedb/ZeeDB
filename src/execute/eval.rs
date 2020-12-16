@@ -28,7 +28,7 @@ pub fn eval(
         Scalar::Column(column) => {
             let i = (0..input.num_columns())
                 .find(|i| input.schema().field(*i).name() == &column.canonical_name())
-                .expect(format!("no column {} in {}", column, input.schema()).as_str());
+                .expect(format!("no column {:?} in {}", column, input.schema()).as_str());
             Ok(input.column(i).clone())
         }
         Scalar::Parameter(name, _) => {

@@ -12,13 +12,13 @@ Script
 	Assign next_table_id (NextVal @table_sequence_id)
 		TableFreeScan
 	Insert table
-		Values table.catalog_id table.table_id table.table_name table.table_cardinality [@catalog_id @next_table_id "foo" 0]
+		Values table.catalog_id table.table_id table.table_name [@catalog_id @next_table_id "foo"]
 			TableFreeScan
 	Insert column
-		Values column.table_id column.column_id column.column_name column.column_type column.column_unique_cardinality [@next_table_id 0 "person_id" "INT64" 0]
+		Values column.table_id column.column_id column.column_name column.column_type [@next_table_id 0 "person_id" "INT64"]
 			TableFreeScan
 	Insert column
-		Values column.table_id column.column_id column.column_name column.column_type column.column_unique_cardinality [@next_table_id 1 "store_id" "INT64" 0]
+		Values column.table_id column.column_id column.column_name column.column_type [@next_table_id 1 "store_id" "INT64"]
 			TableFreeScan
 	Call create_table @next_table_id
 		TableFreeScan

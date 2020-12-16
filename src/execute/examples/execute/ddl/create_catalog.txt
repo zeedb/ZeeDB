@@ -1,0 +1,7 @@
+create database foo;
+create table foo.bar (id int64);
+insert into foo.bar values (1);
+select * from foo.bar;
+
+id
+1

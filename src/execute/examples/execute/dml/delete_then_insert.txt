@@ -1,7 +1,7 @@
 create table foo (id int64);
-insert into foo (id) values (1);
+insert into foo values (1);
 delete from foo where id = 1;
-insert into foo (id) values (2);
+insert into foo values (2);
 select * from foo;
 
 id

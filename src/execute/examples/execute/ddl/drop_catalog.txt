@@ -1,0 +1,9 @@
+create database foo;
+create table foo.bar (id int64); create table foo.doh (id int64);
+insert into foo.bar values (1); insert into foo.doh values (2)
+drop database foo;
+create database foo;
+create table foo.bar (id int64); create table foo.doh (id int64);
+select * from foo.bar union all select * from foo.doh;
+
+Empty

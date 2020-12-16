@@ -1,0 +1,22 @@
+create database nested.foo
+
+Script
+	Assign parent_catalog_id 0
+		TableFreeScan
+	Assign parent_catalog_id catalog.catalog_id
+		NestedLoop Single
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @parent_catalog_id)
+				Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
+					SeqScan catalog
+			TableFreeScan
+	Assign catalog_sequence_id sequence.sequence_id
+		NestedLoop Single
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "catalog")
+				Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
+					SeqScan sequence
+			TableFreeScan
+	Assign next_catalog_id (NextVal @catalog_sequence_id)
+		TableFreeScan
+	Insert catalog
+		Values catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name [@parent_catalog_id @next_catalog_id "foo"]
+			TableFreeScan

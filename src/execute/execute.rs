@@ -737,33 +737,46 @@ impl Input {
                 let input = input.next(state)?;
                 match procedure {
                     Procedure::CreateTable(id) => {
-                        let id = eval_int64(id, &input, state)?;
-                        state.storage.create_table(id);
+                        let ids_any = crate::eval::eval(id, &input, state)?;
+                        let ids_i64 = as_primitive_array::<Int64Type>(&ids_any);
+                        for id in ids_i64 {
+                            if let Some(id) = id {
+                                state.storage.create_table(id);
+                            }
+                        }
                     }
                     Procedure::DropTable(id) => {
-                        let id = eval_int64(id, &input, state)?;
-                        state.storage.drop_table(id);
+                        let ids_any = crate::eval::eval(id, &input, state)?;
+                        let ids_i64 = as_primitive_array::<Int64Type>(&ids_any);
+                        for id in ids_i64 {
+                            if let Some(id) = id {
+                                state.storage.drop_table(id);
+                            }
+                        }
                     }
                     Procedure::CreateIndex(id) => {
-                        let id = eval_int64(id, &input, state)?;
-                        state.storage.create_index(id);
+                        let ids_any = crate::eval::eval(id, &input, state)?;
+                        let ids_i64 = as_primitive_array::<Int64Type>(&ids_any);
+                        for id in ids_i64 {
+                            if let Some(id) = id {
+                                state.storage.create_index(id);
+                            }
+                        }
                     }
                     Procedure::DropIndex(id) => {
-                        let id = eval_int64(id, &input, state)?;
-                        state.storage.drop_index(id);
+                        let ids_any = crate::eval::eval(id, &input, state)?;
+                        let ids_i64 = as_primitive_array::<Int64Type>(&ids_any);
+                        for id in ids_i64 {
+                            if let Some(id) = id {
+                                state.storage.drop_index(id);
+                            }
+                        }
                     }
                 };
                 Ok(dummy_row(self.schema.clone()))
             }
         }
     }
-}
-
-fn eval_int64(id: &mut Scalar, input: &RecordBatch, state: &mut State) -> Result<i64, Error> {
-    let eval = crate::eval::eval(id, &input, state)?;
-    let cast = as_primitive_array::<Int64Type>(&eval);
-    let head = cast.value(0);
-    Ok(head)
 }
 
 impl fmt::Debug for Input {

@@ -1,4 +1,6 @@
-create table foo (id int64)
+create table foo (id int64);
+insert into foo values (1)
+select * from foo;
 
-$dummy
-false
+id
+1

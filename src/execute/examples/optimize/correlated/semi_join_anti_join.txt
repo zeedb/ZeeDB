@@ -25,7 +25,7 @@ Map $query.$col1:1
 							Map* store.store_id store.modified_date $xmin $xmax
 								SeqScan store
 		Partition* customer.store_id customer.modified_date
-			Map $expr_subquery.$col1 $exists:true $xmax $xmin customer.modified_date customer.person_id person_id' customer.store_id
+			Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
 				HashJoin Semi (Equal customer.person_id person_id')
 					Partition* person_id'
 						Map $expr_subquery.$col1:1 person_id'

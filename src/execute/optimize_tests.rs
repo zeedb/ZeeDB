@@ -258,6 +258,30 @@ fn test_correlated() {
 fn test_ddl() {
     let mut test = TestProvider::new();
     test.test(
+        "examples/optimize/ddl/create_database.txt",
+        r#"
+            create database foo
+        "#,
+    );
+    test.test(
+        "examples/optimize/ddl/drop_database.txt",
+        r#"
+            drop database foo
+        "#,
+    );
+    test.test(
+        "examples/optimize/ddl/create_database_nested.txt",
+        r#"
+            create database nested.foo
+        "#,
+    );
+    test.test(
+        "examples/optimize/ddl/drop_database_nested.txt",
+        r#"
+            drop database nested.foo
+        "#,
+    );
+    test.test(
         "examples/optimize/ddl/create_table.txt",
         r#"
             create table foo (person_id int64 primary key, store_id int64)
