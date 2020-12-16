@@ -60,6 +60,11 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
+    LogicalCreateTempTable {
+        name: String,
+        columns: Vec<Column>,
+        input: Box<Expr>,
+    },
     // LogicalGetWith { table } reads the subquery that was created by With.
     LogicalGetWith {
         name: String,
@@ -192,8 +197,7 @@ pub enum Expr {
     CreateTempTable {
         name: String,
         columns: Vec<Column>,
-        left: Box<Expr>,
-        right: Box<Expr>,
+        input: Box<Expr>,
     },
     GetTempTable {
         name: String,
@@ -252,6 +256,7 @@ impl Expr {
             Expr::LogicalJoin { .. }
             | Expr::LogicalDependentJoin { .. }
             | Expr::LogicalWith { .. }
+            | Expr::LogicalCreateTempTable { .. }
             | Expr::LogicalUnion { .. }
             | Expr::LogicalFilter { .. }
             | Expr::LogicalOut { .. }
@@ -323,6 +328,7 @@ impl Expr {
             | Expr::LogicalJoin { .. }
             | Expr::LogicalDependentJoin { .. }
             | Expr::LogicalWith { .. }
+            | Expr::LogicalCreateTempTable { .. }
             | Expr::LogicalGetWith { .. }
             | Expr::LogicalAggregate { .. }
             | Expr::LogicalLimit { .. }
@@ -364,7 +370,6 @@ impl Expr {
             | Expr::LogicalUnion { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
-            | Expr::CreateTempTable { .. }
             | Expr::Union { .. } => 2,
             Expr::LogicalFilter { .. }
             | Expr::LogicalOut { .. }
@@ -386,6 +391,8 @@ impl Expr {
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
+            | Expr::LogicalCreateTempTable { .. }
+            | Expr::CreateTempTable { .. }
             | Expr::LogicalAssign { .. }
             | Expr::Assign { .. }
             | Expr::LogicalCall { .. }
@@ -461,6 +468,18 @@ impl Expr {
                     columns,
                     left,
                     right,
+                }
+            }
+            Expr::LogicalCreateTempTable {
+                name,
+                columns,
+                input,
+            } => {
+                let input = Box::new(visitor(*input));
+                Expr::LogicalCreateTempTable {
+                    name,
+                    columns,
+                    input,
                 }
             }
             Expr::LogicalAggregate {
@@ -559,13 +578,11 @@ impl Expr {
             Expr::CreateTempTable {
                 name,
                 columns,
-                left,
-                right,
+                input,
             } => Expr::CreateTempTable {
                 name,
                 columns,
-                left: Box::new(visitor(*left)),
-                right: Box::new(visitor(*right)),
+                input: Box::new(visitor(*input)),
             },
             Expr::GetTempTable { name, columns } => Expr::GetTempTable { name, columns },
             Expr::IndexScan {
@@ -796,6 +813,7 @@ impl Expr {
             | Expr::LogicalUpdate { .. }
             | Expr::LogicalDelete { .. }
             | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTempTable { .. }
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. }
@@ -893,6 +911,7 @@ impl Expr {
             | Expr::LogicalUpdate { .. }
             | Expr::LogicalDelete { .. }
             | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTempTable { .. }
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. }
@@ -988,6 +1007,15 @@ impl Expr {
                 columns: columns.iter().map(subst_c).collect(),
                 left: Box::new(left.subst(map)),
                 right: Box::new(right.subst(map)),
+            },
+            Expr::LogicalCreateTempTable {
+                name,
+                columns,
+                input,
+            } => Expr::LogicalCreateTempTable {
+                name: name.clone(),
+                columns: columns.iter().map(subst_c).collect(),
+                input: Box::new(input.subst(map)),
             },
             Expr::LogicalGetWith { name, columns } => Expr::LogicalGetWith {
                 name: name.clone(),
@@ -1101,7 +1129,6 @@ impl ops::Index<usize> for Expr {
             | Expr::LogicalUnion { left, right, .. }
             | Expr::NestedLoop { left, right, .. }
             | Expr::HashJoin { left, right, .. }
-            | Expr::CreateTempTable { left, right, .. }
             | Expr::Union { left, right } => match index {
                 0 => left,
                 1 => right,
@@ -1127,6 +1154,8 @@ impl ops::Index<usize> for Expr {
             | Expr::Insert { input, .. }
             | Expr::Values { input, .. }
             | Expr::Delete { input, .. }
+            | Expr::LogicalCreateTempTable { input, .. }
+            | Expr::CreateTempTable { input, .. }
             | Expr::LogicalAssign { input, .. }
             | Expr::Assign { input, .. }
             | Expr::LogicalCall { input, .. }

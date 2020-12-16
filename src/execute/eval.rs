@@ -1,4 +1,4 @@
-use crate::execute::State;
+use crate::execute::Session;
 use arrow::array::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub fn all(
     predicates: &Vec<Scalar>,
     input: &RecordBatch,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<BooleanArray, Error> {
     let mut mask = BooleanArray::from(vec![true].repeat(input.num_rows()));
     for p in predicates {
@@ -21,7 +21,7 @@ pub fn all(
 pub fn eval(
     scalar: &Scalar,
     input: &RecordBatch,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<Arc<dyn Array>, Error> {
     match scalar {
         Scalar::Literal(value) => Ok(repeat(&value.array(), input.num_rows())),

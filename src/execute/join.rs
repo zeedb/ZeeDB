@@ -1,4 +1,4 @@
-use crate::execute::State;
+use crate::execute::Session;
 use crate::hash_table::HashTable;
 use arrow::array::*;
 use arrow::datatypes::*;
@@ -12,7 +12,7 @@ pub fn hash_join(
     right: &RecordBatch,
     partition_right: &Vec<Scalar>,
     join: &Join,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     match join {
         Join::Inner(predicates) => hash_join_inner(predicates, left, right, partition_right, state),
@@ -30,7 +30,7 @@ fn hash_join_inner(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &Vec<Scalar>,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     let partition_right: Result<Vec<_>, _> = partition_right
         .iter()
@@ -47,7 +47,7 @@ pub fn nested_loop(
     left: &RecordBatch,
     right: &RecordBatch,
     join: &Join,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     match join {
         Join::Inner(predicates) => nested_loop_inner(predicates, left, right, state),
@@ -64,7 +64,7 @@ fn nested_loop_inner(
     predicates: &Vec<Scalar>,
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
     let mask = crate::eval::all(predicates, &input, state)?;
@@ -75,7 +75,7 @@ fn nested_loop_semi(
     predicates: &Vec<Scalar>,
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
     let mask = crate::eval::all(predicates, &input, state)?;
@@ -87,7 +87,7 @@ fn nested_loop_anti(
     predicates: &Vec<Scalar>,
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
     let mask = crate::eval::all(predicates, &input, state)?;
@@ -99,7 +99,7 @@ fn nested_loop_single(
     predicates: &Vec<Scalar>,
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut State,
+    state: &mut Session,
 ) -> Result<RecordBatch, Error> {
     let head = cross_product(left, &right)?;
     let mask = crate::eval::all(predicates, &head, state)?;

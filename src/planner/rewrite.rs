@@ -574,7 +574,7 @@ impl RewriteRule {
                     match count_get_with(name, right) {
                         0 if !left.has_side_effects() => return Some(right.as_ref().clone()),
                         1 => return Some(inline_with(name, columns, left, right.as_ref().clone())),
-                        _ => (),
+                        _ => return Some(with_to_script(name, columns, left, right)),
                     }
                 }
             }
@@ -986,6 +986,19 @@ fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -
             }
         }
         expr => expr.map(|child| inline_with(name, columns, left, child)),
+    }
+}
+
+fn with_to_script(name: &String, columns: &Vec<Column>, left: &Expr, right: &Expr) -> Expr {
+    LogicalScript {
+        statements: vec![
+            LogicalCreateTempTable {
+                name: name.clone(),
+                columns: columns.clone(),
+                input: Box::new(left.clone()),
+            },
+            right.clone(),
+        ],
     }
 }
 

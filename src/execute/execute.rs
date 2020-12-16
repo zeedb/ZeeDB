@@ -22,9 +22,11 @@ impl Program {
     pub fn execute<'a>(&'a self, storage: &'a mut Storage, txn: i64) -> Execute<'a> {
         Execute {
             input: Input::compile(self.expr.clone()),
-            state: State {
-                storage,
+            state: Session {
                 txn,
+                storage,
+                temp_tables: Storage::new(),
+                temp_table_ids: HashMap::new(),
                 variables: HashMap::new(),
             },
         }
@@ -33,13 +35,15 @@ impl Program {
 
 pub struct Execute<'a> {
     input: Input,
-    state: State<'a>,
+    state: Session<'a>,
 }
 
-pub struct State<'a> {
-    pub storage: &'a mut Storage,
-    pub variables: HashMap<String, Arc<dyn Array>>,
+pub struct Session<'a> {
     pub txn: i64,
+    pub storage: &'a mut Storage,
+    pub temp_tables: Storage,
+    pub temp_table_ids: HashMap<String, i64>,
+    pub variables: HashMap<String, Arc<dyn Array>>,
 }
 
 struct Input {
@@ -97,12 +101,12 @@ enum Node {
     CreateTempTable {
         name: String,
         columns: Vec<Column>,
-        left: Input,
-        right: Input,
+        input: Input,
     },
     GetTempTable {
         name: String,
         columns: Vec<Column>,
+        scan: Option<Vec<Page>>,
     },
     Aggregate {
         finished: bool,
@@ -249,8 +253,20 @@ impl Node {
                     right,
                 }
             }
-            CreateTempTable { .. } => todo!(),
-            GetTempTable { .. } => todo!(),
+            CreateTempTable {
+                name,
+                columns,
+                input,
+            } => Node::CreateTempTable {
+                name,
+                columns,
+                input: Input::compile(*input),
+            },
+            GetTempTable { name, columns } => Node::GetTempTable {
+                name,
+                columns,
+                scan: None,
+            },
             Aggregate {
                 group_by,
                 aggregate,
@@ -334,6 +350,7 @@ impl Node {
             | LogicalJoin { .. }
             | LogicalDependentJoin { .. }
             | LogicalWith { .. }
+            | LogicalCreateTempTable { .. }
             | LogicalGetWith { .. }
             | LogicalAggregate { .. }
             | LogicalLimit { .. }
@@ -427,13 +444,13 @@ impl Node {
                 }
                 Schema::new(fields)
             }
-            Node::CreateTempTable {
-                name,
-                columns,
-                left,
-                right,
-            } => todo!(),
-            Node::GetTempTable { name, columns } => todo!(),
+            Node::GetTempTable { columns, .. } => {
+                let fields = columns
+                    .iter()
+                    .map(|column| column.into_query_field())
+                    .collect();
+                Schema::new(fields)
+            }
             Node::Aggregate {
                 group_by,
                 aggregate,
@@ -448,24 +465,23 @@ impl Node {
                 }
                 Schema::new(fields)
             }
-            Node::Insert { .. } => dummy_schema(),
-            Node::Values {
-                columns,
-                values,
-                input,
-            } => Schema::new(
+            Node::Values { columns, .. } => Schema::new(
                 columns
                     .iter()
                     .map(|column| column.into_query_field())
                     .collect(),
             ),
-            Node::Script { .. } | Node::Assign { .. } | Node::Call { .. } => dummy_schema(),
+            Node::Script { statements, .. } => statements.last().unwrap().schema.as_ref().clone(),
+            Node::CreateTempTable { .. }
+            | Node::Insert { .. }
+            | Node::Assign { .. }
+            | Node::Call { .. } => dummy_schema(),
         }
     }
 }
 
 impl Input {
-    fn next(&mut self, state: &mut State) -> Result<RecordBatch, Error> {
+    fn next(&mut self, state: &mut Session) -> Result<RecordBatch, Error> {
         match self.node.as_mut() {
             Node::TableFreeScan { empty } => {
                 if *empty {
@@ -596,13 +612,33 @@ impl Input {
                     state,
                 )
             }
-            Node::CreateTempTable {
+            Node::CreateTempTable { name, input, .. } => {
+                // Register a new temp table.
+                let table_id = 100 + state.temp_table_ids.len() as i64;
+                state.temp_table_ids.insert(name.clone(), table_id);
+                state.temp_tables.create_table(table_id);
+                // Populate the table.
+                let input = input.next(state)?;
+                let heap = state.temp_tables.table_mut(table_id);
+                heap.insert(&input, state.txn);
+                Err(Error::Empty)
+            }
+            Node::GetTempTable {
                 name,
                 columns,
-                left,
-                right,
-            } => todo!(),
-            Node::GetTempTable { name, columns } => todo!(),
+                scan,
+            } => {
+                if scan.is_none() {
+                    *scan = Some(state.temp_tables.table(state.temp_table_ids[name]).scan())
+                }
+                match scan.as_mut().unwrap().pop() {
+                    Some(page) => {
+                        let column_names = columns.iter().map(|c| c.canonical_name()).collect();
+                        Ok(page.select(&column_names))
+                    }
+                    None => Err(Error::Empty),
+                }
+            }
             Node::Aggregate {
                 finished,
                 group_by,
@@ -678,7 +714,7 @@ impl Input {
                         &tids,
                     );
                 }
-                Ok(dummy_row(self.schema.clone()))
+                Err(Error::Empty)
             }
             Node::Values { values, input, .. } => {
                 let input = input.next(state)?;
@@ -737,7 +773,9 @@ impl Input {
                             return Err(error);
                         }
                         Ok(batch) => {
-                            return Ok(batch);
+                            if *offset == statements.len() - 1 {
+                                return Ok(batch);
+                            }
                         }
                     }
                 }
@@ -751,7 +789,7 @@ impl Input {
                 let input = input.next(state)?;
                 let value = crate::eval::eval(value, &input, state)?;
                 state.variables.insert(variable.clone(), value);
-                Ok(dummy_row(self.schema.clone()))
+                Err(Error::Empty)
             }
             Node::Call { procedure, input } => {
                 let input = input.next(state)?;
@@ -793,7 +831,7 @@ impl Input {
                         }
                     }
                 };
-                Ok(dummy_row(self.schema.clone()))
+                Err(Error::Empty)
             }
         }
     }
@@ -818,7 +856,7 @@ fn dummy_schema() -> Schema {
 }
 
 // TODO instead of calling a function, insert a Build operator into the tree.
-fn build(input: &mut Input, state: &mut State) -> Result<RecordBatch, Error> {
+fn build(input: &mut Input, state: &mut Session) -> Result<RecordBatch, Error> {
     let mut batches = vec![];
     loop {
         match input.next(state) {

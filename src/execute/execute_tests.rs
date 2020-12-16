@@ -229,16 +229,6 @@ fn test_join() {
 }
 
 #[test]
-fn test_set() {
-    let mut test = TestProvider::new(None);
-    test.test(
-        "examples/execute/set/union_all.txt",
-        vec!["select 1 as x union all select 2 as x"],
-    );
-    test.finish();
-}
-
-#[test]
 fn test_limit() {
     let mut test = TestProvider::new(None);
     test.test(
@@ -256,6 +246,26 @@ fn test_limit() {
             "insert into foo values (1), (2), (3);",
             "select * from foo limit 1 offset 1;",
         ],
+    );
+    test.finish();
+}
+
+#[test]
+fn test_set() {
+    let mut test = TestProvider::new(None);
+    test.test(
+        "examples/execute/set/union_all.txt",
+        vec!["select 1 as x union all select 2 as x"],
+    );
+    test.finish();
+}
+
+#[test]
+fn test_with() {
+    let mut test = TestProvider::new(None);
+    test.test(
+        "examples/execute/with/with.txt",
+        vec!["with foo as (select 1 as bar) select * from foo union all select * from foo"],
     );
     test.finish();
 }
@@ -289,10 +299,8 @@ impl TestProvider {
             let program = Self::compile(storage, &catalog, &indexes, &sql);
             let results: Result<Vec<_>, _> = program.execute(storage, txn).collect();
             match results {
-                Ok(batches) => match batches.last() {
-                    Some(last) => output = Self::csv(last),
-                    None => output = "Empty".to_string(),
-                },
+                Ok(batches) if batches.is_empty() => output = "Empty".to_string(),
+                Ok(batches) => output = Self::csv(&kernel::cat(&batches)),
                 Err(err) => output = format!("Error: {:?}", err),
             }
         }

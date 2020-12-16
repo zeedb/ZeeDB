@@ -107,15 +107,29 @@ impl IndentPrint for Expr {
             }
             Expr::LogicalWith {
                 name, left, right, ..
-            }
-            | Expr::CreateTempTable {
-                name, left, right, ..
             } => {
                 write!(f, "{} {}", self.name(), name)?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
+            }
+            Expr::LogicalCreateTempTable {
+                name,
+                columns,
+                input,
+            }
+            | Expr::CreateTempTable {
+                name,
+                columns,
+                input,
+            } => {
+                write!(f, "{} {}", self.name(), name)?;
+                for c in columns {
+                    write!(f, " {} {}", c.name, data_type::to_string(&c.data_type))?;
+                }
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
             }
             Expr::LogicalGetWith { name, .. } | Expr::GetTempTable { name, .. } => {
                 write!(f, "{} {}", self.name(), name)
@@ -333,6 +347,7 @@ impl Expr {
             Expr::LogicalJoin { .. } => "LogicalJoin",
             Expr::LogicalDependentJoin { .. } => "LogicalDependentJoin",
             Expr::LogicalWith { .. } => "LogicalWith",
+            Expr::LogicalCreateTempTable { .. } => "LogicalCreateTempTable",
             Expr::LogicalGetWith { .. } => "LogicalGetWith",
             Expr::LogicalAggregate { .. } => "LogicalAggregate",
             Expr::LogicalLimit { .. } => "LogicalLimit",

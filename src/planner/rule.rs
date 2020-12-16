@@ -25,7 +25,7 @@ pub enum Rule {
     LogicalLimitToLimit,
     LogicalSortToSort,
     LogicallUnionToUnion,
-    LogicalWithToCreateTempTable,
+    LogicalCreateTempTableToCreateTempTable,
     LogicalGetWithToGetTempTable,
     LogicalInsertToInsert,
     LogicalValuesToValues,
@@ -52,7 +52,7 @@ impl Rule {
             | Rule::LogicalLimitToLimit
             | Rule::LogicalSortToSort
             | Rule::LogicallUnionToUnion
-            | Rule::LogicalWithToCreateTempTable
+            | Rule::LogicalCreateTempTableToCreateTempTable
             | Rule::LogicalGetWithToGetTempTable
             | Rule::LogicalInsertToInsert
             | Rule::LogicalValuesToValues
@@ -100,7 +100,7 @@ impl Rule {
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort { .. })
             | (Rule::LogicallUnionToUnion, LogicalUnion { .. })
-            | (Rule::LogicalWithToCreateTempTable, LogicalWith { .. })
+            | (Rule::LogicalCreateTempTableToCreateTempTable, LogicalCreateTempTable { .. })
             | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith { .. })
             | (Rule::LogicalInsertToInsert, LogicalInsert { .. })
             | (Rule::LogicalValuesToValues, LogicalValues { .. })
@@ -522,19 +522,17 @@ impl Rule {
                     return Some(Union { left, right });
                 }
             }
-            Rule::LogicalWithToCreateTempTable => {
-                if let LogicalWith {
+            Rule::LogicalCreateTempTableToCreateTempTable => {
+                if let LogicalCreateTempTable {
                     name,
                     columns,
-                    left,
-                    right,
+                    input,
                 } = bind
                 {
                     return Some(CreateTempTable {
                         name,
                         columns,
-                        left,
-                        right,
+                        input,
                     });
                 }
             }
@@ -624,7 +622,7 @@ impl Rule {
             Rule::LogicalLimitToLimit,
             Rule::LogicalSortToSort,
             Rule::LogicallUnionToUnion,
-            Rule::LogicalWithToCreateTempTable,
+            Rule::LogicalCreateTempTableToCreateTempTable,
             Rule::LogicalGetWithToGetTempTable,
             Rule::LogicalInsertToInsert,
             Rule::LogicalValuesToValues,

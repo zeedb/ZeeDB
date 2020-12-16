@@ -16,11 +16,8 @@ fn generate_adventure_works() -> Storage {
         let indexes = crate::catalog::indexes(&mut storage, txn);
         let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, sql).unwrap();
         let expr = optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
-        crate::compile(expr)
-            .execute(&mut storage, txn)
-            .last()
-            .unwrap()
-            .unwrap();
+        let result: Result<Vec<_>, _> = crate::compile(expr).execute(&mut storage, txn).collect();
+        result.unwrap();
         txn += 1;
     };
     // Create tables.

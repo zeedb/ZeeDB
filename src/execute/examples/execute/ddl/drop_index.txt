@@ -2,5 +2,4 @@ create table foo (id int64);
 create index foo_id on foo (id);
 drop index foo_id;
 
-$dummy
-false
+Empty

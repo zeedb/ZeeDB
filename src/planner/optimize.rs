@@ -256,10 +256,18 @@ impl<'a> Optimizer<'a> {
                 }
             }
             LogicalOut { projects, input } => {
-                cardinality = self.ss[leaf(input)].props.cardinality;
+                let input = &self.ss[leaf(input)];
+                cardinality = input.props.cardinality;
                 for c in projects {
-                    let n = self.ss[leaf(input)].props.column_unique_cardinality[c];
-                    column_unique_cardinality.insert(c.clone(), n);
+                    let n = input.props.column_unique_cardinality.get(c).expect(
+                        format!(
+                            "no column {:?} in {:?}",
+                            c,
+                            input.props.column_unique_cardinality.keys()
+                        )
+                        .as_str(),
+                    );
+                    column_unique_cardinality.insert(c.clone(), *n);
                 }
             }
             LogicalMap {
@@ -337,10 +345,8 @@ impl<'a> Optimizer<'a> {
                     cardinality = apply_selectivity(cardinality, selectivity);
                 }
             }
-            LogicalWith { right, .. } => {
-                cardinality = self.ss[leaf(right)].props.cardinality;
-                column_unique_cardinality =
-                    self.ss[leaf(right)].props.column_unique_cardinality.clone();
+            LogicalWith { .. } => {
+                panic!("LogicalWith should have been eliminated during rewrite phase")
             }
             LogicalGetWith { columns, .. } => {
                 cardinality = 1000; // TODO get from catalog somehow
@@ -387,15 +393,21 @@ impl<'a> Optimizer<'a> {
                     &self.ss[leaf(right)].props.column_unique_cardinality,
                 );
             }
+            LogicalScript { statements } => {
+                let last = statements.last().unwrap();
+                cardinality = self.ss[leaf(last)].props.cardinality;
+                column_unique_cardinality =
+                    self.ss[leaf(last)].props.column_unique_cardinality.clone();
+            }
             LogicalInsert { .. }
             | LogicalValues { .. }
             | LogicalUpdate { .. }
             | LogicalDelete { .. }
             | LogicalCreateDatabase { .. }
             | LogicalCreateTable { .. }
+            | LogicalCreateTempTable { .. }
             | LogicalCreateIndex { .. }
             | LogicalDrop { .. }
-            | LogicalScript { .. }
             | LogicalAssign { .. }
             | LogicalCall { .. }
             | LogicalRewrite { .. } => {}
