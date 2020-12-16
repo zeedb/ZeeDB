@@ -431,7 +431,20 @@ impl RewriteRule {
                         right: right_subquery,
                     } = subquery.as_ref()
                     {
-                        todo!()
+                        return Some(LogicalUnion {
+                            left: Box::new(LogicalDependentJoin {
+                                parameters: parameters.clone(),
+                                predicates: predicates.clone(),
+                                subquery: left_subquery.clone(),
+                                domain: domain.clone(),
+                            }),
+                            right: Box::new(LogicalDependentJoin {
+                                parameters: parameters.clone(),
+                                predicates: predicates.clone(),
+                                subquery: right_subquery.clone(),
+                                domain: domain.clone(),
+                            }),
+                        });
                     }
                 }
             }
@@ -793,6 +806,7 @@ impl RewriteRule {
                         let mut combined = inner.clone();
                         for (x, c) in outer {
                             // TODO if *some* mapped items can be embedded, embed them.
+                            // TODO if column is renamed, that should be embedd-able, but it's not presently because we use column names as ids.
                             if !x.is_just(c) {
                                 return None;
                             }

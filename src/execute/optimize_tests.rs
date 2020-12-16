@@ -240,7 +240,16 @@ fn test_correlated() {
             update customer
             set account_number = (select person.person_id)
             from person
-            where customer.person_id = person.person_id"#,
+            where customer.person_id = person.person_id
+        "#,
+    );
+    test.test(
+        "examples/optimize/correlated/push_through_union.txt",
+        r#"
+            select *
+            from person 
+            where exists (select 1 from customer where store_id = 1 and person.person_id = customer.person_id union all select 1 from customer where store_id = 2 and person.person_id = customer.person_id)
+        "#,
     );
     test.finish();
 }
