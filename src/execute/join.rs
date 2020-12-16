@@ -53,8 +53,8 @@ pub fn nested_loop(
         Join::Inner(predicates) => nested_loop_inner(predicates, left, right, state),
         Join::Right(_) => todo!(),
         Join::Outer(_) => todo!(),
-        Join::Semi(_) => todo!(),
-        Join::Anti(_) => todo!(),
+        Join::Semi(predicates) => nested_loop_semi(predicates, left, right, state),
+        Join::Anti(predicates) => nested_loop_anti(predicates, left, right, state),
         Join::Single(predicates) => nested_loop_single(predicates, left, right, state),
         Join::Mark(_, _) => todo!(),
     }
@@ -69,6 +69,30 @@ fn nested_loop_inner(
     let input = cross_product(left, right)?;
     let mask = crate::eval::all(predicates, &input, state)?;
     Ok(kernel::gather_logical(&input, &mask))
+}
+
+fn nested_loop_semi(
+    predicates: &Vec<Scalar>,
+    left: &RecordBatch,
+    right: &RecordBatch,
+    state: &mut State,
+) -> Result<RecordBatch, Error> {
+    let input = cross_product(left, right)?;
+    let mask = crate::eval::all(predicates, &input, state)?;
+    let right_mask = reshape_any(&mask, left.num_rows());
+    Ok(kernel::gather_logical(right, &right_mask))
+}
+
+fn nested_loop_anti(
+    predicates: &Vec<Scalar>,
+    left: &RecordBatch,
+    right: &RecordBatch,
+    state: &mut State,
+) -> Result<RecordBatch, Error> {
+    let input = cross_product(left, right)?;
+    let mask = crate::eval::all(predicates, &input, state)?;
+    let right_mask = reshape_none(&mask, left.num_rows());
+    Ok(kernel::gather_logical(right, &right_mask))
 }
 
 fn nested_loop_single(
@@ -167,4 +191,20 @@ fn index_cross_product(num_left: usize, num_right: usize) -> (UInt32Array, UInt3
         }
     }
     (index_left.finish(), index_right.finish())
+}
+
+fn reshape_any(mask: &BooleanArray, stride: usize) -> BooleanArray {
+    let mut result = vec![false].repeat(mask.len() / stride);
+    for i in 0..mask.len() {
+        result[i / stride] |= mask.value(i)
+    }
+    BooleanArray::from(result)
+}
+
+fn reshape_none(mask: &BooleanArray, stride: usize) -> BooleanArray {
+    let mut result = vec![true].repeat(mask.len() / stride);
+    for i in 0..mask.len() {
+        result[i / stride] &= !mask.value(i)
+    }
+    BooleanArray::from(result)
 }

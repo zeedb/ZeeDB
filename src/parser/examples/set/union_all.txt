@@ -1,0 +1,11 @@
+select 1 as a
+union all
+select 2 as a
+
+LogicalUnion
+	LogicalMap $union_all.a:$union_all1.a
+		LogicalMap $union_all1.a:1
+			LogicalSingleGet
+	LogicalMap $union_all.a:$union_all2.a
+		LogicalMap $union_all2.a:2
+			LogicalSingleGet

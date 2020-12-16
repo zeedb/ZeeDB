@@ -125,7 +125,11 @@ impl Heap {
     }
 
     pub fn approx_cardinality(&self) -> usize {
-        self.pages.len() * PAGE_SIZE
+        if let Some(last) = self.pages.last() {
+            last.approx_num_rows() + PAGE_SIZE * (self.pages.len() - 1)
+        } else {
+            0
+        }
     }
 
     pub fn approx_unique_cardinality(&self, column: &String) -> usize {

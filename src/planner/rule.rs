@@ -25,8 +25,6 @@ pub enum Rule {
     LogicalLimitToLimit,
     LogicalSortToSort,
     LogicallUnionToUnion,
-    LogicalIntersectToIntersect,
-    LogicalExceptToExcept,
     LogicalWithToCreateTempTable,
     LogicalGetWithToGetTempTable,
     LogicalInsertToInsert,
@@ -54,8 +52,6 @@ impl Rule {
             | Rule::LogicalLimitToLimit
             | Rule::LogicalSortToSort
             | Rule::LogicallUnionToUnion
-            | Rule::LogicalIntersectToIntersect
-            | Rule::LogicalExceptToExcept
             | Rule::LogicalWithToCreateTempTable
             | Rule::LogicalGetWithToGetTempTable
             | Rule::LogicalInsertToInsert
@@ -104,8 +100,6 @@ impl Rule {
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort { .. })
             | (Rule::LogicallUnionToUnion, LogicalUnion { .. })
-            | (Rule::LogicalIntersectToIntersect, LogicalIntersect { .. })
-            | (Rule::LogicalExceptToExcept, LogicalExcept { .. })
             | (Rule::LogicalWithToCreateTempTable, LogicalWith { .. })
             | (Rule::LogicalGetWithToGetTempTable, LogicalGetWith { .. })
             | (Rule::LogicalInsertToInsert, LogicalInsert { .. })
@@ -524,18 +518,8 @@ impl Rule {
                 }
             }
             Rule::LogicallUnionToUnion => {
-                if let LogicalUnion { left, right } = bind {
+                if let LogicalUnion { left, right, .. } = bind {
                     return Some(Union { left, right });
-                }
-            }
-            Rule::LogicalIntersectToIntersect => {
-                if let LogicalIntersect { left, right } = bind {
-                    return Some(Intersect { left, right });
-                }
-            }
-            Rule::LogicalExceptToExcept => {
-                if let LogicalExcept { left, right } = bind {
-                    return Some(Except { left, right });
                 }
             }
             Rule::LogicalWithToCreateTempTable => {
@@ -640,8 +624,6 @@ impl Rule {
             Rule::LogicalLimitToLimit,
             Rule::LogicalSortToSort,
             Rule::LogicallUnionToUnion,
-            Rule::LogicalIntersectToIntersect,
-            Rule::LogicalExceptToExcept,
             Rule::LogicalWithToCreateTempTable,
             Rule::LogicalGetWithToGetTempTable,
             Rule::LogicalInsertToInsert,

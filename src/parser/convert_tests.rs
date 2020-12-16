@@ -599,6 +599,23 @@ fn test_script() {
     }
 }
 
+#[test]
+fn test_set() {
+    let mut errors = vec![];
+    ok!(
+        "examples/set/union_all.txt",
+        r#"
+            select 1 as a
+            union all
+            select 2 as a
+        "#,
+        errors
+    );
+    if !errors.is_empty() {
+        panic!("{:#?}", errors);
+    }
+}
+
 // #[test]
 // fn test_single() {
 //     let mut errors = vec![];

@@ -166,12 +166,7 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalUnion { left, right }
-            | Expr::LogicalIntersect { left, right }
-            | Expr::LogicalExcept { left, right }
-            | Expr::Union { left, right }
-            | Expr::Intersect { left, right }
-            | Expr::Except { left, right } => {
+            Expr::LogicalUnion { left, right, .. } | Expr::Union { left, right } => {
                 write!(f, "{}", self.name())?;
                 newline(f, indent)?;
                 left.indent_print(f, indent + 1)?;
@@ -343,8 +338,6 @@ impl Expr {
             Expr::LogicalLimit { .. } => "LogicalLimit",
             Expr::LogicalSort { .. } => "LogicalSort",
             Expr::LogicalUnion { .. } => "LogicalUnion",
-            Expr::LogicalIntersect { .. } => "LogicalIntersect",
-            Expr::LogicalExcept { .. } => "LogicalExcept",
             Expr::LogicalInsert { .. } => "LogicalInsert",
             Expr::LogicalValues { .. } => "LogicalValues",
             Expr::LogicalUpdate { .. } => "LogicalUpdate",
@@ -371,8 +364,6 @@ impl Expr {
             Expr::Limit { .. } => "Limit",
             Expr::Sort { .. } => "Sort",
             Expr::Union { .. } => "Union",
-            Expr::Intersect { .. } => "Intersect",
-            Expr::Except { .. } => "Except",
             Expr::Insert { .. } => "Insert",
             Expr::Values { .. } => "Values",
             Expr::Delete { .. } => "Delete",

@@ -1,0 +1,7 @@
+select * 
+from (select 1 as x)
+join (select 1 as y) on x = y
+
+Filter (Equal $subquery1.x $subquery2.y)
+	Map $subquery2.y:1 $subquery1.x:1
+		TableFreeScan

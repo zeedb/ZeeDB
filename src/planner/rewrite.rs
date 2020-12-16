@@ -426,20 +426,12 @@ impl RewriteRule {
                     if free_parameters(parameters, subquery).is_empty() {
                         return None;
                     }
-                    match subquery.as_ref() {
-                        LogicalUnion {
-                            left: left_subquery,
-                            right: right_subquery,
-                        } => todo!(),
-                        LogicalIntersect {
-                            left: left_subquery,
-                            right: right_subquery,
-                        } => todo!(),
-                        LogicalExcept {
-                            left: left_subquery,
-                            right: right_subquery,
-                        } => todo!(),
-                        _ => {}
+                    if let LogicalUnion {
+                        left: left_subquery,
+                        right: right_subquery,
+                    } = subquery.as_ref()
+                    {
+                        todo!()
                     }
                 }
             }
@@ -525,16 +517,11 @@ impl RewriteRule {
                     right,
                 } = expr
                 {
-                    if let Some(single) = remove_inner_join_left(
-                        left.as_ref(),
-                        &maybe_filter(join_predicates.as_ref(), right.as_ref()),
-                    ) {
-                        return Some(single);
-                    } else if let Some(single) = remove_inner_join_left(
-                        right.as_ref(),
-                        &maybe_filter(join_predicates.as_ref(), left.as_ref()),
-                    ) {
-                        return Some(single);
+                    if let Some(projects) = is_table_free_scan(left.as_ref()) {
+                        return Some(maybe_filter(join_predicates, &maybe_map(&projects, right)));
+                    }
+                    if let Some(projects) = is_table_free_scan(right.as_ref()) {
+                        return Some(maybe_filter(join_predicates, &maybe_map(&projects, left)));
                     }
                 }
             }
@@ -805,6 +792,7 @@ impl RewriteRule {
                     {
                         let mut combined = inner.clone();
                         for (x, c) in outer {
+                            // TODO if *some* mapped items can be embedded, embed them.
                             if !x.is_just(c) {
                                 return None;
                             }
@@ -896,18 +884,34 @@ fn prove_at_most_one(expr: &Expr) -> bool {
     }
 }
 
-fn remove_inner_join_left(left: &Expr, right: &Expr) -> Option<Expr> {
-    match left {
+fn is_table_free_scan(input: &Expr) -> Option<Vec<(Scalar, Column)>> {
+    match input {
         LogicalMap {
-            include_existing,
-            projects,
+            include_existing: true,
+            projects: my_projects,
             input,
-        } => remove_inner_join_left(input.as_ref(), right).map(|input| LogicalMap {
-            include_existing: include_existing.clone(),
-            projects: projects.clone(),
-            input: Box::new(input),
-        }),
-        LogicalSingleGet => Some(right.clone()),
+        } => {
+            if let Some(more_projects) = is_table_free_scan(input.as_ref()) {
+                let mut projects = vec![];
+                projects.extend_from_slice(my_projects);
+                projects.extend_from_slice(&more_projects);
+                Some(projects)
+            } else {
+                None
+            }
+        }
+        LogicalMap {
+            include_existing: false,
+            projects: my_projects,
+            input,
+        } => {
+            if is_table_free_scan(input.as_ref()).is_some() {
+                Some(my_projects.clone())
+            } else {
+                None
+            }
+        }
+        LogicalSingleGet => Some(vec![]),
         _ => None,
     }
 }
@@ -957,6 +961,18 @@ fn maybe_filter(predicates: &Vec<Scalar>, input: &Expr) -> Expr {
     }
 }
 
+fn maybe_map(projects: &Vec<(Scalar, Column)>, input: &Expr) -> Expr {
+    if projects.is_empty() {
+        input.clone()
+    } else {
+        LogicalMap {
+            include_existing: true,
+            projects: projects.clone(),
+            input: Box::new(input.clone()),
+        }
+    }
+}
+
 fn combine_consecutive_filters(
     outer: &Vec<Scalar>,
     inner: &Vec<Scalar>,
@@ -986,17 +1002,17 @@ fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {
     combined
 }
 
-fn apply_all(expr: Expr, rules: &Vec<RewriteRule>) -> Expr {
+fn apply_all(before: Expr, rules: &Vec<RewriteRule>) -> Expr {
     for rule in rules {
-        match rule.apply(&expr) {
+        match rule.apply(&before) {
             // Abandon previous expr.
-            Some(expr) => {
-                return apply_all(expr, rules);
+            Some(after) => {
+                return apply_all(after, rules);
             }
             None => (),
         }
     }
-    expr
+    before
 }
 
 pub fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {

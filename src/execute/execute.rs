@@ -123,14 +123,6 @@ enum Node {
         left: Input,
         right: Input,
     },
-    Intersect {
-        left: Input,
-        right: Input,
-    },
-    Except {
-        left: Input,
-        right: Input,
-    },
     Insert {
         table: Table,
         indexes: Vec<Index>,
@@ -277,9 +269,10 @@ impl Node {
                 order_by,
                 input: Input::compile(*input),
             },
-            Union { .. } => todo!(),
-            Intersect { .. } => todo!(),
-            Except { .. } => todo!(),
+            Union { left, right } => Node::Union {
+                left: Input::compile(*left),
+                right: Input::compile(*right),
+            },
             Insert {
                 table,
                 indexes,
@@ -340,8 +333,6 @@ impl Node {
             | LogicalLimit { .. }
             | LogicalSort { .. }
             | LogicalUnion { .. }
-            | LogicalIntersect { .. }
-            | LogicalExcept { .. }
             | LogicalInsert { .. }
             | LogicalValues { .. }
             | LogicalUpdate { .. }
@@ -360,9 +351,11 @@ impl Node {
     fn schema(&self) -> Schema {
         match self {
             Node::TableFreeScan { .. } => dummy_schema(),
-            Node::Filter { input, .. } | Node::Limit { input, .. } | Node::Sort { input, .. } => {
-                input.node.schema()
-            }
+            Node::Filter { input, .. }
+            | Node::Limit { input, .. }
+            | Node::Sort { input, .. }
+            | Node::Union { left: input, .. }
+            | Node::Delete { input, .. } => input.schema.as_ref().clone(),
             Node::SeqScan { projects, .. } => {
                 let fields = projects
                     .iter()
@@ -449,9 +442,6 @@ impl Node {
                 }
                 Schema::new(fields)
             }
-            Node::Union { left, right } => todo!(),
-            Node::Intersect { left, right } => todo!(),
-            Node::Except { left, right } => todo!(),
             Node::Insert { .. } => dummy_schema(),
             Node::Values {
                 columns,
@@ -463,7 +453,6 @@ impl Node {
                     .map(|column| column.into_query_field())
                     .collect(),
             ),
-            Node::Delete { input, .. } => input.schema.as_ref().clone(),
             Node::Script { .. } | Node::Assign { .. } | Node::Call { .. } => dummy_schema(),
         }
     }
@@ -646,9 +635,11 @@ impl Input {
                 input,
             } => todo!(),
             Node::Sort { order_by, input } => crate::sort::sort(input.next(state)?, order_by),
-            Node::Union { left, right } => todo!(),
-            Node::Intersect { left, right } => todo!(),
-            Node::Except { left, right } => todo!(),
+            Node::Union { left, right } => match left.next(state) {
+                Ok(batch) => Ok(batch),
+                Err(Error::Empty) => right.next(state),
+                Err(other) => Err(other),
+            },
             Node::Insert {
                 table,
                 indexes,

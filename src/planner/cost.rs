@@ -27,8 +27,6 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | Out { .. }
         | Limit { .. }
         | Union { .. }
-        | Intersect { .. }
-        | Except { .. }
         | Values { .. }
         | Script { .. }
         | Assign { .. }
@@ -115,8 +113,6 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | LogicalDependentJoin { .. }
         | LogicalWith { .. }
         | LogicalUnion { .. }
-        | LogicalIntersect { .. }
-        | LogicalExcept { .. }
         | LogicalFilter { .. }
         | LogicalOut { .. }
         | LogicalMap { .. }

@@ -87,16 +87,6 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
-    // LogicalIntersect implements SELECT _ INTERSECT SELECT _.
-    LogicalIntersect {
-        left: Box<Expr>,
-        right: Box<Expr>,
-    },
-    // LogicalExcept implements SELECT _ EXCEPT SELECT _.
-    LogicalExcept {
-        left: Box<Expr>,
-        right: Box<Expr>,
-    },
     // LogicalInsert { table, columns } implements the INSERT operation.
     LogicalInsert {
         table: Table,
@@ -227,14 +217,6 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
-    Intersect {
-        left: Box<Expr>,
-        right: Box<Expr>,
-    },
-    Except {
-        left: Box<Expr>,
-        right: Box<Expr>,
-    },
     Insert {
         table: Table,
         indexes: Vec<Index>,
@@ -271,8 +253,6 @@ impl Expr {
             | Expr::LogicalDependentJoin { .. }
             | Expr::LogicalWith { .. }
             | Expr::LogicalUnion { .. }
-            | Expr::LogicalIntersect { .. }
-            | Expr::LogicalExcept { .. }
             | Expr::LogicalFilter { .. }
             | Expr::LogicalOut { .. }
             | Expr::LogicalMap { .. }
@@ -309,8 +289,6 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
-            | Expr::Intersect { .. }
-            | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -350,8 +328,6 @@ impl Expr {
             | Expr::LogicalLimit { .. }
             | Expr::LogicalSort { .. }
             | Expr::LogicalUnion { .. }
-            | Expr::LogicalIntersect { .. }
-            | Expr::LogicalExcept { .. }
             | Expr::LogicalValues { .. }
             | Expr::LogicalScript { .. }
             | Expr::LogicalAssign { .. }
@@ -371,8 +347,6 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
-            | Expr::Intersect { .. }
-            | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -388,14 +362,10 @@ impl Expr {
             | Expr::LogicalDependentJoin { .. }
             | Expr::LogicalWith { .. }
             | Expr::LogicalUnion { .. }
-            | Expr::LogicalIntersect { .. }
-            | Expr::LogicalExcept { .. }
             | Expr::NestedLoop { .. }
             | Expr::HashJoin { .. }
             | Expr::CreateTempTable { .. }
-            | Expr::Union { .. }
-            | Expr::Intersect { .. }
-            | Expr::Except { .. } => 2,
+            | Expr::Union { .. } => 2,
             Expr::LogicalFilter { .. }
             | Expr::LogicalOut { .. }
             | Expr::LogicalMap { .. }
@@ -526,16 +496,6 @@ impl Expr {
                 let right = Box::new(visitor(*right));
                 Expr::LogicalUnion { left, right }
             }
-            Expr::LogicalIntersect { left, right } => {
-                let left = Box::new(visitor(*left));
-                let right = Box::new(visitor(*right));
-                Expr::LogicalIntersect { left, right }
-            }
-            Expr::LogicalExcept { left, right } => {
-                let left = Box::new(visitor(*left));
-                let right = Box::new(visitor(*right));
-                Expr::LogicalExcept { left, right }
-            }
             Expr::LogicalInsert { table, input } => {
                 let input = Box::new(visitor(*input));
                 Expr::LogicalInsert { table, input }
@@ -651,14 +611,6 @@ impl Expr {
                 left: Box::new(visitor(*left)),
                 right: Box::new(visitor(*right)),
             },
-            Expr::Intersect { left, right } => Expr::Intersect {
-                left: Box::new(visitor(*left)),
-                right: Box::new(visitor(*right)),
-            },
-            Expr::Except { left, right } => Expr::Except {
-                left: Box::new(visitor(*left)),
-                right: Box::new(visitor(*right)),
-            },
             Expr::Insert {
                 table,
                 indexes,
@@ -770,8 +722,6 @@ impl Expr {
             | Expr::LogicalLimit { input, .. }
             | Expr::LogicalSort { input, .. }
             | Expr::LogicalUnion { right: input, .. }
-            | Expr::LogicalIntersect { right: input, .. }
-            | Expr::LogicalExcept { right: input, .. }
             | Expr::LogicalJoin {
                 join: Join::Semi { .. },
                 right: input,
@@ -865,8 +815,6 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
-            | Expr::Intersect { .. }
-            | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -941,8 +889,6 @@ impl Expr {
             | Expr::LogicalOut { .. }
             | Expr::LogicalLimit { .. }
             | Expr::LogicalUnion { .. }
-            | Expr::LogicalIntersect { .. }
-            | Expr::LogicalExcept { .. }
             | Expr::LogicalInsert { .. }
             | Expr::LogicalUpdate { .. }
             | Expr::LogicalDelete { .. }
@@ -966,8 +912,6 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
-            | Expr::Intersect { .. }
-            | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -1108,8 +1052,6 @@ impl Expr {
             | Expr::LogicalSingleGet { .. }
             | Expr::LogicalLimit { .. }
             | Expr::LogicalUnion { .. }
-            | Expr::LogicalIntersect { .. }
-            | Expr::LogicalExcept { .. }
             | Expr::LogicalInsert { .. }
             | Expr::LogicalCreateDatabase { .. }
             | Expr::LogicalCreateTable { .. }
@@ -1131,8 +1073,6 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
-            | Expr::Intersect { .. }
-            | Expr::Except { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -1158,15 +1098,11 @@ impl ops::Index<usize> for Expr {
                 ..
             }
             | Expr::LogicalWith { left, right, .. }
-            | Expr::LogicalUnion { left, right }
-            | Expr::LogicalIntersect { left, right }
-            | Expr::LogicalExcept { left, right }
+            | Expr::LogicalUnion { left, right, .. }
             | Expr::NestedLoop { left, right, .. }
             | Expr::HashJoin { left, right, .. }
             | Expr::CreateTempTable { left, right, .. }
-            | Expr::Union { left, right }
-            | Expr::Intersect { left, right }
-            | Expr::Except { left, right } => match index {
+            | Expr::Union { left, right } => match index {
                 0 => left,
                 1 => right,
                 _ => panic!("{} is out of bounds [0,2)", index),
@@ -1322,6 +1258,7 @@ pub struct Column {
 pub enum Phase {
     Parse,
     Convert,
+    // TODO Plan is somewhat of a misnomer, we actually use this for dependent joins in the convert phase.
     Plan,
 }
 

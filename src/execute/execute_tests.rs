@@ -181,6 +181,38 @@ fn test_index() {
     test.finish();
 }
 
+#[test]
+fn test_join() {
+    let mut test = TestProvider::new(None);
+    test.test(
+        "examples/execute/join/nested_loop_semi_join.txt",
+        vec![
+            "create table foo (id int64); create table bar (id int64);",
+            "insert into foo values (1), (2); insert into bar values (2), (3);",
+            "select id from foo where id in (select id from bar)",
+        ],
+    );
+    test.test(
+        "examples/execute/join/nested_loop_anti_join.txt",
+        vec![
+            "create table foo (id int64); create table bar (id int64);",
+            "insert into foo values (1), (2); insert into bar values (2), (3);",
+            "select id from foo where id not in (select id from bar)",
+        ],
+    );
+    test.finish();
+}
+
+#[test]
+fn test_set() {
+    let mut test = TestProvider::new(None);
+    test.test(
+        "examples/execute/set/union_all.txt",
+        vec!["select 1 as x union all select 2 as x"],
+    );
+    test.finish();
+}
+
 pub struct TestProvider {
     persistent_storage: Option<Storage>,
     errors: Vec<String>,

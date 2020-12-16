@@ -3,5 +3,5 @@ values (1, (select current_timestamp())), (2, (select current_timestamp()))
 
 Insert person
 	Values person.person_id person.modified_date [1 $expr_subquery.$col1] [2 $expr_subquery.$col1]
-		Map $expr_subquery.$col1:(CurrentTimestamp)
+		Map $expr_subquery.$col1:(CurrentTimestamp) $expr_subquery.$col1:(CurrentTimestamp), ..
 			TableFreeScan

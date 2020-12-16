@@ -88,8 +88,8 @@ impl Converter {
             .map(|c| Column::from(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column("$xmin".to_string(), DataType::Int64);
-        let xmax = self.create_column("$xmax".to_string(), DataType::Int64);
+        let xmin = self.create_column("$xmin".to_string(), DataType::Int64, Phase::Convert);
+        let xmax = self.create_column("$xmax".to_string(), DataType::Int64, Phase::Convert);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -118,9 +118,9 @@ impl Converter {
             .map(|c| Column::from(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column("$xmin".to_string(), DataType::Int64);
-        let xmax = self.create_column("$xmax".to_string(), DataType::Int64);
-        let tid = self.create_column("$tid".to_string(), DataType::Int64);
+        let xmin = self.create_column("$xmin".to_string(), DataType::Int64, Phase::Convert);
+        let xmax = self.create_column("$xmax".to_string(), DataType::Int64, Phase::Convert);
+        let tid = self.create_column("$tid".to_string(), DataType::Int64, Phase::Convert);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -232,63 +232,59 @@ impl Converter {
     }
 
     fn set_operation(&mut self, q: &ResolvedSetOperationScanProto) -> Expr {
-        // Note that this nests the operations backwards.
-        // For example, `a U b U c` will be nested as (c (b a)).
-        // This is important for `a EXCEPT b`, which needs to be nested as
-        // (EXCEPT b a) so the build side is on the left.
-        let head = &q.input_item_list[0];
-        let tail = &q.input_item_list[1..];
-        let mut right = self.any_resolved_scan(head.scan.get());
-        right = self.project_set_item(&q.parent.get().column_list, &head.output_column_list, right);
-        for input in tail {
-            let mut left = self.any_resolved_scan(input.scan.get());
-            left =
-                self.project_set_item(&q.parent.get().column_list, &input.output_column_list, left);
-            right = match *q.op_type.get() {
-                // UnionAll
-                0 => LogicalUnion {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                },
-                // UnionDistinct
-                1 => panic!("UNION DISTINCT is not supported"), // TODO
-                // IntersectAll
-                2 => LogicalIntersect {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                },
-                // IntersectDistinct
-                3 => panic!("INTERSECT DISTINCT is not supported"), // TODO
-                // ExceptAll
-                4 => LogicalExcept {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                },
-                // ExceptDistinct
-                5 => panic!("EXCEPT DISTINCT is not supported"), // TODO
-                // Other
-                other => panic!("{:?}", other),
-            };
+        match q.op_type.unwrap() {
+            // UnionAll
+            0 => self.union(&q.parent.get().column_list, &q.input_item_list),
+            // UnionDistinct
+            1 => panic!("UNION DISTINCT is not supported"), // TODO
+            // IntersectAll
+            2 => panic!("UNION DISTINCT is not supported"), // TODO
+            // IntersectDistinct
+            3 => panic!("INTERSECT DISTINCT is not supported"), // TODO
+            // ExceptAll
+            4 => panic!("EXCEPT ALL is not supported"), // TODO
+            // ExceptDistinct
+            5 => panic!("EXCEPT DISTINCT is not supported"), // TODO
+            // Other
+            other => panic!("{:?}", other),
         }
-        right
     }
 
-    fn project_set_item(
+    fn union(
         &mut self,
         outputs: &Vec<ResolvedColumnProto>,
-        inputs: &Vec<ResolvedColumnProto>,
-        item: Expr,
+        items: &[ResolvedSetOperationItemProto],
     ) -> Expr {
+        match items.len() {
+            0 => panic!(),
+            1 => {
+                let input = self.any_resolved_scan(items[0].scan.get());
+                let columns = self.columns(&items[0].output_column_list);
+                let outputs = self.columns(outputs);
+                self.rename_columns(outputs, columns, input)
+            }
+            _ => {
+                let left = self.union(outputs, &items[0..1]);
+                let right = self.union(outputs, &items[1..]);
+                LogicalUnion {
+                    left: Box::new(left),
+                    right: Box::new(right),
+                }
+            }
+        }
+    }
+
+    fn rename_columns(&mut self, outputs: Vec<Column>, inputs: Vec<Column>, input: Expr) -> Expr {
         let mut projects = vec![];
         for i in 0..outputs.len() {
-            let input = Scalar::Column(Column::from(&inputs[i]));
-            let output = Column::from(&outputs[i]);
+            let input = Scalar::Column(inputs[i].clone());
+            let output = outputs[i].clone();
             projects.push((input, output))
         }
         LogicalMap {
             include_existing: false,
             projects,
-            input: Box::new(item),
+            input: Box::new(input),
         }
     }
 
@@ -484,12 +480,16 @@ impl Converter {
         let function = function.function.get().name.get().clone();
         let argument = if arguments.len() == 0 {
             let argument = Scalar::Literal(Value::Int64(1));
-            let column = self.create_column("$star".to_string(), DataType::Int64);
+            let column = self.create_column("$star".to_string(), DataType::Int64, Phase::Convert);
             project.push((argument, column.clone()));
             column.clone()
         } else if arguments.len() == 1 {
             let argument = self.expr(arguments.first().get(), input);
-            let column = self.create_column(function_name(&function), argument.data_type());
+            let column = self.create_column(
+                function_name(&function),
+                argument.data_type(),
+                Phase::Convert,
+            );
             project.push((argument, column.clone()));
             column.clone()
         } else {
@@ -775,7 +775,7 @@ impl Converter {
             ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
             ResolvedCastNode(x) => self.cast(x, outer),
-            ResolvedParameterNode(x) => self.parameter(x, outer),
+            ResolvedParameterNode(x) => self.parameter(x),
             ResolvedSubqueryExprNode(x) => self.subquery_expr(x, outer),
             other => panic!("{:?}", other),
         }
@@ -819,7 +819,7 @@ impl Converter {
         Scalar::Cast(Box::new(self.expr(expr, outer)), data_type::from_proto(ty))
     }
 
-    fn parameter(&mut self, x: &ResolvedParameterProto, outer: &mut Expr) -> Scalar {
+    fn parameter(&mut self, x: &ResolvedParameterProto) -> Scalar {
         Scalar::Parameter(
             x.name.get().clone(),
             data_type::from_proto(x.parent.get().r#type.get()),
@@ -844,14 +844,15 @@ impl Converter {
             1 => unimplemented!(),
             // Exists
             2 => {
-                let mark = self.create_column("$exists".to_string(), DataType::Boolean);
+                let mark =
+                    self.create_column("$exists".to_string(), DataType::Boolean, Phase::Convert);
                 let join = Join::Mark(mark.clone(), vec![]);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
             }
             // In
             3 => {
-                let mark = self.create_column("$in".to_string(), DataType::Boolean);
+                let mark = self.create_column("$in".to_string(), DataType::Boolean, Phase::Convert);
                 let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
@@ -867,14 +868,119 @@ impl Converter {
             other => panic!("{:?}", other),
         };
         // Push join onto outer.
-        *outer = create_dependent_join(parameters, join, subquery, outer.clone());
+        *outer = self.create_dependent_join(parameters, join, subquery, outer.clone());
         // Return scalar that represents the entire query.
         scalar
     }
 
-    fn create_column(&mut self, name: String, data_type: DataType) -> Column {
+    fn create_dependent_join(
+        &mut self,
+        subquery_parameters: Vec<Column>,
+        join: Join,
+        subquery: Expr,
+        outer: Expr,
+    ) -> Expr {
+        if subquery_parameters.is_empty() {
+            return LogicalJoin {
+                join,
+                left: Box::new(subquery),
+                right: Box::new(outer),
+            };
+        }
+        // A correlated subquery can be interpreted as a dependent join
+        // that executes the subquery once for every tuple in outer:
+        //
+        //        DependentJoin
+        //         +         +
+        //         +         +
+        //    subquery      outer
+        //
+        // As a first step in eliminating the dependent join, we rewrite it as dependent join
+        // that executes the subquery once for every *distinct combination of parameters* in outer,
+        // and then an equi-join that looks up the appropriate row for every tuple in outer:
+        //
+        //             LogicalJoin
+        //              +       +
+        //              +       +
+        //   DependentJoin     outer
+        //    +         +
+        //    +         +
+        // subquery  Project
+        //              +
+        //              +
+        //            outer
+        //
+        // This is a slight improvement because the number of distinct combinations of parameters in outer
+        // is likely much less than the number of tuples in outer,
+        // and it makes the dependent join much easier to manipulate because Project is a set rather than a multiset.
+        // During the rewrite phase, we will take advantage of this to push the dependent join down
+        // until it can be eliminated or converted to an inner join.
+        //
+        //   DependentJoin
+        //    +         +
+        //    +         +
+        // subquery  Project
+        //              +
+        //              +
+        //            outer
+        //
+        // TODO this doesn't work if we're only looking at part of the expression
+        let rename_subquery_parameters: Vec<Column> = subquery_parameters
+            .iter()
+            .map(|p| self.create_column(p.name.clone(), p.data_type.clone(), Phase::Plan))
+            .collect();
+        let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
+            .map(|i| {
+                (
+                    subquery_parameters[i].clone(),
+                    rename_subquery_parameters[i].clone(),
+                )
+            })
+            .collect();
+        let dependent_join = LogicalDependentJoin {
+            parameters: rename_subquery_parameters.clone(),
+            predicates: vec![],
+            subquery: Box::new(subquery.clone().subst(&map_subquery_parameters)),
+            domain: Box::new(outer.clone().subst(&map_subquery_parameters)),
+        };
+        //             LogicalJoin
+        //              +       +
+        //              +       +
+        //   DependentJoin     outer
+        //    +         +
+        let mut join_predicates: Vec<Scalar> = (0..subquery_parameters.len())
+            .map(|i| {
+                Scalar::Call(Box::new(Function::Equal(
+                    Scalar::Column(subquery_parameters[i].clone()),
+                    Scalar::Column(rename_subquery_parameters[i].clone()),
+                )))
+            })
+            .collect();
+        let join = match join {
+            Join::Single(additional_predicates) => {
+                for p in additional_predicates {
+                    join_predicates.push(p.clone());
+                }
+                Join::Single(join_predicates)
+            }
+            Join::Mark(mark, additional_predicates) => {
+                for p in additional_predicates {
+                    join_predicates.push(p.clone());
+                }
+                Join::Mark(mark.clone(), join_predicates)
+            }
+            _ => panic!("{}", join),
+        };
+        LogicalJoin {
+            join,
+            left: Box::new(dependent_join),
+            right: Box::new(outer),
+        }
+    }
+
+    fn create_column(&mut self, name: String, data_type: DataType, created: Phase) -> Column {
         let column = Column {
-            created: Phase::Convert,
+            created,
             id: self.next_column_id,
             name,
             table: None,
@@ -882,123 +988,6 @@ impl Converter {
         };
         self.next_column_id += 1;
         column
-    }
-}
-
-fn create_dependent_join(
-    subquery_parameters: Vec<Column>,
-    join: Join,
-    subquery: Expr,
-    outer: Expr,
-) -> Expr {
-    if subquery_parameters.is_empty() {
-        return LogicalJoin {
-            join,
-            left: Box::new(subquery),
-            right: Box::new(outer),
-        };
-    }
-    // A correlated subquery can be interpreted as a dependent join
-    // that executes the subquery once for every tuple in outer:
-    //
-    //        DependentJoin
-    //         +         +
-    //         +         +
-    //    subquery      outer
-    //
-    // As a first step in eliminating the dependent join, we rewrite it as dependent join
-    // that executes the subquery once for every *distinct combination of parameters* in outer,
-    // and then an equi-join that looks up the appropriate row for every tuple in outer:
-    //
-    //             LogicalJoin
-    //              +       +
-    //              +       +
-    //   DependentJoin     outer
-    //    +         +
-    //    +         +
-    // subquery  Project
-    //              +
-    //              +
-    //            outer
-    //
-    // This is a slight improvement because the number of distinct combinations of parameters in outer
-    // is likely much less than the number of tuples in outer,
-    // and it makes the dependent join much easier to manipulate because Project is a set rather than a multiset.
-    // During the rewrite phase, we will take advantage of this to push the dependent join down
-    // until it can be eliminated or converted to an inner join.
-    //
-    //   DependentJoin
-    //    +         +
-    //    +         +
-    // subquery  Project
-    //              +
-    //              +
-    //            outer
-    //
-    // TODO this doesn't work if we're only looking at part of the expression
-    let fresh_column = subquery
-        .references()
-        .iter()
-        .filter(|c| c.created == Phase::Plan)
-        .map(|c| c.id)
-        .max()
-        .unwrap_or(0)
-        + 1;
-    let rename_subquery_parameters: Vec<Column> = (0..subquery_parameters.len())
-        .map(|i| Column {
-            created: Phase::Plan,
-            id: fresh_column + i as i64,
-            name: subquery_parameters[i].name.clone(),
-            table: None,
-            data_type: subquery_parameters[i].data_type.clone(),
-        })
-        .collect();
-    let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
-        .map(|i| {
-            (
-                subquery_parameters[i].clone(),
-                rename_subquery_parameters[i].clone(),
-            )
-        })
-        .collect();
-    let dependent_join = LogicalDependentJoin {
-        parameters: rename_subquery_parameters.clone(),
-        predicates: vec![],
-        subquery: Box::new(subquery.clone().subst(&map_subquery_parameters)),
-        domain: Box::new(outer.clone().subst(&map_subquery_parameters)),
-    };
-    //             LogicalJoin
-    //              +       +
-    //              +       +
-    //   DependentJoin     outer
-    //    +         +
-    let mut join_predicates: Vec<Scalar> = (0..subquery_parameters.len())
-        .map(|i| {
-            Scalar::Call(Box::new(Function::Equal(
-                Scalar::Column(subquery_parameters[i].clone()),
-                Scalar::Column(rename_subquery_parameters[i].clone()),
-            )))
-        })
-        .collect();
-    let join = match join {
-        Join::Single(additional_predicates) => {
-            for p in additional_predicates {
-                join_predicates.push(p.clone());
-            }
-            Join::Single(join_predicates)
-        }
-        Join::Mark(mark, additional_predicates) => {
-            for p in additional_predicates {
-                join_predicates.push(p.clone());
-            }
-            Join::Mark(mark.clone(), join_predicates)
-        }
-        _ => panic!("{}", join),
-    };
-    LogicalJoin {
-        join,
-        left: Box::new(dependent_join),
-        right: Box::new(outer),
     }
 }
 
@@ -1044,7 +1033,7 @@ fn function_name(name: &String) -> String {
 fn literal(value: &ValueProto, data_type: &TypeProto) -> Value {
     let value = match value {
         ValueProto { value: Some(value) } => value,
-        other => return Value::Null(data_type::from_proto(data_type)),
+        _ => return Value::Null(data_type::from_proto(data_type)),
     };
     match value {
         Int64Value(x) => Value::Int64(*x),

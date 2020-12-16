@@ -387,12 +387,6 @@ impl<'a> Optimizer<'a> {
                     &self.ss[leaf(right)].props.column_unique_cardinality,
                 );
             }
-            LogicalIntersect { left, right } => todo!("intersect"),
-            LogicalExcept { left, .. } => {
-                cardinality = self.ss[leaf(left)].props.cardinality;
-                column_unique_cardinality =
-                    self.ss[leaf(left)].props.column_unique_cardinality.clone();
-            }
             LogicalInsert { .. }
             | LogicalValues { .. }
             | LogicalUpdate { .. }
@@ -420,8 +414,6 @@ impl<'a> Optimizer<'a> {
             | Limit { .. }
             | Sort { .. }
             | Union { .. }
-            | Intersect { .. }
-            | Except { .. }
             | Insert { .. }
             | Values { .. }
             | Delete { .. }

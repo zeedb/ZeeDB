@@ -240,6 +240,10 @@ impl Page {
         (start, end)
     }
 
+    pub fn approx_num_rows(&self) -> usize {
+        self.num_rows().load(Ordering::Relaxed)
+    }
+
     fn num_rows(&self) -> &AtomicUsize {
         self.atomic::<AtomicUsize>(self.inner.num_rows, 0)
     }

@@ -412,6 +412,14 @@ fn test_join() {
         "#,
     );
     test.test(
+        "examples/optimize/join/anti_join.txt",
+        r#"
+            select 1
+            from person
+            where not exists (select 1 from customer where customer.person_id = person.person_id)
+        "#,
+    );
+    test.test(
         "examples/optimize/join/single_join.txt",
         r#"
             select (select name from store where store.store_id = customer.customer_id and store.name like "A%"), (select first_name from person where person.person_id = customer.person_id)
@@ -514,6 +522,14 @@ fn test_join() {
             from person
             join customer using (person_id)
             join store using (store_id)
+        "#,
+    );
+    test.test(
+        "examples/optimize/join/remove_inner_join.txt",
+        r#"
+            select * 
+            from (select 1 as x)
+            join (select 1 as y) on x = y
         "#,
     );
     test.finish();
