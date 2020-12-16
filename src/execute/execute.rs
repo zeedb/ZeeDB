@@ -111,6 +111,7 @@ enum Node {
         input: Input,
     },
     Limit {
+        cursor: usize,
         limit: usize,
         offset: usize,
         input: Input,
@@ -264,7 +265,12 @@ impl Node {
                 limit,
                 offset,
                 input,
-            } => todo!(),
+            } => Node::Limit {
+                cursor: 0,
+                limit,
+                offset,
+                input: Input::compile(*input),
+            },
             Sort { order_by, input } => Node::Sort {
                 order_by,
                 input: Input::compile(*input),
@@ -630,10 +636,24 @@ impl Input {
                 }
             }
             Node::Limit {
+                cursor,
                 limit,
                 offset,
                 input,
-            } => todo!(),
+            } => {
+                let input = input.next(state)?;
+                let mut start_inclusive = 0;
+                while start_inclusive < input.num_rows() && cursor < offset {
+                    start_inclusive += 1;
+                    *cursor += 1;
+                }
+                let mut end_exclusive = start_inclusive;
+                while end_exclusive <= input.num_rows() && *cursor < *offset + *limit {
+                    end_exclusive += 1;
+                    *cursor += 1;
+                }
+                Ok(kernel::slice(&input, start_inclusive..end_exclusive))
+            }
             Node::Sort { order_by, input } => crate::sort::sort(input.next(state)?, order_by),
             Node::Union { left, right } => match left.next(state) {
                 Ok(batch) => Ok(batch),

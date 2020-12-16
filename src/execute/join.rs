@@ -79,7 +79,7 @@ fn nested_loop_semi(
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
     let mask = crate::eval::all(predicates, &input, state)?;
-    let right_mask = reshape_any(&mask, left.num_rows());
+    let right_mask = kernel::reshape_any(&mask, left.num_rows());
     Ok(kernel::gather_logical(right, &right_mask))
 }
 
@@ -91,7 +91,7 @@ fn nested_loop_anti(
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
     let mask = crate::eval::all(predicates, &input, state)?;
-    let right_mask = reshape_none(&mask, left.num_rows());
+    let right_mask = kernel::reshape_none(&mask, left.num_rows());
     Ok(kernel::gather_logical(right, &right_mask))
 }
 
@@ -191,20 +191,4 @@ fn index_cross_product(num_left: usize, num_right: usize) -> (UInt32Array, UInt3
         }
     }
     (index_left.finish(), index_right.finish())
-}
-
-fn reshape_any(mask: &BooleanArray, stride: usize) -> BooleanArray {
-    let mut result = vec![false].repeat(mask.len() / stride);
-    for i in 0..mask.len() {
-        result[i / stride] |= mask.value(i)
-    }
-    BooleanArray::from(result)
-}
-
-fn reshape_none(mask: &BooleanArray, stride: usize) -> BooleanArray {
-    let mut result = vec![true].repeat(mask.len() / stride);
-    for i in 0..mask.len() {
-        result[i / stride] &= !mask.value(i)
-    }
-    BooleanArray::from(result)
 }

@@ -1,0 +1,6 @@
+create table foo (id int64);
+insert into foo values (1), (2), (3);
+select * from foo limit 1 offset 1;
+
+id
+2

@@ -238,6 +238,28 @@ fn test_set() {
     test.finish();
 }
 
+#[test]
+fn test_limit() {
+    let mut test = TestProvider::new(None);
+    test.test(
+        "examples/execute/limit/limit.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo values (1), (2), (3);",
+            "select * from foo limit 1;",
+        ],
+    );
+    test.test(
+        "examples/execute/limit/offset.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo values (1), (2), (3);",
+            "select * from foo limit 1 offset 1;",
+        ],
+    );
+    test.finish();
+}
+
 pub struct TestProvider {
     persistent_storage: Option<Storage>,
     errors: Vec<String>,
