@@ -1,0 +1,4 @@
+select count(person.person_id), count(customer.person_id) from person join customer using (person_id)
+
+$agg1,$agg2
+10000,10000

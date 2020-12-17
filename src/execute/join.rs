@@ -16,7 +16,7 @@ pub fn hash_join(
 ) -> Result<RecordBatch, Error> {
     match join {
         Join::Inner(predicates) => hash_join_inner(predicates, left, right, partition_right, state),
-        Join::Right(_) => todo!(),
+        Join::Right(predicates) => hash_join_right(predicates, left, right, partition_right, state),
         Join::Outer(_) => todo!(),
         Join::Semi(_) => todo!(),
         Join::Anti(_) => todo!(),
@@ -41,6 +41,37 @@ fn hash_join_inner(
     let input = kernel::zip(&left, &right);
     let mask = crate::eval::all(predicates, &input, state)?;
     Ok(kernel::gather_logical(&input, &mask))
+}
+
+fn hash_join_right(
+    predicates: &Vec<Scalar>,
+    left: &HashTable,
+    right: &RecordBatch,
+    partition_right: &Vec<Scalar>,
+    state: &mut Session,
+) -> Result<RecordBatch, Error> {
+    let partition_right: Result<Vec<_>, _> = partition_right
+        .iter()
+        .map(|x| crate::eval::eval(x, right, state))
+        .collect();
+    let (left_input, right_index) = left.probe(&partition_right?);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
+    let mask = crate::eval::all(predicates, &input, state)?;
+    let matched = kernel::gather_logical(&input, &mask);
+    // Figure out which indexes on the right were not matched.
+    let matched_indexes = kernel::gather_logical(&right_index, &mask);
+    let matched_mask = kernel::scatter(
+        &kernel::falses(right.num_rows()),
+        &matched_indexes,
+        &kernel::trues(matched_indexes.len()),
+    );
+    let unmatched_mask = kernel::not(&matched_mask);
+    let unmatched_right = kernel::gather_logical(right, &unmatched_mask);
+    let unmatched_left = null_batch(unmatched_right.num_rows(), left_input.schema());
+    let unmatched = kernel::zip(&unmatched_left, &unmatched_right);
+    // Stitch together the two parts.
+    Ok(kernel::cat(&vec![matched, unmatched]))
 }
 
 pub fn nested_loop(

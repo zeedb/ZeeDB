@@ -70,6 +70,20 @@ fn test_aggregate() {
 }
 
 #[test]
+fn test_aggregate_large() {
+    let mut test = TestProvider::new(Some(crate::adventure_works::adventure_works()));
+    test.test(
+        "examples/execute/aggregate/count_person.txt",
+        vec!["select count(*) from person"],
+    );
+    test.test(
+        "examples/execute/aggregate/count_customer.txt",
+        vec!["select count(*) from customer"],
+    );
+    test.finish();
+}
+
+#[test]
 fn test_ddl() {
     let mut test = TestProvider::new(None);
     test.test(
@@ -265,6 +279,41 @@ fn test_join() {
         ],
     );
     test.finish();
+}
+
+#[test]
+fn test_join_large() {
+    let mut adventure_works = TestProvider::new(Some(crate::adventure_works::adventure_works()));
+    adventure_works.test(
+        "examples/execute/join/hash_inner_join.txt",
+        vec!["select count(person.person_id), count(customer.person_id) from person join customer using (person_id)"],
+    );
+    adventure_works.test(
+        "examples/execute/join/hash_left_join.txt",
+        vec!["select count(person.person_id), count(customer.person_id) from person left join customer using (person_id)"],
+    );
+    adventure_works.test(
+        "examples/execute/join/hash_right_join.txt",
+        vec!["select count(person.person_id), count(customer.person_id) from person right join customer using (person_id)"],
+    );
+    // adventure_works.test(
+    //     "examples/execute/join/hash_outer_join.txt",
+    //     // TODO this is not a great test.
+    //     vec!["select count(person.person_id), count(customer.person_id) from person full join customer using (person_id)"],
+    // );
+    // adventure_works.test(
+    //     "examples/execute/join/hash_semi_join.txt",
+    //     vec!["select count(*) from person where person_id in (select person_id from customer)"],
+    // );
+    // adventure_works.test(
+    //     "examples/execute/join/hash_anti_join.txt",
+    //     vec!["select count(*) from person where person_id not in (select person_id from customer)"],
+    // );
+    // adventure_works.test(
+    //     "examples/execute/join/hash_mark_join.txt",
+    //     vec!["select exists(select 1 from customer where customer.person_id = person.person_id), count(*) from person"],
+    // );
+    adventure_works.finish();
 }
 
 #[test]

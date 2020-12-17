@@ -173,7 +173,7 @@ impl Page {
         tids: &mut Int64Builder,
         offset: &mut usize,
     ) {
-        let (start, end) = self.reserve(records.num_rows());
+        let (start, end) = self.reserve(records.num_rows() - *offset);
         // Write the new rows in the reserved slots.
         for (dst, dst_field) in self.inner.schema.fields().iter().enumerate() {
             for (src, src_field) in records.schema().fields().iter().enumerate() {
@@ -191,7 +191,7 @@ impl Page {
                         &self.inner.string_buffers[dst],
                         start,
                         end,
-                        records.column(src).deref(),
+                        records.column(src).slice(*offset, end - start).deref(),
                     );
                 }
             }

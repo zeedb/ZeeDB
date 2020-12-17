@@ -497,7 +497,7 @@ impl Input {
                 scan,
             } => {
                 if scan.is_none() {
-                    *scan = Some(state.storage.table(table.id).scan())
+                    *scan = Some(state.storage.table(table.id).scan());
                 }
                 match scan.as_mut().unwrap().pop() {
                     Some(page) => {
