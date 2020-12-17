@@ -7,6 +7,10 @@ Map $query.$col1:1
 		Partition* store_id' modified_date'
 			Map $expr_subquery.$col1:1 store_id' modified_date'
 				HashJoin Inner (Equal store.store_id store_id') (Greater modified_date' store.modified_date)
+					Partition* store.store_id
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* store.store_id store.modified_date $xmin $xmax
+								SeqScan store
 					Partition* store_id'
 						Aggregate store_id' modified_date'
 							HashJoin Mark $exists (Equal customer.person_id person_id')
@@ -20,10 +24,6 @@ Map $query.$col1:1
 									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 										Map* customer.person_id store_id' modified_date' $xmin $xmax
 											SeqScan customer
-					Partition* store.store_id
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* store.store_id store.modified_date $xmin $xmax
-								SeqScan store
 		Partition* customer.store_id customer.modified_date
 			Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
 				HashJoin Semi (Equal customer.person_id person_id')

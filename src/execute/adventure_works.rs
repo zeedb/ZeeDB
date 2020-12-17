@@ -4,6 +4,14 @@ use planner::*;
 use rand::*;
 use storage::Storage;
 
+pub fn adventure_works() -> Storage {
+    static ADVENTURE_WORKS: OnceCell<Storage> = OnceCell::new();
+
+    ADVENTURE_WORKS
+        .get_or_init(generate_adventure_works)
+        .clone()
+}
+
 fn generate_adventure_works() -> Storage {
     fn timestamp(secs: i64) -> DateTime<Utc> {
         DateTime::from_utc(NaiveDateTime::from_timestamp(secs, 0), Utc)
@@ -57,9 +65,11 @@ fn generate_adventure_works() -> Storage {
     execute(format!("insert into store values\n{};", lines.join(",\n")).as_str());
     println!("...wrote {} rows into store", N_STORE);
     // Customer.
+    let customers = sample(N_PERSON, N_CUSTOMER);
     let lines: Vec<_> = (0..N_CUSTOMER)
         .map(|customer_id| {
-            let person_id = rng.gen_range(0, N_PERSON);
+            let person_id = customers[customer_id];
+            // TODO some stores might have no customers.
             let store_id = rng.gen_range(0, N_STORE);
             let account_number = rng.gen_range(0, N_CUSTOMER * 10);
             let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
@@ -72,10 +82,10 @@ fn generate_adventure_works() -> Storage {
     execute(format!("insert into customer values\n{};", lines.join(",\n")).as_str());
     println!("...wrote {} rows into customer", N_CUSTOMER);
     // Person.
-    let mut remaining = N_PERSON;
-    while remaining > 0 {
-        let queued = remaining.min(10_000);
-        let lines: Vec<_> = (0..queued)
+    let mut offset = 0;
+    while offset < N_PERSON {
+        let n = (N_PERSON - offset).min(10_000);
+        let lines: Vec<_> = (offset..offset + n)
             .map(|person_id| {
                 let first_name = rng.gen_range(0, 1_000_000);
                 let last_name = rng.gen_range(0, 1_000_000);
@@ -87,17 +97,19 @@ fn generate_adventure_works() -> Storage {
             })
             .collect();
         execute(format!("insert into person values\n{};", lines.join(",\n")).as_str());
-        remaining -= queued;
-        println!("...wrote {} rows into person", queued);
+        offset += n;
+        println!("...wrote {} rows into person", n);
     }
 
     storage
 }
 
-pub fn adventure_works() -> Storage {
-    static ADVENTURE_WORKS: OnceCell<Storage> = OnceCell::new();
-
-    ADVENTURE_WORKS
-        .get_or_init(generate_adventure_works)
-        .clone()
+fn sample(universe: usize, n: usize) -> Vec<usize> {
+    let mut rng = rngs::SmallRng::from_seed([0; 16]);
+    let mut array: Vec<_> = (0..universe).collect();
+    for i in 0..n {
+        let j = rng.gen_range(i, universe);
+        array.swap(i, j);
+    }
+    array.drain(0..n).collect()
 }
