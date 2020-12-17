@@ -2,7 +2,6 @@ use arrow::array::*;
 use arrow::buffer::*;
 use arrow::datatypes::*;
 use arrow::record_batch::*;
-use arrow::util::bit_util::*;
 use std::fmt;
 use std::mem::size_of;
 use std::ops::Deref;
@@ -402,12 +401,12 @@ fn extend_nulls(
     if let Some(null_bitmap) = values.data_ref().null_bitmap() {
         for i in 0..(end - start) {
             if null_bitmap.is_set(i) {
-                unsafe { set_bit_raw(dst, start + i) }
+                unsafe { kernel::set_bit_raw(dst, start + i) }
             }
         }
     } else {
         unsafe {
-            set_bits_raw(dst, start, end);
+            arrow::util::bit_util::set_bits_raw(dst, start, end);
         }
     }
 }
@@ -451,8 +450,8 @@ fn extend_boolean(
         .raw_data();
     for i in 0..(end - start) {
         unsafe {
-            if get_bit_raw(src, i) {
-                set_bit_raw(dst, start + i)
+            if kernel::get_bit_raw(src, i) {
+                kernel::set_bit_raw(dst, start + i)
             }
         }
     }
