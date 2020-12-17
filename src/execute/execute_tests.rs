@@ -256,6 +256,14 @@ fn test_join() {
             "select id from foo where id not in (select id from bar)",
         ],
     );
+    test.test(
+        "examples/execute/join/nested_loop_mark_join.txt",
+        vec![
+            "create table foo (id int64); create table bar (id int64);",
+            "insert into foo values (1), (2); insert into bar values (2), (3);",
+            "select id, exists(select id from bar where foo.id = bar.id) from foo",
+        ],
+    );
     test.finish();
 }
 

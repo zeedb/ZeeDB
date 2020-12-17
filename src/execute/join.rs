@@ -56,7 +56,7 @@ pub fn nested_loop(
         Join::Semi(predicates) => nested_loop_semi(predicates, left, right, state),
         Join::Anti(predicates) => nested_loop_anti(predicates, left, right, state),
         Join::Single(predicates) => nested_loop_single(predicates, left, right, state),
-        Join::Mark(_, _) => todo!(),
+        Join::Mark(mark, predicates) => nested_loop_mark(mark, predicates, left, right, state),
     }
 }
 
@@ -147,6 +147,24 @@ fn nested_loop_single(
     let combined = kernel::cat(&vec![head, tail]);
     assert!(combined.num_rows() >= right.num_rows());
     Ok(combined)
+}
+
+fn nested_loop_mark(
+    mark: &Column,
+    predicates: &Vec<Scalar>,
+    left: &RecordBatch,
+    right: &RecordBatch,
+    state: &mut Session,
+) -> Result<RecordBatch, Error> {
+    let input = cross_product(left, right)?;
+    let mask = crate::eval::all(predicates, &input, state)?;
+    let right_mask = kernel::reshape_columns_any(&mask, left.num_rows());
+    let right_column = RecordBatch::try_new(
+        Arc::new(Schema::new(vec![mark.into_query_field()])),
+        vec![Arc::new(right_mask)],
+    )
+    .unwrap();
+    Ok(kernel::zip(right, &right_column))
 }
 
 fn unmatched(left: &RecordBatch, right: &RecordBatch, mask: &BooleanArray) -> RecordBatch {
