@@ -10,4 +10,5 @@ members = [
     "src/planner",
     "src/storage",
     "src/zetasql",
+    "src/zetasql_build",
 ]

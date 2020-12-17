@@ -1,0 +1,16 @@
+[package]
+name = "zetasql_build"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[[bin]]
+name = "main"
+path = "main.rs"
+
+[dependencies]
+tonic = "0.2.0"
+prost = "0.6.1"
+prost-types = "0.6.1"
+tokio = { version = "0.2", features = ["macros"] }
+tonic-build = "0.2.0"

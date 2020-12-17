@@ -1636,5 +1636,15 @@ dependencies = [
  "prost-types",
  "tokio",
  "tonic",
+]
+
+[[package]]
+name = "zetasql_build"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tokio",
+ "tonic",
  "tonic-build",
 ]

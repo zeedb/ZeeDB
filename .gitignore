@@ -1,5 +1,3 @@
 /target
 .idea
 src/benchmarks/profiles/*.profile
-src/zetasql/local_service.rs
-src/zetasql/zetasql.rs
