@@ -217,6 +217,30 @@ fn test_index() {
 fn test_join() {
     let mut test = TestProvider::new(None);
     test.test(
+        "examples/execute/join/nested_loop_left_join.txt",
+        vec![
+            "create table foo (id int64); create table bar (id int64);",
+            "insert into foo values (1), (2); insert into bar values (2), (3);",
+            "select foo.id as foo_id, bar.id as bar_id from foo left join bar using (id)",
+        ],
+    );
+    test.test(
+        "examples/execute/join/nested_loop_right_join.txt",
+        vec![
+            "create table foo (id int64); create table bar (id int64);",
+            "insert into foo values (1), (2); insert into bar values (2), (3);",
+            "select foo.id as foo_id, bar.id as bar_id from foo right join bar using (id)",
+        ],
+    );
+    test.test(
+        "examples/execute/join/nested_loop_outer_join.txt",
+        vec![
+            "create table foo (id int64); create table bar (id int64);",
+            "insert into foo values (1), (2); insert into bar values (2), (3);",
+            "select foo.id as foo_id, bar.id as bar_id from foo full join bar using (id)",
+        ],
+    );
+    test.test(
         "examples/execute/join/nested_loop_semi_join.txt",
         vec![
             "create table foo (id int64); create table bar (id int64);",

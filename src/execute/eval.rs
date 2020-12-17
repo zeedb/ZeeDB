@@ -70,6 +70,7 @@ pub fn eval(
             )?),
             Function::Multiply(_, _, _) => todo!(),
             Function::Subtract(_, _, _) => todo!(),
+            Function::Coalesce(_, _, _) => todo!(),
             Function::Default(column, _) => todo!(),
             Function::NextVal(sequence) => {
                 let input = eval(sequence, input, state)?;

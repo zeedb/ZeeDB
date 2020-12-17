@@ -514,6 +514,11 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             | Function::Divide(_, _, _)
             | Function::Multiply(_, _, _)
             | Function::Subtract(_, _, _) => panic!("{:?} is not a logical function", function),
+            Function::Coalesce(left, right, _) => {
+                let left = predicate_selectivity(left, scope);
+                let right = predicate_selectivity(right, scope);
+                left.min(right)
+            }
             Function::Default(_, _) | Function::NextVal(_) | Function::Xid => 1.0,
         },
         Scalar::Cast(_, _) => 0.5,

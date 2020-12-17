@@ -1,0 +1,7 @@
+create table foo (id int64); create table bar (id int64);
+insert into foo values (1), (2); insert into bar values (2), (3);
+select foo.id as foo_id, bar.id as bar_id from foo right join bar using (id)
+
+id,id
+2,2
+,3

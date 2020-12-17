@@ -1499,6 +1499,8 @@ pub enum Function {
     Divide(Scalar, Scalar, DataType),
     Multiply(Scalar, Scalar, DataType),
     Subtract(Scalar, Scalar, DataType),
+    // Other binary functions.
+    Coalesce(Scalar, Scalar, DataType),
     // System functions.
     Default(Column, DataType),
     NextVal(Scalar),
@@ -1554,6 +1556,7 @@ impl Function {
                     "ZetaSQL:$divide" => Function::Divide(left, right, returns),
                     "ZetaSQL:$multiply" => Function::Multiply(left, right, returns),
                     "ZetaSQL:$subtract" => Function::Subtract(left, right, returns),
+                    "ZetaSQL:coalesce" => Function::Coalesce(left, right, returns),
                     other => panic!("{} is not a binary function", other),
                 }
             }
@@ -1579,7 +1582,6 @@ impl Function {
         // "ZetaSQL:$case_with_value" => Function::CaseWithValue,
         // "ZetaSQL:ceil" => Function::Ceil,
         // "ZetaSQL:char_length" => Function::CharLength,
-        // "ZetaSQL:coalesce" => Function::Coalesce,
         // "ZetaSQL:concat" => Function::Concat,
         // "ZetaSQL:cos" => Function::Cos,
         // "ZetaSQL:cosh" => Function::Cosh,
@@ -1676,6 +1678,7 @@ impl Function {
             Function::Divide(_, _, _) => "Divide",
             Function::Multiply(_, _, _) => "Multiply",
             Function::Subtract(_, _, _) => "Subtract",
+            Function::Coalesce(_, _, _) => "Coalesce",
             Function::Default(_, _) => "Default",
             Function::NextVal(_) => "NextVal",
             Function::Xid => "Xid",
@@ -1704,7 +1707,8 @@ impl Function {
             | Function::Add(left, right, _)
             | Function::Divide(left, right, _)
             | Function::Multiply(left, right, _)
-            | Function::Subtract(left, right, _) => vec![left, right],
+            | Function::Subtract(left, right, _)
+            | Function::Coalesce(left, right, _) => vec![left, right],
         }
     }
 
@@ -1727,6 +1731,7 @@ impl Function {
             Function::Add(_, _, returns)
             | Function::Multiply(_, _, returns)
             | Function::Subtract(_, _, returns)
+            | Function::Coalesce(_, _, returns)
             | Function::Divide(_, _, returns)
             | Function::Default(_, returns) => returns.clone(),
             Function::NextVal(_) => DataType::Int64,
@@ -1759,6 +1764,9 @@ impl Function {
             }
             Function::Subtract(left, right, returns) => {
                 Function::Subtract(f(left), f(right), returns)
+            }
+            Function::Coalesce(left, right, returns) => {
+                Function::Coalesce(f(left), f(right), returns)
             }
             Function::NextVal(argument) => Function::NextVal(f(argument)),
         }
