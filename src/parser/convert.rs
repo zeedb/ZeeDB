@@ -413,92 +413,117 @@ impl Converter {
     fn aggregate(&mut self, q: &ResolvedAggregateScanProto) -> Expr {
         let q = q.parent.get();
         let mut input = self.any_resolved_scan(q.input_scan.get());
-        let mut projects = vec![];
-        let group_by = q
-            .group_by_list
-            .iter()
-            .map(|c| self.compute(c, &mut projects, &mut input))
-            .collect();
-        let aggregate = q
-            .aggregate_list
-            .iter()
-            .map(|c| {
-                let (aggregate, parameter) = self.reduce(c, &mut projects, &mut input);
-                let result = Column::from(&c.column.get());
-                (aggregate, parameter, result)
-            })
-            .collect();
-        if projects.len() > 0 {
-            input = LogicalMap {
+        // Project each of the group-by columns under its own name.
+        let mut input_projects: Vec<(Scalar, Column)> = vec![];
+        let mut group_by_columns: Vec<Column> = vec![];
+        for compute in &q.group_by_list {
+            let scalar = self.expr(compute.expr.get(), &mut input);
+            let column = Column::from(compute.column.get());
+            input_projects.push((scalar, column.clone()));
+            group_by_columns.push(column);
+        }
+        // Organize each of the aggregation operations into stages.
+        let mut aggregate_operators: Vec<(AggregateFn, Column, Column)> = vec![];
+        let mut output_projects: Vec<(Scalar, Column)> = vec![];
+        for aggregate in &q.aggregate_list {
+            let function = match aggregate.expr.get().node.get() {
+                ResolvedFunctionCallBaseNode(function) => function,
+                other => panic!("{:?}", other),
+            };
+            let function = match function.node.get() {
+                ResolvedNonScalarFunctionCallBaseNode(function) => function,
+                other => panic!("{:?}", other),
+            };
+            let function = match function.node.get() {
+                ResolvedAggregateFunctionCallNode(function) => function,
+                other => panic!("{:?}", other),
+            };
+            let function = function.parent.get();
+            let distinct = function.distinct.unwrap_or(false); // TODO
+            let ignore_nulls = function.null_handling_modifier.unwrap_or(0) == 1; // TODO
+            let function = function.parent.get();
+            let arguments = &function.argument_list;
+            let function = function.function.get().name.get().clone();
+            if &function == "ZetaSQL:avg" {
+                assert!(arguments.len() == 1);
+
+                let input_expr = self.expr(&arguments[0], &mut input);
+                let input_column =
+                    self.create_column("$avg".to_string(), input_expr.data_type(), Phase::Plan);
+                input_projects.push((input_expr.clone(), input_column.clone()));
+                let sum_column =
+                    self.create_column("$avg$sum".to_string(), input_expr.data_type(), Phase::Plan);
+                let count_column = self.create_column(
+                    "$avg$count".to_string(),
+                    input_expr.data_type(),
+                    Phase::Plan,
+                );
+                aggregate_operators.push((
+                    AggregateFn::Sum,
+                    input_column.clone(),
+                    sum_column.clone(),
+                ));
+                aggregate_operators.push((
+                    AggregateFn::Count,
+                    input_column.clone(),
+                    count_column.clone(),
+                ));
+                let avg_expr = Scalar::Call(Box::new(Function::Divide(
+                    Scalar::Cast(Box::new(Scalar::Column(sum_column)), DataType::Float64),
+                    Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::Float64),
+                    DataType::Float64,
+                )));
+                let avg_column = Column::from(aggregate.column.get());
+                output_projects.push((avg_expr, avg_column));
+            } else if &function == "ZetaSQL:$count_star" {
+                assert!(arguments.len() == 0);
+
+                let input_expr = Scalar::Literal(Value::Int64(1));
+                let input_column =
+                    self.create_column("$star".to_string(), DataType::Int64, Phase::Convert);
+                input_projects.push((input_expr, input_column.clone()));
+                let count_column = Column::from(aggregate.column.get());
+                aggregate_operators.push((AggregateFn::Count, input_column, count_column));
+            } else {
+                assert!(arguments.len() == 1);
+
+                let input_expr = self.expr(&arguments[0], &mut input);
+                let input_column = self.create_column(
+                    function_name(&function),
+                    input_expr.data_type(),
+                    Phase::Convert,
+                );
+                input_projects.push((input_expr, input_column.clone()));
+                let aggregate_column = Column::from(aggregate.column.get());
+                aggregate_operators.push((
+                    AggregateFn::from(&function),
+                    input_column,
+                    aggregate_column,
+                ));
+            }
+        }
+        // Form the result, using as many stages as are necessary.
+        let mut result = input;
+        if input_projects.len() > 0 {
+            result = LogicalMap {
                 include_existing: false,
-                projects,
-                input: Box::new(input),
+                projects: input_projects,
+                input: Box::new(result),
             };
         }
-        LogicalAggregate {
-            group_by,
-            aggregate,
-            input: Box::new(input),
+        result = LogicalAggregate {
+            group_by: group_by_columns,
+            aggregate: aggregate_operators,
+            input: Box::new(result),
+        };
+        if output_projects.len() > 0 {
+            result = LogicalMap {
+                include_existing: false,
+                projects: output_projects,
+                input: Box::new(result),
+            };
         }
-    }
-
-    fn compute(
-        &mut self,
-        compute: &ResolvedComputedColumnProto,
-        project: &mut Vec<(Scalar, Column)>,
-        input: &mut Expr,
-    ) -> Column {
-        let expr = compute.expr.get();
-        let column = compute.column.get();
-        project.push((self.expr(expr, input), Column::from(column)));
-        Column::from(column)
-    }
-
-    fn reduce(
-        &mut self,
-        aggregate: &ResolvedComputedColumnProto,
-        project: &mut Vec<(Scalar, Column)>,
-        input: &mut Expr,
-    ) -> (AggregateFn, Column) {
-        let function = match aggregate.expr.get().node.get() {
-            ResolvedFunctionCallBaseNode(function) => function,
-            other => panic!("{:?}", other),
-        };
-        let function = match function.node.get() {
-            ResolvedNonScalarFunctionCallBaseNode(function) => function,
-            other => panic!("{:?}", other),
-        };
-        let function = match function.node.get() {
-            ResolvedAggregateFunctionCallNode(function) => function,
-            other => panic!("{:?}", other),
-        };
-        let function = function.parent.get();
-        let distinct = function.distinct.unwrap_or(false); // TODO
-        let ignore_nulls = function.null_handling_modifier.unwrap_or(0) == 1; // TODO
-        let function = function.parent.get();
-        let arguments = &function.argument_list;
-        let function = function.function.get().name.get().clone();
-        let argument = if arguments.len() == 0 {
-            let argument = Scalar::Literal(Value::Int64(1));
-            let column = self.create_column("$star".to_string(), DataType::Int64, Phase::Convert);
-            project.push((argument, column.clone()));
-            column.clone()
-        } else if arguments.len() == 1 {
-            let argument = self.expr(arguments.first().get(), input);
-            let column = self.create_column(
-                function_name(&function),
-                argument.data_type(),
-                Phase::Convert,
-            );
-            project.push((argument, column.clone()));
-            column.clone()
-        } else {
-            panic!("expected 1 or 0 arguments but found {:?}", arguments.len());
-        };
-        if &function == "ZetaSQL:avg" {
-            todo!()
-        }
-        (AggregateFn::from(function), argument)
+        result
     }
 
     fn create(&mut self, q: &AnyResolvedCreateStatementProto) -> Expr {

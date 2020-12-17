@@ -1778,12 +1778,11 @@ pub enum AggregateFn {
 }
 
 impl AggregateFn {
-    pub fn from(name: String) -> Self {
-        match name.as_str() {
+    pub fn from(name: &str) -> Self {
+        match name {
             "ZetaSQL:any_value" => AggregateFn::AnyValue,
             "ZetaSQL:avg" => panic!("avg should be converted into sum / count"),
             "ZetaSQL:count" => AggregateFn::Count,
-            "ZetaSQL:$count_star" => AggregateFn::Count, // count(*) gets converted into count(1)
             "ZetaSQL:logical_and" => AggregateFn::LogicalAnd,
             "ZetaSQL:logical_or" => AggregateFn::LogicalOr,
             "ZetaSQL:max" => AggregateFn::Max,

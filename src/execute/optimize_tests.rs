@@ -38,6 +38,13 @@ fn test_aggregate() {
             group by 1
         "#,
     );
+    test.test(
+        "examples/optimize/aggregate/avg.txt",
+        r#"
+            select avg(store_id)
+            from customer
+        "#,
+    );
     test.finish();
 }
 

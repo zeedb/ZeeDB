@@ -64,7 +64,10 @@ pub fn eval(
             Function::NotEqual(_, _) => todo!(),
             Function::Or(_, _) => todo!(),
             Function::Add(_, _, _) => todo!(),
-            Function::Divide(_, _, _) => todo!(),
+            Function::Divide(left, right, _) => Ok(kernel::div(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
             Function::Multiply(_, _, _) => todo!(),
             Function::Subtract(_, _, _) => todo!(),
             Function::Default(column, _) => todo!(),
@@ -83,7 +86,10 @@ pub fn eval(
                 vec![state.txn].repeat(input.num_rows()),
             ))),
         },
-        Scalar::Cast(scalar, data_type) => todo!(),
+        Scalar::Cast(scalar, data_type) => Ok(arrow::compute::cast(
+            &eval(scalar, input, state)?,
+            data_type,
+        )?),
     }
 }
 

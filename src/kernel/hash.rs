@@ -68,7 +68,7 @@ impl HashProvider for Arc<dyn Array> {
             }
             DataType::Date32(DateUnit::Day) => hash(as_primitive_array::<Date32Type>(values)),
             DataType::Utf8 => hash(as_string_array(values)),
-            other => panic!("+({:?}) is not supported", other),
+            other => panic!("hash({:?}) is not supported", other),
         }
     }
 }

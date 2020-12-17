@@ -58,7 +58,14 @@ fn test_aggregate() {
             "select id, sum(id) from foo group by id order by id",
         ],
     );
-    // TODO test avg
+    test.test(
+        "examples/execute/aggregate/avg.txt",
+        vec![
+            "create table foo (id int64);",
+            "insert into foo values (1), (2), (3), (1)",
+            "select avg(id) from foo",
+        ],
+    );
     test.finish();
 }
 

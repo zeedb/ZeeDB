@@ -1,0 +1,9 @@
+select avg(store_id)
+from customer
+
+Map $aggregate.$agg1:(Divide $avg$sum' $avg$count')
+	Aggregate $avg$sum':(Sum $avg') $avg$count':(Count $avg')
+		Map $avg':customer.store_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.store_id $xmin $xmax
+					SeqScan customer
