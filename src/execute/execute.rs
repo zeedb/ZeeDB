@@ -88,6 +88,7 @@ enum Node {
         join: Join,
         left: Input,
         build_left: Option<RecordBatch>,
+        unmatched_left: Option<Bits>,
         right: Input,
     },
     HashJoin {
@@ -234,6 +235,7 @@ impl Node {
                 join,
                 left: Input::compile(*left),
                 build_left: None,
+                unmatched_left: None,
                 right: Input::compile(*right),
             },
             HashJoin {
@@ -576,17 +578,97 @@ impl Input {
                 Ok(RecordBatch::try_new(self.schema.clone(), columns).unwrap())
             }
             Node::NestedLoop {
+                join: Join::Outer(predicates),
+                left,
+                build_left,
+                unmatched_left,
+                right,
+            } => {
+                // If this is the first iteration, build the left side of the join into a single batch.
+                if build_left.is_none() {
+                    let input = build(left, state)?;
+                    let bits = Bits::trues(input.num_rows());
+                    *build_left = Some(input);
+                    // Allocate a bit array to keep track of which rows on the left side never found join partners.
+                    *unmatched_left = Some(bits);
+                }
+                match right.next(state) {
+                    // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
+                    Ok(right) => {
+                        let filter =
+                            |input: &RecordBatch| crate::eval::all(predicates, input, state);
+                        crate::join::nested_loop(
+                            build_left.as_ref().unwrap(),
+                            &right,
+                            filter,
+                            unmatched_left.as_mut(),
+                            true,
+                        )
+                    }
+                    Err(Error::Empty) => match unmatched_left.take() {
+                        // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
+                        Some(unmatched_left) => Ok(crate::join::unmatched_tuples(
+                            build_left.as_ref().unwrap(),
+                            unmatched_left,
+                            &right.schema,
+                        )),
+                        // The second time we receive 'Empty' from the right side, we are truly finished.
+                        None => Err(Error::Empty),
+                    },
+                    Err(other) => Err(other),
+                }
+            }
+            Node::NestedLoop {
                 join,
                 left,
                 build_left,
                 right,
+                ..
             } => {
+                // If this is the first iteration, build the left side of the join into a single batch.
                 if build_left.is_none() {
                     let input = build(left, state)?;
                     *build_left = Some(input);
                 }
+                // Get the next batch of rows from the right (probe) side.
                 let right = right.next(state)?;
-                crate::join::nested_loop(build_left.as_ref().unwrap(), &right, &join, state)
+                let filter =
+                    |input: &RecordBatch| crate::eval::all(join.predicates(), input, state);
+                // Join a batch of rows to the left (build) side.
+                match &join {
+                    Join::Inner(_) => crate::join::nested_loop(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        filter,
+                        None,
+                        false,
+                    ),
+                    Join::Right(_) => crate::join::nested_loop(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        filter,
+                        None,
+                        true,
+                    ),
+                    Join::Outer(_) => panic!("outer joins are handled separately"),
+                    Join::Semi(_) => {
+                        crate::join::nested_loop_semi(build_left.as_ref().unwrap(), &right, filter)
+                    }
+                    Join::Anti(_) => {
+                        crate::join::nested_loop_anti(build_left.as_ref().unwrap(), &right, filter)
+                    }
+                    Join::Single(_) => crate::join::nested_loop_single(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        filter,
+                    ),
+                    Join::Mark(mark, _) => crate::join::nested_loop_mark(
+                        mark,
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        filter,
+                    ),
+                }
             }
             Node::HashJoin {
                 join: Join::Outer(predicates),
@@ -630,7 +712,7 @@ impl Input {
                     Err(Error::Empty) => match unmatched_left.take() {
                         // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
                         Some(unmatched_left) => Ok(crate::join::unmatched_tuples(
-                            build_left.as_ref().unwrap(),
+                            &build_left.as_ref().unwrap().tuples,
                             unmatched_left,
                             &right.schema,
                         )),

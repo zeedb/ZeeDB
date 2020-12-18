@@ -228,7 +228,7 @@ fn test_index() {
 }
 
 #[test]
-fn test_join() {
+fn test_join_nested_loop() {
     let mut test = TestProvider::new(None);
     test.test(
         "examples/execute/join/nested_loop_left_join.txt",
@@ -282,7 +282,7 @@ fn test_join() {
 }
 
 #[test]
-fn test_join_large() {
+fn test_join_hash() {
     let mut adventure_works = TestProvider::new(Some(crate::adventure_works::adventure_works()));
     adventure_works.test(
         "examples/execute/join/hash_inner_join.txt",

@@ -1,4 +1,3 @@
-use crate::execute::Session;
 use crate::hash_table::HashTable;
 use arrow::array::*;
 use arrow::datatypes::*;
@@ -46,12 +45,12 @@ pub fn hash_join(
 }
 
 pub fn unmatched_tuples(
-    left: &HashTable,
+    left: &RecordBatch,
     unmatched_left: Bits,
     right: &Arc<Schema>,
 ) -> RecordBatch {
     let mask = unmatched_left.freeze();
-    let unmatched_left = kernel::gather_logical(&left.tuples, &mask);
+    let unmatched_left = kernel::gather_logical(left, &mask);
     let unmatched_right = null_batch(unmatched_left.num_rows(), right.clone());
     kernel::zip(&unmatched_left, &unmatched_right)
 }
@@ -59,118 +58,79 @@ pub fn unmatched_tuples(
 pub fn nested_loop(
     left: &RecordBatch,
     right: &RecordBatch,
-    join: &Join,
-    state: &mut Session,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
+    keep_unmatched_left: Option<&mut Bits>,
+    keep_unmatched_right: bool,
 ) -> Result<RecordBatch, Error> {
-    match join {
-        Join::Inner(predicates) => nested_loop_inner(predicates, left, right, state),
-        Join::Right(predicates) => nested_loop_right(predicates, left, right, state),
-        Join::Outer(predicates) => nested_loop_outer(predicates, left, right, state),
-        Join::Semi(predicates) => nested_loop_semi(predicates, left, right, state),
-        Join::Anti(predicates) => nested_loop_anti(predicates, left, right, state),
-        Join::Single(predicates) => nested_loop_single(predicates, left, right, state),
-        Join::Mark(mark, predicates) => nested_loop_mark(mark, predicates, left, right, state),
+    let input = cross_product(left, right)?;
+    let mask = filter(&input)?;
+    let matched = kernel::gather_logical(&input, &mask);
+    let mut result = vec![matched];
+    if let Some(unmatched_left) = keep_unmatched_left {
+        let left_mask = kernel::reshape_rows_none(&mask, right.num_rows());
+        for i in 0..left.num_rows() {
+            if left_mask.value(i) {
+                unmatched_left.unset(i)
+            }
+        }
     }
+    if keep_unmatched_right {
+        let right_mask = kernel::reshape_columns_none(&mask, left.num_rows());
+        let right_unmatched = kernel::gather_logical(right, &right_mask);
+        let left_nulls = null_batch(right_unmatched.num_rows(), left.schema());
+        result.push(kernel::zip(&left_nulls, &right_unmatched));
+    }
+    Ok(kernel::cat(&result))
 }
 
-fn nested_loop_inner(
-    predicates: &Vec<Scalar>,
+pub fn nested_loop_semi(
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut Session,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
-    let mask = crate::eval::all(predicates, &input, state)?;
-    Ok(kernel::gather_logical(&input, &mask))
-}
-
-fn nested_loop_right(
-    predicates: &Vec<Scalar>,
-    left: &RecordBatch,
-    right: &RecordBatch,
-    state: &mut Session,
-) -> Result<RecordBatch, Error> {
-    let input = cross_product(left, right)?;
-    let mask = crate::eval::all(predicates, &input, state)?;
-    let right_mask = kernel::reshape_columns_none(&mask, left.num_rows());
-    let right_unmatched = kernel::gather_logical(right, &right_mask);
-    let left_nulls = null_batch(right_unmatched.num_rows(), left.schema());
-    Ok(kernel::cat(&vec![
-        kernel::gather_logical(&input, &mask),
-        kernel::zip(&left_nulls, &right_unmatched),
-    ]))
-}
-
-fn nested_loop_outer(
-    predicates: &Vec<Scalar>,
-    left: &RecordBatch,
-    right: &RecordBatch,
-    state: &mut Session,
-) -> Result<RecordBatch, Error> {
-    let input = cross_product(left, right)?;
-    let mask = crate::eval::all(predicates, &input, state)?;
-    let left_mask = kernel::reshape_rows_none(&mask, right.num_rows());
-    let left_unmatched = kernel::gather_logical(left, &left_mask);
-    let right_nulls = null_batch(left_unmatched.num_rows(), left.schema());
-    let right_mask = kernel::reshape_columns_none(&mask, left.num_rows());
-    let right_unmatched = kernel::gather_logical(right, &right_mask);
-    let left_nulls = null_batch(right_unmatched.num_rows(), left.schema());
-    Ok(kernel::cat(&vec![
-        kernel::gather_logical(&input, &mask),
-        kernel::zip(&left_unmatched, &right_nulls),
-        kernel::zip(&left_nulls, &right_unmatched),
-    ]))
-}
-
-fn nested_loop_semi(
-    predicates: &Vec<Scalar>,
-    left: &RecordBatch,
-    right: &RecordBatch,
-    state: &mut Session,
-) -> Result<RecordBatch, Error> {
-    let input = cross_product(left, right)?;
-    let mask = crate::eval::all(predicates, &input, state)?;
+    let mask = filter(&input)?;
     let right_mask = kernel::reshape_columns_any(&mask, left.num_rows());
     Ok(kernel::gather_logical(right, &right_mask))
 }
 
-fn nested_loop_anti(
-    predicates: &Vec<Scalar>,
+pub fn nested_loop_anti(
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut Session,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
-    let mask = crate::eval::all(predicates, &input, state)?;
+    let mask = filter(&input)?;
     let right_mask = kernel::reshape_columns_none(&mask, left.num_rows());
     Ok(kernel::gather_logical(right, &right_mask))
 }
 
-fn nested_loop_single(
-    predicates: &Vec<Scalar>,
+pub fn nested_loop_single(
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut Session,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
 ) -> Result<RecordBatch, Error> {
     let head = cross_product(left, &right)?;
-    let mask = crate::eval::all(predicates, &head, state)?;
-    let head = kernel::gather_logical(&head, &mask);
-    // TODO use reshape_columns_none
-    let tail = unmatched(left, right, &mask);
-    let combined = kernel::cat(&vec![head, tail]);
+    let mask = filter(&head)?;
+    // TODO verify that each right row found at most one join partner on the left.
+    let matched = kernel::gather_logical(&head, &mask);
+    let right_mask = kernel::reshape_columns_none(&mask, left.num_rows());
+    let right_unmatched = kernel::gather_logical(right, &right_mask);
+    let left_nulls = null_batch(right_unmatched.num_rows(), left.schema());
+    let unmatched = kernel::zip(&left_nulls, &right_unmatched);
+    let combined = kernel::cat(&vec![matched, unmatched]);
     assert!(combined.num_rows() >= right.num_rows());
     Ok(combined)
 }
 
-fn nested_loop_mark(
+pub fn nested_loop_mark(
     mark: &Column,
-    predicates: &Vec<Scalar>,
     left: &RecordBatch,
     right: &RecordBatch,
-    state: &mut Session,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
 ) -> Result<RecordBatch, Error> {
     let input = cross_product(left, right)?;
-    let mask = crate::eval::all(predicates, &input, state)?;
+    let mask = filter(&input)?;
     let right_mask = kernel::reshape_columns_any(&mask, left.num_rows());
     let right_column = RecordBatch::try_new(
         Arc::new(Schema::new(vec![mark.into_query_field()])),
@@ -178,22 +138,6 @@ fn nested_loop_mark(
     )
     .unwrap();
     Ok(kernel::zip(right, &right_column))
-}
-
-fn unmatched(left: &RecordBatch, right: &RecordBatch, mask: &BooleanArray) -> RecordBatch {
-    let mask = mask.as_any().downcast_ref::<BooleanArray>().unwrap();
-    let mut unmatched = Vec::with_capacity(right.num_rows());
-    unmatched.resize(right.num_rows(), true);
-    for i in 0..right.num_rows() {
-        for j in 0..left.num_rows() {
-            if mask.value(i * left.num_rows() + j) {
-                unmatched[i] = false;
-            }
-        }
-    }
-    let left = null_batch(right.num_rows(), left.schema());
-    let right = kernel::zip(&left, right);
-    kernel::gather_logical(&right, &BooleanArray::from(unmatched))
 }
 
 fn null_batch(num_rows: usize, schema: Arc<Schema>) -> RecordBatch {
