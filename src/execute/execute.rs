@@ -4,7 +4,7 @@ use arrow::datatypes::*;
 use arrow::record_batch::RecordBatch;
 use ast::*;
 use catalog::Index;
-use kernel::Error;
+use kernel::{Bits, Error};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::Arc;
@@ -96,7 +96,7 @@ enum Node {
         partition_right: Vec<Scalar>,
         left: Input,
         build_left: Option<HashTable>,
-        unmatched_left: Option<Vec<bool>>,
+        unmatched_left: Option<Bits>,
         right: Input,
     },
     CreateTempTable {
@@ -597,6 +597,7 @@ impl Input {
                 unmatched_left,
                 right,
             } => {
+                // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
                     let left = build(left, state)?;
                     let partition_left: Result<Vec<_>, _> = partition_left
@@ -605,23 +606,35 @@ impl Input {
                         .collect();
                     let table = HashTable::new(&left, &partition_left?)?;
                     *build_left = Some(table);
-                    *unmatched_left = Some(vec![true].repeat(left.num_rows()));
+                    // Allocate a bit array to keep track of which rows on the left side never found join partners.
+                    *unmatched_left = Some(Bits::trues(left.num_rows()));
                 }
                 match right.next(state) {
-                    Ok(right) => crate::join::hash_join_outer(
-                        predicates,
-                        build_left.as_ref().unwrap(),
-                        unmatched_left.as_mut().unwrap(),
-                        &right,
-                        partition_right,
-                        state,
-                    ),
+                    // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
+                    Ok(right) => {
+                        let partition_right: Result<Vec<_>, _> = partition_right
+                            .iter()
+                            .map(|x| crate::eval::eval(x, &right, state))
+                            .collect();
+                        let filter =
+                            |input: &RecordBatch| crate::eval::all(predicates, input, state);
+                        crate::join::hash_join(
+                            build_left.as_ref().unwrap(),
+                            &right,
+                            &partition_right?,
+                            filter,
+                            Some(unmatched_left.as_mut().unwrap()),
+                            true,
+                        )
+                    }
                     Err(Error::Empty) => match unmatched_left.take() {
-                        Some(unmatched_left) => Ok(crate::join::hash_join_outer_unmatched(
+                        // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
+                        Some(unmatched_left) => Ok(crate::join::unmatched_tuples(
                             build_left.as_ref().unwrap(),
                             unmatched_left,
                             &right.schema,
                         )),
+                        // The second time we receive 'Empty' from the right side, we are truly finished.
                         None => Err(Error::Empty),
                     },
                     Err(other) => Err(other),
@@ -636,6 +649,7 @@ impl Input {
                 right,
                 ..
             } => {
+                // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
                     let left = build(left, state)?;
                     let partition_left: Result<Vec<_>, _> = partition_left
@@ -645,14 +659,38 @@ impl Input {
                     let table = HashTable::new(&left, &partition_left?)?;
                     *build_left = Some(table);
                 }
+                // Get the next batch of rows from the right (probe) side.
                 let right = right.next(state)?;
-                crate::join::hash_join(
-                    build_left.as_mut().unwrap(),
-                    &right,
-                    partition_right,
-                    join,
-                    state,
-                )
+                let partition_right: Result<Vec<_>, _> = partition_right
+                    .iter()
+                    .map(|x| crate::eval::eval(x, &right, state))
+                    .collect();
+                let filter =
+                    |input: &RecordBatch| crate::eval::all(join.predicates(), input, state);
+                // Join a batch of rows to the left (build) side.
+                match join {
+                    Join::Inner(_) => crate::join::hash_join(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        &partition_right?,
+                        filter,
+                        None,
+                        false,
+                    ),
+                    Join::Right(_) => crate::join::hash_join(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        &partition_right?,
+                        filter,
+                        None,
+                        true,
+                    ),
+                    Join::Outer(_) => panic!("outer joins are handled separately"),
+                    Join::Semi(_) => todo!(),
+                    Join::Anti(_) => todo!(),
+                    Join::Single(_) => todo!(),
+                    Join::Mark(_, _) => todo!(),
+                }
             }
             Node::CreateTempTable { name, input, .. } => {
                 // Register a new temp table.

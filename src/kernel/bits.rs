@@ -1,5 +1,5 @@
 use arrow::array::*;
-use arrow::buffer::Buffer;
+use arrow::buffer::*;
 use arrow::datatypes::*;
 
 pub fn not(mask: &BooleanArray) -> BooleanArray {
@@ -39,6 +39,43 @@ fn null_or<T: Array>(left: &T, right: &T) -> Option<Buffer> {
         (Some(left), Some(right)) => Some((left | right).unwrap()),
         (Some(bits), _) | (_, Some(bits)) => Some(bits.clone()),
         (None, None) => None,
+    }
+}
+
+#[derive(Debug)]
+pub struct Bits {
+    len: usize,
+    buffer: MutableBuffer,
+}
+
+impl Bits {
+    pub fn trues(len: usize) -> Self {
+        let len_bytes = (len + 7) / 8;
+        Self {
+            len,
+            buffer: MutableBuffer::new(len_bytes).with_bitset(len_bytes, true),
+        }
+    }
+
+    pub fn get(&self, i: usize) -> bool {
+        get_bit(self.buffer.data(), i)
+    }
+
+    pub fn set(&mut self, i: usize) {
+        set_bit(self.buffer.data_mut(), i)
+    }
+
+    pub fn unset(&mut self, i: usize) {
+        unset_bit(self.buffer.data_mut(), i)
+    }
+
+    pub fn freeze(self) -> BooleanArray {
+        BooleanArray::from(
+            ArrayData::builder(DataType::Boolean)
+                .len(self.len)
+                .add_buffer(self.buffer.freeze())
+                .build(),
+        )
     }
 }
 
