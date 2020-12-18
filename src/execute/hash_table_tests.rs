@@ -17,7 +17,8 @@ fn test_hash_table() {
     let input = RecordBatch::try_new(schema, columns).unwrap();
     let partition_by = vec![input.column(0).clone()];
     let table = HashTable::new(&input, &partition_by).unwrap();
-    let (left, right_index) = table.probe(&partition_by);
+    let (left_index, right_index) = table.probe(&partition_by);
+    let left = kernel::gather(&table.tuples, &left_index);
     let right = kernel::gather(&input, &right_index);
     let output = kernel::zip(&left, &right);
     let a1: &Int64Array = as_primitive_array(output.column(0));

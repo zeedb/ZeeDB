@@ -296,11 +296,10 @@ fn test_join_large() {
         "examples/execute/join/hash_right_join.txt",
         vec!["select count(person.person_id), count(customer.person_id) from person right join customer using (person_id)"],
     );
-    // adventure_works.test(
-    //     "examples/execute/join/hash_outer_join.txt",
-    //     // TODO this is not a great test.
-    //     vec!["select count(person.person_id), count(customer.person_id) from person full join customer using (person_id)"],
-    // );
+    adventure_works.test(
+        "examples/execute/join/hash_outer_join.txt",
+        vec!["select count(person.person_id), count(customer.person_id) from person full join customer using (person_id)"],
+    );
     // adventure_works.test(
     //     "examples/execute/join/hash_semi_join.txt",
     //     vec!["select count(*) from person where person_id in (select person_id from customer)"],

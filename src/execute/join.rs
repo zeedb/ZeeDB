@@ -17,7 +17,7 @@ pub fn hash_join(
     match join {
         Join::Inner(predicates) => hash_join_inner(predicates, left, right, partition_right, state),
         Join::Right(predicates) => hash_join_right(predicates, left, right, partition_right, state),
-        Join::Outer(_) => todo!(),
+        Join::Outer(_) => panic!("call hash_join_outer separately"),
         Join::Semi(_) => todo!(),
         Join::Anti(_) => todo!(),
         Join::Single(_) => todo!(),
@@ -36,9 +36,10 @@ fn hash_join_inner(
         .iter()
         .map(|x| crate::eval::eval(x, right, state))
         .collect();
-    let (left, right_index) = left.probe(&partition_right?);
-    let right = kernel::gather(right, &right_index);
-    let input = kernel::zip(&left, &right);
+    let (left_index, right_index) = left.probe(&partition_right?);
+    let left_input = kernel::gather(&left.tuples, &left_index);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
     let mask = crate::eval::all(predicates, &input, state)?;
     Ok(kernel::gather_logical(&input, &mask))
 }
@@ -54,7 +55,8 @@ fn hash_join_right(
         .iter()
         .map(|x| crate::eval::eval(x, right, state))
         .collect();
-    let (left_input, right_index) = left.probe(&partition_right?);
+    let (left_index, right_index) = left.probe(&partition_right?);
+    let left_input = kernel::gather(&left.tuples, &left_index);
     let right_input = kernel::gather(right, &right_index);
     let input = kernel::zip(&left_input, &right_input);
     let mask = crate::eval::all(predicates, &input, state)?;
@@ -72,6 +74,56 @@ fn hash_join_right(
     let unmatched = kernel::zip(&unmatched_left, &unmatched_right);
     // Stitch together the two parts.
     Ok(kernel::cat(&vec![matched, unmatched]))
+}
+
+pub fn hash_join_outer(
+    predicates: &Vec<Scalar>,
+    left: &HashTable,
+    unmatched_left: &mut Vec<bool>,
+    right: &RecordBatch,
+    partition_right: &Vec<Scalar>,
+    state: &mut Session,
+) -> Result<RecordBatch, Error> {
+    let partition_right: Result<Vec<_>, _> = partition_right
+        .iter()
+        .map(|x| crate::eval::eval(x, right, state))
+        .collect();
+    let (left_index, right_index) = left.probe(&partition_right?);
+    let left_input = kernel::gather(&left.tuples, &left_index);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
+    let mask = crate::eval::all(predicates, &input, state)?;
+    let matched = kernel::gather_logical(&input, &mask);
+    // Remember which indexes on the left were matched, so we can add unmatched left-side rows at the end.
+    for i in 0..left_index.len() {
+        if mask.value(i) {
+            unmatched_left[left_index.value(i) as usize] = false;
+        }
+    }
+    // Figure out which indexes on the right were not matched.
+    let matched_indexes = kernel::gather_logical(&right_index, &mask);
+    let matched_mask = kernel::scatter(
+        &kernel::falses(right.num_rows()),
+        &matched_indexes,
+        &kernel::trues(matched_indexes.len()),
+    );
+    let unmatched_mask = kernel::not(&matched_mask);
+    let unmatched_right = kernel::gather_logical(right, &unmatched_mask);
+    let unmatched_left = null_batch(unmatched_right.num_rows(), left_input.schema());
+    let unmatched = kernel::zip(&unmatched_left, &unmatched_right);
+    // Stitch together the two parts.
+    Ok(kernel::cat(&vec![matched, unmatched]))
+}
+
+pub fn hash_join_outer_unmatched(
+    left: &HashTable,
+    unmatched_left: Vec<bool>,
+    right: &Arc<Schema>,
+) -> RecordBatch {
+    let mask = BooleanArray::from(unmatched_left);
+    let unmatched_left = kernel::gather_logical(&left.tuples, &mask);
+    let unmatched_right = null_batch(unmatched_left.num_rows(), right.clone());
+    kernel::zip(&unmatched_left, &unmatched_right)
 }
 
 pub fn nested_loop(

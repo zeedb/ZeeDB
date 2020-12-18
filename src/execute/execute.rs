@@ -96,6 +96,7 @@ enum Node {
         partition_right: Vec<Scalar>,
         left: Input,
         build_left: Option<HashTable>,
+        unmatched_left: Option<Vec<bool>>,
         right: Input,
     },
     CreateTempTable {
@@ -250,6 +251,7 @@ impl Node {
                     partition_right,
                     left,
                     build_left: None,
+                    unmatched_left: None,
                     right,
                 }
             }
@@ -587,12 +589,52 @@ impl Input {
                 crate::join::nested_loop(build_left.as_ref().unwrap(), &right, &join, state)
             }
             Node::HashJoin {
+                join: Join::Outer(predicates),
+                partition_left,
+                partition_right,
+                left,
+                build_left,
+                unmatched_left,
+                right,
+            } => {
+                if build_left.is_none() {
+                    let left = build(left, state)?;
+                    let partition_left: Result<Vec<_>, _> = partition_left
+                        .iter()
+                        .map(|x| crate::eval::eval(x, &left, state))
+                        .collect();
+                    let table = HashTable::new(&left, &partition_left?)?;
+                    *build_left = Some(table);
+                    *unmatched_left = Some(vec![true].repeat(left.num_rows()));
+                }
+                match right.next(state) {
+                    Ok(right) => crate::join::hash_join_outer(
+                        predicates,
+                        build_left.as_ref().unwrap(),
+                        unmatched_left.as_mut().unwrap(),
+                        &right,
+                        partition_right,
+                        state,
+                    ),
+                    Err(Error::Empty) => match unmatched_left.take() {
+                        Some(unmatched_left) => Ok(crate::join::hash_join_outer_unmatched(
+                            build_left.as_ref().unwrap(),
+                            unmatched_left,
+                            &right.schema,
+                        )),
+                        None => Err(Error::Empty),
+                    },
+                    Err(other) => Err(other),
+                }
+            }
+            Node::HashJoin {
                 join,
                 partition_left,
                 partition_right,
                 left,
                 build_left,
                 right,
+                ..
             } => {
                 if build_left.is_none() {
                     let left = build(left, state)?;

@@ -8,7 +8,7 @@ use std::sync::Arc;
 #[derive(Debug)]
 pub struct HashTable {
     offsets: Vec<usize>,
-    tuples: RecordBatch,
+    pub tuples: RecordBatch,
 }
 
 impl HashTable {
@@ -24,7 +24,7 @@ impl HashTable {
     }
 
     /// Identify matching rows from self (build side of join) and right (probe side of the join).
-    pub fn probe(&self, partition_by: &Vec<Arc<dyn Array>>) -> (RecordBatch, UInt32Array) {
+    pub fn probe(&self, partition_by: &Vec<Arc<dyn Array>>) -> (UInt32Array, UInt32Array) {
         let n_buckets = self.offsets.len() - 1;
         let right_buckets = kernel::hash(partition_by);
         let mut left_index = vec![];
@@ -41,8 +41,7 @@ impl HashTable {
         }
         let left_index = UInt32Array::from(left_index);
         let right_index = UInt32Array::from(right_index);
-        let left = kernel::gather(&self.tuples, &left_index);
-        (left, right_index)
+        (left_index, right_index)
     }
 }
 

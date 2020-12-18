@@ -197,7 +197,6 @@ fn mask_bits(from: &Buffer, mask: &BooleanArray, n: usize) -> Buffer {
                     crate::bits::unset_bit_raw(into_bits, dst);
                 }
                 dst += 1;
-                dbg!(src, dst, std::slice::from_raw_parts(into.raw_data(), 1));
             }
         }
     }
