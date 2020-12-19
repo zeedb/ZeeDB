@@ -3,7 +3,7 @@ use arrow::record_batch::*;
 use std::sync::Arc;
 
 pub fn zip(left: &RecordBatch, right: &RecordBatch) -> RecordBatch {
-    assert!(left.num_rows() == right.num_rows());
+    assert_eq!(left.num_rows(), right.num_rows());
     let mut columns = vec![];
     columns.extend_from_slice(left.columns());
     columns.extend_from_slice(right.columns());

@@ -33,7 +33,7 @@ pub fn eval(
         }
         Scalar::Parameter(name, _) => {
             let value: &Arc<dyn Array> = state.variables.get(name).as_ref().expect(name);
-            assert!(value.len() == 1);
+            assert_eq!(value.len(), 1);
             Ok(repeat(value, input.num_rows()))
         }
         Scalar::Call(function) => match function.as_ref() {
