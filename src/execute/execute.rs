@@ -750,7 +750,7 @@ impl Input {
                 let filter =
                     |input: &RecordBatch| crate::eval::all(join.predicates(), input, state);
                 // Join a batch of rows to the left (build) side.
-                match join {
+                match &join {
                     Join::Inner(_) => crate::join::hash_join(
                         build_left.as_ref().unwrap(),
                         &right,
@@ -768,10 +768,31 @@ impl Input {
                         true,
                     ),
                     Join::Outer(_) => panic!("outer joins are handled separately"),
-                    Join::Semi(_) => todo!(),
-                    Join::Anti(_) => todo!(),
-                    Join::Single(_) => todo!(),
-                    Join::Mark(_, _) => todo!(),
+                    Join::Semi(_) => crate::join::hash_join_semi(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        &partition_right?,
+                        filter,
+                    ),
+                    Join::Anti(_) => crate::join::hash_join_anti(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        &partition_right?,
+                        filter,
+                    ),
+                    Join::Single(_) => crate::join::hash_join_single(
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        &partition_right?,
+                        filter,
+                    ),
+                    Join::Mark(mark, _) => crate::join::hash_join_mark(
+                        mark,
+                        build_left.as_ref().unwrap(),
+                        &right,
+                        &partition_right?,
+                        filter,
+                    ),
                 }
             }
             Node::CreateTempTable { name, input, .. } => {

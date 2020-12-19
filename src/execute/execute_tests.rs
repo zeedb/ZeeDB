@@ -300,18 +300,18 @@ fn test_join_hash() {
         "examples/execute/join/hash_outer_join.txt",
         vec!["select count(person.person_id), count(customer.person_id) from person full join customer using (person_id)"],
     );
-    // adventure_works.test(
-    //     "examples/execute/join/hash_semi_join.txt",
-    //     vec!["select count(*) from person where person_id in (select person_id from customer)"],
-    // );
-    // adventure_works.test(
-    //     "examples/execute/join/hash_anti_join.txt",
-    //     vec!["select count(*) from person where person_id not in (select person_id from customer)"],
-    // );
-    // adventure_works.test(
-    //     "examples/execute/join/hash_mark_join.txt",
-    //     vec!["select exists(select 1 from customer where customer.person_id = person.person_id), count(*) from person"],
-    // );
+    adventure_works.test(
+        "examples/execute/join/hash_semi_join.txt",
+        vec!["select count(*) from person where person_id in (select person_id from customer)"],
+    );
+    adventure_works.test(
+        "examples/execute/join/hash_anti_join.txt",
+        vec!["select count(*) from person where person_id not in (select person_id from customer)"],
+    );
+    adventure_works.test(
+        "examples/execute/join/hash_mark_join.txt",
+        vec!["select exists(select 1 from customer where customer.person_id = person.person_id), count(*) from person group by 1 order by 1"],
+    );
     adventure_works.finish();
 }
 

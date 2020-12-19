@@ -1,0 +1,5 @@
+select exists(select 1 from customer where customer.person_id = person.person_id), count(*) from person group by 1 order by 1
+
+$col1,$agg1
+false,10000
+true,10000

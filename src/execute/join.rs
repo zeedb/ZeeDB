@@ -29,12 +29,11 @@ pub fn hash_join(
     }
     if keep_unmatched_right {
         let matched_indexes = kernel::gather_logical(&right_index, &mask);
-        let matched_mask = kernel::scatter(
-            &kernel::falses(right.num_rows()),
+        let unmatched_mask = kernel::scatter(
+            &kernel::trues(right.num_rows()),
             &matched_indexes,
-            &kernel::trues(matched_indexes.len()),
+            &kernel::falses(matched_indexes.len()),
         );
-        let unmatched_mask = kernel::not(&matched_mask);
         let unmatched_right = kernel::gather_logical(right, &unmatched_mask);
         let unmatched_left = null_batch(unmatched_right.num_rows(), left_input.schema());
         let unmatched = kernel::zip(&unmatched_left, &unmatched_right);
@@ -42,6 +41,89 @@ pub fn hash_join(
     } else {
         Ok(matched)
     }
+}
+
+pub fn hash_join_semi(
+    left: &HashTable,
+    right: &RecordBatch,
+    partition_right: &Vec<Arc<dyn Array>>,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
+) -> Result<RecordBatch, Error> {
+    let (left_index, right_index) = left.probe(partition_right);
+    let left_input = kernel::gather(&left.tuples, &left_index);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
+    let mask = filter(&input)?;
+    let right_index_mask = kernel::gather_logical(&right_index, &mask);
+    Ok(kernel::gather(right, &right_index_mask))
+}
+
+pub fn hash_join_anti(
+    left: &HashTable,
+    right: &RecordBatch,
+    partition_right: &Vec<Arc<dyn Array>>,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
+) -> Result<RecordBatch, Error> {
+    let (left_index, right_index) = left.probe(partition_right);
+    let left_input = kernel::gather(&left.tuples, &left_index);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
+    let mask = filter(&input)?;
+    let matched_indexes = kernel::gather_logical(&right_index, &mask);
+    let unmatched_mask = kernel::scatter(
+        &kernel::trues(right.num_rows()),
+        &matched_indexes,
+        &kernel::falses(matched_indexes.len()),
+    );
+    Ok(kernel::gather_logical(right, &unmatched_mask))
+}
+
+pub fn hash_join_single(
+    left: &HashTable,
+    right: &RecordBatch,
+    partition_right: &Vec<Arc<dyn Array>>,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
+) -> Result<RecordBatch, Error> {
+    let (left_index, right_index) = left.probe(partition_right);
+    let left_input = kernel::gather(&left.tuples, &left_index);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
+    let mask = filter(&input)?;
+    // TODO verify that each right row found at most one join partner on the left.
+    let matched = kernel::gather_logical(&input, &mask);
+    let right_index_not_mask = kernel::gather_logical(&right_index, &kernel::not(&mask));
+    let right_unmatched = kernel::gather(right, &right_index_not_mask);
+    let left_nulls = null_batch(right_unmatched.num_rows(), left.tuples.schema());
+    let unmatched = kernel::zip(&left_nulls, &right_unmatched);
+    let combined = kernel::cat(&vec![matched, unmatched]);
+    assert!(combined.num_rows() >= right.num_rows());
+    Ok(combined)
+}
+
+pub fn hash_join_mark(
+    mark: &Column,
+    left: &HashTable,
+    right: &RecordBatch,
+    partition_right: &Vec<Arc<dyn Array>>,
+    mut filter: impl FnMut(&RecordBatch) -> Result<BooleanArray, Error>,
+) -> Result<RecordBatch, Error> {
+    let (left_index, right_index) = left.probe(partition_right);
+    let left_input = kernel::gather(&left.tuples, &left_index);
+    let right_input = kernel::gather(right, &right_index);
+    let input = kernel::zip(&left_input, &right_input);
+    let mask = filter(&input)?;
+    let right_index_mask = kernel::gather_logical(&right_index, &mask);
+    let right_mask: BooleanArray = kernel::scatter(
+        &kernel::falses(right.num_rows()),
+        &right_index_mask,
+        &kernel::trues(right_index_mask.len()),
+    );
+    let right_column = RecordBatch::try_new(
+        Arc::new(Schema::new(vec![mark.into_query_field()])),
+        vec![Arc::new(right_mask)],
+    )
+    .unwrap();
+    Ok(kernel::zip(right, &right_column))
 }
 
 pub fn unmatched_tuples(

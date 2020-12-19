@@ -23,9 +23,13 @@ impl ScatterProvider for BooleanArray {
             let dst = indexes.value(src) as usize;
             if from.is_null(src) {
                 crate::bits::unset_bit(valid_slice, dst);
-            } else if from.value(src) {
-                crate::bits::set_bit(values_slice, dst);
+            } else {
                 crate::bits::set_bit(valid_slice, dst);
+                if from.value(src) {
+                    crate::bits::set_bit(values_slice, dst);
+                } else {
+                    crate::bits::unset_bit(values_slice, dst);
+                }
             }
         }
         let data = ArrayData::new(
