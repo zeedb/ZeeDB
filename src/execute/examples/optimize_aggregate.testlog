@@ -1,0 +1,36 @@
+
+# combine_consecutive_projects
+plan: select a + 1 as b from (select 1 as a)
+Map $query.b:(Add 1 1)
+	TableFreeScan
+
+# combine_consecutive_projects_star
+plan: select *, a + 1 as b from (select 1 as a)
+Map $query.b:(Add 1 1) $subquery1.a:1
+	TableFreeScan
+
+# count_and_sum_distinct
+plan: select count(distinct account_number), sum(distinct account_number) from customer
+Aggregate $aggregate.$agg1:(Count $count) $aggregate.$agg2:(Sum $sum)
+	Map $count:customer.account_number $sum:customer.account_number
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* customer.account_number $xmin $xmax
+				SeqScan customer
+
+# group_by
+plan: select store_id from customer group by 1
+Aggregate $groupby.store_id
+	Map $groupby.store_id:customer.store_id
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* customer.store_id $xmin $xmax
+				SeqScan customer
+
+# avg
+plan: select avg(store_id) from customer
+Map $aggregate.$agg1:(Divide (Cast $avg$sum' DOUBLE) (Cast $avg$count' DOUBLE))
+	Aggregate $avg$sum':(Sum $avg') $avg$count':(Count $avg')
+		Map $avg':customer.store_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.store_id $xmin $xmax
+					SeqScan customer
+

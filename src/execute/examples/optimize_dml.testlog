@@ -1,0 +1,48 @@
+
+# delete
+plan: delete customer where person_id = 1
+Delete customer
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.person_id 1)
+		Map* customer.person_id $xmin $xmax $tid
+			SeqScan customer
+
+# insert_values
+plan: insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', current_timestamp())
+Insert person
+	Values person.person_id person.first_name person.last_name person.modified_date [1 "Foo" "Bar" (CurrentTimestamp)]
+		TableFreeScan
+
+# update_where
+plan: update person set first_name = 'Foo' where person_id = 1
+Insert person
+	Delete person
+		Map person.person_id person.first_name:"Foo" person.last_name person.modified_date $tid
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
+					IndexScan person(person_id:1)
+						TableFreeScan
+
+# update_equi_join
+plan: update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
+Insert customer
+	Delete customer
+		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(Add customer.account_number 1) customer.modified_date $tid
+			HashJoin Inner (Equal customer.person_id person.person_id)
+				Partition* customer.person_id
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
+							SeqScan customer
+				Partition* person.person_id
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* person.person_id $xmin $xmax
+							SeqScan person
+
+# update_set_default
+plan: update customer set account_number = default where person_id = 1
+Insert customer
+	Delete customer
+		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(Default) customer.modified_date $tid
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.person_id 1)
+				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
+					SeqScan customer
+

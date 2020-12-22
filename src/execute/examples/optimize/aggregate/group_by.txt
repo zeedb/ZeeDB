@@ -1,9 +1,0 @@
-select store_id
-from customer
-group by 1
-
-Aggregate $groupby.store_id
-	Map $groupby.store_id:customer.store_id
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.store_id $xmin $xmax
-				SeqScan customer

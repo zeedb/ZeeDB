@@ -1,8 +1,0 @@
-select store_id
-from customer
-where customer_id = 1
-
-Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-	Map* customer.customer_id customer.store_id $xmin $xmax
-		IndexScan customer(customer_id:1)
-			TableFreeScan

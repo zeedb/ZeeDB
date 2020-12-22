@@ -1,4 +1,5 @@
 use arrow::{array::*, datatypes::*, record_batch::RecordBatch};
+use ast::Expr;
 use regex::Regex;
 use std::{fmt::Write, sync::Arc};
 use storage::Storage;
@@ -12,6 +13,7 @@ pub struct TestSuite {
 enum TestLog {
     Comment(String),
     Preamble(String),
+    Plan(String),
     Query(String),
     Error(String),
 }
@@ -40,14 +42,24 @@ impl TestSuite {
                 }
                 TestLog::Preamble(sql) => {
                     Self::run(&mut storage, &sql, self.txn);
-                    writeln!(&mut result, "setup: {}", &sql,).unwrap();
+                    writeln!(&mut result, "setup: {}", Self::trim(&sql)).unwrap();
+                    self.txn += 1;
+                }
+                TestLog::Plan(sql) => {
+                    writeln!(
+                        &mut result,
+                        "plan: {}\n{}\n",
+                        Self::trim(&sql),
+                        Self::plan(&mut storage, &sql, self.txn)
+                    )
+                    .unwrap();
                     self.txn += 1;
                 }
                 TestLog::Query(sql) => {
                     writeln!(
                         &mut result,
                         "ok: {}\n{}\n",
-                        &sql,
+                        Self::trim(&sql),
                         Self::run(&mut storage, &sql, self.txn)
                     )
                     .unwrap();
@@ -57,7 +69,7 @@ impl TestSuite {
                     writeln!(
                         &mut result,
                         "error: {}\n{}\n",
-                        &sql,
+                        Self::trim(&sql),
                         Self::run(&mut storage, &sql, self.txn)
                     )
                     .unwrap_err();
@@ -70,13 +82,20 @@ impl TestSuite {
         }
     }
 
-    pub fn run(storage: &mut Storage, sql: &str, txn: i64) -> String {
+    fn trim(sql: &str) -> String {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
-        let sql = trim.replace_all(sql, "").trim().to_string();
+        trim.replace_all(sql, "").trim().to_string()
+    }
+
+    fn plan(storage: &mut Storage, sql: &str, txn: i64) -> Expr {
         let catalog = crate::catalog::catalog(storage, txn);
         let indexes = crate::catalog::indexes(storage, txn);
         let parse = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).expect(&sql);
-        let plan = planner::optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, storage, parse);
+        planner::optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, storage, parse)
+    }
+
+    fn run(storage: &mut Storage, sql: &str, txn: i64) -> String {
+        let plan = Self::plan(storage, sql, txn);
         let program = crate::execute::compile(plan);
         let results: Result<Vec<_>, _> = program.execute(storage, txn).collect();
         match results {
@@ -86,7 +105,7 @@ impl TestSuite {
         }
     }
 
-    pub fn tsv(record_batch: &RecordBatch) -> String {
+    fn tsv(record_batch: &RecordBatch) -> String {
         let columns: Vec<Vec<String>> = (0..record_batch.num_columns())
             .map(|i| Self::tsv_column(record_batch.schema().field(i), record_batch.column(i)))
             .collect();
@@ -113,7 +132,7 @@ impl TestSuite {
         rows.join("\n")
     }
 
-    pub fn tsv_column(field: &Field, column: &Arc<dyn Array>) -> Vec<String> {
+    fn tsv_column(field: &Field, column: &Arc<dyn Array>) -> Vec<String> {
         let values: Vec<String> = match field.data_type() {
             DataType::Int64 => {
                 let column = as_primitive_array::<Int64Type>(column);
@@ -217,6 +236,10 @@ impl TestSuiteBuilder {
 
     pub fn comment(&mut self, comment: &str) {
         self.suite.log.push(TestLog::Comment(comment.to_string()));
+    }
+
+    pub fn plan(&mut self, sql: &str) {
+        self.suite.log.push(TestLog::Plan(sql.to_string()));
     }
 
     pub fn ok(&mut self, sql: &str) {

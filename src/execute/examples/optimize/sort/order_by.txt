@@ -1,8 +1,0 @@
-select customer_id
-from customer
-order by modified_date
-
-Sort customer.modified_date
-	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-		Map* customer.customer_id customer.modified_date $xmin $xmax
-			SeqScan customer

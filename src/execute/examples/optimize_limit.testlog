@@ -1,0 +1,8 @@
+
+# limit_offset
+plan: select customer_id from customer limit 100 offset 10
+Limit 100 10
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+		Map* customer.customer_id $xmin $xmax
+			SeqScan customer
+

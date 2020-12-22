@@ -24,7 +24,7 @@ fn test_aggregates() {
     t.ok("select x, sum(x) from integers group by 1 order by 1");
     t.comment("simple avg");
     t.ok("select avg(x) from integers");
-    t.finish("examples/test_aggregates.testlog")
+    t.finish("examples/execute_aggregates.testlog")
 }
 
 #[test]
@@ -32,7 +32,7 @@ fn test_aggregate_large() {
     let mut t = TestSuite::builder(Some(crate::adventure_works()));
     t.ok("select count(*) from person");
     t.ok("select count(*) from customer");
-    t.finish("examples/test_aggregate_large.testlog");
+    t.finish("examples/execute_aggregate_large.testlog");
 }
 
 #[test]
@@ -61,7 +61,7 @@ fn test_ddl() {
     t.setup("create database foo;");
     t.setup("create table foo.bar (id int64); create table foo.doh (id int64);");
     t.ok("select * from foo.bar union all select * from foo.doh;");
-    t.finish("examples/test_ddl.testlog");
+    t.finish("examples/execute_ddl.testlog");
 }
 
 #[test]
@@ -92,7 +92,7 @@ fn test_dml() {
     t.setup("insert into foo (id, ok) values (1, false);");
     t.setup("insert into foo (ok, id) values (true, 2);");
     t.ok("select * from foo;");
-    t.finish("examples/test_dml.testlog");
+    t.finish("examples/execute_dml.testlog");
 }
 
 #[test]
@@ -100,7 +100,7 @@ fn test_index() {
     let mut t = TestSuite::builder(Some(crate::adventure_works()));
     t.ok("select * from customer where customer_id = 1");
     t.ok("select * from customer join store using (store_id) where customer_id = 1");
-    t.finish("examples/test_index.testlog");
+    t.finish("examples/execute_index.testlog");
 }
 
 #[test]
@@ -114,7 +114,7 @@ fn test_join_nested_loop() {
     t.ok("select id from foo where id in (select id from bar)");
     t.ok("select id from foo where id not in (select id from bar)");
     t.ok("select id, exists(select id from bar where foo.id = bar.id) from foo");
-    t.finish("examples/test_join_nested_loop.testlog");
+    t.finish("examples/execute_join_nested_loop.testlog");
 }
 
 #[test]
@@ -144,7 +144,7 @@ fn test_join_hash() {
     t.ok(
         "select exists(select 1 from customer where customer.person_id = person.person_id), count(*) from person group by 1 order by 1"
     );
-    t.finish("examples/test_join_hash.testlog");
+    t.finish("examples/execute_join_hash.testlog");
 }
 
 #[test]
@@ -154,21 +154,21 @@ fn test_limit() {
     t.setup("insert into foo values (1), (2), (3);");
     t.ok("select * from foo limit 1");
     t.ok("select * from foo limit 1 offset 1");
-    t.finish("examples/test_limit.testlog");
+    t.finish("examples/execute_limit.testlog");
 }
 
 #[test]
 fn test_set() {
     let mut t = TestSuite::builder(None);
     t.ok("select 1 as x union all select 2 as x");
-    t.finish("examples/test_set.testlog");
+    t.finish("examples/execute_set.testlog");
 }
 
 #[test]
 fn test_with() {
     let mut t = TestSuite::builder(None);
     t.ok("with foo as (select 1 as bar) select * from foo union all select * from foo");
-    t.finish("examples/test_with.testlog");
+    t.finish("examples/execute_with.testlog");
 }
 
 #[test]
