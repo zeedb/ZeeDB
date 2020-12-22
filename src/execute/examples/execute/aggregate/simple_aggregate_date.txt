@@ -1,6 +1,0 @@
-create table foo (x date);
-insert into foo values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null)
-select max(x), min(x) from foo
-
-$agg1,$agg2
-2000-01-03,2000-01-01

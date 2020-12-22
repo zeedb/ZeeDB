@@ -1,4 +1,0 @@
-select * from customer where customer_id = 1
-
-customer_id,person_id,store_id,account_number,modified_date
-1,3305,48,15822,2008-12-13T02:02:36.000000000

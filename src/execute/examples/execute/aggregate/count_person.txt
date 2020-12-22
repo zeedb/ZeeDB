@@ -1,4 +1,0 @@
-select count(*) from person
-
-$agg1
-20000

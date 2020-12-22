@@ -1,0 +1,11 @@
+
+setup: create table foo (id int64);
+setup: insert into foo values (1), (2), (3);
+ok: select * from foo limit 1
+id
+1 
+
+ok: select * from foo limit 1 offset 1
+id
+2 
+

@@ -1,0 +1,37 @@
+
+# hash inner join
+ok: select count(person.person_id), count(customer.person_id) from person join customer using (person_id)
+$agg1 $agg2
+10000 10000
+
+# hash left join
+ok: select count(person.person_id), count(customer.person_id) from person left join customer using (person_id)
+$agg1 $agg2
+20000 10000
+
+# hash right join
+ok: select count(person.person_id), count(customer.person_id) from person right join customer using (person_id)
+$agg1 $agg2
+10000 10000
+
+# hash outer join
+ok: select count(person.person_id), count(customer.person_id) from person full join customer using (person_id)
+$agg1 $agg2
+20000 10000
+
+# hash semi join
+ok: select count(*) from person where person_id in (select person_id from customer)
+$agg1
+10000
+
+# hash anti join
+ok: select count(*) from person where person_id not in (select person_id from customer)
+$agg1
+10000
+
+# hash mark join
+ok: select exists(select 1 from customer where customer.person_id = person.person_id), count(*) from person group by 1 order by 1
+$col1 $agg1
+false 10000
+true  10000
+

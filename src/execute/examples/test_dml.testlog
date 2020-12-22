@@ -1,0 +1,48 @@
+
+setup: create table foo (id int64);
+setup: insert into foo values (1);
+ok: select * from foo;
+id
+1 
+
+setup: insert into foo values (1);
+setup: delete from foo where id = 1;
+ok: select * from foo;
+id
+
+setup: insert into foo values (1);
+setup: delete from foo where id = 1;
+setup: insert into foo values (2);
+ok: select * from foo;
+id
+2 
+
+setup: insert into foo values (1);
+setup: update foo set id = 2 where id = 1;
+ok: select * from foo;
+id
+2 
+2 
+
+setup: create index foo_id on foo (id);
+setup: insert into foo values (1);
+ok: select * from foo where id = 1
+id
+1 
+
+setup: create index foo_id on foo (id);
+setup: insert into foo values (1);
+setup: update foo set id = 2 where id = 1;
+ok: select * from foo where id = 2;
+id
+2 
+
+setup: drop table foo;
+setup: create table foo (id int64, ok bool);
+setup: insert into foo (id, ok) values (1, false);
+setup: insert into foo (ok, id) values (true, 2);
+ok: select * from foo;
+id ok   
+1  false
+2  true 
+

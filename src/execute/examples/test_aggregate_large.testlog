@@ -1,0 +1,9 @@
+
+ok: select count(*) from person
+$agg1
+20000
+
+ok: select count(*) from customer
+$agg1
+10000
+

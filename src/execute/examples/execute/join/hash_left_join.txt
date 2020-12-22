@@ -1,4 +1,0 @@
-select count(person.person_id), count(customer.person_id) from person left join customer using (person_id)
-
-$agg1,$agg2
-20000,10000

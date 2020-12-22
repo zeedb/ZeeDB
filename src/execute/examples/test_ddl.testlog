@@ -1,0 +1,40 @@
+
+# create table
+setup: create table foo (id int64);
+setup: insert into foo values (1)
+ok: select * from foo;
+id
+1 
+
+# drop table
+setup: drop table foo;
+setup: create table foo (id int64);
+ok: select * from foo;
+EMPTY
+
+# create index
+ok: create index foo_id on foo (id);
+EMPTY
+
+# drop index
+ok: drop index foo_id;
+EMPTY
+
+# create database
+ok: create database foo;
+EMPTY
+
+# create table
+setup: create table foo.bar (id int64);
+setup: insert into foo.bar values (1);
+ok: select * from foo.bar;
+id
+1 
+
+# drop database
+setup: drop database foo;
+setup: create database foo;
+setup: create table foo.bar (id int64); create table foo.doh (id int64);
+ok: select * from foo.bar union all select * from foo.doh;
+EMPTY
+

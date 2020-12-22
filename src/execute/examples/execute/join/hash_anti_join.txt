@@ -1,4 +1,0 @@
-select count(*) from person where person_id not in (select person_id from customer)
-
-$agg1
-10000

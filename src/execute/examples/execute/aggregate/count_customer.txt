@@ -1,4 +1,0 @@
-select count(*) from customer
-
-$agg1
-10000

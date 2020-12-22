@@ -1,8 +1,0 @@
-create table foo (id int64);
-create index foo_id on foo (id);
-insert into foo values (1);
-update foo set id = 2 where id = 1;
-select * from foo where id = 2;
-
-id
-2

@@ -16,6 +16,8 @@ mod join;
 #[cfg(test)]
 mod optimize_tests;
 mod sort;
+#[cfg(test)]
+mod test_suite;
 
 pub use crate::adventure_works::adventure_works;
 pub use crate::catalog::{catalog, indexes};

@@ -1,0 +1,43 @@
+
+setup: create table booleans (x boolean);
+setup: create table integers (x int64);
+setup: create table floats (x float64);
+setup: create table dates (x date);
+setup: create table timestamps (x timestamp);
+setup: insert into booleans values (true), (true), (false), (null);
+setup: insert into integers values (1), (1), (2), (3), (null);
+setup: insert into floats values (1.0), (2.0), (3.0), (null);
+setup: insert into dates values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null);
+# simple aggregate counts
+ok: select any_value(x), count(x), count(*) from integers
+$agg1 $agg2 $agg3
+NULL  4     5    
+
+# simple aggregate boolean
+ok: select logical_and(x), logical_or(x), max(x), min(x) from booleans
+$agg1 $agg2 $agg3 $agg4
+false true  true  false
+
+# simple aggregate int
+ok: select max(x), min(x), sum(x) from integers
+$agg1 $agg2 $agg3
+3     1     7    
+
+# simple aggregate float
+ok: select max(x), min(x), sum(x) from floats
+$agg1 $agg2 $agg3
+3     1     6    
+
+# group by aggregate
+ok: select x, sum(x) from integers group by 1 order by 1
+x    $agg1
+NULL NULL 
+1    2    
+2    2    
+3    3    
+
+# simple avg
+ok: select avg(x) from integers
+$agg1
+1.75 
+
