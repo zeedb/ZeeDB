@@ -13,7 +13,7 @@ pub struct GroupByAggregate {
 
 struct Batch {
     group_by: Vec<Arc<dyn Array>>,
-    hash: UInt32Array,
+    hash: UInt64Array,
 }
 
 struct Key {
@@ -57,7 +57,7 @@ impl GroupByAggregate {
 
     /// Insert a batch of rows into the hash table.
     pub fn insert(&mut self, group_by: Vec<Arc<dyn Array>>, aggregate: Vec<Arc<dyn Array>>) {
-        let len = aggregate.first().unwrap().len();
+        let len = group_by.first().or(aggregate.first()).unwrap().len();
         // Add batch to the universe of tuples that we know about.
         let hash = if group_by.is_empty() {
             zeros(len)
@@ -134,7 +134,7 @@ impl GroupByAggregate {
         true
     }
 
-    fn hash(&self, row: &Key) -> u32 {
+    fn hash(&self, row: &Key) -> u64 {
         self.group_by_batches[row.batch as usize]
             .hash
             .value(row.tuple as usize)
@@ -145,7 +145,7 @@ impl Hash for Key {
     fn hash<H: Hasher>(&self, state: &mut H) {
         unsafe {
             // TODO this is going to hash something that has already been hashed, install a no-op hasher when we set up the map.
-            state.write_u32(self.parent.as_ref().unwrap().hash(self))
+            state.write_u64(self.parent.as_ref().unwrap().hash(self))
         }
     }
 }
@@ -534,8 +534,8 @@ fn equal_string(
             && column1.value(row1) == column2.value(row2)
 }
 
-fn zeros(len: usize) -> UInt32Array {
-    UInt32Array::from(vec![0].repeat(len))
+fn zeros(len: usize) -> UInt64Array {
+    UInt64Array::from(vec![0].repeat(len))
 }
 
 fn array_builder(data_type: &DataType, capacity: usize) -> Box<dyn ArrayBuilder> {

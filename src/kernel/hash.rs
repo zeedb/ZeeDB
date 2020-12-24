@@ -1,39 +1,49 @@
-use arrow::array::*;
 use arrow::datatypes::*;
+use arrow::{array::*, buffer::MutableBuffer};
 use std::sync::Arc;
 use twox_hash::xxh3;
 
 pub trait HashProvider {
-    fn hash(values: &Self) -> UInt32Array;
+    fn hash_update(seeds: *mut u64, values: &Self);
+    fn len(values: &Self) -> usize;
 }
 
-pub fn hash<P: HashProvider>(values: &P) -> UInt32Array {
-    P::hash(values)
+pub fn hash<P: HashProvider>(values: &P) -> UInt64Array {
+    let len = P::len(values);
+    let buffer = MutableBuffer::new(len * 8).with_bitset(len * 8, false);
+    P::hash_update(buffer.raw_data() as *mut u64, values);
+    UInt64Array::from(
+        ArrayData::builder(DataType::UInt64)
+            .add_buffer(buffer.freeze())
+            .len(len)
+            .build(),
+    )
 }
 
 macro_rules! primitive {
     ($T:ty) => {
         impl HashProvider for $T {
-            fn hash(values: &Self) -> UInt32Array {
-                hash_primitive(values)
+            fn hash_update(seeds: *mut u64, values: &Self) {
+                hash_primitive(seeds, values)
+            }
+            fn len(values: &Self) -> usize {
+                values.len()
             }
         }
     };
 }
 
-fn hash_primitive<T: ArrowPrimitiveType>(values: &PrimitiveArray<T>) -> UInt32Array {
-    let mut builder = UInt32Array::builder(values.len());
+fn hash_primitive<T: ArrowPrimitiveType>(seeds: *mut u64, values: &PrimitiveArray<T>) {
     for i in 0..values.len() {
-        if values.is_null(i) {
-            builder.append_null().unwrap();
-        } else {
-            let value = values.value(i);
-            let bytes = value.to_byte_slice();
-            let hash = fnv(bytes);
-            builder.append_value(hash).unwrap();
+        if values.is_valid(i) {
+            unsafe {
+                let value = values.value(i);
+                let data = value.to_byte_slice();
+                let seed = *seeds.offset(i as isize);
+                *seeds.offset(i as isize) = xxh3::hash64_with_seed(data, seed);
+            }
         }
     }
-    builder.finish()
 }
 
 primitive!(BooleanArray);
@@ -43,57 +53,60 @@ primitive!(Date32Array);
 primitive!(TimestampMicrosecondArray);
 
 impl HashProvider for StringArray {
-    fn hash(values: &Self) -> UInt32Array {
-        let mut builder = UInt32Array::builder(values.len());
+    fn hash_update(seeds: *mut u64, values: &Self) {
         for i in 0..values.len() {
-            if values.is_null(i) {
-                builder.append_null().unwrap();
-            } else {
-                let hash64 = xxh3::hash64(values.value(i).as_bytes());
-                builder.append_value(hash64 as u32).unwrap();
+            if values.is_valid(i) {
+                unsafe {
+                    let data = values.value(i).as_bytes();
+                    let seed = *seeds.offset(i as isize);
+                    *seeds.offset(i as isize) = xxh3::hash64_with_seed(data, seed);
+                }
             }
         }
-        builder.finish()
+    }
+
+    fn len(values: &Self) -> usize {
+        values.len()
     }
 }
 
 impl HashProvider for Arc<dyn Array> {
-    fn hash(values: &Self) -> UInt32Array {
+    fn hash_update(seeds: *mut u64, values: &Self) {
         match values.data_type() {
-            DataType::Boolean => hash(as_primitive_array::<BooleanType>(values)),
-            DataType::Int64 => hash(as_primitive_array::<Int64Type>(values)),
-            DataType::Float64 => hash(as_primitive_array::<Float64Type>(values)),
-            DataType::Timestamp(TimeUnit::Microsecond, None) => {
-                hash(as_primitive_array::<TimestampMicrosecondType>(values))
+            DataType::Boolean => {
+                HashProvider::hash_update(seeds, as_primitive_array::<BooleanType>(values))
             }
-            DataType::Date32(DateUnit::Day) => hash(as_primitive_array::<Date32Type>(values)),
-            DataType::Utf8 => hash(as_string_array(values)),
+            DataType::Int64 => {
+                HashProvider::hash_update(seeds, as_primitive_array::<Int64Type>(values))
+            }
+            DataType::Float64 => {
+                HashProvider::hash_update(seeds, as_primitive_array::<Float64Type>(values))
+            }
+            DataType::Timestamp(TimeUnit::Microsecond, None) => HashProvider::hash_update(
+                seeds,
+                as_primitive_array::<TimestampMicrosecondType>(values),
+            ),
+            DataType::Date32(DateUnit::Day) => {
+                HashProvider::hash_update(seeds, as_primitive_array::<Date32Type>(values))
+            }
+            DataType::Utf8 => HashProvider::hash_update(seeds, as_string_array(values)),
             other => panic!("hash({:?}) is not supported", other),
         }
+    }
+
+    fn len(values: &Self) -> usize {
+        values.len()
     }
 }
 
 impl HashProvider for Vec<Arc<dyn Array>> {
-    fn hash(values: &Self) -> UInt32Array {
-        let mut output: Option<UInt32Array> = None;
+    fn hash_update(seeds: *mut u64, values: &Self) {
         for column in values {
-            let next = hash(column);
-            output = match output {
-                None => Some(next),
-                Some(prev) => Some(crate::bit_or(&prev, &next)),
-            }
+            HashProvider::hash_update(seeds, column);
         }
-        output.unwrap()
+    }
+
+    fn len(values: &Self) -> usize {
+        values.first().unwrap().len()
     }
 }
-
-fn fnv(bytes: &[u8]) -> u32 {
-    let mut hash: u32 = 0x811c9dc5;
-    for byte in bytes.iter() {
-        hash = hash ^ (*byte as u32);
-        hash = hash.wrapping_mul(0x01000193);
-    }
-    hash
-}
-
-// TODO impl HashProvider for strings with a different algorithm that is efficient for long keys.

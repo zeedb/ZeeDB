@@ -16,7 +16,7 @@ impl HashTable {
         let n_rows = input.num_rows();
         let n_buckets = size_hash_table(n_rows);
         let hashes = kernel::hash(partition_by);
-        let buckets = bucketize(&hashes, n_buckets as u32);
+        let buckets = bucketize(&hashes, n_buckets);
         let indexes = kernel::sort(&buckets);
         let tuples = kernel::gather(input, &indexes);
         let offsets = bucket_offsets(&buckets, n_buckets);
@@ -45,10 +45,11 @@ impl HashTable {
     }
 }
 
-fn bucketize(hashes: &UInt32Array, n_buckets: u32) -> UInt32Array {
+fn bucketize(hashes: &UInt64Array, n_buckets: usize) -> UInt32Array {
     let mut builder = UInt32Array::builder(hashes.len());
     for i in 0..hashes.len() {
-        builder.append_value(hashes.value(i) % n_buckets).unwrap();
+        let bucket = hashes.value(i) % n_buckets as u64;
+        builder.append_value(bucket as u32).unwrap();
     }
     builder.finish()
 }
