@@ -4,7 +4,7 @@ where person_id = 1
 
 LogicalUpdate person
 	LogicalMap person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
-		LogicalJoin Single (Equal person.last_name last_name)
+		LogicalJoin Single (Is person.last_name last_name)
 			LogicalDependentJoin [last_name]
 				LogicalMap $expr_subquery.last_name:last_name
 					LogicalSingleGet

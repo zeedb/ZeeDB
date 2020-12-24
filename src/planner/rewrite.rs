@@ -1,5 +1,5 @@
-use arrow::datatypes::*;
 use ast::*;
+use std::collections::HashMap;
 use zetasql::SimpleCatalogProto;
 
 #[derive(Debug)]
@@ -278,6 +278,10 @@ impl RewriteRule {
                     domain,
                 } = expr
                 {
+                    // PushExplicitFilterIntoInnerJoin hasn't yet run, so predicates should be empty.
+                    // We won't bother substituting fresh column names in parameters.
+                    assert!(predicates.is_empty());
+
                     if free_parameters(parameters, subquery).is_empty() {
                         return None;
                     }
@@ -295,7 +299,7 @@ impl RewriteRule {
                                         left: left_subquery.clone(),
                                         right: Box::new(LogicalDependentJoin {
                                             parameters: parameters.clone(),
-                                            predicates: predicates.clone(),
+                                            predicates: vec![],
                                             subquery: right_subquery.clone(),
                                             domain: domain.clone(),
                                         }),
@@ -305,14 +309,50 @@ impl RewriteRule {
                                         join: join.clone(),
                                         left: Box::new(LogicalDependentJoin {
                                             parameters: parameters.clone(),
-                                            predicates: predicates.clone(),
+                                            predicates: vec![],
                                             subquery: left_subquery.clone(),
                                             domain: domain.clone(),
                                         }),
                                         right: right_subquery.clone(),
                                     });
                                 } else {
-                                    todo!()
+                                    // Substitute fresh column names for the left side subquery.
+                                    let left_parameters: Vec<_> =
+                                        parameters.iter().map(Column::fresh).collect();
+                                    let left_parameters_map: HashMap<_, _> = (0..parameters.len())
+                                        .map(|i| {
+                                            (parameters[i].clone(), left_parameters[i].clone())
+                                        })
+                                        .collect();
+                                    let left_subquery =
+                                        left_subquery.clone().subst(&left_parameters_map);
+                                    let left_domain = domain.clone().subst(&left_parameters_map);
+                                    // Add natural-join on domain to the top join predicates.
+                                    let mut inner_join_predicates = join.predicates().clone();
+                                    for i in 0..parameters.len() {
+                                        inner_join_predicates.push(Scalar::Call(Box::new(
+                                            Function::Is(
+                                                Scalar::Column(left_parameters[i].clone()),
+                                                Scalar::Column(parameters[i].clone()),
+                                            ),
+                                        )));
+                                    }
+                                    // Push the rewritten dependent join down the left side, and the original dependent join down the right side.
+                                    return Some(LogicalJoin {
+                                        join: Join::Inner(inner_join_predicates),
+                                        left: Box::new(LogicalDependentJoin {
+                                            parameters: left_parameters,
+                                            predicates: vec![],
+                                            subquery: Box::new(left_subquery),
+                                            domain: Box::new(left_domain),
+                                        }),
+                                        right: Box::new(LogicalDependentJoin {
+                                            parameters: parameters.clone(),
+                                            predicates: vec![],
+                                            subquery: right_subquery.clone(),
+                                            domain: domain.clone(),
+                                        }),
+                                    });
                                 }
                             }
                             Join::Right(predicates) => {
@@ -419,7 +459,24 @@ impl RewriteRule {
                         input: subquery,
                     } = subquery.as_ref()
                     {
-                        todo!()
+                        if *offset > 0 {
+                            panic!("OFFSET is not supported in correlated subquery");
+                        }
+                        let input = LogicalDependentJoin {
+                            parameters: parameters.clone(),
+                            predicates: predicates.clone(),
+                            subquery: subquery.clone(),
+                            domain: domain.clone(),
+                        };
+                        if *limit == 0 {
+                            return Some(LogicalLimit {
+                                limit: *limit,
+                                offset: *offset,
+                                input: Box::new(input),
+                            });
+                        } else {
+                            return Some(input);
+                        }
                     }
                 }
             }

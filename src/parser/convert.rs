@@ -964,7 +964,7 @@ impl Converter {
         //    +         +
         let mut join_predicates: Vec<Scalar> = (0..subquery_parameters.len())
             .map(|i| {
-                Scalar::Call(Box::new(Function::Equal(
+                Scalar::Call(Box::new(Function::Is(
                     Scalar::Column(subquery_parameters[i].clone()),
                     Scalar::Column(rename_subquery_parameters[i].clone()),
                 )))

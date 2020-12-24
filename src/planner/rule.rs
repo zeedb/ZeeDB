@@ -283,7 +283,7 @@ impl Rule {
                     ..
                 } = bind
                 {
-                    debug_assert!(!parameters.is_empty());
+                    assert!(!parameters.is_empty());
                     if let Leaf { gid: subquery } = subquery.as_ref() {
                         // Check if predicates contains subquery.a = domain.b for every b in domain.
                         let subquery_scope =
@@ -645,7 +645,9 @@ fn hash_join(
     let mut partition_right = vec![];
     for predicate in join_predicates.drain(0..) {
         if let Scalar::Call(function) = predicate {
-            if let Function::Equal(left_side, right_side) = *function {
+            if let Function::Equal(left_side, right_side) | Function::Is(left_side, right_side) =
+                *function
+            {
                 if contains_all(&ss[left], left_side.references())
                     && contains_all(&ss[right], right_side.references())
                 {

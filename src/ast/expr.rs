@@ -1501,11 +1501,13 @@ pub enum Function {
     CurrentTimestamp,
     Rand,
     // Unary logical functions.
+    IsNull(Scalar),
     Not(Scalar),
     // Unary mathematical functions.
     UnaryMinus(Scalar),
     // Binary logical functions.
     And(Scalar, Scalar),
+    Is(Scalar, Scalar),
     Equal(Scalar, Scalar),
     Greater(Scalar, Scalar),
     GreaterOrEqual(Scalar, Scalar),
@@ -1521,8 +1523,9 @@ pub enum Function {
     Subtract(Scalar, Scalar, DataType),
     // Other binary functions.
     Coalesce(Scalar, Scalar, DataType),
+    // Ternary functions.
+    CaseNoValue(Scalar, Scalar, Scalar, DataType),
     // System functions.
-    Default(Column, DataType),
     NextVal(Scalar),
     Xid,
 }
@@ -1534,6 +1537,15 @@ impl Function {
         mut arguments: Vec<Scalar>,
     ) -> Self {
         let name = function.name.as_ref().unwrap().as_str();
+        let returns = crate::data_type::from_proto(
+            signature
+                .return_type
+                .as_ref()
+                .unwrap()
+                .r#type
+                .as_ref()
+                .unwrap(),
+        );
         match arguments.len() {
             0 => match name {
                 "ZetaSQL:current_date" => Function::CurrentDate,
@@ -1544,6 +1556,7 @@ impl Function {
             1 => {
                 let argument = arguments.pop().unwrap();
                 match name {
+                    "ZetaSQL:$is_null" => Function::IsNull(argument),
                     "ZetaSQL:$not" => Function::Not(argument),
                     "ZetaSQL:$unary_minus" => Function::UnaryMinus(argument),
                     "system:next_val" => Function::NextVal(argument),
@@ -1553,15 +1566,6 @@ impl Function {
             2 => {
                 let right = arguments.pop().unwrap();
                 let left = arguments.pop().unwrap();
-                let returns = crate::data_type::from_proto(
-                    signature
-                        .return_type
-                        .as_ref()
-                        .unwrap()
-                        .r#type
-                        .as_ref()
-                        .unwrap(),
-                );
                 match name {
                     "ZetaSQL:$and" => Function::And(left, right),
                     "ZetaSQL:$equal" => Function::Equal(left, right),
@@ -1578,6 +1582,15 @@ impl Function {
                     "ZetaSQL:$subtract" => Function::Subtract(left, right, returns),
                     "ZetaSQL:coalesce" => Function::Coalesce(left, right, returns),
                     other => panic!("{} is not a binary function", other),
+                }
+            }
+            3 => {
+                let c = arguments.pop().unwrap();
+                let b = arguments.pop().unwrap();
+                let a = arguments.pop().unwrap();
+                match name {
+                    "ZetaSQL:$case_no_value" => Function::CaseNoValue(a, b, c, returns),
+                    other => panic!("{} is not a ternary function", other),
                 }
             }
             other => panic!("function {} has arity {}", name, other),
@@ -1683,9 +1696,11 @@ impl Function {
             Function::CurrentDate => "CurrentDate",
             Function::CurrentTimestamp => "CurrentTimestamp",
             Function::Rand => "Rand",
+            Function::IsNull(_) => "IsNull",
             Function::Not(_) => "Not",
             Function::UnaryMinus(_) => "UnaryMinus",
             Function::And(_, _) => "And",
+            Function::Is(_, _) => "Is",
             Function::Equal(_, _) => "Equal",
             Function::Greater(_, _) => "Greater",
             Function::GreaterOrEqual(_, _) => "GreaterOrEqual",
@@ -1699,7 +1714,7 @@ impl Function {
             Function::Multiply(_, _, _) => "Multiply",
             Function::Subtract(_, _, _) => "Subtract",
             Function::Coalesce(_, _, _) => "Coalesce",
-            Function::Default(_, _) => "Default",
+            Function::CaseNoValue(_, _, _, _) => "CaseNoValue",
             Function::NextVal(_) => "NextVal",
             Function::Xid => "Xid",
         }
@@ -1707,15 +1722,15 @@ impl Function {
 
     pub fn arguments(&self) -> Vec<&Scalar> {
         match self {
-            Function::CurrentDate
-            | Function::CurrentTimestamp
-            | Function::Rand
-            | Function::Default(_, _)
-            | Function::Xid => vec![],
-            Function::Not(argument)
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
+                vec![]
+            }
+            Function::IsNull(argument)
+            | Function::Not(argument)
             | Function::UnaryMinus(argument)
             | Function::NextVal(argument) => vec![argument],
-            Function::Equal(left, right)
+            Function::Is(left, right)
+            | Function::Equal(left, right)
             | Function::Greater(left, right)
             | Function::GreaterOrEqual(left, right)
             | Function::Less(left, right)
@@ -1729,6 +1744,7 @@ impl Function {
             | Function::Multiply(left, right, _)
             | Function::Subtract(left, right, _)
             | Function::Coalesce(left, right, _) => vec![left, right],
+            Function::CaseNoValue(test, if_true, if_false, _) => vec![test, if_true, if_false],
         }
     }
 
@@ -1737,8 +1753,10 @@ impl Function {
             Function::CurrentDate => DataType::Date32(DateUnit::Day),
             Function::CurrentTimestamp => DataType::Timestamp(TimeUnit::Microsecond, None),
             Function::Rand => DataType::Float64,
-            Function::Not(_)
+            Function::IsNull(_)
+            | Function::Not(_)
             | Function::And(_, _)
+            | Function::Is(_, _)
             | Function::Equal(_, _)
             | Function::Greater(_, _)
             | Function::GreaterOrEqual(_, _)
@@ -1753,7 +1771,7 @@ impl Function {
             | Function::Subtract(_, _, returns)
             | Function::Coalesce(_, _, returns)
             | Function::Divide(_, _, returns)
-            | Function::Default(_, returns) => returns.clone(),
+            | Function::CaseNoValue(_, _, _, returns) => returns.clone(),
             Function::NextVal(_) => DataType::Int64,
             Function::Xid => DataType::Int64,
         }
@@ -1761,13 +1779,13 @@ impl Function {
 
     pub fn map(self, f: impl Fn(Scalar) -> Scalar) -> Self {
         match self {
-            Function::CurrentDate
-            | Function::CurrentTimestamp
-            | Function::Rand
-            | Function::Xid
-            | Function::Default(_, _) => self,
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
+                self
+            }
+            Function::IsNull(argument) => Function::IsNull(f(argument)),
             Function::Not(argument) => Function::Not(f(argument)),
             Function::And(left, right) => Function::And(f(left), f(right)),
+            Function::Is(left, right) => Function::Is(f(left), f(right)),
             Function::Equal(left, right) => Function::Equal(f(left), f(right)),
             Function::Greater(left, right) => Function::Greater(f(left), f(right)),
             Function::GreaterOrEqual(left, right) => Function::GreaterOrEqual(f(left), f(right)),
@@ -1787,6 +1805,9 @@ impl Function {
             }
             Function::Coalesce(left, right, returns) => {
                 Function::Coalesce(f(left), f(right), returns)
+            }
+            Function::CaseNoValue(test, if_true, if_false, returns) => {
+                Function::CaseNoValue(f(test), f(if_true), f(if_false), returns)
             }
             Function::NextVal(argument) => Function::NextVal(f(argument)),
         }

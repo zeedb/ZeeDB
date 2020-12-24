@@ -32,7 +32,7 @@ Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 # pull_filter_through_aggregate
 plan: select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
 Map $query.$col2:$aggregate.$agg1 store.store_id
-	HashJoin Single (Equal store.store_id store_id)
+	HashJoin Single (Is store.store_id store_id)
 		Partition* store_id
 			Aggregate store_id $aggregate.$agg1:(Count $star)
 				Map $star:1 store_id

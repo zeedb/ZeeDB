@@ -40,18 +40,33 @@ pub fn eval(
             Function::CurrentDate => todo!(),
             Function::CurrentTimestamp => todo!(),
             Function::Rand => todo!(),
-            Function::Not(_) => todo!(),
+            Function::IsNull(argument) => Ok(Arc::new(arrow::compute::is_null(&eval(
+                argument, input, state,
+            )?)?)),
+            Function::Not(argument) => Ok(Arc::new(arrow::compute::not(&as_boolean_array(
+                &eval(argument, input, state)?,
+            ))?)),
             Function::UnaryMinus(_) => todo!(),
             Function::And(left, right) => Ok(Arc::new(arrow::compute::and(
                 &as_boolean_array(&eval(left, input, state)?),
                 &as_boolean_array(&eval(right, input, state)?),
             )?)),
+            Function::Is(left, right) => Ok(Arc::new(kernel::is(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            ))),
             Function::Equal(left, right) => Ok(Arc::new(kernel::equal(
                 &eval(left, input, state)?,
                 &eval(right, input, state)?,
             ))),
-            Function::Greater(_, _) => todo!(),
-            Function::GreaterOrEqual(_, _) => todo!(),
+            Function::Greater(left, right) => Ok(Arc::new(kernel::greater(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            ))),
+            Function::GreaterOrEqual(left, right) => Ok(Arc::new(kernel::greater_equal(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            ))),
             Function::Less(left, right) => Ok(Arc::new(kernel::less(
                 &eval(left, input, state)?,
                 &eval(right, input, state)?,
@@ -61,17 +76,36 @@ pub fn eval(
                 &eval(right, input, state)?,
             ))),
             Function::Like(_, _) => todo!(),
-            Function::NotEqual(_, _) => todo!(),
-            Function::Or(_, _) => todo!(),
-            Function::Add(_, _, _) => todo!(),
+            Function::NotEqual(left, right) => Ok(Arc::new(kernel::equal(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            ))),
+            Function::Or(left, right) => Ok(Arc::new(arrow::compute::or(
+                &as_boolean_array(&eval(left, input, state)?),
+                &as_boolean_array(&eval(right, input, state)?),
+            )?)),
+            Function::Add(left, right, _) => Ok(kernel::add(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
             Function::Divide(left, right, _) => Ok(kernel::div(
                 &eval(left, input, state)?,
                 &eval(right, input, state)?,
             )?),
-            Function::Multiply(_, _, _) => todo!(),
-            Function::Subtract(_, _, _) => todo!(),
+            Function::Multiply(left, right, _) => Ok(kernel::mul(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
+            Function::Subtract(left, right, _) => Ok(kernel::sub(
+                &eval(left, input, state)?,
+                &eval(right, input, state)?,
+            )?),
             Function::Coalesce(_, _, _) => todo!(),
-            Function::Default(column, _) => todo!(),
+            Function::CaseNoValue(test, if_true, if_false, _) => Ok(kernel::mask(
+                &as_boolean_array(&eval(test, input, state)?),
+                &eval(if_true, input, state)?,
+                &eval(if_false, input, state)?,
+            )),
             Function::NextVal(sequence) => {
                 let input = eval(sequence, input, state)?;
                 let input: &Int64Array = input.as_any().downcast_ref::<Int64Array>().unwrap();

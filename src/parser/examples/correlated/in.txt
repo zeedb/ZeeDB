@@ -2,7 +2,7 @@ select 1 in (select store_id from store where store.store_id = customer.store_id
 from customer
 
 LogicalMap $query.ok:$in
-	LogicalJoin Mark $in (Equal customer.store_id store_id) (Equal 1 store.store_id)
+	LogicalJoin Mark $in (Is customer.store_id store_id) (Equal 1 store.store_id)
 		LogicalDependentJoin [store_id]
 			LogicalMap store.store_id
 				LogicalFilter (Equal store.store_id store_id)

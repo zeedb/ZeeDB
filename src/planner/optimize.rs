@@ -485,7 +485,7 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
         Scalar::Parameter(_, _) => 0.5,
         Scalar::Call(function) => match function.deref() {
             Function::Not(argument) => 1.0 - predicate_selectivity(argument, scope),
-            Function::Equal(left, right) => {
+            Function::Is(left, right) | Function::Equal(left, right) => {
                 let left = scalar_unique_cardinality(left, scope) as f64;
                 let right = scalar_unique_cardinality(right, scope) as f64;
                 1.0 / left.max(right).max(1.0)
@@ -500,7 +500,8 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
                 let right = predicate_selectivity(right, scope);
                 1.0 - (1.0 - left) * (1.0 - right)
             }
-            Function::NotEqual(_, _)
+            Function::IsNull(_)
+            | Function::NotEqual(_, _)
             | Function::Less(_, _)
             | Function::LessOrEqual(_, _)
             | Function::Greater(_, _)
@@ -519,7 +520,12 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
                 let right = predicate_selectivity(right, scope);
                 left.min(right)
             }
-            Function::Default(_, _) | Function::NextVal(_) | Function::Xid => 1.0,
+            Function::CaseNoValue(_, if_true, if_false, _) => {
+                let left = predicate_selectivity(if_true, scope);
+                let right = predicate_selectivity(if_false, scope);
+                (left + right) / 2.0
+            }
+            Function::NextVal(_) | Function::Xid => 1.0,
         },
         Scalar::Cast(_, _) => 0.5,
     }

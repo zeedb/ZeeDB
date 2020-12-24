@@ -4,7 +4,7 @@ where exists (select person_id from customer where customer.person_id = person.p
 
 LogicalMap $query.$col1:1
 	LogicalFilter $exists
-		LogicalJoin Mark $exists (Equal person.person_id person_id)
+		LogicalJoin Mark $exists (Is person.person_id person_id)
 			LogicalDependentJoin [person_id]
 				LogicalMap customer.person_id
 					LogicalFilter (Equal customer.person_id person_id)
