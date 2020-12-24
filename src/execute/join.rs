@@ -91,8 +91,13 @@ pub fn hash_join_single(
     let mask = filter(&input)?;
     // TODO verify that each right row found at most one join partner on the left.
     let matched = kernel::gather_logical(&input, &mask);
-    let right_index_not_mask = kernel::gather_logical(&right_index, &kernel::not(&mask));
-    let right_unmatched = kernel::gather(right, &right_index_not_mask);
+    let matched_indexes = kernel::gather_logical(&right_index, &mask);
+    let unmatched_mask = kernel::scatter(
+        &kernel::trues(right.num_rows()),
+        &matched_indexes,
+        &kernel::falses(matched_indexes.len()),
+    );
+    let right_unmatched = kernel::gather_logical(right, &unmatched_mask);
     let left_nulls = null_batch(right_unmatched.num_rows(), left.tuples.schema());
     let unmatched = kernel::zip(&left_nulls, &right_unmatched);
     let combined = kernel::cat(&vec![matched, unmatched]);
