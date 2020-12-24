@@ -1,4 +1,3 @@
-
 # redundant_with_clause_with_projection
 plan: with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo
 Map foo.customer_id:customer.customer_id foo.r:(CurrentDate)

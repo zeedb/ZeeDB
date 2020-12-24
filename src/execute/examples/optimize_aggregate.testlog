@@ -1,4 +1,3 @@
-
 # combine_consecutive_projects
 plan: select a + 1 as b from (select 1 as a)
 Map $query.b:(Add 1 1)

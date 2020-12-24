@@ -2,7 +2,7 @@ use crate::test_suite::*;
 
 #[test]
 fn test_aggregate() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("combine_consecutive_projects");
     t.plan("select a + 1 as b from (select 1 as a)");
     t.comment("combine_consecutive_projects_star");
@@ -18,7 +18,7 @@ fn test_aggregate() {
 
 #[test]
 fn test_correlated() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("redundant_table_free_single_join");
     t.plan("select (select 1)");
     t.comment("semi_join");
@@ -120,7 +120,7 @@ fn test_correlated() {
 
 #[test]
 fn test_ddl() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("create_database");
     t.plan("create database foo");
     t.comment("drop_database");
@@ -151,7 +151,7 @@ fn test_ddl() {
 
 #[test]
 fn test_dml() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("delete");
     t.plan("delete customer where person_id = 1");
     t.comment("insert_values");
@@ -164,14 +164,14 @@ fn test_dml() {
     t.plan(
         "update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id",
     );
-    t.comment("update_set_default");
-    t.plan("update customer set account_number = default where person_id = 1");
+    // t.comment("update_set_default");
+    // t.plan("update customer set account_number = default where person_id = 1");
     t.finish("examples/optimize_dml.testlog");
 }
 
 #[test]
 fn test_filter() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("combine_consecutive_filters");
     t.plan(
         "select 1 from (select * from person where first_name like 'A%') where last_name like 'A%'",
@@ -197,7 +197,7 @@ fn test_filter() {
 
 #[test]
 fn test_join() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("semi_join");
     t.plan(
         "select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)",
@@ -257,7 +257,7 @@ fn test_join() {
 
 #[test]
 fn test_limit() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("limit_offset");
     t.plan("select customer_id from customer limit 100 offset 10");
     t.finish("examples/optimize_limit.testlog");
@@ -265,7 +265,7 @@ fn test_limit() {
 
 #[test]
 fn test_set() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("union_all");
     t.plan("select 1 as a union all select 2 as a");
     t.finish("examples/optimize_set.testlog");
@@ -273,7 +273,7 @@ fn test_set() {
 
 #[test]
 fn test_sort() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("order_by");
     t.plan("select customer_id from customer order by modified_date");
     t.finish("examples/optimize_sort.testlog");
@@ -281,7 +281,7 @@ fn test_sort() {
 
 #[test]
 fn test_with() {
-    let mut t = TestSuite::builder(Some(crate::adventure_works()));
+    let mut t = TestSuite::new(Some(crate::adventure_works()));
     t.comment("redundant_with_clause_with_projection");
     t.plan(
         "with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo",
@@ -305,55 +305,4 @@ fn test_with() {
         "with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id",
     );
     t.finish("examples/optimize_with.testlog");
-}
-
-#[test]
-#[ignore]
-fn test_correlated_subquery() {
-    let mut t = TestSuite::builder(None);
-    t.setup("create table integers (i int64);");
-    t.setup("insert into integers values (1), (2), (3), (null);");
-    t.comment("scalar select with correlation");
-    t.plan("SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;");
-    t.comment("ORDER BY correlated subquery");
-    t.plan("SELECT i FROM integers i1 ORDER BY (SELECT 100-i1.i);");
-    t.comment("subquery returning multiple results");
-    t.plan("SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;");
-    t.comment("subquery with LIMIT");
-    t.plan("SELECT i, (SELECT 42+i1.i FROM integers LIMIT 1) AS j FROM integers i1 ORDER BY i;");
-    t.comment("subquery with LIMIT 0");
-    t.plan("SELECT i, (SELECT 42+i1.i FROM integers LIMIT 0) AS j FROM integers i1 ORDER BY i;");
-    t.comment("subquery with WHERE clause that is always FALSE");
-    t.plan(
-        "SELECT i, (SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;",
-    );
-    t.comment("correlated EXISTS with WHERE clause that is always FALSE");
-    t.plan(
-        "SELECT i, EXISTS(SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;",
-    );
-    t.comment("correlated ANY with WHERE clause that is always FALSE");
-    t.plan(
-        "SELECT i, i IN (SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;",
-    );
-    t.comment("subquery with OFFSET is not supported");
-    t.plan(
-        "SELECT i, (SELECT i+i1.i FROM integers LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;",
-    );
-    t.comment("subquery with ORDER BY is not supported");
-    t.plan(
-        "SELECT i, (SELECT i+i1.i FROM integers ORDER BY 1 LIMIT 1 OFFSET 1) AS j FROM integers i1 ORDER BY i;",
-    );
-    t.comment("correlated filter without FROM clause");
-    t.plan("SELECT i, (SELECT 42 WHERE i1.i>2) AS j FROM integers i1 ORDER BY i;");
-    t.comment("correlated filter with matching entry on NULL");
-    t.plan("SELECT i, (SELECT 42 WHERE i1.i IS NULL) AS j FROM integers i1 ORDER BY i;");
-    t.comment("scalar select with correlation in projection");
-    t.plan("SELECT i, (SELECT i+i1.i FROM integers WHERE i=1) AS j FROM integers i1 ORDER BY i;");
-    t.comment("scalar select with correlation in filter");
-    t.plan("SELECT i, (SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
-    t.comment("scalar select with operation in projection");
-    t.plan("SELECT i, (SELECT i+1 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
-    t.comment("correlated scalar select with constant in projection");
-    t.plan("SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
-    t.finish("examples/optimize_correlated_subquery.testlog");
 }

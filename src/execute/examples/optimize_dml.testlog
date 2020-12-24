@@ -1,4 +1,3 @@
-
 # delete
 plan: delete customer where person_id = 1
 Delete customer
@@ -36,13 +35,4 @@ Insert customer
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* person.person_id $xmin $xmax
 							SeqScan person
-
-# update_set_default
-plan: update customer set account_number = default where person_id = 1
-Insert customer
-	Delete customer
-		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(Default) customer.modified_date $tid
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.person_id 1)
-				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-					SeqScan customer
 

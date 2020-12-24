@@ -1,4 +1,3 @@
-
 # redundant_table_free_single_join
 plan: select (select 1)
 Map $query.$col1:1

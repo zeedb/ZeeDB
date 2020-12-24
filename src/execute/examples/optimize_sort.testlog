@@ -1,4 +1,3 @@
-
 # order_by
 plan: select customer_id from customer order by modified_date
 Sort customer.modified_date

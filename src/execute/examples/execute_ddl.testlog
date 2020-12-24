@@ -1,4 +1,3 @@
-
 # create table
 setup: create table foo (id int64);
 setup: insert into foo values (1)

@@ -1,4 +1,3 @@
-
 # semi_join
 plan: select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
 Map $query.$col1:1

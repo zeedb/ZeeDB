@@ -1,4 +1,3 @@
-
 setup: create table booleans (x boolean);
 setup: create table integers (x int64);
 setup: create table floats (x float64);
