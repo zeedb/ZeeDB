@@ -13,33 +13,40 @@ pub fn not(mask: &BooleanArray) -> BooleanArray {
     BooleanArray::from(builder.build())
 }
 
-pub fn bit_or<T: ArrowPrimitiveType>(
-    left: &PrimitiveArray<T>,
-    right: &PrimitiveArray<T>,
-) -> PrimitiveArray<T> {
-    let mut builder = ArrayData::builder(left.data_type().clone()).len(left.len());
-    let left_data = left.data();
-    let right_data = right.data();
-    let left_buffer = left_data.buffers().first().unwrap();
-    let right_buffer = right_data.buffers().first().unwrap();
-    let buffer = (left_buffer | right_buffer).unwrap();
-    if let Some(nulls) = null_or(left, right) {
-        builder = builder.null_bit_buffer(nulls);
+pub fn bit_or(left: &Buffer, right: &Buffer) -> Buffer {
+    let len = left.len().min(right.len());
+    let left = left.data();
+    let right = right.data();
+    let mut into_buffer = MutableBuffer::new(len).with_bitset(len, false);
+    let into = into_buffer.data_mut();
+    for i in 0..len {
+        into[i] = left[i] | right[i];
     }
-    builder = builder.add_buffer(buffer);
-    PrimitiveArray::from(builder.build())
+    into_buffer.freeze()
 }
 
-fn null_or<T: Array>(left: &T, right: &T) -> Option<Buffer> {
-    let left_data = left.data();
-    let left_nulls = left_data.null_buffer();
-    let right_data = right.data();
-    let right_nulls = right_data.null_buffer();
-    match (left_nulls, right_nulls) {
-        (Some(left), Some(right)) => Some((left | right).unwrap()),
-        (Some(bits), _) | (_, Some(bits)) => Some(bits.clone()),
-        (None, None) => None,
+pub fn bit_and(left: &Buffer, right: &Buffer) -> Buffer {
+    let len = left.len().min(right.len());
+    let left = left.data();
+    let right = right.data();
+    let mut into_buffer = MutableBuffer::new(len).with_bitset(len, false);
+    let into = into_buffer.data_mut();
+    for i in 0..len {
+        into[i] = left[i] & right[i];
     }
+    into_buffer.freeze()
+}
+
+pub fn bit_xor(left: &Buffer, right: &Buffer) -> Buffer {
+    let len = left.len().min(right.len());
+    let left = left.data();
+    let right = right.data();
+    let mut into_buffer = MutableBuffer::new(len).with_bitset(len, false);
+    let into = into_buffer.data_mut();
+    for i in 0..len {
+        into[i] = left[i] ^ right[i];
+    }
+    into_buffer.freeze()
 }
 
 #[derive(Debug)]

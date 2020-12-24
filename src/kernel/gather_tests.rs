@@ -47,6 +47,14 @@ fn test_gather_logical_boolean() {
         (0..found.len()).map(|i| found.value(i)).collect::<Vec<_>>(),
         vec![true, false, true]
     );
+    let found = gather_logical(
+        &BooleanArray::from(vec![true, false, false, false, true]),
+        &BooleanArray::from(vec![Some(true), Some(false), Some(true), Some(false), None]),
+    );
+    assert_eq!(
+        (0..found.len()).map(|i| found.value(i)).collect::<Vec<_>>(),
+        vec![true, false]
+    );
 }
 
 #[test]
@@ -59,6 +67,14 @@ fn test_gather_logical_int() {
         (0..found.len()).map(|i| found.value(i)).collect::<Vec<_>>(),
         vec![1, 3, 5]
     );
+    let found = gather_logical(
+        &Int64Array::from(vec![1, 2, 3, 4, 5]),
+        &BooleanArray::from(vec![Some(true), Some(false), Some(true), Some(false), None]),
+    );
+    assert_eq!(
+        (0..found.len()).map(|i| found.value(i)).collect::<Vec<_>>(),
+        vec![1, 3]
+    );
 }
 
 #[test]
@@ -70,5 +86,13 @@ fn test_gather_logical_string() {
     assert_eq!(
         (0..found.len()).map(|i| found.value(i)).collect::<Vec<_>>(),
         vec!["1", "3", "5"]
+    );
+    let found = gather_logical(
+        &StringArray::from(vec!["1", "2", "3", "4", "5"]),
+        &BooleanArray::from(vec![Some(true), Some(false), Some(true), Some(false), None]),
+    );
+    assert_eq!(
+        (0..found.len()).map(|i| found.value(i)).collect::<Vec<_>>(),
+        vec!["1", "3"]
     );
 }

@@ -70,9 +70,10 @@ impl GatherProvider for StringArray {
     fn gather_logical(values: &Self, mask: &BooleanArray) -> Self {
         assert_eq!(values.len(), mask.len());
 
-        let mut builder = StringBuilder::new(values.len());
+        let n = count_bits(mask);
+        let mut builder = StringBuilder::new(n);
         for i in 0..values.len() {
-            if mask.value(i) {
+            if mask.is_valid(i) && mask.value(i) {
                 if values.is_valid(i) {
                     builder.append_value(values.value(i)).unwrap();
                 } else {
@@ -161,7 +162,8 @@ fn mask_primitive<T: ArrowNumericType>(
 fn mask_bytes(from: &Buffer, width: usize, mask: &BooleanArray, n: usize) -> Buffer {
     assert!(mask.len() * width <= from.len());
 
-    let mask_bits = mask.data_ref().buffers().first().unwrap().data();
+    let mask_is_true = is_true(mask);
+    let mask_bits = mask_is_true.data();
     let mut into = MutableBuffer::new(n * width);
     into.resize(n * width).unwrap();
     let mut src = from.raw_data();
@@ -181,7 +183,8 @@ fn mask_bytes(from: &Buffer, width: usize, mask: &BooleanArray, n: usize) -> Buf
 fn mask_bits(from: &Buffer, mask: &BooleanArray, n: usize) -> Buffer {
     assert!(mask.len() / 8 <= from.len());
 
-    let mask_bits = mask.data_ref().buffers().first().unwrap().data();
+    let mask_is_true = is_true(mask);
+    let mask_bits = mask_is_true.data();
     let n_bytes = (n + 7) / 8;
     let mut into = MutableBuffer::new(n_bytes);
     into.resize(n_bytes).unwrap();
@@ -204,9 +207,13 @@ fn mask_bits(from: &Buffer, mask: &BooleanArray, n: usize) -> Buffer {
 }
 
 fn count_bits(mask: &BooleanArray) -> usize {
-    arrow::util::bit_util::count_set_bits_offset(
-        mask.data_ref().buffers().first().unwrap().data(),
-        0,
-        mask.len(),
-    )
+    arrow::util::bit_util::count_set_bits_offset(is_true(mask).data(), 0, mask.len())
+}
+
+fn is_true(mask: &BooleanArray) -> Buffer {
+    let value_bits = mask.data_ref().buffers().first().unwrap();
+    match mask.data_ref().null_buffer() {
+        Some(null_bits) => crate::bit_and(value_bits, null_bits),
+        None => value_bits.clone(),
+    }
 }

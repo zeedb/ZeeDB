@@ -1,8 +1,8 @@
 mod bits;
-#[cfg(test)]
-mod bits_tests;
 mod cat;
 mod compare;
+#[cfg(test)]
+mod compare_tests;
 mod constructors;
 mod error;
 mod find;
@@ -10,6 +10,9 @@ mod gather;
 #[cfg(test)]
 mod gather_tests;
 mod hash;
+mod mask;
+#[cfg(test)]
+mod mask_tests;
 mod math;
 mod reshape;
 mod scatter;
@@ -28,6 +31,7 @@ pub use crate::error::*;
 pub use crate::find::*;
 pub use crate::gather::*;
 pub use crate::hash::*;
+pub use crate::mask::*;
 pub use crate::math::*;
 pub use crate::reshape::*;
 pub use crate::scatter::*;
