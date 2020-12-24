@@ -540,7 +540,7 @@ pub fn base_name(field: &str) -> &str {
     for (n, c) in field.char_indices().rev() {
         if c == '#' {
             return &field[0..n];
-        } else if ('0'..='9').contains(&c) {
+        } else if ('0'..='f').contains(&c) || 'x' == c {
             continue;
         } else {
             break;

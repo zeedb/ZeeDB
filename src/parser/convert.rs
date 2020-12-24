@@ -19,14 +19,14 @@ use zetasql::*;
 pub fn convert(catalog_id: i64, q: &AnyResolvedStatementProto) -> Expr {
     Converter {
         catalog_id,
-        next_column_id: 0,
+        known_columns: HashMap::new(),
     }
     .any_stmt(q)
 }
 
 struct Converter {
     catalog_id: i64,
-    next_column_id: i64,
+    known_columns: HashMap<i64, Column>,
 }
 
 impl Converter {
@@ -50,7 +50,7 @@ impl Converter {
             projects: q
                 .output_column_list
                 .iter()
-                .map(|c| Column::from(c.column.get()))
+                .map(|c| self.column(c.column.get()))
                 .collect(),
             input: Box::new(self.any_resolved_scan(q.query.get())),
         }
@@ -85,11 +85,11 @@ impl Converter {
             .get()
             .column_list
             .iter()
-            .map(|c| Column::from(c))
+            .map(|c| self.column(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column("$xmin".to_string(), DataType::Int64, Phase::Convert);
-        let xmax = self.create_column("$xmax".to_string(), DataType::Int64, Phase::Convert);
+        let xmin = Column::computed("$xmin", &DataType::Int64);
+        let xmax = Column::computed("$xmax", &DataType::Int64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -115,12 +115,12 @@ impl Converter {
             .get()
             .column_list
             .iter()
-            .map(|c| Column::from(c))
+            .map(|c| self.column(c))
             .collect();
         let table = Table::from(q);
-        let xmin = self.create_column("$xmin".to_string(), DataType::Int64, Phase::Convert);
-        let xmax = self.create_column("$xmax".to_string(), DataType::Int64, Phase::Convert);
-        let tid = self.create_column("$tid".to_string(), DataType::Int64, Phase::Convert);
+        let xmin = Column::computed("$xmin", &DataType::Int64);
+        let xmax = Column::computed("$xmax", &DataType::Int64);
+        let tid = Column::computed("$tid", &DataType::Int64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -360,7 +360,7 @@ impl Converter {
             {
                 continue;
             }
-            let column = Column::from(&c);
+            let column = self.column(&c);
             projects.push((Scalar::Column(column.clone()), column))
         }
         LogicalMap {
@@ -376,7 +376,7 @@ impl Converter {
         input: &mut Expr,
     ) -> (Scalar, Column) {
         let value = self.expr(x.expr.get(), input);
-        let column = Column::from(x.column.get());
+        let column = self.column(x.column.get());
         (value, column)
     }
 
@@ -418,7 +418,7 @@ impl Converter {
         let mut group_by_columns: Vec<Column> = vec![];
         for compute in &q.group_by_list {
             let scalar = self.expr(compute.expr.get(), &mut input);
-            let column = Column::from(compute.column.get());
+            let column = self.column(compute.column.get());
             input_projects.push((scalar, column.clone()));
             group_by_columns.push(column);
         }
@@ -448,16 +448,10 @@ impl Converter {
                 assert!(arguments.len() == 1);
 
                 let input_expr = self.expr(&arguments[0], &mut input);
-                let input_column =
-                    self.create_column("$avg".to_string(), input_expr.data_type(), Phase::Plan);
+                let input_column = Column::computed("$avg", &input_expr.data_type());
                 input_projects.push((input_expr.clone(), input_column.clone()));
-                let sum_column =
-                    self.create_column("$avg$sum".to_string(), input_expr.data_type(), Phase::Plan);
-                let count_column = self.create_column(
-                    "$avg$count".to_string(),
-                    input_expr.data_type(),
-                    Phase::Plan,
-                );
+                let sum_column = Column::computed("$avg$sum", &input_expr.data_type());
+                let count_column = Column::computed("$avg$count", &input_expr.data_type());
                 aggregate_operators.push((
                     AggregateFn::Sum,
                     input_column.clone(),
@@ -473,28 +467,24 @@ impl Converter {
                     Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::Float64),
                     DataType::Float64,
                 )));
-                let avg_column = Column::from(aggregate.column.get());
+                let avg_column = self.column(aggregate.column.get());
                 output_projects.push((avg_expr, avg_column));
             } else if &function == "ZetaSQL:$count_star" {
                 assert!(arguments.len() == 0);
 
                 let input_expr = Scalar::Literal(Value::Int64(1));
-                let input_column =
-                    self.create_column("$star".to_string(), DataType::Int64, Phase::Convert);
+                let input_column = Column::computed("$star", &DataType::Int64);
                 input_projects.push((input_expr, input_column.clone()));
-                let count_column = Column::from(aggregate.column.get());
+                let count_column = self.column(aggregate.column.get());
                 aggregate_operators.push((AggregateFn::Count, input_column, count_column));
             } else {
                 assert!(arguments.len() == 1);
 
                 let input_expr = self.expr(&arguments[0], &mut input);
-                let input_column = self.create_column(
-                    function_name(&function),
-                    input_expr.data_type(),
-                    Phase::Convert,
-                );
+                let input_column =
+                    Column::computed(&function_name(&function), &input_expr.data_type());
                 input_projects.push((input_expr, input_column.clone()));
-                let aggregate_column = Column::from(aggregate.column.get());
+                let aggregate_column = self.column(aggregate.column.get());
                 aggregate_operators.push((
                     AggregateFn::from(&function),
                     input_column,
@@ -624,8 +614,8 @@ impl Converter {
         let projects = (0..q.query_output_column_list.len())
             .map(|i| {
                 (
-                    Scalar::Column(Column::from(&q.query_output_column_list[i])),
-                    Column::from(&q.insert_column_list[i]),
+                    Scalar::Column(self.column(&q.query_output_column_list[i])),
+                    self.column(&q.insert_column_list[i]),
                 )
             })
             .collect();
@@ -659,13 +649,13 @@ impl Converter {
     fn columns(&mut self, xs: &Vec<ResolvedColumnProto>) -> Vec<Column> {
         let mut cs = vec![];
         for x in xs {
-            cs.push(Column::from(x));
+            cs.push(self.column(x));
         }
         cs
     }
 
     fn column_ref(&mut self, x: &ResolvedColumnRefProto) -> Column {
-        Column::from(x.column.get())
+        self.column(x.column.get())
     }
 
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
@@ -704,25 +694,11 @@ impl Converter {
             };
         }
         let mut projects = vec![];
-        let mut updated_column = |column: &ResolvedColumnProto| -> Option<Scalar> {
-            for item in &q.update_item_list {
-                if let ResolvedColumnRefNode(target) = item.target.get().node.get() {
-                    if target.column.get().name == column.name {
-                        let value = match item.set_value.get().value.get().node.get() {
-                            ResolvedDmldefaultNode(default) => {
-                                self.default(column, default.parent.get().r#type.get())
-                            }
-                            other => self.expr_node(other, &mut input),
-                        };
-                        return Some(value);
-                    }
-                }
-            }
-            None
-        };
         for column in &q.table_scan.get().parent.get().column_list {
-            let as_column = Column::from(column);
-            let value = updated_column(column).unwrap_or(Scalar::Column(as_column.clone()));
+            let as_column = self.column(column);
+            let value = self
+                .updated_column(q, column, &mut input)
+                .unwrap_or(Scalar::Column(as_column.clone()));
             projects.push((value, as_column))
         }
         projects.push((Scalar::Column(tid.clone()), tid.clone()));
@@ -737,11 +713,26 @@ impl Converter {
         }
     }
 
-    fn default(&mut self, column: &ResolvedColumnProto, data_type: &TypeProto) -> Scalar {
-        Scalar::Call(Box::new(Function::Default(
-            Column::from(column),
-            data_type::from_proto(data_type),
-        )))
+    fn updated_column(
+        &mut self,
+        q: &ResolvedUpdateStmtProto,
+        column: &ResolvedColumnProto,
+        outer: &mut Expr,
+    ) -> Option<Scalar> {
+        for item in &q.update_item_list {
+            if let ResolvedColumnRefNode(target) = item.target.get().node.get() {
+                if target.column.get().name == column.name {
+                    let value = match item.set_value.get().value.get().node.get() {
+                        ResolvedDmldefaultNode(_) => {
+                            panic!("DEFAULT is not supported");
+                        }
+                        other => self.expr_node(other, outer),
+                    };
+                    return Some(value);
+                }
+            }
+        }
+        None
     }
 
     fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Expr {
@@ -855,36 +846,35 @@ impl Converter {
         let parameters: Vec<Column> = x
             .parameter_list
             .iter()
-            .map(|c| Column::from(c.column.get()))
+            .map(|c| self.column(c.column.get()))
             .collect();
         let subquery = self.any_resolved_scan(x.subquery.get());
         let (join, scalar) = match x.subquery_type.get() {
             // Scalar
             0 => {
                 let join = Join::Single(vec![]);
-                let scalar = single_column(x.subquery.get());
+                let scalar = self.single_column(x.subquery.get());
                 (join, scalar)
             }
             // Array
             1 => unimplemented!(),
             // Exists
             2 => {
-                let mark =
-                    self.create_column("$exists".to_string(), DataType::Boolean, Phase::Convert);
+                let mark = Column::computed("$exists", &DataType::Boolean);
                 let join = Join::Mark(mark.clone(), vec![]);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
             }
             // In
             3 => {
-                let mark = self.create_column("$in".to_string(), DataType::Boolean, Phase::Convert);
+                let mark = Column::computed("$in", &DataType::Boolean);
                 let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
                     } => self.expr(x, outer),
                     other => panic!("{:?}", other),
                 };
-                let check = single_column(x.subquery.get());
+                let check = self.single_column(x.subquery.get());
                 let join_filter = vec![Scalar::Call(Box::new(Function::Equal(find, check)))];
                 let join = Join::Mark(mark.clone(), join_filter);
                 let scalar = Scalar::Column(mark);
@@ -949,10 +939,9 @@ impl Converter {
         //              +
         //            outer
         //
-        // TODO this doesn't work if we're only looking at part of the expression
         let rename_subquery_parameters: Vec<Column> = subquery_parameters
             .iter()
-            .map(|p| self.create_column(p.name.clone(), p.data_type.clone(), Phase::Plan))
+            .map(|p| Column::computed(&p.name, &p.data_type))
             .collect();
         let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
             .map(|i| {
@@ -1003,16 +992,22 @@ impl Converter {
         }
     }
 
-    fn create_column(&mut self, name: String, data_type: DataType, created: Phase) -> Column {
-        let column = Column {
-            created,
-            id: self.next_column_id,
-            name,
-            table: None,
-            data_type,
-        };
-        self.next_column_id += 1;
-        column
+    fn single_column(&mut self, q: &AnyResolvedScanProto) -> Scalar {
+        Scalar::Column(self.column(&column_list(q)[0]))
+    }
+
+    fn column(&mut self, c: &ResolvedColumnProto) -> Column {
+        if !self.known_columns.contains_key(&c.column_id.unwrap()) {
+            self.known_columns.insert(
+                c.column_id.unwrap(),
+                Column::table(
+                    c.name.get(),
+                    c.table_name.get(),
+                    &data_type::from_proto(c.r#type.as_ref().unwrap()),
+                ),
+            );
+        }
+        self.known_columns[&c.column_id.unwrap()].clone()
     }
 }
 
@@ -1039,10 +1034,6 @@ fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
         }
     };
     &q.column_list
-}
-
-fn single_column(q: &AnyResolvedScanProto) -> Scalar {
-    Scalar::Column(Column::from(&column_list(q)[0]))
 }
 
 fn single_column_aggregate(q: &AnyResolvedAggregateScanBaseProto) -> &ResolvedScanProto {

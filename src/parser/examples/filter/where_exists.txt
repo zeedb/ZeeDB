@@ -4,15 +4,15 @@ where exists (select person_id from customer where customer.person_id = person.p
 
 LogicalMap $query.$col1:1
 	LogicalFilter $exists
-		LogicalJoin Mark $exists (Equal person.person_id person_id')
-			LogicalDependentJoin [person_id']
+		LogicalJoin Mark $exists (Equal person.person_id person_id)
+			LogicalDependentJoin [person_id]
 				LogicalMap customer.person_id
-					LogicalFilter (Equal customer.person_id person_id')
+					LogicalFilter (Equal customer.person_id person_id)
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* customer.person_id $xmin $xmax
 								LogicalGet customer
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person_id' $xmin $xmax
+					Map* person_id $xmin $xmax
 						LogicalGet person
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* person.person_id $xmin $xmax

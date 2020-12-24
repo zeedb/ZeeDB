@@ -4,10 +4,10 @@ join store on person.person_id in (select person_id from customer where customer
 
 LogicalMap $query.$col1:1
 	LogicalFilter $in
-		LogicalJoin Mark $in (Equal store.store_id store_id') (Equal person.person_id customer.person_id)
-			LogicalDependentJoin [store_id']
+		LogicalJoin Mark $in (Equal store.store_id store_id) (Equal person.person_id customer.person_id)
+			LogicalDependentJoin [store_id]
 				LogicalMap customer.person_id
-					LogicalFilter (Equal customer.store_id store_id')
+					LogicalFilter (Equal customer.store_id store_id)
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* customer.person_id customer.store_id $xmin $xmax
 								LogicalGet customer
@@ -16,7 +16,7 @@ LogicalMap $query.$col1:1
 						Map* person.person_id $xmin $xmax
 							LogicalGet person
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* store_id' $xmin $xmax
+						Map* store_id $xmin $xmax
 							LogicalGet store
 			LogicalJoin Inner
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)

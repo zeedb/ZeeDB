@@ -4,13 +4,13 @@ where person_id = 1
 
 LogicalUpdate person
 	LogicalMap person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
-		LogicalJoin Single (Equal person.last_name last_name')
-			LogicalDependentJoin [last_name']
-				LogicalMap $expr_subquery.last_name:last_name'
+		LogicalJoin Single (Equal person.last_name last_name)
+			LogicalDependentJoin [last_name]
+				LogicalMap $expr_subquery.last_name:last_name
 					LogicalSingleGet
 				LogicalFilter (Equal person.person_id 1)
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id person.first_name last_name' person.modified_date $xmin $xmax $tid
+						Map* person.person_id person.first_name last_name person.modified_date $xmin $xmax $tid
 							LogicalGet person
 			LogicalFilter (Equal person.person_id 1)
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)

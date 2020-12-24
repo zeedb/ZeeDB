@@ -4,16 +4,16 @@ join customer on (select person.person_id = customer.person_id)
 
 LogicalMap $query.$col1:1
 	LogicalFilter $expr_subquery.$col1
-		LogicalJoin Single (Equal person.person_id person_id') (Equal customer.person_id person_id')
-			LogicalDependentJoin [person_id' person_id']
-				LogicalMap $expr_subquery.$col1:(Equal person_id' person_id')
+		LogicalJoin Single (Equal person.person_id person_id) (Equal customer.person_id person_id)
+			LogicalDependentJoin [person_id person_id]
+				LogicalMap $expr_subquery.$col1:(Equal person_id person_id)
 					LogicalSingleGet
 				LogicalJoin Inner
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person_id' $xmin $xmax
+						Map* person_id $xmin $xmax
 							LogicalGet person
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person_id' $xmin $xmax
+						Map* person_id $xmin $xmax
 							LogicalGet customer
 			LogicalJoin Inner
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)

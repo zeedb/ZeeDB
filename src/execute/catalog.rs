@@ -5,7 +5,7 @@ use ast::*;
 use catalog::Index;
 use once_cell::sync::OnceCell;
 use planner::optimize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use storage::Storage;
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
@@ -139,7 +139,24 @@ fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto
         table.column.push(read_column(batch, offset));
     }
 
+    assert_unique_column_names(&table);
+
     (catalog_id, table)
+}
+
+fn assert_unique_column_names(table: &SimpleTableProto) {
+    let mut distinct_columns = HashSet::new();
+    for column in &table.column {
+        if distinct_columns.contains(column.name.as_ref().unwrap()) {
+            panic!(
+                "duplicate column {} in table {}",
+                column.name.as_ref().unwrap(),
+                table.name.as_ref().unwrap()
+            );
+        } else {
+            distinct_columns.insert(column.name.as_ref().unwrap().clone());
+        }
+    }
 }
 
 fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
