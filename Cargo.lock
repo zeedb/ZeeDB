@@ -43,7 +43,6 @@ dependencies = [
  "indexmap",
  "lazy_static",
  "num",
- "packed_simd_2",
  "rand",
  "regex",
  "serde",

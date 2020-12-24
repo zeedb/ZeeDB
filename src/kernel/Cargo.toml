@@ -8,7 +8,7 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-arrow = { version = "2.0.0", features = ["simd"] }
+arrow = "2.0.0"
 num = "0.3"
 ast = { path = "../ast" }
 twox-hash = "1.6.0"

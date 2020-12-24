@@ -8,5 +8,5 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-arrow = { version = "2.0.0", features = ["simd"] }
+arrow = "2.0.0"
 zetasql = { path = "../zetasql" }
