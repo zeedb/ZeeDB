@@ -25,8 +25,8 @@ pub fn empty_catalog() -> SimpleCatalogProto {
 
 pub fn enabled_language_features() -> Vec<i32> {
     vec![
+        LanguageFeature::FeatureDisallowGroupByFloat as i32,
         LanguageFeature::FeatureDmlUpdateWithJoin as i32,
-        LanguageFeature::FeatureNumericType as i32,
         LanguageFeature::FeatureNamedArguments as i32,
         LanguageFeature::FeatureV11SelectStarExceptReplace as i32,
         LanguageFeature::FeatureV12CorrelatedRefsInNestedDml as i32,
