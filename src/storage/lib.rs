@@ -4,6 +4,9 @@
 mod art;
 #[cfg(test)]
 mod art_tests;
+mod byte_key;
+#[cfg(test)]
+mod byte_key_tests;
 mod counter;
 #[cfg(test)]
 mod counter_tests;
@@ -16,6 +19,7 @@ mod page_tests;
 mod storage;
 
 pub use art::Art;
+pub use byte_key::ByteKey;
 pub use heap::Heap;
 pub use page::Page;
 pub use page::PAGE_SIZE;
