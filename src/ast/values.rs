@@ -1,85 +1,62 @@
-use arrow::array::*;
-use arrow::datatypes::*;
 use chrono::*;
+use kernel::*;
 use std::fmt;
 use std::hash;
-use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum Value {
-    Null(DataType),
-    Boolean(bool),
-    Int64(i64),
-    Float64(f64),
-    Utf8(String),
-    Timestamp(i64),
-    Date(i32),
+    Bool(Option<bool>),
+    I64(Option<i64>),
+    F64(Option<f64>),
+    Date(Option<i32>),
+    Timestamp(Option<i64>),
+    String(Option<String>),
 }
 
 impl Value {
-    pub fn from(any: &Arc<dyn Array>) -> Self {
-        if any.is_null(0) {
-            Value::Null(any.data_type().clone())
-        } else {
-            match any.data_type() {
-                DataType::Boolean => {
-                    Value::Boolean(as_primitive_array::<BooleanType>(any).value(0))
-                }
-                DataType::Int64 => Value::Int64(as_primitive_array::<Int64Type>(any).value(0)),
-                DataType::Float64 => {
-                    Value::Float64(as_primitive_array::<Float64Type>(any).value(0))
-                }
-                DataType::Utf8 => Value::Utf8(as_string_array(any).value(0).to_string()),
-                DataType::Timestamp(TimeUnit::Microsecond, None) => {
-                    Value::Timestamp(as_primitive_array::<TimestampMicrosecondType>(any).value(0))
-                }
-                DataType::Date32(DateUnit::Day) => {
-                    Value::Date(as_primitive_array::<Date32Type>(any).value(0))
-                }
-                other => panic!("type {:?} is not supported", other),
+    pub fn from(array: &Array) -> Self {
+        match array {
+            Array::Bool(array) => Value::Bool(array.get(0)),
+            Array::I64(array) => Value::I64(array.get(0)),
+            Array::F64(array) => Value::F64(array.get(0)),
+            Array::Date(array) => Value::Date(array.get(0)),
+            Array::Timestamp(array) => Value::Timestamp(array.get(0)),
+            Array::String(array) => Value::String(array.get(0).map(|s| s.to_string())),
+        }
+    }
+
+    pub fn null(data_type: DataType) -> Self {
+        match data_type {
+            DataType::Bool => Value::Bool(None),
+            DataType::I64 => Value::I64(None),
+            DataType::F64 => Value::F64(None),
+            DataType::Date => Value::Date(None),
+            DataType::Timestamp => Value::Timestamp(None),
+            DataType::String => Value::String(None),
+        }
+    }
+
+    pub fn repeat(&self, len: usize) -> Array {
+        match self {
+            Value::Bool(value) => Array::Bool(BoolArray::from(vec![*value])),
+            Value::I64(value) => Array::I64(I64Array::from(vec![*value])),
+            Value::F64(value) => Array::F64(F64Array::from(vec![*value])),
+            Value::String(value) => {
+                Array::String(StringArray::from(vec![value.as_ref().map(|s| s.as_str())]))
             }
+            Value::Timestamp(value) => Array::Timestamp(TimestampArray::from(vec![*value])),
+            Value::Date(value) => Array::Date(DateArray::from(vec![*value])),
         }
     }
 
-    pub fn array(&self) -> Arc<dyn Array> {
+    pub fn data_type(&self) -> DataType {
         match self {
-            Value::Null(data_type) => match data_type {
-                DataType::Boolean => Arc::new(BooleanArray::from(vec![None])),
-                DataType::Int64 => Arc::new(Int64Array::from(vec![None])),
-                DataType::Float64 => Arc::new(Float64Array::from(vec![None])),
-                DataType::Utf8 => Arc::new(StringArray::from(vec![None])),
-                DataType::Timestamp(TimeUnit::Microsecond, None) => {
-                    Arc::new(TimestampMicrosecondArray::from(vec![None]))
-                }
-                DataType::Date32(DateUnit::Day) => Arc::new(Date32Array::from(vec![None])),
-                other => panic!("type {:?} is not supported", other),
-            },
-            Value::Boolean(value) => Arc::new(BooleanArray::from(vec![*value])),
-            Value::Int64(value) => Arc::new(Int64Array::from(vec![*value])),
-            Value::Float64(value) => Arc::new(Float64Array::from(vec![*value])),
-            Value::Utf8(value) => Arc::new(StringArray::from(vec![value.as_str()])),
-            Value::Timestamp(value) => Arc::new(TimestampMicrosecondArray::from(vec![*value])),
-            Value::Date(value) => Arc::new(Date32Array::from(vec![*value])),
-        }
-    }
-
-    pub fn data_type(&self) -> &DataType {
-        match self {
-            Value::Null(data_type) => &data_type,
-            Value::Boolean(_) => &DataType::Boolean,
-            Value::Int64(_) => &DataType::Int64,
-            Value::Float64(_) => &DataType::Float64,
-            Value::Utf8(_) => &DataType::Utf8,
-            Value::Timestamp(_) => &DataType::Timestamp(TimeUnit::Microsecond, None),
-            Value::Date(_) => &DataType::Date32(DateUnit::Day),
-        }
-    }
-
-    pub fn bool(&self) -> Option<bool> {
-        if let Value::Boolean(value) = self {
-            Some(*value)
-        } else {
-            None
+            Value::Bool(_) => DataType::Bool,
+            Value::I64(_) => DataType::I64,
+            Value::F64(_) => DataType::F64,
+            Value::Date(_) => DataType::Date,
+            Value::Timestamp(_) => DataType::Timestamp,
+            Value::String(_) => DataType::String,
         }
     }
 }
@@ -87,13 +64,48 @@ impl Value {
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Value::Null(_) => write!(f, "null"),
-            Value::Boolean(value) => write!(f, "{}", value),
-            Value::Int64(value) => write!(f, "{}", value),
-            Value::Float64(value) => write!(f, "{}", value),
-            Value::Utf8(value) => write!(f, "{:?}", value),
-            Value::Timestamp(value) => write!(f, "{}", timestamp_value(*value)),
-            Value::Date(value) => write!(f, "{}", date_value(*value)),
+            Value::Bool(value) => {
+                if let Some(value) = value {
+                    write!(f, "{}", value)
+                } else {
+                    write!(f, "null")
+                }
+            }
+            Value::I64(value) => {
+                if let Some(value) = value {
+                    write!(f, "{}", value)
+                } else {
+                    write!(f, "null")
+                }
+            }
+            Value::F64(value) => {
+                if let Some(value) = value {
+                    write!(f, "{}", value)
+                } else {
+                    write!(f, "null")
+                }
+            }
+            Value::String(value) => {
+                if let Some(value) = value {
+                    write!(f, "{:?}", value)
+                } else {
+                    write!(f, "null")
+                }
+            }
+            Value::Timestamp(value) => {
+                if let Some(value) = value {
+                    write!(f, "{}", timestamp_value(*value))
+                } else {
+                    write!(f, "null")
+                }
+            }
+            Value::Date(value) => {
+                if let Some(value) = value {
+                    write!(f, "{}", date_value(*value))
+                } else {
+                    write!(f, "null")
+                }
+            }
         }
     }
 }
@@ -103,11 +115,10 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             // Note this is Rust semantics, not SQL semantics.
-            (Value::Null(left), Value::Null(right)) => *left == *right,
-            (Value::Boolean(left), Value::Boolean(right)) => *left == *right,
-            (Value::Int64(left), Value::Int64(right)) => *left == *right,
-            (Value::Float64(left), Value::Float64(right)) => *left == *right,
-            (Value::Utf8(left), Value::Utf8(right)) => *left == *right,
+            (Value::Bool(left), Value::Bool(right)) => *left == *right,
+            (Value::I64(left), Value::I64(right)) => *left == *right,
+            (Value::F64(left), Value::F64(right)) => *left == *right,
+            (Value::String(left), Value::String(right)) => *left == *right,
             (Value::Timestamp(left), Value::Timestamp(right)) => *left == *right,
             (Value::Date(left), Value::Date(right)) => *left == *right,
             (_, _) => false,
@@ -117,11 +128,14 @@ impl PartialEq for Value {
 impl hash::Hash for Value {
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
         match self {
-            Value::Null(data_type) => data_type.hash(state),
-            Value::Boolean(value) => value.hash(state),
-            Value::Int64(value) => value.hash(state),
-            Value::Float64(value) => value.to_ne_bytes().hash(state),
-            Value::Utf8(value) => value.hash(state),
+            Value::Bool(value) => value.hash(state),
+            Value::I64(value) => value.hash(state),
+            Value::F64(value) => {
+                if let Some(value) = value {
+                    value.to_ne_bytes().hash(state)
+                }
+            }
+            Value::String(value) => value.hash(state),
             Value::Timestamp(value) => value.hash(state),
             Value::Date(value) => value.hash(state),
         }

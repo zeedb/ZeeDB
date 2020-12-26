@@ -1,7 +1,5 @@
-use arrow::datatypes::*;
 use ast::*;
-use catalog::Index;
-use encoding::varint128;
+use kernel::*;
 use std::borrow::Borrow;
 use std::collections::HashMap;
 use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
@@ -88,8 +86,8 @@ impl Converter {
             .map(|c| self.column(c))
             .collect();
         let table = Table::from(q);
-        let xmin = Column::computed("$xmin", &DataType::Int64);
-        let xmax = Column::computed("$xmax", &DataType::Int64);
+        let xmin = Column::computed("$xmin", DataType::I64);
+        let xmax = Column::computed("$xmax", DataType::I64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -118,9 +116,9 @@ impl Converter {
             .map(|c| self.column(c))
             .collect();
         let table = Table::from(q);
-        let xmin = Column::computed("$xmin", &DataType::Int64);
-        let xmax = Column::computed("$xmax", &DataType::Int64);
-        let tid = Column::computed("$tid", &DataType::Int64);
+        let xmin = Column::computed("$xmin", DataType::I64);
+        let xmax = Column::computed("$xmax", DataType::I64);
+        let tid = Column::computed("$tid", DataType::I64);
         let predicates = vec![
             Scalar::Call(Box::new(Function::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -448,10 +446,10 @@ impl Converter {
                 assert!(arguments.len() == 1);
 
                 let input_expr = self.expr(&arguments[0], &mut input);
-                let input_column = Column::computed("$avg", &input_expr.data_type());
+                let input_column = Column::computed("$avg", input_expr.data_type());
                 input_projects.push((input_expr.clone(), input_column.clone()));
-                let sum_column = Column::computed("$avg$sum", &input_expr.data_type());
-                let count_column = Column::computed("$avg$count", &input_expr.data_type());
+                let sum_column = Column::computed("$avg$sum", input_expr.data_type());
+                let count_column = Column::computed("$avg$count", input_expr.data_type());
                 aggregate_operators.push((
                     AggregateFn::Sum,
                     input_column.clone(),
@@ -463,17 +461,17 @@ impl Converter {
                     count_column.clone(),
                 ));
                 let avg_expr = Scalar::Call(Box::new(Function::Divide(
-                    Scalar::Cast(Box::new(Scalar::Column(sum_column)), DataType::Float64),
-                    Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::Float64),
-                    DataType::Float64,
+                    Scalar::Cast(Box::new(Scalar::Column(sum_column)), DataType::F64),
+                    Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::F64),
+                    DataType::F64,
                 )));
                 let avg_column = self.column(aggregate.column.get());
                 output_projects.push((avg_expr, avg_column));
             } else if &function == "ZetaSQL:$count_star" {
                 assert!(arguments.len() == 0);
 
-                let input_expr = Scalar::Literal(Value::Int64(1));
-                let input_column = Column::computed("$star", &DataType::Int64);
+                let input_expr = Scalar::Literal(Value::I64(Some(1)));
+                let input_column = Column::computed("$star", DataType::I64);
                 input_projects.push((input_expr, input_column.clone()));
                 let count_column = self.column(aggregate.column.get());
                 aggregate_operators.push((AggregateFn::Count, input_column, count_column));
@@ -482,7 +480,7 @@ impl Converter {
 
                 let input_expr = self.expr(&arguments[0], &mut input);
                 let input_column =
-                    Column::computed(&function_name(&function), &input_expr.data_type());
+                    Column::computed(&function_name(&function), input_expr.data_type());
                 input_projects.push((input_expr, input_column.clone()));
                 let aggregate_column = self.column(aggregate.column.get());
                 aggregate_operators.push((
@@ -577,7 +575,7 @@ impl Converter {
     }
 
     fn column_definition(&mut self, c: &ResolvedColumnDefinitionProto) -> (String, DataType) {
-        (c.name.get().clone(), data_type::from_proto(c.r#type.get()))
+        (c.name.get().clone(), DataType::from(c.r#type.get()))
     }
 
     fn drop(&mut self, q: &ResolvedDropStmtProto) -> Expr {
@@ -832,13 +830,13 @@ impl Converter {
             } => (expr, ty),
             other => panic!("{:?}", other),
         };
-        Scalar::Cast(Box::new(self.expr(expr, outer)), data_type::from_proto(ty))
+        Scalar::Cast(Box::new(self.expr(expr, outer)), DataType::from(ty))
     }
 
     fn parameter(&mut self, x: &ResolvedParameterProto) -> Scalar {
         Scalar::Parameter(
             x.name.get().clone(),
-            data_type::from_proto(x.parent.get().r#type.get()),
+            DataType::from(x.parent.get().r#type.get()),
         )
     }
 
@@ -860,14 +858,14 @@ impl Converter {
             1 => unimplemented!(),
             // Exists
             2 => {
-                let mark = Column::computed("$exists", &DataType::Boolean);
+                let mark = Column::computed("$exists", DataType::Bool);
                 let join = Join::Mark(mark.clone(), vec![]);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
             }
             // In
             3 => {
-                let mark = Column::computed("$in", &DataType::Boolean);
+                let mark = Column::computed("$in", DataType::Bool);
                 let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
@@ -941,7 +939,7 @@ impl Converter {
         //
         let rename_subquery_parameters: Vec<Column> = subquery_parameters
             .iter()
-            .map(|p| Column::computed(&p.name, &p.data_type))
+            .map(|p| Column::computed(&p.name, p.data_type))
             .collect();
         let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
             .map(|i| {
@@ -1003,7 +1001,7 @@ impl Converter {
                 Column::table(
                     c.name.get(),
                     c.table_name.get(),
-                    &data_type::from_proto(c.r#type.as_ref().unwrap()),
+                    DataType::from(c.r#type.as_ref().unwrap()),
                 ),
             );
         }
@@ -1049,15 +1047,15 @@ fn function_name(name: &String) -> String {
 fn literal(value: &ValueProto, data_type: &TypeProto) -> Value {
     let value = match value {
         ValueProto { value: Some(value) } => value,
-        _ => return Value::Null(data_type::from_proto(data_type)),
+        _ => return Value::null(DataType::from(data_type)),
     };
     match value {
-        Int64Value(x) => Value::Int64(*x),
-        BoolValue(x) => Value::Boolean(*x),
-        DoubleValue(x) => Value::Float64(*x),
-        StringValue(x) => Value::Utf8(x.to_string()),
-        DateValue(x) => Value::Date(*x),
-        TimestampValue(x) => Value::Timestamp(microseconds_since_epoch(x)),
+        Int64Value(x) => Value::I64(Some(*x)),
+        BoolValue(x) => Value::Bool(Some(*x)),
+        DoubleValue(x) => Value::F64(Some(*x)),
+        StringValue(x) => Value::String(Some(x.clone())),
+        DateValue(x) => Value::Date(Some(*x)),
+        TimestampValue(x) => Value::Timestamp(Some(microseconds_since_epoch(x))),
         other => panic!("{:?}", other),
     }
 }

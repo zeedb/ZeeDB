@@ -17,7 +17,6 @@ mod storage;
 
 pub use art::Art;
 pub use heap::Heap;
-pub use page::base_name;
 pub use page::Page;
 pub use page::PAGE_SIZE;
 pub use storage::Storage;

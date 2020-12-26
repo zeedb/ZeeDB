@@ -8,7 +8,7 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-arrow = "2.0.0"
 chrono = { version = "0.4.11", features = ["serde"] }
 catalog = { path = "../catalog" }
+kernel = { path = "../kernel" }
 zetasql = { path = "../zetasql" }

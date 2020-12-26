@@ -1,40 +1,13 @@
-mod bits;
-mod cat;
-mod compare;
-#[cfg(test)]
-mod compare_tests;
-mod constructors;
-mod error;
-mod find;
-mod gather;
-#[cfg(test)]
-mod gather_tests;
-mod hash;
-mod mask;
-#[cfg(test)]
-mod mask_tests;
-mod math;
-mod reshape;
-mod scatter;
-#[cfg(test)]
-mod scatter_tests;
-mod slice;
-mod sort;
-mod util;
-mod zip;
+mod any_array;
+mod bitmask;
+mod data_type;
+mod fixed_width;
+mod record_batch;
+mod typed_array;
 
-pub use crate::bits::*;
-pub use crate::cat::*;
-pub use crate::compare::*;
-pub use crate::constructors::*;
-pub use crate::error::*;
-pub use crate::find::*;
-pub use crate::gather::*;
-pub use crate::hash::*;
-pub use crate::mask::*;
-pub use crate::math::*;
-pub use crate::reshape::*;
-pub use crate::scatter::*;
-pub use crate::slice::*;
-pub use crate::sort::*;
-pub use crate::zip::*;
+pub use crate::any_array::*;
+pub use crate::bitmask::*;
+pub use crate::data_type::*;
+pub use crate::fixed_width::*;
+pub use crate::record_batch::*;
+pub use crate::typed_array::*;

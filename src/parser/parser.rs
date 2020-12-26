@@ -1,7 +1,7 @@
 use crate::convert::convert;
 use crate::server::ZETASQL_SERVER;
-use arrow::datatypes::DataType;
 use ast::Expr;
+use kernel::*;
 use std::ops::DerefMut;
 use zetasql::analyze_response::Result::*;
 use zetasql::analyzer_options_proto::QueryParameterProto;
@@ -80,7 +80,7 @@ fn analyze_next(
                 .iter()
                 .map(|(name, data_type)| QueryParameterProto {
                     name: Some(name.clone()),
-                    r#type: Some(ast::data_type::to_proto(data_type)),
+                    r#type: Some(data_type.to_proto()),
                 })
                 .collect(),
             ..Default::default()

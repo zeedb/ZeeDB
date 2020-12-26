@@ -1,6 +1,6 @@
 use crate::values::*;
-use arrow::datatypes::*;
 use catalog::Index;
+use kernel::*;
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -1285,7 +1285,7 @@ pub struct Column {
 }
 
 impl Column {
-    pub fn computed(name: &str, data_type: &DataType) -> Self {
+    pub fn computed(name: &str, data_type: DataType) -> Self {
         Self {
             id: Arc::new(()),
             name: name.to_string(),
@@ -1295,7 +1295,7 @@ impl Column {
         }
     }
 
-    pub fn table(name: &str, table: &str, data_type: &DataType) -> Self {
+    pub fn table(name: &str, table: &str, data_type: DataType) -> Self {
         Self {
             id: Arc::new(()),
             name: name.to_string(),
@@ -1313,14 +1313,6 @@ impl Column {
             data_type: copy.data_type.clone(),
             created_late: true,
         }
-    }
-
-    pub fn into_query_field(&self) -> Field {
-        Field::new(self.canonical_name().as_str(), self.data_type.clone(), true)
-    }
-
-    pub fn into_table_field(&self) -> Field {
-        Field::new(self.name.as_str(), self.data_type.clone(), true)
     }
 
     pub fn canonical_name(&self) -> String {
@@ -1537,7 +1529,7 @@ impl Function {
         mut arguments: Vec<Scalar>,
     ) -> Self {
         let name = function.name.as_ref().unwrap().as_str();
-        let returns = crate::data_type::from_proto(
+        let returns = DataType::from(
             signature
                 .return_type
                 .as_ref()
@@ -1750,9 +1742,9 @@ impl Function {
 
     pub fn returns(&self) -> DataType {
         match self {
-            Function::CurrentDate => DataType::Date32(DateUnit::Day),
-            Function::CurrentTimestamp => DataType::Timestamp(TimeUnit::Microsecond, None),
-            Function::Rand => DataType::Float64,
+            Function::CurrentDate => DataType::Date,
+            Function::CurrentTimestamp => DataType::Timestamp,
+            Function::Rand => DataType::F64,
             Function::IsNull(_)
             | Function::Not(_)
             | Function::And(_, _)
@@ -1764,7 +1756,7 @@ impl Function {
             | Function::LessOrEqual(_, _)
             | Function::Like(_, _)
             | Function::NotEqual(_, _)
-            | Function::Or(_, _) => DataType::Boolean,
+            | Function::Or(_, _) => DataType::Bool,
             Function::UnaryMinus(argument) => argument.data_type(),
             Function::Add(_, _, returns)
             | Function::Multiply(_, _, returns)
@@ -1772,8 +1764,8 @@ impl Function {
             | Function::Coalesce(_, _, returns)
             | Function::Divide(_, _, returns)
             | Function::CaseNoValue(_, _, _, returns) => returns.clone(),
-            Function::NextVal(_) => DataType::Int64,
-            Function::Xid => DataType::Int64,
+            Function::NextVal(_) => DataType::I64,
+            Function::Xid => DataType::I64,
         }
     }
 
@@ -1841,13 +1833,13 @@ impl AggregateFn {
         }
     }
 
-    pub fn data_type(&self, column_type: &DataType) -> DataType {
+    pub fn data_type(&self, column_type: DataType) -> DataType {
         match self {
             AggregateFn::AnyValue | AggregateFn::Max | AggregateFn::Min | AggregateFn::Sum => {
                 column_type.clone()
             }
-            AggregateFn::Count => DataType::Int64,
-            AggregateFn::LogicalAnd | AggregateFn::LogicalOr => DataType::Boolean,
+            AggregateFn::Count => DataType::I64,
+            AggregateFn::LogicalAnd | AggregateFn::LogicalOr => DataType::Bool,
         }
     }
 }

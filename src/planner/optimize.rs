@@ -474,13 +474,11 @@ fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -
 
 fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> f64 {
     match predicate {
-        Scalar::Literal(value) => {
-            if value.bool().unwrap() {
-                1.0
-            } else {
-                0.0
-            }
-        }
+        Scalar::Literal(value) => match value {
+            Value::Bool(Some(true)) => 1.0,
+            Value::Bool(_) => 0.0,
+            _ => panic!("{} is not a bool", value),
+        },
         Scalar::Column(_) => 0.5,
         Scalar::Parameter(_, _) => 0.5,
         Scalar::Call(function) => match function.deref() {

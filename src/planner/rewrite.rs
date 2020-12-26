@@ -74,7 +74,7 @@ impl RewriteRule {
                     );
                     lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (@catalog_id, @next_table_id, {:?});", name.path.last().unwrap()));
                     for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
-                        let column_type = data_type::to_string(column_type);
+                        let column_type = column_type.to_string();
                         lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
                     }
                     lines.push("call metadata.create_table(@next_table_id);".to_string());
@@ -553,7 +553,7 @@ impl RewriteRule {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
                         }
                         combined_attributes
-                            .push((Scalar::Literal(Value::Boolean(true)), mark.clone()));
+                            .push((Scalar::Literal(Value::Bool(Some(true))), mark.clone()));
                         combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));
                         for i in 0..filter_predicates.len() {
                             if filter_predicates[i] == semi {

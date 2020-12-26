@@ -1,6 +1,3 @@
-pub mod data_type;
-#[cfg(test)]
-mod data_type_tests;
 mod expr;
 #[cfg(test)]
 mod expr_tests;

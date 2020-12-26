@@ -1,8 +1,7 @@
-use arrow::array::*;
-use arrow::datatypes::*;
 use hyperloglogplus::*;
+use kernel::*;
 use std::hash::{BuildHasherDefault, Hasher};
-use std::sync::Arc;
+use twox_hash::xxh3::hash64;
 
 #[derive(Clone)]
 pub struct Counter {
@@ -22,38 +21,56 @@ impl Counter {
         self.count
     }
 
-    pub fn insert(&mut self, column: &Arc<dyn Array>) {
-        match column.data_type() {
-            DataType::Boolean => self.insert_generic::<BooleanType>(column),
-            DataType::Int64 => self.insert_generic::<Int64Type>(column),
-            DataType::Float64 => self.insert_generic::<Float64Type>(column),
-            DataType::Timestamp(TimeUnit::Microsecond, None) => {
-                self.insert_generic::<TimestampMicrosecondType>(column)
+    pub fn insert(&mut self, column: &Array) {
+        match column {
+            Array::Bool(array) => {
+                for i in 0..array.len() {
+                    if let Some(value) = array.get(i) {
+                        if value {
+                            self.inner.add(&hash64(&[1]))
+                        } else {
+                            self.inner.add(&hash64(&[0]))
+                        }
+                    }
+                }
             }
-            DataType::Date32(DateUnit::Day) => self.insert_generic::<Date32Type>(column),
-            DataType::Utf8 => self.insert_utf8(column),
-            other => panic!("type {:?} is not supported", other),
+            Array::I64(array) => {
+                for i in 0..array.len() {
+                    if let Some(value) = array.get(i) {
+                        self.inner.add(&hash64(&value.to_ne_bytes()))
+                    }
+                }
+            }
+            Array::F64(array) => {
+                for i in 0..array.len() {
+                    if let Some(value) = array.get(i) {
+                        self.inner.add(&hash64(&value.to_ne_bytes()))
+                    }
+                }
+            }
+            Array::Date(array) => {
+                for i in 0..array.len() {
+                    if let Some(value) = array.get(i) {
+                        self.inner.add(&hash64(&value.to_ne_bytes()))
+                    }
+                }
+            }
+            Array::Timestamp(array) => {
+                for i in 0..array.len() {
+                    if let Some(value) = array.get(i) {
+                        self.inner.add(&hash64(&value.to_ne_bytes()))
+                    }
+                }
+            }
+            Array::String(array) => {
+                for i in 0..array.len() {
+                    if let Some(value) = array.get(i) {
+                        self.inner.add(&hash64(value.as_bytes()))
+                    }
+                }
+            }
         }
         self.count = self.inner.count()
-    }
-
-    fn insert_generic<T: ArrowPrimitiveType>(&mut self, column: &Arc<dyn Array>) {
-        let column: &PrimitiveArray<T> =
-            column.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-        for i in 0..column.len() {
-            if column.is_valid(i) {
-                self.inner.add(&fnv(column.value(i).to_byte_slice()))
-            }
-        }
-    }
-
-    fn insert_utf8(&mut self, column: &Arc<dyn Array>) {
-        let column: &StringArray = column.as_any().downcast_ref::<StringArray>().unwrap();
-        for i in 0..column.len() {
-            if column.is_valid(i) {
-                self.inner.add(&fnv(column.value(i).as_bytes()))
-            }
-        }
     }
 }
 

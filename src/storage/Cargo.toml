@@ -8,10 +8,10 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-arrow = "2.0.0"
 hyperloglogplus = "0.2.2"
 packed_simd = { version = "0.3.4", package = "packed_simd_2" }
 regex = "1.4.2"
+twox-hash = "1.6.0"
 catalog = { path = "../catalog" }
 kernel = { path = "../kernel" }
 

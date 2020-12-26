@@ -1,25 +1,22 @@
 use crate::catalog::*;
-use arrow::array::*;
-use arrow::datatypes::*;
-use arrow::record_batch::*;
-use std::sync::Arc;
+use kernel::*;
 use zetasql::function_enums::*;
-use zetasql::SimpleCatalogProto;
 use zetasql::*;
 
 pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
-    let sequence = RecordBatch::try_new(
-        Arc::new(Schema::new(vec![
-            Field::new("sequence_id", DataType::Int64, true),
-            Field::new("sequence_name", DataType::Utf8, true),
-        ])),
-        vec![
-            Arc::new(Int64Array::from(vec![0, 1, 2])),
-            Arc::new(StringArray::from(vec!["catalog", "table", "index"])),
-        ],
-    )
-    .unwrap();
-    vec![(5, sequence)]
+    vec![(
+        5,
+        RecordBatch::new(vec![
+            (
+                "sequence_id".to_string(),
+                Array::I64(I64Array::from(vec![0, 1, 2])),
+            ),
+            (
+                "sequence_name".to_string(),
+                Array::String(StringArray::from(vec!["catalog", "table", "index"])),
+            ),
+        ]),
+    )]
 }
 
 pub fn bootstrap_sequences() -> Vec<(i64, i64)> {

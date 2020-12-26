@@ -8,5 +8,5 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-arrow = "2.0.0"
+kernel = { path = "../kernel" }
 zetasql = { path = "../zetasql" }

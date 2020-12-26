@@ -1,4 +1,3 @@
-use crate::data_type;
 use crate::expr::*;
 use catalog::Index;
 use std::fmt::{Display, Formatter};
@@ -126,7 +125,7 @@ impl IndentPrint for Expr {
             } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for c in columns {
-                    write!(f, " {} {}", c.name, data_type::to_string(&c.data_type))?;
+                    write!(f, " {} {}", c.name, c.data_type)?;
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -233,7 +232,7 @@ impl IndentPrint for Expr {
             Expr::LogicalCreateTable { name, columns } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for (name, data_type) in columns {
-                    write!(f, " {}:{}", name, data_type::to_string(data_type))?;
+                    write!(f, " {}:{}", name, data_type)?;
                 }
                 Ok(())
             }
@@ -428,9 +427,7 @@ impl Display for Scalar {
                     write!(f, "({} {})", function.name(), arguments.join(" "))
                 }
             }
-            Scalar::Cast(value, data_type) => {
-                write!(f, "(Cast {} {})", value, data_type::to_string(data_type))
-            }
+            Scalar::Cast(value, data_type) => write!(f, "(Cast {} {})", value, data_type),
         }
     }
 }
