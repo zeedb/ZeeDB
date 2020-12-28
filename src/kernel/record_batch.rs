@@ -1,7 +1,10 @@
 use crate::any_array::*;
+use crate::bool_array::*;
 use crate::data_type::*;
-use crate::typed_array::*;
+use crate::primitive_array::*;
+use std::{cmp::Ordering, fmt::Debug, ops::Range};
 
+#[derive(Clone)]
 pub struct RecordBatch {
     pub columns: Vec<(String, Array)>,
 }
@@ -9,6 +12,37 @@ pub struct RecordBatch {
 impl RecordBatch {
     pub fn new(columns: Vec<(String, Array)>) -> Self {
         Self { columns }
+    }
+
+    pub fn nulls(mut columns: Vec<(String, DataType)>, len: usize) -> Self {
+        Self {
+            columns: columns
+                .drain(..)
+                .map(|(name, data_type)| (name, Array::nulls(data_type, len)))
+                .collect(),
+        }
+    }
+
+    pub fn zip(left: Self, right: Self) -> Self {
+        assert_eq!(left.len(), right.len());
+
+        let mut combined = vec![];
+        combined.extend(left.columns);
+        combined.extend(right.columns);
+
+        RecordBatch::new(combined)
+    }
+
+    pub fn cat(batches: &Vec<RecordBatch>) -> RecordBatch {
+        todo!()
+    }
+
+    pub fn repeat(&self, n: usize) -> Self {
+        todo!()
+    }
+
+    pub fn extend(&mut self, other: &Self) -> Self {
+        todo!()
     }
 
     pub fn len(&self) -> usize {
@@ -20,6 +54,14 @@ impl RecordBatch {
             .iter()
             .map(|(n, c)| (n.clone(), c.data_type()))
             .collect()
+    }
+
+    pub fn find(&self, column: &str) -> Option<&Array> {
+        todo!()
+    }
+
+    pub fn slice(&self, range: Range<usize>) -> Self {
+        todo!()
     }
 
     pub fn gather(&self, indexes: &I32Array) -> Self {
@@ -50,24 +92,43 @@ impl RecordBatch {
         }
     }
 
-    pub fn select(&self, mask: &BoolArray, default: &Self) -> Self {
-        assert_eq!(self.columns.len(), default.columns.len());
-
-        Self::new(
-            (0..self.columns.len())
-                .map(|i| {
-                    let (self_name, self_column) = &self.columns[i];
-                    let (default_name, default_column) = &default.columns[i];
-
-                    assert_eq!(self_name, default_name);
-
-                    (self_name.clone(), self_column.select(mask, default_column))
-                })
-                .collect(),
-        )
+    /// Transpose each column, where each column is interpreted as a column-major matrix of size [stride X _].
+    pub fn transpose(&self, stride: usize) -> Self {
+        todo!()
     }
 
-    pub fn sort(&self) -> I32Array {
-        todo!()
+    pub fn sort(&self, desc: Vec<bool>) -> I32Array {
+        let mut indexes: Vec<_> = (0..self.len() as i32).collect();
+        indexes.sort_by(|i, j| {
+            for c in 0..self.columns.len() {
+                match self.columns[c].1.cmp(*i as usize, *j as usize) {
+                    Ordering::Less => {
+                        if desc[c] {
+                            return Ordering::Greater;
+                        } else {
+                            return Ordering::Less;
+                        }
+                    }
+                    Ordering::Equal => {
+                        // Continue to next match column.
+                    }
+                    Ordering::Greater => {
+                        if desc[c] {
+                            return Ordering::Less;
+                        } else {
+                            return Ordering::Greater;
+                        }
+                    }
+                }
+            }
+            Ordering::Equal
+        });
+        I32Array::from(indexes)
+    }
+}
+
+impl Debug for RecordBatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", crate::fixed_width(&vec![self.clone()]))
     }
 }

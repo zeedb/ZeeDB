@@ -1,34 +1,24 @@
 // Key serialization strategies from "The Adaptive Radix Tree: ARTful Indexing for Main-Memory Databases"
 // https://db.in.tum.de/~leis/papers/ART.pdf
 
-pub trait ByteKey {
-    fn key(self) -> Vec<u8>;
+pub fn byte_key_i64(value: i64) -> [u8; 8] {
+    let flip_sign_bit = value ^ (1 << 63);
+    flip_sign_bit.to_be_bytes()
 }
 
-impl ByteKey for i64 {
-    fn key(self) -> Vec<u8> {
-        let flip_sign_bit = self ^ (1 << 63);
-        flip_sign_bit.to_be_bytes().to_vec()
-    }
+pub fn byte_key_i32(value: i32) -> [u8; 4] {
+    let flip_sign_bit = value ^ (1 << 31);
+    flip_sign_bit.to_be_bytes()
 }
 
-impl ByteKey for i32 {
-    fn key(self) -> Vec<u8> {
-        let flip_sign_bit = self ^ (1 << 31);
-        flip_sign_bit.to_be_bytes().to_vec()
-    }
-}
-
-impl ByteKey for f64 {
-    fn key(self) -> Vec<u8> {
-        let bits = self.to_bits();
-        let bits = if bits & (1 << 63) != 0 {
-            bits ^ !0
-        } else {
-            bits ^ (1 << 63)
-        };
-        bits.to_be_bytes().to_vec()
-    }
+pub fn byte_key_f64(value: f64) -> [u8; 8] {
+    let bits = value.to_bits();
+    let bits = if bits & (1 << 63) != 0 {
+        bits ^ !0
+    } else {
+        bits ^ (1 << 63)
+    };
+    bits.to_be_bytes()
 }
 
 // 0111111111111000000000000000000000000000000000000000000000000000        1111111111111000000000000000000000000000000000000000000000000000        f64::NAN                nan

@@ -291,16 +291,15 @@ impl Converter {
         let mut order_by = vec![];
         for x in &q.order_by_item_list {
             let descending = x.is_descending.unwrap_or(false);
-            let nulls_first = match x.null_order.unwrap_or(0) {
-                0 => !descending, // NullOrderMode::OrderUnspecified
-                1 => true,        // NullOrderMode::NullsFirst
-                2 => false,       // NullOrderMode::NullsLast
-                _ => panic!(),
-            };
+            // let nulls_first = match x.null_order.unwrap_or(0) {
+            //     0 => !descending, // NullOrderMode::OrderUnspecified
+            //     1 => true,        // NullOrderMode::NullsFirst
+            //     2 => false,       // NullOrderMode::NullsLast
+            //     _ => panic!(),
+            // };
             order_by.push(OrderBy {
                 column: self.column_ref(x.column_ref.get()),
                 descending,
-                nulls_first,
             });
         }
         LogicalSort {

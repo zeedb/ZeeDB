@@ -2,12 +2,23 @@ use crate::any_array::*;
 use crate::record_batch::*;
 use chrono::NaiveDateTime;
 
-pub fn fixed_width(record_batch: &RecordBatch) -> String {
-    let columns: Vec<Vec<String>> = record_batch
+pub fn fixed_width(batches: &Vec<RecordBatch>) -> String {
+    let header: Vec<Vec<String>> = batches[0]
         .columns
         .iter()
-        .map(|(name, array)| fixed_width_column(name, array))
+        .map(|(name, _)| vec![name.clone()])
         .collect();
+    let data: Vec<Vec<Vec<String>>> = batches
+        .iter()
+        .map(|batch| {
+            batch
+                .columns
+                .iter()
+                .map(|(_, array)| fixed_width_column(array))
+                .collect()
+        })
+        .collect();
+    let columns = cat(header, data);
     let widths: Vec<usize> = columns
         .iter()
         .map(|column| column.iter().map(|value| value.len()).max().unwrap_or(0))
@@ -20,9 +31,9 @@ pub fn fixed_width(record_batch: &RecordBatch) -> String {
                 .collect()
         })
         .collect();
-    let rows: Vec<String> = (0..record_batch.len() + 1)
+    let rows: Vec<String> = (0..columns[0].len())
         .map(|i| {
-            (0..record_batch.columns.len())
+            (0..columns.len())
                 .map(|j| padded[j][i].clone())
                 .collect::<Vec<String>>()
                 .join(" ")
@@ -31,8 +42,8 @@ pub fn fixed_width(record_batch: &RecordBatch) -> String {
     rows.join("\n")
 }
 
-fn fixed_width_column(name: &String, array: &Array) -> Vec<String> {
-    let values: Vec<String> = match array {
+fn fixed_width_column(array: &Array) -> Vec<String> {
+    match array {
         Array::Bool(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
@@ -76,40 +87,18 @@ fn fixed_width_column(name: &String, array: &Array) -> Vec<String> {
                 Some(value) => value.to_string(),
             })
             .collect(),
-    };
-    let mut header = vec![name.clone()];
-    header.extend_from_slice(&values);
-    header
+    }
 }
-// DataType::Date32(DateUnit::Day) => {
-//     let column = as_primitive_array::<Date32Type>(column);
-//     (0..column.len())
-//         .map(|i| {
-//             if column.is_null(i) {
-//                 "NULL".to_string()
-//             } else {
-//                 column.value_as_date(i).unwrap().format("%F").to_string()
-//             }
-//         })
-//         .collect()
-// }
-// DataType::Timestamp(TimeUnit::Microsecond, None) => {
-//     let column: &TimestampMicrosecondArray =
-//         as_primitive_array::<TimestampMicrosecondType>(column);
-//     (0..column.len())
-//         .map(|i| {
-//             if column.is_null(i) {
-//                 "NULL".to_string()
-//             } else {
-//                 column
-//                     .value_as_datetime(i)
-//                     .unwrap()
-//                     .format("%F %T")
-//                     .to_string()
-//             }
-//         })
-//         .collect()
-// }
+
+fn cat(header: Vec<Vec<String>>, data: Vec<Vec<Vec<String>>>) -> Vec<Vec<String>> {
+    let mut columns = header;
+    for batch in data {
+        for i in 0..batch.len() {
+            columns[i].extend_from_slice(batch[i].as_slice())
+        }
+    }
+    columns
+}
 
 /// Number of seconds in a day
 const SECONDS_IN_DAY: i64 = 86_400;

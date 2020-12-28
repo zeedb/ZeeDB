@@ -1,3 +1,4 @@
+#[derive(Clone, Debug)]
 pub struct Bitmask {
     values: Vec<u8>,
     len: usize,

@@ -21,11 +21,11 @@ impl Heap {
         }
     }
 
-    pub fn iter(&self) -> &Vec<Page> {
+    pub fn scan(&self) -> &Vec<Page> {
         &self.pages
     }
 
-    pub fn iter_mut(&mut self) -> &mut Vec<Page> {
+    pub fn scan_mut(&mut self) -> &mut Vec<Page> {
         &mut self.pages
     }
 

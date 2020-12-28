@@ -3,45 +3,45 @@ use crate::byte_key::*;
 #[test]
 fn test_i32() {
     assert_ordered(vec![
-        ByteKey::key(i32::MIN),
-        ByteKey::key(-2i32),
-        ByteKey::key(-1i32),
-        ByteKey::key(0i32),
-        ByteKey::key(1i32),
-        ByteKey::key(2i32),
-        ByteKey::key(i32::MAX),
+        byte_key_i32(i32::MIN).to_vec(),
+        byte_key_i32(-2i32).to_vec(),
+        byte_key_i32(-1i32).to_vec(),
+        byte_key_i32(0i32).to_vec(),
+        byte_key_i32(1i32).to_vec(),
+        byte_key_i32(2i32).to_vec(),
+        byte_key_i32(i32::MAX).to_vec(),
     ]);
 }
 
 #[test]
 fn test_i64() {
     assert_ordered(vec![
-        ByteKey::key(i64::MIN),
-        ByteKey::key(-2i64),
-        ByteKey::key(-1i64),
-        ByteKey::key(0i64),
-        ByteKey::key(1i64),
-        ByteKey::key(2i64),
-        ByteKey::key(i64::MAX),
+        byte_key_i64(i64::MIN).to_vec(),
+        byte_key_i64(-2i64).to_vec(),
+        byte_key_i64(-1i64).to_vec(),
+        byte_key_i64(0i64).to_vec(),
+        byte_key_i64(1i64).to_vec(),
+        byte_key_i64(2i64).to_vec(),
+        byte_key_i64(i64::MAX).to_vec(),
     ]);
 }
 
 #[test]
 fn test_f64() {
     assert_ordered(vec![
-        ByteKey::key(f64::NEG_INFINITY),
-        ByteKey::key(f64::MIN),
-        ByteKey::key(-1f64),
-        ByteKey::key(-f64::from_bits(2)),
-        ByteKey::key(-f64::from_bits(1)),
-        ByteKey::key(-0f64),
-        ByteKey::key(0f64),
-        ByteKey::key(f64::from_bits(1)),
-        ByteKey::key(f64::from_bits(2)),
-        ByteKey::key(1f64),
-        ByteKey::key(f64::MAX),
-        ByteKey::key(f64::INFINITY),
-        ByteKey::key(f64::NAN),
+        byte_key_f64(f64::NEG_INFINITY).to_vec(),
+        byte_key_f64(f64::MIN).to_vec(),
+        byte_key_f64(-1f64).to_vec(),
+        byte_key_f64(-f64::from_bits(2)).to_vec(),
+        byte_key_f64(-f64::from_bits(1)).to_vec(),
+        byte_key_f64(-0f64).to_vec(),
+        byte_key_f64(0f64).to_vec(),
+        byte_key_f64(f64::from_bits(1)).to_vec(),
+        byte_key_f64(f64::from_bits(2)).to_vec(),
+        byte_key_f64(1f64).to_vec(),
+        byte_key_f64(f64::MAX).to_vec(),
+        byte_key_f64(f64::INFINITY).to_vec(),
+        byte_key_f64(f64::NAN).to_vec(),
     ])
 }
 
