@@ -128,6 +128,97 @@ impl Data {
             )),
         }
     }
+
+    fn extend(&mut self, start: usize, end: usize, from: &Array, offset: usize) {
+        match (self, from) {
+            (Data::Bool { values, is_valid }, Array::Bool(from)) => {
+                for i in 0..(end - start) {
+                    let src = offset + i;
+                    let dst = start + i;
+                    if let Some(value) = from.get(src) {
+                        if value {
+                            set_bit(values, dst);
+                        } else {
+                            unset_bit(values, dst);
+                        }
+                        set_bit(is_valid, dst);
+                    } else {
+                        unset_bit(is_valid, dst);
+                    }
+                }
+            }
+            (Data::I64 { values, is_valid }, Array::I64(from)) => {
+                for i in 0..(end - start) {
+                    let src = offset + i;
+                    let dst = start + i;
+                    if let Some(value) = from.get(src) {
+                        values[dst] = value;
+                        set_bit(is_valid, dst);
+                    } else {
+                        unset_bit(is_valid, dst);
+                    }
+                }
+            }
+            (Data::F64 { values, is_valid }, Array::F64(from)) => {
+                for i in 0..(end - start) {
+                    let src = offset + i;
+                    let dst = start + i;
+                    if let Some(value) = from.get(src) {
+                        values[dst] = value;
+                        set_bit(is_valid, dst);
+                    } else {
+                        unset_bit(is_valid, dst);
+                    }
+                }
+            }
+            (Data::Date { values, is_valid }, Array::Date(from)) => {
+                for i in 0..(end - start) {
+                    let src = offset + i;
+                    let dst = start + i;
+                    if let Some(value) = from.get(src) {
+                        values[dst] = value;
+                        set_bit(is_valid, dst);
+                    } else {
+                        unset_bit(is_valid, dst);
+                    }
+                }
+            }
+            (Data::Timestamp { values, is_valid }, Array::Timestamp(from)) => {
+                for i in 0..(end - start) {
+                    let src = offset + i;
+                    let dst = start + i;
+                    if let Some(value) = from.get(src) {
+                        values[dst] = value;
+                        set_bit(is_valid, dst);
+                    } else {
+                        unset_bit(is_valid, dst);
+                    }
+                }
+            }
+            (
+                Data::String {
+                    buffer,
+                    offsets,
+                    is_valid,
+                },
+                Array::String(from),
+            ) => {
+                for i in 0..(end - start) {
+                    let src = offset + i;
+                    let dst = start + i;
+                    if let Some(value) = from.get(src) {
+                        buffer.push_str(value);
+                        offsets[dst + 1] = buffer.len() as i32;
+                        set_bit(is_valid, dst);
+                    } else {
+                        offsets[dst + 1] = buffer.len() as i32;
+                        unset_bit(is_valid, dst);
+                    }
+                }
+            }
+            (left, right) => panic!("{} does not match {}", left.data_type(), right.data_type()),
+        }
+    }
 }
 
 impl Page {
@@ -187,7 +278,7 @@ impl Page {
         for (dst_name, dst_array) in &mut self.columns {
             for (src_name, src_array) in &records.columns {
                 if dst_name == src_name {
-                    extend(dst_array, start, end, src_array, *offset);
+                    dst_array.extend(start, end, src_array, *offset);
                 }
             }
         }
@@ -249,97 +340,6 @@ impl Page {
 impl fmt::Debug for Page {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.print(f, 0)
-    }
-}
-
-fn extend(into: &mut Data, start: usize, end: usize, from: &Array, offset: usize) {
-    match (into, from) {
-        (Data::Bool { values, is_valid }, Array::Bool(from)) => {
-            for i in 0..(end - start) {
-                let src = offset + i;
-                let dst = start + i;
-                if let Some(value) = from.get(src) {
-                    if value {
-                        set_bit(values, dst);
-                    } else {
-                        unset_bit(values, dst);
-                    }
-                    set_bit(is_valid, dst);
-                } else {
-                    unset_bit(is_valid, dst);
-                }
-            }
-        }
-        (Data::I64 { values, is_valid }, Array::I64(from)) => {
-            for i in 0..(end - start) {
-                let src = offset + i;
-                let dst = start + i;
-                if let Some(value) = from.get(src) {
-                    values[dst] = value;
-                    set_bit(is_valid, dst);
-                } else {
-                    unset_bit(is_valid, dst);
-                }
-            }
-        }
-        (Data::F64 { values, is_valid }, Array::F64(from)) => {
-            for i in 0..(end - start) {
-                let src = offset + i;
-                let dst = start + i;
-                if let Some(value) = from.get(src) {
-                    values[dst] = value;
-                    set_bit(is_valid, dst);
-                } else {
-                    unset_bit(is_valid, dst);
-                }
-            }
-        }
-        (Data::Date { values, is_valid }, Array::Date(from)) => {
-            for i in 0..(end - start) {
-                let src = offset + i;
-                let dst = start + i;
-                if let Some(value) = from.get(src) {
-                    values[dst] = value;
-                    set_bit(is_valid, dst);
-                } else {
-                    unset_bit(is_valid, dst);
-                }
-            }
-        }
-        (Data::Timestamp { values, is_valid }, Array::Timestamp(from)) => {
-            for i in 0..(end - start) {
-                let src = offset + i;
-                let dst = start + i;
-                if let Some(value) = from.get(src) {
-                    values[dst] = value;
-                    set_bit(is_valid, dst);
-                } else {
-                    unset_bit(is_valid, dst);
-                }
-            }
-        }
-        (
-            Data::String {
-                buffer,
-                offsets,
-                is_valid,
-            },
-            Array::String(from),
-        ) => {
-            for i in 0..(end - start) {
-                let src = offset + i;
-                let dst = start + i;
-                if let Some(value) = from.get(src) {
-                    buffer.push_str(value);
-                    offsets[dst + 1] = buffer.len() as i32;
-                    set_bit(is_valid, dst);
-                } else {
-                    offsets[dst + 1] = buffer.len() as i32;
-                    unset_bit(is_valid, dst);
-                }
-            }
-        }
-        (left, right) => panic!("{} does not match {}", left.data_type(), right.data_type()),
     }
 }
 
