@@ -491,7 +491,7 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
         Scalar::Column(_) => 0.5,
         Scalar::Parameter(_, _) => 0.5,
         Scalar::Call(function) => match function.deref() {
-            Function::Not(argument) => 1.0 - predicate_selectivity(argument, scope),
+            Function::Not(argument) => predicate_selectivity(argument, scope),
             Function::Is(left, right) | Function::Equal(left, right) => {
                 // Note that equi-joins are handled separately as a special case.
                 let left = scalar_unique_cardinality(left, scope) as f64;

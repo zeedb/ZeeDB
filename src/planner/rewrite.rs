@@ -683,6 +683,11 @@ impl RewriteRule {
                     let mut filter_predicates = vec![];
                     for p in predicates {
                         if let Some((subquery_column, domain_column)) = match_equals(&p) {
+                            filter_predicates.push(Scalar::Call(Box::new(Function::Not(
+                                Scalar::Call(Box::new(Function::IsNull(Scalar::Column(
+                                    subquery_column.clone(),
+                                )))),
+                            ))));
                             equiv_predicates.insert(domain_column, subquery_column);
                         } else {
                             filter_predicates.push(p.clone())

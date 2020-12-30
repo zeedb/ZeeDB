@@ -35,10 +35,12 @@ Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
 		Partition* store_id
 			Aggregate store_id $aggregate.$agg1:(Count $star)
-				Map $star:1 store_id:customer.store_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.store_id $xmin $xmax
-							SeqScan customer
+				Map $star:1 store_id
+					Filter (Not (IsNull customer.store_id))
+						Map store_id:customer.store_id, ..
+							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+								Map* customer.store_id $xmin $xmax
+									SeqScan customer
 		Partition* store.store_id
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* store.store_id $xmin $xmax

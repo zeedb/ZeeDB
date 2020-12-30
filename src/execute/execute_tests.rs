@@ -90,10 +90,12 @@ fn test_aggregates() {
     t.setup("create table floats (x float64);");
     t.setup("create table dates (x date);");
     t.setup("create table timestamps (x timestamp);");
+    // TODO strings?
     t.setup("insert into booleans values (true), (true), (false), (null);");
     t.setup("insert into integers values (1), (1), (2), (3), (null);");
     t.setup("insert into floats values (1.0), (2.0), (3.0), (null);");
     t.setup("insert into dates values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null);");
+    t.setup("insert into timestamps values (timestamp '2000-01-01'), (timestamp '2000-01-02'), (timestamp '2000-01-03'), (null);");
     t.comment("simple aggregate counts");
     t.ok("select any_value(x), count(x), count(*) from integers");
     t.comment("simple aggregate boolean");
@@ -106,7 +108,14 @@ fn test_aggregates() {
     t.ok("select x, sum(x) from integers group by 1 order by 1");
     t.comment("simple avg");
     t.ok("select avg(x) from integers");
-    t.finish("examples/execute_aggregates.testlog")
+    t.comment("projection");
+    t.ok("select x from booleans group by x order by x");
+    t.ok("select x from integers group by x order by x");
+    t.ok("select x from dates group by x order by x");
+    t.ok("select x from timestamps group by x order by x");
+    t.ok("select booleans.x, integers.x from booleans, integers group by 1, 2 order by 1, 2");
+    t.ok("select distinct booleans.x, integers.x from booleans, integers order by 1, 2");
+    t.finish("examples/execute_aggregates.testlog");
 }
 
 #[test]
@@ -254,7 +263,6 @@ fn test_with() {
 }
 
 #[test]
-#[ignore]
 fn test_correlated_exists() {
     let mut t = TestSuite::new(None);
     t.setup("create table integers (i int64);");
@@ -265,11 +273,6 @@ fn test_correlated_exists() {
     t.ok("SELECT i, EXISTS(SELECT i FROM integers WHERE i IS NULL OR i>i1.i*10) FROM integers i1 ORDER BY i;");
     t.ok("SELECT i, EXISTS(SELECT i FROM integers WHERE i1.i>i OR i1.i IS NULL) FROM integers i1 ORDER BY i;");
     t.ok("SELECT i FROM integers i1 WHERE EXISTS(SELECT i FROM integers WHERE i=i1.i) ORDER BY i;");
-    t.comment("correlated EXISTS with aggregations");
-    // t.ok("SELECT EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) FROM integers i1;");
-    // t.ok("SELECT i, SUM(i) FROM integers i1 GROUP BY i HAVING EXISTS(SELECT i FROM integers WHERE i>MIN(i1.i)) ORDER BY i;");
-    t.ok("SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=3 GROUP BY i) FROM integers i1;");
-    t.ok("SELECT EXISTS(SELECT i+MIN(i1.i) FROM integers WHERE i=5 GROUP BY i) FROM integers i1;");
     t.comment("GROUP BY correlated exists");
     t.ok("SELECT EXISTS(SELECT i FROM integers WHERE i=i1.i) AS g, COUNT(*) FROM integers i1 GROUP BY g ORDER BY g;");
     t.comment("SUM on exists");
@@ -277,7 +280,7 @@ fn test_correlated_exists() {
     t.comment("aggregates with multiple parameters");
     t.ok("SELECT (SELECT SUM(i1.i * i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
     t.ok("SELECT (SELECT SUM(i2.i * i1.i) FROM integers i2) FROM integers i1 ORDER BY 1");
-    t.ok("SELECT (SELECT SUM(i1.i+i2.i * i1.i+i2.i) FROM integers i2) FROM integers i1 ORDER BY 1");
+    t.ok("SELECT (SELECT SUM((i1.i+i2.i) * (i1.i+i2.i)) FROM integers i2) FROM integers i1 ORDER BY 1");
     t.ok("SELECT (SELECT SUM(i2.i * i2.i) FROM integers i2) FROM integers i1 ORDER BY 1;");
     t.ok("SELECT (SELECT SUM(i1.i * i1.i) FROM integers i2 LIMIT 1) FROM integers i1 ORDER BY 1;");
     t.finish("examples/execute_correlated_exists.testlog");
