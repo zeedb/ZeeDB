@@ -115,14 +115,12 @@ Map customer.customer_id store.store_id
 # join_left_index_scan
 plan: select customer.customer_id, store.store_id from customer, store where customer.customer_id = 1
 Map customer.customer_id store.store_id
-	NestedLoop Inner
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.customer_id $xmin $xmax
-				IndexScan customer(customer_id:1)
-					TableFreeScan
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* store.store_id $xmin $xmax
-				SeqScan store
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+		Map* customer.customer_id $xmin $xmax, ..
+			IndexScan customer(customer_id:1)
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* store.store_id $xmin $xmax
+						SeqScan store
 
 # join_right_index_scan
 plan: select customer.customer_id, store.store_id from customer, store where store.store_id = 1
@@ -139,13 +137,16 @@ Map customer.customer_id store.store_id
 # equi_join_left_index_scan
 plan: select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and customer.customer_id = 1
 Map customer.customer_id store.store_id
-	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-		Map* store.store_id $xmin $xmax, ..
-			IndexScan store(store_id:customer.store_id)
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.customer_id customer.store_id $xmin $xmax
-						IndexScan customer(customer_id:1)
-							TableFreeScan
+	HashJoin Inner (Equal customer.store_id store.store_id)
+		Partition* store.store_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* store.store_id $xmin $xmax
+					SeqScan store
+		Partition* customer.store_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.customer_id customer.store_id $xmin $xmax
+					IndexScan customer(customer_id:1)
+						TableFreeScan
 
 # equi_join_right_index_scan
 plan: select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and store.store_id = 1
@@ -192,21 +193,21 @@ Map customer.customer_id store.store_id
 # two_inner_joins
 plan: select * from person join customer using (person_id) join store using (store_id)
 Map customer.store_id person.person_id person.first_name person.last_name person.modified_date customer.customer_id customer.account_number customer.modified_date store.name store.modified_date
-	HashJoin Inner (Equal customer.store_id store.store_id)
-		Partition* store.store_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* store.store_id store.name store.modified_date $xmin $xmax
-					SeqScan store
-		Partition* customer.store_id
-			HashJoin Inner (Equal person.person_id customer.person_id)
-				Partition* customer.person_id
+	HashJoin Inner (Equal person.person_id customer.person_id)
+		Partition* customer.person_id
+			HashJoin Inner (Equal customer.store_id store.store_id)
+				Partition* store.store_id
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* store.store_id store.name store.modified_date $xmin $xmax
+							SeqScan store
+				Partition* customer.store_id
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
 							SeqScan customer
-				Partition* person.person_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax
-							SeqScan person
+		Partition* person.person_id
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax
+					SeqScan person
 
 # remove_inner_join
 plan: select *  from (select 1 as x) join (select 1 as y) on x = y

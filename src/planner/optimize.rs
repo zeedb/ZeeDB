@@ -4,7 +4,7 @@ use crate::rule::*;
 use crate::search_space::*;
 use ast::*;
 use catalog::Index;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Deref;
 use storage::Storage;
 use zetasql::SimpleCatalogProto;
@@ -292,12 +292,15 @@ impl<'a> Optimizer<'a> {
             LogicalJoin {
                 join, left, right, ..
             } => {
-                cardinality =
-                    self.ss[leaf(left)].props.cardinality * self.ss[leaf(right)].props.cardinality;
-                for (c, n) in &self.ss[leaf(left)].props.column_unique_cardinality {
+                let left_cardinality = self.ss[leaf(left)].props.cardinality;
+                let right_cardinality = self.ss[leaf(right)].props.cardinality;
+                let left_scope = &self.ss[leaf(left)].props.column_unique_cardinality;
+                let right_scope = &self.ss[leaf(right)].props.column_unique_cardinality;
+                cardinality = left_cardinality * right_cardinality;
+                for (c, n) in left_scope {
                     column_unique_cardinality.insert(c.clone(), *n);
                 }
-                for (c, n) in &self.ss[leaf(right)].props.column_unique_cardinality {
+                for (c, n) in right_scope {
                     column_unique_cardinality.insert(c.clone(), *n);
                 }
                 // Mark join projects the $mark attribute
@@ -305,9 +308,17 @@ impl<'a> Optimizer<'a> {
                     column_unique_cardinality.insert(mark.clone(), 2);
                 }
                 // Apply predicates
+                let mut is_equi_join = false;
                 for p in join.predicates() {
-                    let selectivity = predicate_selectivity(p, &column_unique_cardinality);
-                    cardinality = apply_selectivity(cardinality, selectivity);
+                    if is_equi_predicate(p, left_scope, right_scope) {
+                        is_equi_join = true;
+                    } else {
+                        let selectivity = predicate_selectivity(p, &column_unique_cardinality);
+                        cardinality = apply_selectivity(cardinality, selectivity);
+                    }
+                }
+                if is_equi_join {
+                    cardinality = cardinality / left_cardinality.min(right_cardinality).max(1);
                 }
                 // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
                 if let Join::Semi(_) | Join::Anti(_) = join {
@@ -464,6 +475,31 @@ impl<'a> Optimizer<'a> {
     }
 }
 
+fn is_equi_predicate(
+    p: &Scalar,
+    left_scope: &HashMap<Column, usize>,
+    right_scope: &HashMap<Column, usize>,
+) -> bool {
+    match p {
+        Scalar::Call(f) => match f.as_ref() {
+            Function::Equal(left, right) | Function::Is(left, right) => {
+                let left_references = left.references();
+                let right_references = right.references();
+                (is_subset(&left_references, left_scope)
+                    && is_subset(&right_references, right_scope))
+                    || (is_subset(&left_references, right_scope)
+                        && is_subset(&right_references, left_scope))
+            }
+            _ => false,
+        },
+        _ => false,
+    }
+}
+
+fn is_subset(references: &HashSet<Column>, scope: &HashMap<Column, usize>) -> bool {
+    references.iter().all(|column| scope.contains_key(column))
+}
+
 fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -> f64 {
     let mut selectivity = 1.0;
     for p in predicates {
@@ -484,9 +520,10 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
         Scalar::Call(function) => match function.deref() {
             Function::Not(argument) => 1.0 - predicate_selectivity(argument, scope),
             Function::Is(left, right) | Function::Equal(left, right) => {
+                // Note that equi-joins are handled separately as a special case.
                 let left = scalar_unique_cardinality(left, scope) as f64;
                 let right = scalar_unique_cardinality(right, scope) as f64;
-                1.0 / left.max(right).max(1.0)
+                1.0 / left.min(right).max(1.0)
             }
             Function::And(left, right) => {
                 let left = predicate_selectivity(left, scope);

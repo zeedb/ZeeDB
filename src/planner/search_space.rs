@@ -205,7 +205,11 @@ impl MultiExpr {
 
 impl fmt::Debug for MultiExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.expr.name())?;
+        if let LogicalGet { table, .. } = &self.expr {
+            write!(f, "{} {}", self.expr.name(), &table.name)?;
+        } else {
+            write!(f, "{}", self.expr.name())?;
+        }
         for i in 0..self.expr.len() {
             write!(f, " {}", self.expr[i])?;
         }

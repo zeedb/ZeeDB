@@ -82,13 +82,15 @@ plan: update customer set account_number = 0 where person_id in (select person_i
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date $tid
-			NestedLoop Semi (Equal customer.person_id person.person_id)
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal person.first_name "Joe")
-					Map* person.person_id person.first_name $xmin $xmax
-						SeqScan person
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-						SeqScan customer
+			HashJoin Semi (Equal customer.person_id person.person_id)
+				Partition* person.person_id
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal person.first_name "Joe")
+						Map* person.person_id person.first_name $xmin $xmax
+							SeqScan person
+				Partition* customer.person_id
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
+							SeqScan customer
 
 # delete_semi_join
 plan: delete person where person_id in (select person_id from customer)
@@ -108,13 +110,15 @@ Delete person
 plan: delete customer where person_id in (select person_id from customer where account_number = 0)
 Delete customer
 	Map $in:true $tid $xmax $xmin customer.person_id
-		NestedLoop Semi (Equal customer.person_id customer.person_id)
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.account_number 0)
-				Map* customer.person_id customer.account_number $xmin $xmax
-					SeqScan customer
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.person_id $xmin $xmax $tid
-					SeqScan customer
+		HashJoin Semi (Equal customer.person_id customer.person_id)
+			Partition* customer.person_id
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.account_number 0)
+					Map* customer.person_id customer.account_number $xmin $xmax
+						SeqScan customer
+			Partition* customer.person_id
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id $xmin $xmax $tid
+						SeqScan customer
 
 # single_equi_join
 plan: select (select name from store where store.store_id = customer.store_id) from customer
@@ -173,10 +177,6 @@ Map $query.$col1:1
 		Partition* store_id modified_date
 			Map $expr_subquery.$col1:1 store_id modified_date
 				HashJoin Inner (Equal store.store_id store_id) (Greater modified_date store.modified_date)
-					Partition* store.store_id
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* store.store_id store.modified_date $xmin $xmax
-								SeqScan store
 					Partition* store_id
 						Aggregate store_id modified_date
 							HashJoin Mark $exists (Is customer.person_id person_id)
@@ -190,6 +190,10 @@ Map $query.$col1:1
 									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 										Map* customer.person_id store_id modified_date $xmin $xmax
 											SeqScan customer
+					Partition* store.store_id
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* store.store_id store.modified_date $xmin $xmax
+								SeqScan store
 		Partition* customer.store_id customer.modified_date
 			Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
 				HashJoin Semi (Is customer.person_id person_id)
@@ -375,16 +379,18 @@ Map customer.customer_id
 # semi_self_join
 plan: select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
 Map customer.customer_id
-	NestedLoop Semi (Is c1.prev_account_number prev_account_number) (Equal customer.person_id customer.person_id)
-		Map customer.person_id prev_account_number
-			Map prev_account_number:customer.account_number, ..
+	HashJoin Semi (Is c1.prev_account_number prev_account_number) (Equal customer.person_id customer.person_id)
+		Partition* prev_account_number customer.person_id
+			Map customer.person_id prev_account_number
+				Map prev_account_number:customer.account_number, ..
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* customer.person_id customer.account_number $xmin $xmax
+							SeqScan customer
+		Partition* c1.prev_account_number customer.person_id
+			Map c1.prev_account_number:(Subtract customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.person_id customer.account_number $xmin $xmax
+					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
 						SeqScan customer
-		Map c1.prev_account_number:(Subtract customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-					SeqScan customer
 
 # semi_join_then_order_by
 plan: select first_name from person where person_id in (select person_id from customer) order by modified_date limit 10
@@ -406,19 +412,21 @@ plan: update person set first_name = (select last_name) where person_id = 1
 Insert person
 	Delete person
 		Map person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
-			NestedLoop Single (Is person.last_name last_name)
-				Map $expr_subquery.last_name:last_name last_name
-					NestedLoop Inner
-						Aggregate last_name
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* person.person_id person.first_name last_name person.modified_date $xmin $xmax $tid
-									IndexScan person(person_id:1)
-										TableFreeScan
-						TableFreeScan
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
-						IndexScan person(person_id:1)
+			HashJoin Single (Is person.last_name last_name)
+				Partition* last_name
+					Map $expr_subquery.last_name:last_name last_name
+						NestedLoop Inner
 							TableFreeScan
+							Aggregate last_name
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* person.person_id person.first_name last_name person.modified_date $xmin $xmax $tid
+										IndexScan person(person_id:1)
+											TableFreeScan
+				Partition* person.last_name
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
+							IndexScan person(person_id:1)
+								TableFreeScan
 
 # update_set_redundant_single_join
 plan: update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id
