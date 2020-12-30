@@ -287,7 +287,6 @@ fn test_correlated_exists() {
 }
 
 #[test]
-#[ignore]
 fn test_complex_correlated_subquery() {
     let mut t = TestSuite::new(None);
     t.setup("create table integers (i int64);");
@@ -320,7 +319,7 @@ fn test_complex_correlated_subquery() {
     // t.comment("correlated expression inside window function not supported");
     // t.error("SELECT i, (SELECT row_number() OVER (ORDER BY i)) FROM integers i1 ORDER BY i;");
     t.comment("union with correlated expression");
-    t.ok("SELECT i, (SELECT i FROM integers WHERE i=i1.i UNION ALL SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
+    t.ok("SELECT i, EXISTS (SELECT i FROM integers WHERE i=i1.i UNION ALL SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
     // t.comment("except with correlated expression");
     // t.ok("SELECT i, (SELECT i FROM integers WHERE i IS NOT NULL EXCEPT ALL SELECT i FROM integers WHERE i<>i1.i) AS j FROM integers i1 WHERE i IS NOT NULL ORDER BY i;");
     // t.comment("intersect with correlated expression");
