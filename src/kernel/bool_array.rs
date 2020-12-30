@@ -403,6 +403,26 @@ impl BoolArray {
         logical_reduction!(self, stride, true, prev, next, prev && !next)
     }
 
+    pub fn count(&self, stride: usize) -> I64Array {
+        assert_eq!(self.len() % stride, 0);
+
+        if self.len() == 0 {
+            return I64Array::zeros(stride);
+        }
+
+        let mut builder = I64Array::zeros(stride);
+        for i in 0..stride {
+            for j in 0..self.len() / stride {
+                if let Some(true) = self.get(j * stride + i) {
+                    let prev = builder.get(i).unwrap();
+                    builder.set(i, Some(prev + 1));
+                }
+            }
+        }
+
+        builder
+    }
+
     // Support operations for data structures.
 
     pub fn cmp(&self, i: usize, j: usize) -> Ordering {

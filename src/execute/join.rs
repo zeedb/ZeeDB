@@ -76,7 +76,9 @@ pub fn hash_join_single(
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
     let mask = filter(&input);
-    // TODO verify that each right row found at most one join partner on the left.
+    if right_index.conflict(&mask, right.len()) {
+        panic!("Scalar subquery produced more than one element");
+    }
     let matched = input.compress(&mask);
     let matched_indexes = right_index.compress(&mask);
     let mut unmatched_mask = BoolArray::trues(right.len());
@@ -170,7 +172,10 @@ pub fn nested_loop_single(
 ) -> RecordBatch {
     let head = cross_product(left, &right);
     let mask = filter(&head);
-    // TODO verify that each right row found at most one join partner on the left.
+    let count = mask.count(right.len());
+    if count.greater_scalar(Some(1)).any(1).get(0).unwrap() {
+        panic!("Scalar subquery produced more than one element");
+    }
     let matched = head.compress(&mask);
     let right_mask = mask.none(right.len());
     let right_unmatched = right.compress(&right_mask);

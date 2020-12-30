@@ -333,7 +333,6 @@ fn test_complex_correlated_subquery() {
 }
 
 #[test]
-#[ignore]
 fn test_correlated_subquery() {
     let mut t = TestSuite::new(None);
     t.setup("create table integers (i int64);");
@@ -343,7 +342,7 @@ fn test_correlated_subquery() {
     t.comment("ORDER BY correlated subquery");
     t.ok("SELECT i FROM integers i1 ORDER BY (SELECT 100-i1.i);");
     t.comment("subquery returning multiple results");
-    t.ok("SELECT i, (SELECT 42+i1.i FROM integers) AS j FROM integers i1 ORDER BY i;");
+    t.ok("SELECT i, (SELECT any_value(42+i1.i) FROM integers) AS j FROM integers i1 ORDER BY i;");
     t.comment("subquery with LIMIT");
     t.ok("SELECT i, (SELECT 42+i1.i FROM integers LIMIT 1) AS j FROM integers i1 ORDER BY i;");
     t.comment("subquery with LIMIT 0");

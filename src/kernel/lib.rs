@@ -1,9 +1,13 @@
 mod any_array;
 #[macro_use]
 mod array_macros;
+#[cfg(test)]
+mod array_tests;
 mod bitmask;
 mod bool_array;
 mod data_type;
+#[cfg(test)]
+mod data_type_tests;
 mod dates;
 mod fixed_width;
 mod primitive_array;

@@ -384,6 +384,28 @@ macro_rules! math_ops {
 math_ops!(I64Array, i64);
 math_ops!(F64Array, f64);
 
+impl I32Array {
+    pub fn conflict(&self, mask: &BoolArray, len: usize) -> bool {
+        // Strategy for SIMD implementation:
+        // Allocate an array of ids.
+        // Scatter and gather the ids using self indexes.
+        // If there is a conflict, some ids will collide during this process.
+        let mut histogram = Bitmask::falses(len);
+        for i in 0..self.len() {
+            if mask.get(i) == Some(true) {
+                if let Some(j) = self.get(i) {
+                    if histogram.get(j as usize) {
+                        return true;
+                    } else {
+                        histogram.set(j as usize, true);
+                    }
+                }
+            }
+        }
+        false
+    }
+}
+
 impl U64Array {
     pub fn hash_all(columns: &Vec<Array>) -> Self {
         let mut seeds = U64Array::zeros(columns[0].len());

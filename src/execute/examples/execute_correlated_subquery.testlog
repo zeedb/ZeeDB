@@ -1,0 +1,98 @@
+setup: create table integers (i int64);
+setup: insert into integers values (1), (2), (3), (null);
+# scalar select with correlation
+ok: SELECT i, (SELECT 42+i1.i) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    43  
+2    44  
+3    45  
+
+# ORDER BY correlated subquery
+ok: SELECT i FROM integers i1 ORDER BY (SELECT 100-i1.i);
+i   
+NULL
+3   
+2   
+1   
+
+# subquery returning multiple results
+ok: SELECT i, (SELECT any_value(42+i1.i) FROM integers) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    43  
+2    44  
+3    45  
+
+# subquery with LIMIT
+ok: SELECT i, (SELECT 42+i1.i FROM integers LIMIT 1) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    43  
+2    44  
+3    45  
+
+# subquery with LIMIT 0
+ok: SELECT i, (SELECT 42+i1.i FROM integers LIMIT 0) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    NULL
+2    NULL
+3    NULL
+
+# subquery with WHERE clause that is always FALSE
+ok: SELECT i, (SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    NULL
+2    NULL
+3    NULL
+
+# correlated EXISTS with WHERE clause that is always FALSE
+ok: SELECT i, EXISTS(SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;
+i    j    
+NULL false
+1    false
+2    false
+3    false
+
+# correlated ANY with WHERE clause that is always FALSE
+ok: SELECT i, i IN (SELECT i FROM integers WHERE 1=0 AND i1.i=i) AS j FROM integers i1 ORDER BY i;
+i    j    
+NULL false
+1    false
+2    false
+3    false
+
+# scalar select with correlation in projection
+ok: SELECT i, (SELECT i+i1.i FROM integers WHERE i=1) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    2   
+2    3   
+3    4   
+
+# scalar select with correlation in filter
+ok: SELECT i, (SELECT i FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    1   
+2    2   
+3    3   
+
+# scalar select with operation in projection
+ok: SELECT i, (SELECT i+1 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    2   
+2    3   
+3    4   
+
+# correlated scalar select with constant in projection
+ok: SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;
+i    j   
+NULL NULL
+1    42  
+2    42  
+3    42  
+

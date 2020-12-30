@@ -470,20 +470,34 @@ impl RewriteRule {
                         if *offset > 0 {
                             panic!("OFFSET is not supported in correlated subquery");
                         }
-                        let input = LogicalDependentJoin {
-                            parameters: parameters.clone(),
-                            predicates: predicates.clone(),
-                            subquery: subquery.clone(),
-                            domain: domain.clone(),
-                        };
+                        // Limit 0 means we ignore the result of the subquery.
                         if *limit == 0 {
                             return Some(LogicalLimit {
-                                limit: *limit,
-                                offset: *offset,
-                                input: Box::new(input),
+                                limit: 0,
+                                offset: 0,
+                                input: Box::new(LogicalDependentJoin {
+                                    parameters: parameters.clone(),
+                                    predicates: predicates.clone(),
+                                    subquery: subquery.clone(),
+                                    domain: domain.clone(),
+                                }),
+                            });
+                        // Limit 1 can be converted to ANY_VALUE, which can be unnested:
+                        } else if *limit == 1 {
+                            return Some(LogicalDependentJoin {
+                                parameters: parameters.clone(),
+                                predicates: predicates.clone(),
+                                subquery: Box::new(LogicalAggregate {
+                                    group_by: vec![],
+                                    aggregate: any_value(subquery.attributes()),
+                                    input: subquery.clone(),
+                                }),
+                                domain: domain.clone(),
                             });
                         } else {
-                            return Some(input);
+                            // LIMIT N may actually be a no-op.
+                            // Either way, it's best to just make the user take it out.
+                            panic!("Only LIMIT 0 and LIMIT 1 are supported in subqueries");
                         }
                     }
                 }
@@ -998,6 +1012,15 @@ impl RewriteRule {
         };
         None
     }
+}
+
+fn any_value(attributes: HashSet<Column>) -> Vec<(AggregateFn, Column, Column)> {
+    let mut attributes: Vec<_> = attributes
+        .iter()
+        .map(|column| (AggregateFn::AnyValue, column.clone(), column.clone()))
+        .collect();
+    attributes.sort_by(|(_, i, _), (_, j, _)| i.cmp(j));
+    attributes
 }
 
 fn correlated_predicates(predicates: &Vec<Scalar>, input: &Expr) -> (Vec<Scalar>, Vec<Scalar>) {

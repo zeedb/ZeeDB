@@ -36,7 +36,7 @@ fn test_to_from_proto() {
         DataType::Timestamp,
     ];
     for data_type in examples {
-        let proto: zetasql::TypeProto = data_type.into();
+        let proto: zetasql::TypeProto = data_type.to_proto();
         assert_eq!(data_type, DataType::from(&proto));
     }
 }
