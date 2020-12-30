@@ -1,8 +1,5 @@
 mod adventure_works;
 mod aggregate;
-mod byte_key;
-#[cfg(test)]
-mod byte_key_tests;
 mod catalog;
 mod eval;
 mod execute;
@@ -15,7 +12,6 @@ mod index;
 mod join;
 #[cfg(test)]
 mod optimize_tests;
-mod sort;
 #[cfg(test)]
 mod test_suite;
 

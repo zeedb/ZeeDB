@@ -1,6 +1,14 @@
-#[derive(Clone, Debug)]
+use std::{fmt::Debug, ops::Range};
+
+#[derive(Clone)]
 pub struct Bitmask {
     values: Vec<u8>,
+    len: usize,
+}
+
+pub struct BitSlice<'a> {
+    values: &'a [u8],
+    offset: usize,
     len: usize,
 }
 
@@ -19,15 +27,15 @@ impl Bitmask {
         }
     }
 
-    pub fn from_slice(values: &[u8], len: usize) -> Self {
+    pub fn from_slice(slice: BitSlice) -> Self {
         Self {
-            values: values.to_vec(),
-            len,
+            values: slice.to_vec(),
+            len: slice.len(),
         }
     }
 
     pub fn len(&self) -> usize {
-        self.values.len()
+        self.len
     }
 
     pub fn falses(len: usize) -> Self {
@@ -48,6 +56,13 @@ impl Bitmask {
         get_bit(&self.values, index)
     }
 
+    pub fn slice(&self, range: Range<usize>) -> BitSlice<'_> {
+        assert!(range.start < self.len);
+        assert!(range.end < self.len);
+
+        BitSlice::from_slice(&self.values, range)
+    }
+
     pub fn set(&mut self, index: usize, value: bool) {
         if value {
             set_bit(&mut self.values, index)
@@ -63,6 +78,57 @@ impl Bitmask {
             self.values.push(0)
         }
         self.set(index, value)
+    }
+
+    pub fn extend(&mut self, other: &Self) {
+        for i in 0..other.len() {
+            self.push(other.get(i))
+        }
+    }
+}
+
+impl<'a> BitSlice<'a> {
+    pub fn from_slice(slice: &'a [u8], range: Range<usize>) -> Self {
+        Self {
+            values: slice,
+            offset: range.start,
+            len: range.end - range.start,
+        }
+    }
+
+    pub fn get(&self, index: usize) -> bool {
+        get_bit(&self.values, self.offset + index)
+    }
+
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    fn to_vec(&self) -> Vec<u8> {
+        let byte_offset = self.offset / 8;
+        let byte_len = (self.len + 7) / 8;
+        let bit_offset = self.offset % 8;
+        let mut bytes = self.values[byte_offset..byte_offset + byte_len].to_vec();
+        bytes.rotate_left(bit_offset);
+        bytes
+    }
+}
+
+impl Debug for Bitmask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("[")?;
+        for i in 0..self.len() {
+            if self.get(i) {
+                f.write_str("1")?;
+            } else {
+                f.write_str("0")?;
+            }
+            if i < self.len() - 1 {
+                f.write_str(" ")?;
+            }
+        }
+        f.write_str("]")?;
+        Ok(())
     }
 }
 

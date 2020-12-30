@@ -1,7 +1,10 @@
 mod any_array;
+#[macro_use]
+mod array_macros;
 mod bitmask;
 mod bool_array;
 mod data_type;
+mod dates;
 mod fixed_width;
 mod primitive_array;
 mod record_batch;

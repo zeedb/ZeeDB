@@ -1,6 +1,6 @@
 use crate::any_array::*;
+use crate::dates::*;
 use crate::record_batch::*;
-use chrono::NaiveDateTime;
 
 pub fn fixed_width(batches: &Vec<RecordBatch>) -> String {
     let header: Vec<Vec<String>> = batches[0]
@@ -65,20 +65,13 @@ fn fixed_width_column(array: &Array) -> Vec<String> {
         Array::Date(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
-                Some(value) => NaiveDateTime::from_timestamp(value as i64 * SECONDS_IN_DAY, 0)
-                    .format("%F")
-                    .to_string(),
+                Some(value) => date(value).format("%F").to_string(),
             })
             .collect(),
         Array::Timestamp(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
-                Some(value) => NaiveDateTime::from_timestamp(
-                    value / MICROSECONDS,
-                    (value % MICROSECONDS * MILLISECONDS) as u32,
-                )
-                .format("%F %T")
-                .to_string(),
+                Some(value) => timestamp(value).format("%F %T").to_string(),
             })
             .collect(),
         Array::String(array) => (0..array.len())
@@ -99,10 +92,3 @@ fn cat(header: Vec<Vec<String>>, data: Vec<Vec<Vec<String>>>) -> Vec<Vec<String>
     }
     columns
 }
-
-/// Number of seconds in a day
-const SECONDS_IN_DAY: i64 = 86_400;
-/// Number of milliseconds in a second
-const MILLISECONDS: i64 = 1_000;
-/// Number of microseconds in a second
-const MICROSECONDS: i64 = 1_000_000;

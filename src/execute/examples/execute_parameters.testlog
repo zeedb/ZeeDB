@@ -1,0 +1,4 @@
+ok: set parameter = 1; select @parameter
+$col1
+1    
+

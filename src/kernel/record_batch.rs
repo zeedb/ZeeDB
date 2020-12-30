@@ -11,14 +11,42 @@ pub struct RecordBatch {
 
 impl RecordBatch {
     pub fn new(columns: Vec<(String, Array)>) -> Self {
+        assert!(!columns.is_empty());
+        for i in 1..columns.len() {
+            let (left_name, left_column) = &columns[0];
+            let (right_name, right_column) = &columns[i];
+            assert_eq!(
+                left_column.len(),
+                right_column.len(),
+                "column {} has length {} but column {} has length {}",
+                left_name,
+                left_column.len(),
+                right_name,
+                right_column.len()
+            );
+        }
+
         Self { columns }
     }
 
     pub fn nulls(mut columns: Vec<(String, DataType)>, len: usize) -> Self {
+        assert!(!columns.is_empty());
+
         Self {
             columns: columns
                 .drain(..)
                 .map(|(name, data_type)| (name, Array::nulls(data_type, len)))
+                .collect(),
+        }
+    }
+
+    pub fn empty(mut columns: Vec<(String, DataType)>) -> Self {
+        assert!(!columns.is_empty());
+
+        Self {
+            columns: columns
+                .drain(..)
+                .map(|(name, data_type)| (name, Array::new(data_type)))
                 .collect(),
         }
     }
@@ -30,19 +58,50 @@ impl RecordBatch {
         combined.extend(left.columns);
         combined.extend(right.columns);
 
-        RecordBatch::new(combined)
+        Self::new(combined)
     }
 
-    pub fn cat(batches: &Vec<RecordBatch>) -> RecordBatch {
-        todo!()
+    pub fn cat(mut batches: Vec<Self>) -> Self {
+        let n_columns = batches[0].columns.len();
+        let names: Vec<String> = batches[0]
+            .columns
+            .iter()
+            .map(|(name, _)| name.clone())
+            .collect();
+        let mut transpose: Vec<Vec<Array>> = (0..n_columns).map(|_| vec![]).collect();
+        batches.drain(..).for_each(|mut batch| {
+            batch
+                .columns
+                .drain(..)
+                .enumerate()
+                .for_each(|(i, (_, array))| {
+                    transpose[i].push(array);
+                });
+        });
+        let columns: Vec<(String, Array)> = transpose
+            .drain(..)
+            .enumerate()
+            .map(|(i, arrays)| (names[i].clone(), Array::cat(arrays)))
+            .collect();
+        Self::new(columns)
     }
 
     pub fn repeat(&self, n: usize) -> Self {
-        todo!()
+        let columns = self
+            .columns
+            .iter()
+            .map(|(name, array)| (name.clone(), array.repeat(n)))
+            .collect();
+        Self::new(columns)
     }
 
-    pub fn extend(&mut self, other: &Self) -> Self {
-        todo!()
+    pub fn extend(&mut self, other: &Self) {
+        for i in 0..self.columns.len() {
+            let (left_name, left_array) = &mut self.columns[i];
+            let (right_name, right_array) = &other.columns[i];
+            assert_eq!(left_name, right_name);
+            left_array.extend(&right_array)
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -57,11 +116,19 @@ impl RecordBatch {
     }
 
     pub fn find(&self, column: &str) -> Option<&Array> {
-        todo!()
+        self.columns
+            .iter()
+            .find(|(name, _)| name == column)
+            .map(|(_, array)| array)
     }
 
     pub fn slice(&self, range: Range<usize>) -> Self {
-        todo!()
+        Self::new(
+            self.columns
+                .iter()
+                .map(|(name, array)| (name.clone(), array.slice(range.start..range.end)))
+                .collect(),
+        )
     }
 
     pub fn gather(&self, indexes: &I32Array) -> Self {
@@ -94,7 +161,12 @@ impl RecordBatch {
 
     /// Transpose each column, where each column is interpreted as a column-major matrix of size [stride X _].
     pub fn transpose(&self, stride: usize) -> Self {
-        todo!()
+        let columns = self
+            .columns
+            .iter()
+            .map(|(name, array)| (name.clone(), array.transpose(stride)))
+            .collect();
+        Self::new(columns)
     }
 
     pub fn sort(&self, desc: Vec<bool>) -> I32Array {
@@ -124,6 +196,21 @@ impl RecordBatch {
             Ordering::Equal
         });
         I32Array::from(indexes)
+    }
+
+    pub fn rename(mut self, renames: &Vec<(String, String)>) -> Self {
+        let columns: Vec<(String, Array)> = self
+            .columns
+            .drain(..)
+            .flat_map(|(old_name, array)| {
+                renames
+                    .iter()
+                    .find(|(from_name, _)| from_name == &old_name)
+                    .map(|(_, new_name)| (new_name.clone(), array))
+            })
+            .collect();
+        assert_eq!(renames.len(), columns.len());
+        Self::new(columns)
     }
 }
 

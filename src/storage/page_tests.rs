@@ -149,7 +149,7 @@ a b  $xmin $xmax
 
 #[test]
 fn test_expand_string_pool() {
-    let mut page = Page::empty(0, vec![("a".to_string(), DataType::String)]);
+    let page = Page::empty(0, vec![("a".to_string(), DataType::String)]);
     let strings: Vec<String> = (0..PAGE_SIZE)
         .map(|i| format!("1234567890-{}", i))
         .collect();

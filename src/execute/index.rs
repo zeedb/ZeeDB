@@ -1,30 +1,16 @@
-use crate::byte_key::ByteKey;
-use arrow::array::*;
-use arrow::datatypes::*;
-use arrow::record_batch::RecordBatch;
-use std::sync::Arc;
-use storage::Art;
+use kernel::*;
+use storage::*;
 
-pub(crate) fn insert(
-    index: &mut Art,
-    columns: &Vec<String>,
-    input: &RecordBatch,
-    tids: &Int64Array,
-) {
-    // Convert all the index columns into bytes, in lexicographic order.
-    let mut index_columns = vec![];
-    for column in columns {
-        for (i, field) in input.schema().fields().iter().enumerate() {
-            if storage::base_name(field.name()) == column {
-                index_columns.push(bytes(input.column(i)));
-            }
-        }
-    }
-    index_columns.push(bytes_static(tids));
+pub(crate) fn insert(index: &mut Art, columns: &Vec<String>, input: &RecordBatch, tids: &I64Array) {
+    // Convert each row into bytes that match the lexicographic order of rows.
+    let index_columns: Vec<&Array> = columns
+        .iter()
+        .map(|name| input.find(name).unwrap())
+        .collect();
+    let keys = byte_keys(index_columns, tids);
     // Insert the keys into the index.
-    let keys = zip(&index_columns);
     for i in 0..keys.len() {
-        index.insert(keys.value(i), tids.value(i));
+        index.insert(keys.get(i), tids.get(i).unwrap());
     }
 }
 
@@ -46,76 +32,140 @@ pub(crate) fn upper_bound(prefix: &[u8]) -> Vec<u8> {
     }
 }
 
-pub(crate) fn bytes(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
-    match column.data_type() {
-        DataType::Boolean => bytes_bool(column),
-        DataType::Int64 => bytes_generic::<Int64Type>(column),
-        DataType::Float64 => bytes_generic::<Float64Type>(column),
-        DataType::Timestamp(TimeUnit::Microsecond, None) => {
-            bytes_generic::<TimestampMicrosecondType>(column)
+#[derive(Debug)]
+pub(crate) struct PackedBytes {
+    bytes: Vec<u8>,
+    offsets: Vec<usize>,
+}
+
+impl PackedBytes {
+    fn with_capacity(len: usize, byte_len: usize) -> Self {
+        let mut offsets = Vec::with_capacity(len + 1);
+        offsets.push(0);
+        Self {
+            bytes: Vec::with_capacity(byte_len),
+            offsets,
         }
-        DataType::Date32(DateUnit::Day) => bytes_generic::<Date32Type>(column),
-        DataType::Utf8 => bytes_utf8(column),
-        other => panic!("type {:?} is not supported", other),
+    }
+
+    fn push(&mut self, next: &[u8]) {
+        debug_assert!(self.bytes.len() + next.len() <= self.bytes.capacity());
+
+        self.bytes.extend_from_slice(next);
+    }
+
+    fn next(&mut self) {
+        debug_assert!(self.offsets.len() + 1 <= self.offsets.capacity());
+
+        self.offsets.push(self.bytes.len());
+    }
+
+    pub(crate) fn get(&self, i: usize) -> &[u8] {
+        &self.bytes[self.offsets[i]..self.offsets[i + 1]]
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.offsets.len() - 1
     }
 }
 
-fn bytes_bool(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
-    // TODO deal with nulls somehow. Encode as 0 and accept collisions? Encode as empty array?
-    let column: &BooleanArray = column.as_any().downcast_ref::<BooleanArray>().unwrap();
-    let mut buffer = BinaryBuilder::new(column.len());
-    for i in 0..column.len() {
-        buffer
-            .append_value(if column.value(i) { &[1u8] } else { &[0u8] })
-            .unwrap();
-    }
-    buffer.finish()
-}
-
-fn bytes_generic<T>(column: &Arc<dyn Array>) -> GenericBinaryArray<i32>
-where
-    T: ArrowNumericType,
-    T::Native: ByteKey,
-{
-    // TODO deal with nulls somehow. Encode as 0 and accept collisions? Encode as empty array?
-    let column: &PrimitiveArray<T> = column.as_any().downcast_ref::<PrimitiveArray<T>>().unwrap();
-    bytes_static(column)
-}
-
-fn bytes_static<T>(column: &PrimitiveArray<T>) -> GenericBinaryArray<i32>
-where
-    T: ArrowNumericType,
-    T::Native: ByteKey,
-{
-    let mut buffer = BinaryBuilder::new(column.len() * std::mem::size_of::<T::Native>());
-    for i in 0..column.len() {
-        buffer
-            .append_value(column.value(i).key().as_slice())
-            .unwrap();
-    }
-    buffer.finish()
-}
-
-fn bytes_utf8(column: &Arc<dyn Array>) -> GenericBinaryArray<i32> {
-    // TODO deal with nulls somehow. Encode as 0 and accept collisions? Encode as empty array?
-    let column: &StringArray = column.as_any().downcast_ref::<StringArray>().unwrap();
-    BinaryArray::from(
-        ArrayData::builder(DataType::Binary)
-            .add_buffer(column.value_data())
-            .build(),
-    )
-}
-
-pub(crate) fn zip(columns: &Vec<GenericBinaryArray<i32>>) -> GenericBinaryArray<i32> {
-    let len = columns.iter().map(|c| c.len()).sum();
-    let mut buffer = BinaryBuilder::new(len);
+pub(crate) fn byte_keys(columns: Vec<&Array>, tids: &I64Array) -> PackedBytes {
+    let byte_len = columns.iter().map(|c| byte_len(*c)).sum::<usize>()
+        + tids.len() * std::mem::size_of::<i64>();
+    let mut result = PackedBytes::with_capacity(columns[0].len(), byte_len);
     for i in 0..columns[0].len() {
-        for column in columns {
-            for b in column.value(i) {
-                buffer.append_byte(*b).unwrap();
+        push_byte_key_prefix(&mut result, &columns, i);
+        result.push(&byte_key_i64(tids.get(i).unwrap()));
+        result.next();
+    }
+    result
+}
+
+pub(crate) fn byte_key_prefix(columns: Vec<&Array>) -> PackedBytes {
+    let byte_len = columns.iter().map(|c| byte_len(*c)).sum::<usize>();
+    let mut result = PackedBytes::with_capacity(columns[0].len(), byte_len);
+    for i in 0..columns[0].len() {
+        push_byte_key_prefix(&mut result, &columns, i);
+        result.next();
+    }
+    result
+}
+
+fn byte_len(column: &Array) -> usize {
+    match column {
+        Array::Bool(array) => array.len(), // Unpacked representation.
+        Array::I64(array) => array.len() * std::mem::size_of::<i64>(),
+        Array::F64(array) => array.len() * std::mem::size_of::<f64>(),
+        Array::Date(array) => array.len() * std::mem::size_of::<i32>(),
+        Array::Timestamp(array) => array.len() * std::mem::size_of::<i64>(),
+        Array::String(array) => array.byte_len(),
+    }
+}
+
+fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usize) {
+    for j in 0..columns.len() {
+        match columns[j] {
+            Array::Bool(column) => {
+                let b = match column.get(i) {
+                    None => 0,
+                    Some(false) => 1,
+                    Some(true) => 2,
+                };
+                result.push(&[b]);
+            }
+            Array::I64(column) => {
+                if let Some(value) = column.get(i) {
+                    result.push(&byte_key_i64(value));
+                    // Per https://db.in.tum.de/~leis/papers/ART.pdf section IV.B.e
+                    if value == i64::MIN {
+                        result.push(&[1]);
+                    }
+                } else {
+                    result.push(&byte_key_i64(i64::MIN));
+                }
+            }
+            Array::F64(column) => {
+                if let Some(value) = column.get(i) {
+                    result.push(&byte_key_f64(value));
+                    if value == f64::MIN {
+                        result.push(&[1]);
+                    }
+                } else {
+                    result.push(&byte_key_f64(f64::MIN));
+                }
+            }
+            Array::Date(column) => {
+                if let Some(value) = column.get(i) {
+                    result.push(&byte_key_i32(value));
+                    if value == i32::MIN {
+                        result.push(&[1]);
+                    }
+                } else {
+                    result.push(&byte_key_i32(i32::MIN));
+                }
+            }
+            Array::Timestamp(column) => {
+                if let Some(value) = column.get(i) {
+                    result.push(&byte_key_i64(value));
+                    if value == i64::MIN {
+                        result.push(&[1]);
+                    }
+                } else {
+                    result.push(&byte_key_i64(i64::MIN));
+                }
+            }
+            Array::String(column) => {
+                // TODO UTF-8 order doesn't match the "Unicode Collation Algorithm" https://www.unicode.org/reports/tr10/.
+                // An implementation of unicode => binary comparable representation is available in https://docs.rs/crate/rust_icu.
+                if let Some(value) = column.get(i) {
+                    result.push(value.as_bytes());
+                    // Strings are null-terminated, so that a key cannot be a prefix of another key.
+                    result.push(&[0]);
+                } else {
+                    // TODO this creates a collsion between NULL and "".
+                    result.push(&[0]);
+                }
             }
         }
-        buffer.append(true).unwrap();
     }
-    buffer.finish()
 }

@@ -122,7 +122,6 @@ fn execute(storage: &mut Storage, sql: &str, txn: &mut i64) {
     let indexes = crate::catalog::indexes(storage, *txn);
     let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, sql).unwrap();
     let expr = optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
-    let result: Result<Vec<_>, _> = crate::compile(expr).execute(storage, *txn).collect();
-    result.unwrap();
+    let _result: Vec<_> = crate::compile(expr).execute(storage, *txn).collect();
     *txn += 1;
 }

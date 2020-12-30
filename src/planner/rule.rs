@@ -542,12 +542,18 @@ impl Rule {
                 }
             }
             Rule::LogicalInsertToInsert => {
-                if let LogicalInsert { table, input } = bind {
+                if let LogicalInsert {
+                    table,
+                    input,
+                    columns,
+                } = bind
+                {
                     let indexes = indexes.get(&table.id).cloned().unwrap_or(vec![]);
                     return Some(Insert {
                         table,
                         indexes,
                         input,
+                        columns,
                     });
                 }
             }

@@ -1,33 +1,40 @@
 use crate::hash_table::*;
-use arrow::array::*;
-use arrow::datatypes::*;
-use arrow::record_batch::*;
-use std::sync::Arc;
+use kernel::*;
 
 #[test]
 fn test_hash_table() {
-    let schema = Arc::new(Schema::new(vec![
-        Field::new("a#0", DataType::Int64, true),
-        Field::new("b#0", DataType::Int64, true),
-    ]));
     let a: Vec<i64> = (0..100).collect();
     let b: Vec<i64> = (1000..1100).collect();
-    let columns: Vec<Arc<dyn Array>> =
-        vec![Arc::new(Int64Array::from(a)), Arc::new(Int64Array::from(b))];
-    let input = RecordBatch::try_new(schema, columns).unwrap();
-    let partition_by = vec![input.column(0).clone()];
-    let table = HashTable::new(&input, &partition_by).unwrap();
+    let columns = vec![
+        ("a".to_string(), Array::I64(I64Array::from(a))),
+        ("b".to_string(), Array::I64(I64Array::from(b))),
+    ];
+    let probe = RecordBatch::new(columns);
+    let partition_by = vec![probe.columns[0].1.clone()];
+    let table = HashTable::new(&probe, &partition_by);
     let (left_index, right_index) = table.probe(&partition_by);
-    let left = kernel::gather(&table.tuples, &left_index);
-    let right = kernel::gather(&input, &right_index);
-    let output = kernel::zip(&left, &right);
-    let a1: &Int64Array = as_primitive_array(output.column(0));
-    let b1: &Int64Array = as_primitive_array(output.column(1));
-    let a2: &Int64Array = as_primitive_array(output.column(2));
-    let b2: &Int64Array = as_primitive_array(output.column(3));
+    let left = table.build().gather(&left_index);
+    let right = probe.gather(&right_index);
+    let output = RecordBatch::zip(left, right);
+    let a1 = match &output.columns[0].1 {
+        Array::I64(array) => array,
+        _ => panic!(),
+    };
+    let b1 = match &output.columns[1].1 {
+        Array::I64(array) => array,
+        _ => panic!(),
+    };
+    let a2 = match &output.columns[2].1 {
+        Array::I64(array) => array,
+        _ => panic!(),
+    };
+    let b2 = match &output.columns[3].1 {
+        Array::I64(array) => array,
+        _ => panic!(),
+    };
     let mut count = 0;
-    for i in 0..output.num_rows() {
-        if a1.value(i) == a2.value(i) && b1.value(i) == b2.value(i) {
+    for i in 0..output.len() {
+        if a1.get(i) == a2.get(i) && b1.get(i) == b2.get(i) {
             count += 1;
         }
     }

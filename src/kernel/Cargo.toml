@@ -10,4 +10,5 @@ path = "lib.rs"
 [dependencies]
 zetasql = { path = "../zetasql" }
 chrono = "0.4.11"
+regex = "1.4.2"
 twox-hash = "1.6.0"

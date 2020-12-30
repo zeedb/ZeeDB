@@ -1,6 +1,7 @@
 use kernel::*;
-use std::fmt;
+use regex::Regex;
 use std::sync::atomic::*;
+use std::{fmt, sync::Arc};
 
 pub const PAGE_SIZE: usize = 1024;
 
@@ -15,7 +16,12 @@ pub const PAGE_SIZE: usize = 1024;
 // 3  z  3     MAX
 //       0     0
 //       0     0
+#[derive(Clone)]
 pub struct Page {
+    inner: Arc<Inner>,
+}
+
+struct Inner {
     pid: usize,
     columns: Vec<(String, Data)>,
     xmin: [i64; PAGE_SIZE],
@@ -97,25 +103,24 @@ impl Data {
     fn slice(&self, len: usize) -> Array {
         match self {
             Data::Bool { values, is_valid } => Array::Bool(BoolArray::from_slice(
-                &values[..len],
-                &is_valid[..(len + 7) / 8],
-                len,
+                BitSlice::from_slice(values, 0..len),
+                BitSlice::from_slice(is_valid, 0..len),
             )),
             Data::I64 { values, is_valid } => Array::I64(I64Array::from_slice(
                 &values[..len],
-                &is_valid[..(len + 7) / 8],
+                BitSlice::from_slice(is_valid, 0..len),
             )),
             Data::F64 { values, is_valid } => Array::F64(F64Array::from_slice(
                 &values[..len],
-                &is_valid[..(len + 7) / 8],
+                BitSlice::from_slice(is_valid, 0..len),
             )),
             Data::Date { values, is_valid } => Array::Date(DateArray::from_slice(
                 &values[..len],
-                &is_valid[..(len + 7) / 8],
+                BitSlice::from_slice(is_valid, 0..len),
             )),
             Data::Timestamp { values, is_valid } => Array::Timestamp(TimestampArray::from_slice(
                 &values[..len],
-                &is_valid[..(len + 7) / 8],
+                BitSlice::from_slice(is_valid, 0..len),
             )),
             Data::String {
                 buffer,
@@ -124,7 +129,7 @@ impl Data {
             } => Array::String(StringArray::from_slice(
                 &buffer[..offsets[len] as usize],
                 &offsets[..len + 1],
-                &is_valid[..(len + 7) / 8],
+                BitSlice::from_slice(is_valid, 0..len),
             )),
         }
     }
@@ -225,57 +230,86 @@ impl Page {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
     pub fn empty(pid: usize, mut schema: Vec<(String, DataType)>) -> Self {
         Self {
-            pid,
-            columns: schema.drain(..).map(|(n, t)| (n, Data::new(t))).collect(),
-            xmin: [0; PAGE_SIZE],
-            xmax: [0; PAGE_SIZE],
-            len: AtomicUsize::new(0),
+            inner: Arc::new(Inner {
+                pid,
+                columns: schema
+                    .drain(..)
+                    .map(|(name, data_type)| (name, Data::new(data_type)))
+                    .collect(),
+                xmin: [0; PAGE_SIZE],
+                xmax: [0; PAGE_SIZE],
+                len: AtomicUsize::new(0),
+            }),
         }
     }
 
-    pub fn schema(&self) -> Vec<(String, DataType)> {
-        self.columns
+    pub fn schema(&self, projects: &Vec<String>) -> Vec<(String, DataType)> {
+        projects
             .iter()
-            .map(|(n, c)| (n.clone(), c.data_type()))
+            .map(|find| {
+                let data_type = match find.as_str() {
+                    "$xmin" | "$xmax" | "$tid" => DataType::I64,
+                    find => self
+                        .inner
+                        .columns
+                        .iter()
+                        .find(|(name, _)| find == name)
+                        .map(|(_, data)| data.data_type())
+                        .expect(find),
+                };
+                (find.clone(), data_type)
+            })
             .collect()
     }
 
     pub fn select(&self, projects: &Vec<String>) -> RecordBatch {
-        let len = self.len.load(Ordering::Relaxed);
-        let mut columns: Vec<(String, Array)> = self
-            .columns
+        let len = self.inner.len.load(Ordering::Relaxed);
+        let columns: Vec<(String, Array)> = projects
             .iter()
-            .filter(|(n, _)| projects.contains(n))
-            .map(|(n, c)| (n.clone(), c.slice(len)))
+            .map(|find| {
+                let array = match find.as_str() {
+                    "$xmin" => Self::xcolumn(&self.inner.xmin[..len]),
+                    "$xmax" => Self::xcolumn(&self.inner.xmax[..len]),
+                    "$tid" => {
+                        let start = (self.inner.pid * PAGE_SIZE) as i64;
+                        let end = start + len as i64;
+                        let tids: Vec<i64> = (start..end).collect();
+                        Array::I64(I64Array::from(tids))
+                    }
+                    find => self
+                        .inner
+                        .columns
+                        .iter()
+                        .find(|(name, _)| find == name)
+                        .map(|(_, data)| data.slice(len))
+                        .expect(find),
+                };
+                (find.clone(), array)
+            })
             .collect();
-        if projects.contains(&"$xmin".to_string()) {
-            columns.push(("$xmin".to_string(), Self::xcolumn(&self.xmin[..len])))
-        }
-        if projects.contains(&"$xmax".to_string()) {
-            columns.push(("$xmax".to_string(), Self::xcolumn(&self.xmax[..len])))
-        }
         RecordBatch::new(columns)
     }
 
     fn xcolumn(values: &[i64]) -> Array {
         let is_valid = vec![u8::MAX].repeat((values.len() + 7) / 8);
-        Array::I64(I64Array::from_slice(values, &is_valid))
+        Array::I64(I64Array::from_slice(
+            values,
+            BitSlice::from_slice(&is_valid, 0..values.len()),
+        ))
     }
 
     pub fn star(&self) -> Vec<String> {
-        self.columns.iter().map(|(n, _)| n.clone()).collect()
+        self.inner
+            .columns
+            .iter()
+            .map(|(n, _)| format!("{}", n))
+            .collect()
     }
 
-    pub fn insert(
-        &mut self,
-        records: &RecordBatch,
-        txn: i64,
-        tids: &mut I64Array,
-        offset: &mut usize,
-    ) {
+    pub fn insert(&self, records: &RecordBatch, txn: i64, tids: &mut I64Array, offset: &mut usize) {
         let (start, end) = self.reserve(records.len() - *offset);
         // Write the new rows in the reserved slots.
-        for (dst_name, dst_array) in &mut self.columns {
+        for (dst_name, dst_array) in &mut self.inner_mut().columns {
             for (src_name, src_array) in &records.columns {
                 if dst_name == src_name {
                     dst_array.extend(start, end, src_array, *offset);
@@ -284,18 +318,22 @@ impl Page {
         }
         for rid in start..end {
             // Make the rows visible to subsequent transactions.
-            self.xmin[rid] = txn;
-            self.xmax[rid] = i64::MAX;
+            self.inner_mut().xmin[rid] = txn;
+            self.inner_mut().xmax[rid] = i64::MAX;
             // Write new tids.
-            let tid = self.pid * PAGE_SIZE + rid;
+            let tid = self.inner.pid * PAGE_SIZE + rid;
             tids.push(Some(tid as i64));
         }
         *offset += end - start;
     }
 
-    pub fn delete(&mut self, row: usize, txn: i64) -> bool {
-        if self.xmax[row] > txn {
-            self.xmax[row] = txn;
+    fn inner_mut(&self) -> &mut Inner {
+        unsafe { (Arc::as_ptr(&self.inner) as *mut Inner).as_mut().unwrap() }
+    }
+
+    pub fn delete(&self, row: usize, txn: i64) -> bool {
+        if self.inner.xmax[row] > txn {
+            self.inner_mut().xmax[row] = txn;
             true
         } else {
             false
@@ -303,15 +341,20 @@ impl Page {
     }
 
     fn reserve(&self, request: usize) -> (usize, usize) {
-        let start = self.len.load(Ordering::Relaxed);
+        let start = self.inner.len.load(Ordering::Relaxed);
         let end = start + request;
         // If there's not enough space for request, take whatever is available.
         if end > PAGE_SIZE {
-            let start = self.len.swap(PAGE_SIZE, Ordering::Relaxed);
+            let start = self.inner.len.swap(PAGE_SIZE, Ordering::Relaxed);
             return (start, PAGE_SIZE);
         }
         // If someone else concurrently reserves rows, try again.
-        if self.len.compare_and_swap(start, end, Ordering::Relaxed) != start {
+        if self
+            .inner
+            .len
+            .compare_and_swap(start, end, Ordering::Relaxed)
+            != start
+        {
             return self.reserve(request);
         }
         // Otherwise, we have successfully reserved a segment of the page.
@@ -319,7 +362,7 @@ impl Page {
     }
 
     pub fn approx_num_rows(&self) -> usize {
-        self.len.load(Ordering::Relaxed)
+        self.inner.len.load(Ordering::Relaxed)
     }
 
     pub(crate) fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
@@ -340,17 +383,5 @@ impl Page {
 impl fmt::Debug for Page {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.print(f, 0)
-    }
-}
-
-impl Clone for Page {
-    fn clone(&self) -> Self {
-        Self {
-            pid: self.pid.clone(),
-            columns: self.columns.clone(),
-            xmin: self.xmin.clone(),
-            xmax: self.xmax.clone(),
-            len: AtomicUsize::new(self.len.load(Ordering::Relaxed)),
-        }
     }
 }

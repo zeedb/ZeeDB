@@ -1,13 +1,19 @@
 use crate::column::Column;
 use crate::expr::*;
 use catalog::Index;
-use std::fmt::{Display, Formatter};
+use std::fmt::{Debug, Display, Formatter};
 
 pub trait IndentPrint {
     fn indent_print(&self, f: &mut Formatter<'_>, indent: usize) -> std::fmt::Result;
 }
 
 impl Display for Expr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        self.indent_print(f, 0)
+    }
+}
+
+impl Debug for Expr {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.indent_print(f, 0)
     }
@@ -188,7 +194,7 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::LogicalInsert { table, input } | Expr::Insert { table, input, .. } => {
+            Expr::LogicalInsert { table, input, .. } | Expr::Insert { table, input, .. } => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)

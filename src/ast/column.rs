@@ -42,7 +42,11 @@ impl Column {
     }
 
     pub fn canonical_name(&self) -> String {
-        format!("{}#{:?}", self.name, Arc::as_ptr(&self.id))
+        if let Some(table) = &self.table {
+            format!("{}.{}#{:?}", table, self.name, Arc::as_ptr(&self.id))
+        } else {
+            format!("{}#{:?}", self.name, Arc::as_ptr(&self.id))
+        }
     }
 }
 

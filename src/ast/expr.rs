@@ -9,7 +9,7 @@ use std::hash::Hash;
 use std::ops;
 
 // Expr plan nodes combine inputs in a Plan tree.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash)]
 pub enum Expr {
     Leaf {
         gid: usize,
@@ -97,6 +97,8 @@ pub enum Expr {
     LogicalInsert {
         table: Table,
         input: Box<Expr>,
+        /// [(query_output_column, table_column), ..]
+        columns: Vec<(Column, String)>,
     },
     // LogicalValues { columns, values } implements VALUES expressions.
     LogicalValues {
@@ -109,6 +111,8 @@ pub enum Expr {
         table: Table,
         tid: Column,
         input: Box<Expr>,
+        /// [(query_output_column, table_column), ..]
+        columns: Vec<(Column, String)>,
     },
     // LogicalDelete { table } implements the DELETE operation.
     LogicalDelete {
@@ -226,6 +230,8 @@ pub enum Expr {
         table: Table,
         indexes: Vec<Index>,
         input: Box<Expr>,
+        /// [(query_output_column, table_column), ..]
+        columns: Vec<(Column, String)>,
     },
     Values {
         columns: Vec<Column>,
@@ -516,9 +522,17 @@ impl Expr {
                 let right = Box::new(visitor(*right));
                 Expr::LogicalUnion { left, right }
             }
-            Expr::LogicalInsert { table, input } => {
+            Expr::LogicalInsert {
+                table,
+                input,
+                columns,
+            } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalInsert { table, input }
+                Expr::LogicalInsert {
+                    table,
+                    input,
+                    columns,
+                }
             }
             Expr::LogicalValues {
                 columns,
@@ -532,9 +546,19 @@ impl Expr {
                     input,
                 }
             }
-            Expr::LogicalUpdate { table, tid, input } => {
+            Expr::LogicalUpdate {
+                table,
+                tid,
+                input,
+                columns,
+            } => {
                 let input = Box::new(visitor(*input));
-                Expr::LogicalUpdate { table, tid, input }
+                Expr::LogicalUpdate {
+                    table,
+                    tid,
+                    input,
+                    columns,
+                }
             }
             Expr::LogicalDelete { table, tid, input } => Expr::LogicalDelete {
                 table,
@@ -633,10 +657,12 @@ impl Expr {
                 table,
                 indexes,
                 input,
+                columns,
             } => Expr::Insert {
                 table,
                 indexes,
                 input: Box::new(visitor(*input)),
+                columns,
             },
             Expr::Values {
                 columns,
@@ -1066,10 +1092,16 @@ impl Expr {
                 projects: projects.iter().map(subst_c).collect(),
                 input: Box::new(input.subst(map)),
             },
-            Expr::LogicalUpdate { table, tid, input } => Expr::LogicalUpdate {
+            Expr::LogicalUpdate {
+                table,
+                tid,
+                input,
+                columns,
+            } => Expr::LogicalUpdate {
                 table,
                 tid: subst_c(&tid),
                 input: Box::new(input.subst(map)),
+                columns,
             },
             Expr::LogicalDelete { table, tid, input } => Expr::LogicalDelete {
                 table,
@@ -1401,23 +1433,23 @@ pub enum Function {
     IsNull(Scalar),
     Not(Scalar),
     // Unary mathematical functions.
-    UnaryMinus(Scalar),
+    UnaryMinus(Scalar, DataType),
     // Binary logical functions.
     And(Scalar, Scalar),
     Or(Scalar, Scalar),
     Is(Scalar, Scalar),
     Equal(Scalar, Scalar),
+    NotEqual(Scalar, Scalar),
     Greater(Scalar, Scalar),
     GreaterOrEqual(Scalar, Scalar),
     Less(Scalar, Scalar),
     LessOrEqual(Scalar, Scalar),
     Like(Scalar, Scalar),
-    NotEqual(Scalar, Scalar),
     // Binary mathematical functions.
     Add(Scalar, Scalar, DataType),
-    Divide(Scalar, Scalar, DataType),
-    Multiply(Scalar, Scalar, DataType),
     Subtract(Scalar, Scalar, DataType),
+    Multiply(Scalar, Scalar, DataType),
+    Divide(Scalar, Scalar, DataType),
     // Other binary functions.
     Coalesce(Scalar, Scalar, DataType),
     // Ternary functions.
@@ -1455,7 +1487,7 @@ impl Function {
                 match name {
                     "ZetaSQL:$is_null" => Function::IsNull(argument),
                     "ZetaSQL:$not" => Function::Not(argument),
-                    "ZetaSQL:$unary_minus" => Function::UnaryMinus(argument),
+                    "ZetaSQL:$unary_minus" => Function::UnaryMinus(argument, returns),
                     "system:next_val" => Function::NextVal(argument),
                     other => panic!("{} is not a unary function", other),
                 }
@@ -1595,7 +1627,7 @@ impl Function {
             Function::Rand => "Rand",
             Function::IsNull(_) => "IsNull",
             Function::Not(_) => "Not",
-            Function::UnaryMinus(_) => "UnaryMinus",
+            Function::UnaryMinus(_, _) => "UnaryMinus",
             Function::And(_, _) => "And",
             Function::Is(_, _) => "Is",
             Function::Equal(_, _) => "Equal",
@@ -1624,7 +1656,7 @@ impl Function {
             }
             Function::IsNull(argument)
             | Function::Not(argument)
-            | Function::UnaryMinus(argument)
+            | Function::UnaryMinus(argument, _)
             | Function::NextVal(argument) => vec![argument],
             Function::Is(left, right)
             | Function::Equal(left, right)
@@ -1662,7 +1694,7 @@ impl Function {
             | Function::Like(_, _)
             | Function::NotEqual(_, _)
             | Function::Or(_, _) => DataType::Bool,
-            Function::UnaryMinus(argument) => argument.data_type(),
+            Function::UnaryMinus(argument, _) => argument.data_type(),
             Function::Add(_, _, returns)
             | Function::Multiply(_, _, returns)
             | Function::Subtract(_, _, returns)
@@ -1691,7 +1723,7 @@ impl Function {
             Function::Like(left, right) => Function::Like(f(left), f(right)),
             Function::NotEqual(left, right) => Function::NotEqual(f(left), f(right)),
             Function::Or(left, right) => Function::Or(f(left), f(right)),
-            Function::UnaryMinus(argument) => Function::UnaryMinus(f(argument)),
+            Function::UnaryMinus(argument, returns) => Function::UnaryMinus(f(argument), returns),
             Function::Add(left, right, returns) => Function::Add(f(left), f(right), returns),
             Function::Divide(left, right, returns) => Function::Divide(f(left), f(right), returns),
             Function::Multiply(left, right, returns) => {

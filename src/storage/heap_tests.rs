@@ -26,7 +26,7 @@ a b  $xmin $xmax
         .trim(),
         format!("{:?}", heap).trim()
     );
-    for page in heap.scan_mut() {
+    for mut page in heap.scan() {
         assert!(page.delete(1, 2000));
     }
     assert_eq!(

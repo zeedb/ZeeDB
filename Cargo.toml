@@ -1,10 +1,10 @@
 [workspace]
 members = [
     "src/ast",
-    # "src/benchmarks",
+    "src/benchmarks",
     "src/catalog",
     "src/encoding",
-    # "src/execute",
+    "src/execute",
     "src/kernel",
     "src/parser",
     "src/planner",

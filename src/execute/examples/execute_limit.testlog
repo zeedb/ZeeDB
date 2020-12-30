@@ -1,10 +1,10 @@
-setup: create table foo (id int64);
-setup: insert into foo values (1), (2), (3);
+setup: create table foo (b bool, i int64, s string);
+setup: insert into foo values (false, 1, 'one'), (true, 2, 'two'), (false, 3, 'three');
 ok: select * from foo limit 1
-id
-1 
+b     i s  
+false 1 one
 
 ok: select * from foo limit 1 offset 1
-id
-2 
+b     i s  
+false 2 two
 

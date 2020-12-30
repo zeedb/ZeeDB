@@ -1,135 +1,162 @@
 use crate::execute::Session;
-use arrow::array::*;
-use arrow::record_batch::RecordBatch;
 use ast::*;
-use kernel::Error;
-use std::sync::Arc;
+use kernel::*;
 
-pub fn all(
-    predicates: &Vec<Scalar>,
-    input: &RecordBatch,
-    state: &mut Session,
-) -> Result<BooleanArray, Error> {
-    let mut mask = BooleanArray::from(vec![true].repeat(input.num_rows()));
+pub fn all(predicates: &Vec<Scalar>, input: &RecordBatch, state: &mut Session) -> BoolArray {
+    let mut mask = BoolArray::trues(input.len());
     for p in predicates {
-        let next = crate::eval::eval(p, &input, state)?;
-        mask = arrow::compute::and(&mask, as_boolean_array(&next))?;
+        mask = eval(p, &input, state).as_bool().unwrap().and(&mask);
     }
-    Ok(mask)
+    mask
 }
 
-pub fn eval(
-    scalar: &Scalar,
-    input: &RecordBatch,
-    state: &mut Session,
-) -> Result<Arc<dyn Array>, Error> {
+pub fn eval(scalar: &Scalar, input: &RecordBatch, state: &mut Session) -> Array {
     match scalar {
-        Scalar::Literal(value) => Ok(repeat(&value.array(), input.num_rows())),
+        Scalar::Literal(value) => value.repeat(input.len()),
         Scalar::Column(column) => {
-            let i = (0..input.num_columns())
-                .find(|i| input.schema().field(*i).name() == &column.canonical_name())
-                .expect(format!("no column {:?} in {}", column, input.schema()).as_str());
-            Ok(input.column(i).clone())
+            let find = column.canonical_name();
+            input.find(&find).expect(&find).clone()
         }
         Scalar::Parameter(name, _) => {
-            let value: &Arc<dyn Array> = state.variables.get(name).as_ref().expect(name);
-            assert_eq!(value.len(), 1);
-            Ok(repeat(value, input.num_rows()))
+            let value: &Array = state.variables.get(name).as_ref().expect(name);
+            assert_eq!(value.len(), 1, "@{} has length {}", name, value.len());
+            value.repeat(input.len())
         }
         Scalar::Call(function) => match function.as_ref() {
             Function::CurrentDate => todo!(),
             Function::CurrentTimestamp => todo!(),
             Function::Rand => todo!(),
-            Function::IsNull(argument) => Ok(Arc::new(arrow::compute::is_null(&eval(
-                argument, input, state,
-            )?)?)),
-            Function::Not(argument) => Ok(Arc::new(arrow::compute::not(&as_boolean_array(
-                &eval(argument, input, state)?,
-            ))?)),
-            Function::UnaryMinus(_) => todo!(),
-            Function::And(left, right) => Ok(Arc::new(arrow::compute::and(
-                &as_boolean_array(&eval(left, input, state)?),
-                &as_boolean_array(&eval(right, input, state)?),
-            )?)),
-            Function::Is(left, right) => Ok(Arc::new(kernel::is(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::Equal(left, right) => Ok(Arc::new(kernel::equal(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::Greater(left, right) => Ok(Arc::new(kernel::greater(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::GreaterOrEqual(left, right) => Ok(Arc::new(kernel::greater_equal(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::Less(left, right) => Ok(Arc::new(kernel::less(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::LessOrEqual(left, right) => Ok(Arc::new(kernel::less_equal(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::Like(_, _) => todo!(),
-            Function::NotEqual(left, right) => Ok(Arc::new(kernel::equal(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            ))),
-            Function::Or(left, right) => Ok(Arc::new(arrow::compute::or(
-                &as_boolean_array(&eval(left, input, state)?),
-                &as_boolean_array(&eval(right, input, state)?),
-            )?)),
-            Function::Add(left, right, _) => Ok(kernel::add(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            )?),
-            Function::Divide(left, right, _) => Ok(kernel::div(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            )?),
-            Function::Multiply(left, right, _) => Ok(kernel::mul(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            )?),
-            Function::Subtract(left, right, _) => Ok(kernel::sub(
-                &eval(left, input, state)?,
-                &eval(right, input, state)?,
-            )?),
-            Function::Coalesce(_, _, _) => todo!(),
-            Function::CaseNoValue(test, if_true, if_false, _) => Ok(kernel::mask(
-                &as_boolean_array(&eval(test, input, state)?),
-                &eval(if_true, input, state)?,
-                &eval(if_false, input, state)?,
-            )),
-            Function::NextVal(sequence) => {
-                let input = eval(sequence, input, state)?;
-                let input: &Int64Array = input.as_any().downcast_ref::<Int64Array>().unwrap();
-                let mut output = Int64Builder::new(input.len());
-                for i in 0..input.len() {
-                    assert!(!input.is_null(i));
-                    let next = state.storage.next_val(input.value(i));
-                    output.append_value(next).unwrap();
-                }
-                Ok(Arc::new(output.finish()))
+            Function::IsNull(argument) => Array::Bool(eval(argument, input, state).is_null()),
+            Function::Not(argument) => {
+                Array::Bool(eval(argument, input, state).as_bool().unwrap().not())
             }
-            Function::Xid => Ok(Arc::new(Int64Array::from(
-                vec![state.txn].repeat(input.num_rows()),
-            ))),
+            Function::UnaryMinus(argument, DataType::I64) => {
+                Array::I64(eval(argument, input, state).as_i64().unwrap().minus())
+            }
+            Function::UnaryMinus(argument, DataType::F64) => {
+                Array::F64(eval(argument, input, state).as_f64().unwrap().minus())
+            }
+            Function::UnaryMinus(_, other) => panic!("-{} is not defined", other),
+            Function::And(left, right) => {
+                let left = eval(left, input, state).as_bool().unwrap();
+                let right = eval(right, input, state).as_bool().unwrap();
+                Array::Bool(left.and(&right))
+            }
+            Function::Or(left, right) => {
+                let left = eval(left, input, state).as_bool().unwrap();
+                let right = eval(right, input, state).as_bool().unwrap();
+                Array::Bool(left.or(&right))
+            }
+            Function::Is(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.is(&right))
+            }
+            Function::Equal(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.equal(&right))
+            }
+            Function::NotEqual(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.not_equal(&right))
+            }
+            Function::Greater(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.greater(&right))
+            }
+            Function::GreaterOrEqual(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.greater_equal(&right))
+            }
+            Function::Less(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.less(&right))
+            }
+            Function::LessOrEqual(left, right) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                Array::Bool(left.less_equal(&right))
+            }
+            Function::Like(left, right) => {
+                let left = eval(left, input, state).as_string().unwrap();
+                let right = eval(right, input, state).as_string().unwrap();
+                Array::Bool(left.like(&right))
+            }
+            Function::Add(left, right, DataType::I64) => {
+                let left = eval(left, input, state).as_i64().unwrap();
+                let right = eval(right, input, state).as_i64().unwrap();
+                Array::I64(left.add(&right))
+            }
+            Function::Subtract(left, right, DataType::I64) => {
+                let left = eval(left, input, state).as_i64().unwrap();
+                let right = eval(right, input, state).as_i64().unwrap();
+                Array::I64(left.subtract(&right))
+            }
+            Function::Multiply(left, right, DataType::I64) => {
+                let left = eval(left, input, state).as_i64().unwrap();
+                let right = eval(right, input, state).as_i64().unwrap();
+                Array::I64(left.multiply(&right))
+            }
+            Function::Divide(left, right, DataType::I64) => {
+                let left = eval(left, input, state).as_i64().unwrap();
+                let right = eval(right, input, state).as_i64().unwrap();
+                Array::I64(left.divide(&right))
+            }
+            Function::Add(left, right, DataType::F64) => {
+                let left = eval(left, input, state).as_f64().unwrap();
+                let right = eval(right, input, state).as_f64().unwrap();
+                Array::F64(left.add(&right))
+            }
+            Function::Subtract(left, right, DataType::F64) => {
+                let left = eval(left, input, state).as_f64().unwrap();
+                let right = eval(right, input, state).as_f64().unwrap();
+                Array::F64(left.subtract(&right))
+            }
+            Function::Multiply(left, right, DataType::F64) => {
+                let left = eval(left, input, state).as_f64().unwrap();
+                let right = eval(right, input, state).as_f64().unwrap();
+                Array::F64(left.multiply(&right))
+            }
+            Function::Divide(left, right, DataType::F64) => {
+                let left = eval(left, input, state).as_f64().unwrap();
+                let right = eval(right, input, state).as_f64().unwrap();
+                Array::F64(left.divide(&right))
+            }
+            Function::Add(_, _, other)
+            | Function::Subtract(_, _, other)
+            | Function::Multiply(_, _, other)
+            | Function::Divide(_, _, other) => {
+                panic!("Elementary math is not defined for {:?}", other)
+            }
+            Function::Coalesce(left, right, _) => {
+                let left = eval(left, input, state);
+                let right = eval(right, input, state);
+                left.coalesce(&right)
+            }
+            Function::CaseNoValue(test, if_true, if_false, _) => {
+                let test = eval(test, input, state);
+                let test = test.as_bool().unwrap();
+                let if_true = eval(if_true, input, state);
+                let if_false = eval(if_false, input, state);
+                test.select(&if_true, &if_false)
+            }
+            Function::NextVal(sequence) => {
+                let input = eval(sequence, input, state);
+                let input = input.as_i64().unwrap();
+                let mut output = I64Array::with_capacity(input.len());
+                for i in 0..input.len() {
+                    let next = state.storage.next_val(input.get(i).unwrap());
+                    output.push(Some(next));
+                }
+                Array::I64(output)
+            }
+            Function::Xid => Array::I64(I64Array::from(vec![state.txn].repeat(input.len()))),
         },
-        Scalar::Cast(scalar, data_type) => Ok(arrow::compute::cast(
-            &eval(scalar, input, state)?,
-            data_type,
-        )?),
+        Scalar::Cast(scalar, data_type) => eval(scalar, input, state).cast(*data_type),
     }
-}
-
-pub fn repeat(any: &Arc<dyn Array>, len: usize) -> Arc<dyn Array> {
-    let mut alias = vec![];
-    alias.resize_with(len, || any.clone());
-    arrow::compute::concat(&alias[..]).unwrap()
 }

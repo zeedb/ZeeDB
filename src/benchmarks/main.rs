@@ -21,9 +21,7 @@ fn bench(profile: &str, q: &str) {
     let mut profiler = PROFILER.lock().unwrap();
     profiler.start(profile).unwrap();
     for txn in 0..1000 {
-        if let Some(Err(err)) = program.execute(&mut storage, 100 + txn).last() {
-            panic!(err);
-        }
+        program.execute(&mut storage, 100 + txn).last();
     }
     profiler.stop().unwrap();
 }

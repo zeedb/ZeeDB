@@ -1,0 +1,15 @@
+# Catalog queries
+ok: select parent_catalog_id, catalog_id, catalog_name from metadata.catalog
+EMPTY
+
+ok: select catalog_id, table_id, table_name, column_id, column_name, column_type from metadata.table join metadata.column using (table_id) order by catalog_id, table_id, column_id
+EMPTY
+
+ok: select index_id, table_id, column_name from metadata.index join metadata.index_column using (index_id) join metadata.column using (table_id, column_id) order by index_id, index_order
+EMPTY
+
+# DDL implementation queries
+ok: select sequence_id from metadata.sequence where sequence_name = 'table'
+sequence_id
+1          
+

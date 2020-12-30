@@ -1,8 +1,6 @@
-use arrow::array::*;
-use arrow::datatypes::*;
-use arrow::record_batch::*;
 use ast::*;
 use catalog::Index;
+use kernel::*;
 use once_cell::sync::OnceCell;
 use planner::optimize;
 use std::collections::HashMap;
@@ -66,10 +64,9 @@ fn read_all_catalogs(storage: &mut Storage, txn: i64) -> Vec<(i64, i64, SimpleCa
     let expr = read_all_catalogs_query(storage);
     let program = crate::compile(expr);
     let mut catalogs = vec![];
-    for batch_or_err in program.execute(storage, txn) {
-        let batch = batch_or_err.unwrap();
+    for batch in program.execute(storage, txn) {
         let mut offset = 0;
-        while offset < batch.num_rows() {
+        while offset < batch.len() {
             catalogs.push(read_catalog(&batch, &mut offset));
         }
     }
@@ -86,10 +83,10 @@ fn read_all_catalogs_query(storage: &mut Storage) -> Expr {
 }
 
 fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCatalogProto) {
-    let parent_catalog_id = as_primitive_array::<Int64Type>(batch.column(0)).value(*offset);
-    let catalog_id_column = as_primitive_array::<Int64Type>(batch.column(1));
-    let catalog_id = catalog_id_column.value(*offset);
-    let catalog_name = as_string_array(batch.column(2)).value(*offset);
+    let parent_catalog_id = as_i64(batch, 0).get(*offset).unwrap();
+    let catalog_id_column = as_i64(batch, 1);
+    let catalog_id = catalog_id_column.get(*offset).unwrap();
+    let catalog_name = as_string(batch, 2).get(*offset).unwrap();
 
     let mut catalog = catalog::empty_catalog();
     catalog.name = Some(catalog_name.to_string());
@@ -102,10 +99,9 @@ fn read_all_tables(storage: &mut Storage, txn: i64) -> Vec<(i64, SimpleTableProt
     let expr = read_all_tables_query(storage);
     let program = crate::compile(expr);
     let mut tables = vec![];
-    for batch_or_err in program.execute(storage, txn) {
-        let batch = batch_or_err.unwrap();
+    for batch in program.execute(storage, txn) {
         let mut offset = 0;
-        while offset < batch.num_rows() {
+        while offset < batch.len() {
             tables.push(read_table(&batch, &mut offset));
         }
     }
@@ -124,10 +120,10 @@ fn read_all_tables_query(storage: &mut Storage) -> Expr {
 }
 
 fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto) {
-    let catalog_id = as_primitive_array::<Int64Type>(batch.column(0)).value(*offset);
-    let table_id_column = as_primitive_array::<Int64Type>(batch.column(1));
-    let table_id = table_id_column.value(*offset);
-    let table_name = as_string_array(batch.column(2)).value(*offset);
+    let catalog_id = as_i64(batch, 0).get(*offset).unwrap();
+    let table_id_column = as_i64(batch, 1);
+    let table_id = table_id_column.get(*offset).unwrap();
+    let table_name = as_string(batch, 2).get(*offset).unwrap();
 
     let mut table = SimpleTableProto {
         name: Some(table_name.to_string()),
@@ -135,7 +131,7 @@ fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto
         ..Default::default()
     };
 
-    while *offset < batch.num_rows() && table_id == table_id_column.value(*offset) {
+    while *offset < batch.len() && table_id == table_id_column.get(*offset).unwrap() {
         table.column.push(read_column(batch, offset));
     }
 
@@ -143,15 +139,15 @@ fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto
 }
 
 fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
-    let _column_id = as_primitive_array::<Int64Type>(batch.column(3)).value(*offset);
-    let column_name = as_string_array(batch.column(4)).value(*offset);
-    let column_type = as_string_array(batch.column(5)).value(*offset);
+    let _column_id = as_i64(batch, 3).get(*offset).unwrap();
+    let column_name = as_string(batch, 4).get(*offset).unwrap();
+    let column_type = as_string(batch, 5).get(*offset).unwrap();
 
     *offset += 1;
 
     SimpleColumnProto {
         name: Some(column_name.to_string()),
-        r#type: Some(data_type::to_proto(&data_type::from_string(column_type))),
+        r#type: Some(DataType::from(column_type).to_proto()),
         ..Default::default()
     }
 }
@@ -161,10 +157,9 @@ fn read_all_indexes(storage: &mut Storage, txn: i64) -> Vec<Index> {
     let program = crate::compile(expr);
     let program: Vec<_> = program.execute(storage, txn).collect();
     let mut indexes = vec![];
-    for batch_or_err in program {
-        let batch = batch_or_err.unwrap();
+    for batch in program {
         let mut offset = 0;
-        while offset < batch.num_rows() {
+        while offset < batch.len() {
             indexes.push(read_index(&batch, &mut offset));
         }
     }
@@ -184,10 +179,10 @@ fn read_all_indexes_query(storage: &mut Storage) -> Expr {
 }
 
 fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
-    let index_id_column = as_primitive_array::<Int64Type>(batch.column(0));
-    let index_id = index_id_column.value(*offset);
-    let table_id = as_primitive_array::<Int64Type>(batch.column(1)).value(*offset);
-    let column_name_column = as_string_array(batch.column(2));
+    let index_id_column = as_i64(batch, 0);
+    let index_id = index_id_column.get(*offset).unwrap();
+    let table_id = as_i64(batch, 1).get(*offset).unwrap();
+    let column_name_column = as_string(batch, 2);
 
     let mut index = Index {
         index_id,
@@ -195,8 +190,8 @@ fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
         columns: vec![],
     };
 
-    while *offset < batch.num_rows() && index_id == index_id_column.value(*offset) {
-        let column_name = column_name_column.value(*offset).to_string();
+    while *offset < batch.len() && index_id == index_id_column.get(*offset).unwrap() {
+        let column_name = column_name_column.get(*offset).unwrap().to_string();
         index.columns.push(column_name);
         *offset += 1;
     }
@@ -209,4 +204,18 @@ fn plan_query(storage: &mut Storage, q: &str) -> Expr {
     let indexes = HashMap::new();
     let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, q).unwrap();
     optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr)
+}
+
+fn as_string(batch: &RecordBatch, column: usize) -> &StringArray {
+    match &batch.columns[column] {
+        (_, Array::String(array)) => array,
+        _ => panic!(),
+    }
+}
+
+fn as_i64(batch: &RecordBatch, column: usize) -> &I64Array {
+    match &batch.columns[column] {
+        (_, Array::I64(array)) => array,
+        _ => panic!(),
+    }
 }

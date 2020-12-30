@@ -1,0 +1,48 @@
+ok: select i1 is null, inull is null from (select 1 as i1, cast(null as int64) as inull)
+$col1 $col2
+false true 
+
+ok: select not(f) from (select false as f)
+$col1
+true 
+
+ok: select -x from (select 1 as x)
+$col1
+-1   
+
+ok: select t and f from (select true as t, false as f)
+$col1
+false
+
+ok: select t or f from (select true as t, false as f)
+$col1
+true 
+
+ok: select i1 = i1, i1 = i2, i2 = i1, i1 = inull, inull = inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)
+$col1 $col2 $col3 $col4 $col5
+true  false false NULL  NULL 
+
+ok: select i1 <> i1, i1 <> i2, i2 <> i1, i1 <> inull, inull <> inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)
+$col1 $col2 $col3 $col4 $col5
+false true  true  NULL  NULL 
+
+ok: select i1 > i1, i1 > i2, i2 > i1, i1 > inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)
+$col1 $col2 $col3 $col4 $col5
+false false true  NULL  NULL 
+
+ok: select i1 >= i1, i1 >= i2, i2 >= i1, i1 >= inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)
+$col1 $col2 $col3 $col4 $col5
+true  false true  NULL  NULL 
+
+ok: select i1 < i1, i1 < i2, i2 < i1, i1 < inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)
+$col1 $col2 $col3 $col4 $col5
+false true  false NULL  NULL 
+
+ok: select i1 <= i1, i1 <= i2, i2 <= i1, i1 <= inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)
+$col1 $col2 $col3 $col4 $col5
+true  true  false NULL  NULL 
+
+ok: select 'foobar' like 'foo%', 'foobar' like 'bar%', 'foobar' like '%bar', snull like 'foo%', 'foobar' like snull from (select cast(null as string) as snull)
+$col1 $col2 $col3 $col4 $col5
+true  false true  NULL  NULL 
+

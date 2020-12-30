@@ -596,13 +596,30 @@ impl Converter {
         if q.insert_column_list.is_empty() {
             todo!("nested insert")
         }
-        let input = match &q.query {
-            Some(scan) => self.insert_scan(q, scan),
-            None => self.rows(q),
-        };
-        LogicalInsert {
-            table: Table::from(q.table_scan.get()),
-            input: Box::new(input),
+        let table = Table::from(q.table_scan.get());
+        if let Some(scan) = &q.query {
+            LogicalInsert {
+                table,
+                input: Box::new(self.insert_scan(q, scan)),
+                columns: (0..q.query_output_column_list.len())
+                    .map(|i| {
+                        (
+                            self.column(&q.query_output_column_list[i]),
+                            q.insert_column_list[i].name.get().clone(),
+                        )
+                    })
+                    .collect(),
+            }
+        } else {
+            LogicalInsert {
+                table,
+                input: Box::new(self.rows(q)),
+                columns: q
+                    .insert_column_list
+                    .iter()
+                    .map(|c| (self.column(c), c.name.get().clone()))
+                    .collect(),
+            }
         }
     }
 
@@ -690,8 +707,9 @@ impl Converter {
                 input: Box::new(input),
             };
         }
+        let column_list = &q.table_scan.get().parent.get().column_list;
         let mut projects = vec![];
-        for column in &q.table_scan.get().parent.get().column_list {
+        for column in column_list {
             let as_column = self.column(column);
             let value = self
                 .updated_column(q, column, &mut input)
@@ -707,6 +725,10 @@ impl Converter {
                 projects,
                 input: Box::new(input),
             }),
+            columns: column_list
+                .iter()
+                .map(|c| (self.column(c), c.name.get().clone()))
+                .collect(),
         }
     }
 

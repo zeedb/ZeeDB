@@ -21,17 +21,13 @@ impl Heap {
         }
     }
 
-    pub fn scan(&self) -> &Vec<Page> {
-        &self.pages
-    }
-
-    pub fn scan_mut(&mut self) -> &mut Vec<Page> {
-        &mut self.pages
+    pub fn scan(&self) -> Vec<Page> {
+        self.pages.clone()
     }
 
     pub fn bitmap_scan(&self, mut tids: Vec<i64>, projects: &Vec<String>) -> Vec<RecordBatch> {
         if tids.is_empty() {
-            return vec![];
+            return vec![RecordBatch::empty(self.pages[0].schema(projects))];
         }
         // Sort tids so we can access pages in-order.
         tids.sort();

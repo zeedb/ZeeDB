@@ -168,7 +168,13 @@ impl RewriteRule {
                 }
             }
             RewriteRule::UpdateToDeleteThenInsert => {
-                if let LogicalUpdate { table, tid, input } = expr {
+                if let LogicalUpdate {
+                    table,
+                    tid,
+                    input,
+                    columns,
+                } = expr
+                {
                     return Some(LogicalInsert {
                         table: table.clone(),
                         input: Box::new(LogicalDelete {
@@ -176,6 +182,7 @@ impl RewriteRule {
                             tid: tid.clone(),
                             input: input.clone(),
                         }),
+                        columns: columns.clone(),
                     });
                 }
             }

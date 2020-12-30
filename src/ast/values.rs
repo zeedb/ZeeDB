@@ -38,14 +38,16 @@ impl Value {
 
     pub fn repeat(&self, len: usize) -> Array {
         match self {
-            Value::Bool(value) => Array::Bool(BoolArray::from(vec![*value])),
-            Value::I64(value) => Array::I64(I64Array::from(vec![*value])),
-            Value::F64(value) => Array::F64(F64Array::from(vec![*value])),
-            Value::String(value) => {
-                Array::String(StringArray::from(vec![value.as_ref().map(|s| s.as_str())]))
+            Value::Bool(value) => Array::Bool(BoolArray::from(vec![*value].repeat(len))),
+            Value::I64(value) => Array::I64(I64Array::from(vec![*value].repeat(len))),
+            Value::F64(value) => Array::F64(F64Array::from(vec![*value].repeat(len))),
+            Value::String(value) => Array::String(StringArray::from(
+                vec![value.as_ref().map(|s| s.as_str())].repeat(len),
+            )),
+            Value::Timestamp(value) => {
+                Array::Timestamp(TimestampArray::from(vec![*value].repeat(len)))
             }
-            Value::Timestamp(value) => Array::Timestamp(TimestampArray::from(vec![*value])),
-            Value::Date(value) => Array::Date(DateArray::from(vec![*value])),
+            Value::Date(value) => Array::Date(DateArray::from(vec![*value].repeat(len))),
         }
     }
 

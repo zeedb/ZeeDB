@@ -1,0 +1,8 @@
+ok: select coalesce(null, 1), coalesce(2, 3)
+$col1 $col2
+1     2    
+
+ok: select case when false then null else 1 end, case when true then 2 else 3 end
+$col1 $col2
+1     2    
+
