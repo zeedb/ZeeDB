@@ -9,8 +9,6 @@ pub enum Rule {
     // Rewrite rules
     InnerJoinCommutivity,
     InnerJoinAssociativity,
-    RemoveDependentJoin,
-    RewriteDependentJoin,
     // Implementation rules
     LogicalGetToTableFreeScan,
     LogicalGetToSeqScan,
@@ -85,8 +83,6 @@ impl Rule {
                     ..
                 },
             )
-            | (Rule::RemoveDependentJoin, LogicalDependentJoin { .. })
-            | (Rule::RewriteDependentJoin, LogicalDependentJoin { .. })
             | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
@@ -273,94 +269,6 @@ impl Rule {
                             }
                         }
                     }
-                }
-            }
-            Rule::RemoveDependentJoin => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    ..
-                } = bind
-                {
-                    assert!(!parameters.is_empty());
-                    if let Leaf { gid: subquery } = subquery.as_ref() {
-                        // Check if predicates contains subquery.a = domain.b for every b in domain.
-                        let subquery_scope =
-                            &ss[GroupID(*subquery)].props.column_unique_cardinality;
-                        let match_equals = |x: &Scalar| {
-                            if let Scalar::Call(function) = x {
-                                if let Function::Equal(
-                                    Scalar::Column(left),
-                                    Scalar::Column(right),
-                                ) = function.deref()
-                                {
-                                    if subquery_scope.contains_key(&left)
-                                        && parameters.contains(&right)
-                                    {
-                                        return Some((left.clone(), right.clone()));
-                                    } else if subquery_scope.contains_key(&right)
-                                        && parameters.contains(&left)
-                                    {
-                                        return Some((right.clone(), left.clone()));
-                                    }
-                                }
-                            }
-                            None
-                        };
-                        let mut equiv_predicates = HashMap::new();
-                        let mut filter_predicates = vec![];
-                        for p in predicates {
-                            if let Some((subquery_column, domain_column)) = match_equals(&p) {
-                                equiv_predicates.insert(domain_column, subquery_column);
-                            } else {
-                                filter_predicates.push(p.clone())
-                            }
-                        }
-                        if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
-                            return None;
-                        }
-                        // Infer domain from subquery using equivalences from the join condition.
-                        let project_domain: Vec<(Scalar, Column)> = parameters
-                            .iter()
-                            .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
-                            .collect();
-                        if filter_predicates.is_empty() {
-                            return Some(LogicalMap {
-                                include_existing: true,
-                                projects: project_domain,
-                                input: Box::new(Leaf { gid: *subquery }),
-                            });
-                        } else {
-                            return Some(LogicalFilter {
-                                predicates: filter_predicates,
-                                input: Box::new(LogicalMap {
-                                    include_existing: true,
-                                    projects: project_domain,
-                                    input: Box::new(Leaf { gid: *subquery }),
-                                }),
-                            });
-                        }
-                    }
-                }
-            }
-            Rule::RewriteDependentJoin => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = bind
-                {
-                    return Some(LogicalJoin {
-                        join: Join::Inner(predicates),
-                        left: subquery,
-                        right: Box::new(LogicalAggregate {
-                            group_by: parameters,
-                            aggregate: vec![],
-                            input: domain,
-                        }),
-                    });
                 }
             }
             Rule::LogicalGetToTableFreeScan => {
@@ -613,8 +521,6 @@ impl Rule {
         vec![
             Rule::InnerJoinCommutivity,
             Rule::InnerJoinAssociativity,
-            Rule::RemoveDependentJoin,
-            Rule::RewriteDependentJoin,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,

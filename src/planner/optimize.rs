@@ -328,37 +328,10 @@ impl<'a> Optimizer<'a> {
                     }
                 }
             }
-            LogicalDependentJoin {
-                parameters,
-                predicates,
-                subquery,
-                domain,
-            } => {
-                // Figure out the cardinality of domain after projection.
-                let mut domain_cardinality = 1;
-                for c in parameters {
-                    let n = self.ss[leaf(domain)].props.column_unique_cardinality[c];
-                    column_unique_cardinality.insert(c.clone(), n);
-                    domain_cardinality *= n;
-                }
-                domain_cardinality = self.ss[leaf(domain)]
-                    .props
-                    .cardinality
-                    .min(domain_cardinality);
-                // Figure out the cardinality of the join before filtering.
-                cardinality = self.ss[leaf(subquery)].props.cardinality * domain_cardinality;
-                for (c, n) in &self.ss[leaf(subquery)].props.column_unique_cardinality {
-                    column_unique_cardinality.insert(c.clone(), *n);
-                }
-                // Apply predicates
-                for p in predicates {
-                    let selectivity = predicate_selectivity(p, &column_unique_cardinality);
-                    cardinality = apply_selectivity(cardinality, selectivity);
-                }
-            }
-            LogicalWith { .. } => {
-                panic!("LogicalWith should have been eliminated during rewrite phase")
-            }
+            LogicalDependentJoin { .. } | LogicalWith { .. } => panic!(
+                "{} should have been eliminated during rewrite phase",
+                mexpr.expr.name()
+            ),
             LogicalGetWith { columns, .. } => {
                 cardinality = 1000; // TODO get from catalog somehow
                 for c in columns {

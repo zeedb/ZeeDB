@@ -3,11 +3,10 @@ plan: select 1 from person where exists (select 1 from customer where customer.p
 Map $query.$col1:1
 	HashJoin Semi (Is person.person_id person_id)
 		Partition* person_id
-			Map $expr_subquery.$col1:1 person_id
-				Map person_id:customer.person_id, ..
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.person_id $xmin $xmax
-							SeqScan customer
+			Map $expr_subquery.$col1:1 person_id:customer.person_id
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id $xmin $xmax
+						SeqScan customer
 		Partition* person.person_id
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* person.person_id $xmin $xmax
@@ -18,11 +17,10 @@ plan: select 1 from person where not exists (select 1 from customer where custom
 Map $query.$col1:1
 	HashJoin Anti (Is person.person_id person_id)
 		Partition* person_id
-			Map $expr_subquery.$col1:1 person_id
-				Map person_id:customer.person_id, ..
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.person_id $xmin $xmax
-							SeqScan customer
+			Map $expr_subquery.$col1:1 person_id:customer.person_id
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id $xmin $xmax
+						SeqScan customer
 		Partition* person.person_id
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* person.person_id $xmin $xmax
@@ -33,19 +31,17 @@ plan: select (select name from store where store.store_id = customer.customer_id
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Partition* person_id
-			Map person.first_name person_id
-				Map person_id:person.person_id, ..
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id person.first_name $xmin $xmax
-							SeqScan person
+			Map person.first_name person_id:person.person_id
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* person.person_id person.first_name $xmin $xmax
+						SeqScan person
 		Partition* customer.person_id
 			HashJoin Single (Is customer.customer_id customer_id)
 				Partition* customer_id
-					Map store.name customer_id
-						Map customer_id:store.store_id, ..
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like store.name "A%")
-								Map* store.store_id store.name $xmin $xmax
-									SeqScan store
+					Map store.name customer_id:store.store_id
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like store.name "A%")
+							Map* store.store_id store.name $xmin $xmax
+								SeqScan store
 				Partition* customer.customer_id
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* customer.customer_id customer.person_id $xmin $xmax
@@ -64,12 +60,10 @@ Map $query.$col1:$expr_subquery.customer_id
 	HashJoin Single (Is customer.customer_id customer_id)
 		Partition* customer_id
 			Map $expr_subquery.customer_id:customer_id customer_id
-				NestedLoop Inner
-					TableFreeScan
-					Aggregate customer_id
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* customer_id $xmin $xmax
-								SeqScan customer
+				Aggregate customer_id
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* customer_id $xmin $xmax
+							SeqScan customer
 		Partition* customer.customer_id
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* customer.customer_id $xmin $xmax

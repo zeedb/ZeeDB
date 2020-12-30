@@ -1,5 +1,5 @@
 use ast::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use zetasql::SimpleCatalogProto;
 
 #[derive(Debug)]
@@ -27,6 +27,7 @@ enum RewriteRule {
     RemoveInnerJoin,
     RemoveWith,
     RemoveTableFreeScan,
+    RemoveDependentJoin,
     // Predicate pushdown:
     PushExplicitFilterIntoInnerJoin,
     PushImplicitFilterThroughInnerJoin,
@@ -651,6 +652,72 @@ impl RewriteRule {
                     }
                 }
             }
+            RewriteRule::RemoveDependentJoin => {
+                if let LogicalDependentJoin {
+                    parameters,
+                    predicates,
+                    subquery,
+                    domain,
+                } = expr
+                {
+                    assert!(!parameters.is_empty());
+                    // Check if predicates contains subquery.a = domain.b for every b in domain.
+                    let subquery_scope = subquery.attributes();
+                    let match_equals = |x: &Scalar| {
+                        if let Scalar::Call(function) = x {
+                            if let Function::Equal(Scalar::Column(left), Scalar::Column(right)) =
+                                function.as_ref()
+                            {
+                                if subquery_scope.contains(&left) && parameters.contains(&right) {
+                                    return Some((left.clone(), right.clone()));
+                                } else if subquery_scope.contains(&right)
+                                    && parameters.contains(&left)
+                                {
+                                    return Some((right.clone(), left.clone()));
+                                }
+                            }
+                        }
+                        None
+                    };
+                    let mut equiv_predicates = HashMap::new();
+                    let mut filter_predicates = vec![];
+                    for p in predicates {
+                        if let Some((subquery_column, domain_column)) = match_equals(&p) {
+                            equiv_predicates.insert(domain_column, subquery_column);
+                        } else {
+                            filter_predicates.push(p.clone())
+                        }
+                    }
+                    // If we can't remove the dependent join, turn it into an inner join.
+                    // Note that in principal, the inner join can be faster if it prunes the subquery early in the query plan.
+                    // Ideally we would consider both possibilities in the search phase.
+                    // However, for the time being, we are simply using a heuristic that eliminating the dependent join is probably better.
+                    if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
+                        return Some(LogicalJoin {
+                            join: Join::Inner(predicates.clone()),
+                            left: subquery.clone(),
+                            right: Box::new(LogicalAggregate {
+                                group_by: parameters.clone(),
+                                aggregate: vec![],
+                                input: domain.clone(),
+                            }),
+                        });
+                    }
+                    // Infer domain from subquery using equivalences from the join condition.
+                    let project_domain: Vec<(Scalar, Column)> = parameters
+                        .iter()
+                        .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
+                        .collect();
+                    return Some(maybe_filter(
+                        &filter_predicates,
+                        &LogicalMap {
+                            include_existing: true,
+                            projects: project_domain,
+                            input: subquery.clone(),
+                        },
+                    ));
+                }
+            }
             RewriteRule::PushExplicitFilterIntoInnerJoin => {
                 if let LogicalFilter {
                     predicates: filter_predicates,
@@ -1181,6 +1248,7 @@ fn optimize_join_type(expr: Expr) -> Expr {
                 RewriteRule::RemoveInnerJoin,
                 RewriteRule::RemoveWith,
                 RewriteRule::RemoveTableFreeScan,
+                RewriteRule::RemoveDependentJoin,
             ],
         )
     })
