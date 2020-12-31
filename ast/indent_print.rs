@@ -337,6 +337,11 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
+            Expr::LogicalExplain { input, .. } | Expr::Explain { input, .. } => {
+                write!(f, "{}", self.name())?;
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
+            }
         }
     }
 }
@@ -370,6 +375,7 @@ impl Expr {
             Expr::LogicalScript { .. } => "LogicalScript",
             Expr::LogicalAssign { .. } => "LogicalAssign",
             Expr::LogicalCall { .. } => "LogicalCall",
+            Expr::LogicalExplain { .. } => "LogicalExplain",
             Expr::LogicalRewrite { .. } => "LogicalRewrite",
             Expr::TableFreeScan { .. } => "TableFreeScan",
             Expr::SeqScan { .. } => "SeqScan",
@@ -391,6 +397,7 @@ impl Expr {
             Expr::Script { .. } => "Script",
             Expr::Assign { .. } => "Assign",
             Expr::Call { .. } => "Call",
+            Expr::Explain { .. } => "Explain",
         }
     }
 }

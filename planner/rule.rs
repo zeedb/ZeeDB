@@ -31,6 +31,7 @@ pub enum Rule {
     LogicalDropToDrop,
     LogicalAssignToAssign,
     LogicalCallToCall,
+    LogicalExplainToExplain,
     LogicalScriptToScript,
 }
 
@@ -104,6 +105,7 @@ impl Rule {
             | (Rule::LogicalDropToDrop, LogicalDrop { .. })
             | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
             | (Rule::LogicalCallToCall, LogicalCall { .. })
+            | (Rule::LogicalExplainToExplain, LogicalExplain { .. })
             | (Rule::LogicalScriptToScript, LogicalScript { .. }) => true,
             _ => false,
         }
@@ -508,6 +510,11 @@ impl Rule {
                     return Some(Call { procedure, input });
                 }
             }
+            Rule::LogicalExplainToExplain => {
+                if let LogicalExplain { input } = bind {
+                    return Some(Explain { input });
+                }
+            }
             Rule::LogicalScriptToScript => {
                 if let LogicalScript { statements } = bind {
                     return Some(Script { statements });
@@ -542,6 +549,7 @@ impl Rule {
             Rule::LogicalDropToDrop,
             Rule::LogicalAssignToAssign,
             Rule::LogicalCallToCall,
+            Rule::LogicalExplainToExplain,
             Rule::LogicalScriptToScript,
         ]
     }

@@ -378,3 +378,10 @@ fn test_correlated_subquery() {
     t.ok("SELECT i, (SELECT 42 FROM integers WHERE i=i1.i) AS j FROM integers i1 ORDER BY i;");
     t.finish("examples/execute_correlated_subquery.testlog");
 }
+
+#[test]
+fn test_explain() {
+    let mut t = TestSuite::new(None);
+    t.ok("explain select 1");
+    t.finish("examples/execute_explain.testlog");
+}

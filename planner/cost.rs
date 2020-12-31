@@ -30,7 +30,8 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | Values { .. }
         | Script { .. }
         | Assign { .. }
-        | Call { .. } => 0.0,
+        | Call { .. }
+        | Explain { .. } => 0.0,
         SeqScan {
             predicates, table, ..
         } => {
@@ -133,7 +134,8 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | LogicalRewrite { .. }
         | LogicalScript { .. }
         | LogicalAssign { .. }
-        | LogicalCall { .. } => panic!("logical operator {}", &ss[mid].expr),
+        | LogicalCall { .. }
+        | LogicalExplain { .. } => panic!("logical operator {}", &ss[mid].expr),
     }
 }
 

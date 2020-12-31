@@ -150,6 +150,10 @@ enum Node {
         procedure: Procedure,
         input: Box<Node>,
     },
+    Explain {
+        finished: bool,
+        input: Expr,
+    },
 }
 
 impl<'a> Iterator for Execute<'a> {
@@ -324,6 +328,10 @@ impl Node {
                 procedure,
                 input: Box::new(Node::compile(*input)),
             },
+            Explain { input } => Node::Explain {
+                finished: false,
+                input: *input,
+            },
             Leaf { .. }
             | LogicalSingleGet
             | LogicalGet { .. }
@@ -350,7 +358,8 @@ impl Node {
             | LogicalScript { .. }
             | LogicalRewrite { .. }
             | LogicalAssign { .. }
-            | LogicalCall { .. } => panic!("logical operation"),
+            | LogicalCall { .. }
+            | LogicalExplain { .. } => panic!("logical operation"),
         }
     }
 
@@ -440,6 +449,7 @@ impl Node {
                 .map(|column| (column.canonical_name(), column.data_type))
                 .collect(),
             Node::Script { statements, .. } => statements.last().unwrap().schema(),
+            Node::Explain { .. } => vec![("plan".to_string(), DataType::String)],
             Node::CreateTempTable { .. }
             | Node::Insert { .. }
             | Node::Assign { .. }
@@ -1033,6 +1043,19 @@ impl Node {
                     }
                 };
                 None
+            }
+            Node::Explain { finished, input } => {
+                if *finished {
+                    None
+                } else {
+                    *finished = true;
+                    // TODO explain plan should really be proper AST,
+                    // that can be serialized to string and deserialized.
+                    Some(RecordBatch::new(vec![(
+                        "plan".to_string(),
+                        Array::String(StringArray::from(vec![input.to_string().as_str()])),
+                    )]))
+                }
             }
         }
     }

@@ -39,6 +39,7 @@ impl Converter {
             ResolvedCreateDatabaseStmtNode(q) => self.create_database(q),
             ResolvedSingleAssignmentStmtNode(q) => self.assign(q),
             ResolvedCallStmtNode(q) => self.call(q),
+            ResolvedExplainStmtNode(q) => self.explain(q),
             other => panic!("{:?}", other),
         }
     }
@@ -785,6 +786,12 @@ impl Converter {
         LogicalCall {
             procedure,
             input: Box::new(input),
+        }
+    }
+
+    fn explain(&mut self, q: &ResolvedExplainStmtProto) -> Expr {
+        LogicalExplain {
+            input: Box::new(self.any_stmt(q.statement.get())),
         }
     }
 

@@ -394,6 +394,7 @@ impl<'a> Optimizer<'a> {
             | LogicalDrop { .. }
             | LogicalAssign { .. }
             | LogicalCall { .. }
+            | LogicalExplain { .. }
             | LogicalRewrite { .. } => {}
             Leaf { .. }
             | TableFreeScan { .. }
@@ -415,7 +416,8 @@ impl<'a> Optimizer<'a> {
             | Delete { .. }
             | Script { .. }
             | Assign { .. }
-            | Call { .. } => panic!("{} is a physical operator", mexpr.expr.name()),
+            | Call { .. }
+            | Explain { .. } => panic!("{} is a physical operator", mexpr.expr.name()),
         };
         LogicalProps {
             cardinality,

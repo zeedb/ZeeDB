@@ -152,6 +152,9 @@ pub enum Expr {
         procedure: Procedure,
         input: Box<Expr>,
     },
+    LogicalExplain {
+        input: Box<Expr>,
+    },
     LogicalRewrite {
         sql: String,
     },
@@ -255,6 +258,9 @@ pub enum Expr {
         procedure: Procedure,
         input: Box<Expr>,
     },
+    Explain {
+        input: Box<Expr>,
+    },
 }
 
 impl Expr {
@@ -285,7 +291,8 @@ impl Expr {
             | Expr::LogicalRewrite { .. }
             | Expr::LogicalScript { .. }
             | Expr::LogicalAssign { .. }
-            | Expr::LogicalCall { .. } => true,
+            | Expr::LogicalCall { .. }
+            | Expr::LogicalExplain { .. } => true,
             Expr::Leaf { .. }
             | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
@@ -306,7 +313,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
-            | Expr::Call { .. } => false,
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => false,
         }
     }
 
@@ -345,6 +353,7 @@ impl Expr {
             | Expr::LogicalScript { .. }
             | Expr::LogicalAssign { .. }
             | Expr::LogicalCall { .. }
+            | Expr::LogicalExplain { .. }
             | Expr::LogicalRewrite { .. } => false,
             Expr::TableFreeScan
             | Expr::SeqScan { .. }
@@ -365,7 +374,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
-            | Expr::Call { .. } => panic!("{} is a physical operator", self.name()),
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => panic!("{} is a physical operator", self.name()),
         }
     }
 
@@ -403,7 +413,9 @@ impl Expr {
             | Expr::LogicalAssign { .. }
             | Expr::Assign { .. }
             | Expr::LogicalCall { .. }
-            | Expr::Call { .. } => 1,
+            | Expr::Call { .. }
+            | Expr::LogicalExplain { .. }
+            | Expr::Explain { .. } => 1,
             Expr::Leaf { .. }
             | Expr::LogicalSingleGet
             | Expr::LogicalGet { .. }
@@ -710,6 +722,12 @@ impl Expr {
                 procedure,
                 input: Box::new(visitor(*input)),
             },
+            Expr::LogicalExplain { input } => Expr::LogicalExplain {
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Explain { input } => Expr::Explain {
+                input: Box::new(visitor(*input)),
+            },
             Expr::Leaf { .. }
             | Expr::LogicalSingleGet { .. }
             | Expr::LogicalGet { .. }
@@ -807,6 +825,7 @@ impl Expr {
                 procedure: map_procedure(procedure),
                 input,
             },
+            Expr::LogicalExplain { input } => Expr::LogicalExplain { input },
             Expr::LogicalOut { .. }
             | Expr::LogicalWith { .. }
             | Expr::LogicalCreateTempTable { .. }
@@ -844,7 +863,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
-            | Expr::Call { .. } => panic!(
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => panic!(
                 "map_scalar is not implemented for physical operator {}",
                 expr.name()
             ),
@@ -909,7 +929,8 @@ impl Expr {
                 ..
             }
             | Expr::LogicalAssign { input, .. }
-            | Expr::LogicalCall { input, .. } => input.attributes(),
+            | Expr::LogicalCall { input, .. }
+            | Expr::LogicalExplain { input, .. } => input.attributes(),
             Expr::LogicalJoin {
                 join: Join::Mark(mark, _),
                 right,
@@ -992,7 +1013,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
-            | Expr::Call { .. } => panic!(
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => panic!(
                 "attributes is not implemented for physical operator {}",
                 &self.name()
             ),
@@ -1070,7 +1092,8 @@ impl Expr {
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. }
             | Expr::LogicalScript { .. }
-            | Expr::LogicalRewrite { .. } => {}
+            | Expr::LogicalRewrite { .. }
+            | Expr::LogicalExplain { .. } => {}
             Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
@@ -1090,7 +1113,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
-            | Expr::Call { .. } => unimplemented!(
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => unimplemented!(
                 "free is not implemented for physical operator {}",
                 self.name()
             ),
@@ -1215,6 +1239,9 @@ impl Expr {
                 procedure,
                 input: Box::new(input.subst(map)),
             },
+            Expr::LogicalExplain { input } => Expr::LogicalExplain {
+                input: Box::new(input.subst(map)),
+            },
             Expr::LogicalOut { projects, input } => Expr::LogicalOut {
                 projects: projects.iter().map(subst_c).collect(),
                 input: Box::new(input.subst(map)),
@@ -1265,7 +1292,8 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::Script { .. }
             | Expr::Assign { .. }
-            | Expr::Call { .. } => panic!(
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => panic!(
                 "subst is not implemented for physical operator {}",
                 self.name()
             ),
@@ -1318,7 +1346,9 @@ impl ops::Index<usize> for Expr {
             | Expr::LogicalAssign { input, .. }
             | Expr::Assign { input, .. }
             | Expr::LogicalCall { input, .. }
-            | Expr::Call { input, .. } => match index {
+            | Expr::Call { input, .. }
+            | Expr::LogicalExplain { input, .. }
+            | Expr::Explain { input, .. } => match index {
                 0 => input,
                 _ => panic!("{} is out of bounds [0,1)", index),
             },

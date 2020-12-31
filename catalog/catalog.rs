@@ -80,10 +80,12 @@ pub fn supported_statement_kinds() -> Vec<i32> {
         ResolvedNodeKind::ResolvedCallStmt as i32,
         ResolvedNodeKind::ResolvedAggregateHavingModifier as i32,
         ResolvedNodeKind::ResolvedSingleAssignmentStmt as i32,
+        ResolvedNodeKind::ResolvedExplainStmt as i32,
     ]
 }
 
 pub fn enabled_functions() -> Vec<i32> {
+    // TODO shrink down to things that are actually supported.
     vec![
         FunctionSignatureId::FnAddDouble as i32,
         FunctionSignatureId::FnAddInt64 as i32,
