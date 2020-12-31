@@ -1,6 +1,6 @@
 use std::{fmt::Debug, ops::Range};
 
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct Bitmask {
     values: Vec<u8>,
     len: usize,

@@ -2,19 +2,19 @@ use crate::{any_array::*, bitmask::*, bool_array::*, string_array::*};
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct I32Array {
     values: Vec<i32>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct I64Array {
     values: Vec<i64>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct U64Array {
     values: Vec<u64>,
     is_valid: Bitmask,
@@ -26,13 +26,13 @@ pub struct F64Array {
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct DateArray {
     values: Vec<i32>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TimestampArray {
     values: Vec<i64>,
     is_valid: Bitmask,
@@ -483,4 +483,25 @@ impl TimestampArray {
             StringArray
         )
     }
+}
+
+// Float equals.
+
+impl Eq for F64Array {}
+impl PartialEq for F64Array {
+    fn eq(&self, other: &Self) -> bool {
+        self.is_valid == other.is_valid && float_equals(&self.values, &other.values)
+    }
+}
+
+fn float_equals(left: &Vec<f64>, right: &Vec<f64>) -> bool {
+    if left.len() != right.len() {
+        return false;
+    }
+    for i in 0..left.len() {
+        if left[i] != right[i] {
+            return false;
+        }
+    }
+    true
 }

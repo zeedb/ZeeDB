@@ -3,7 +3,7 @@ use regex::Regex;
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct StringArray {
     buffer: String,
     offsets: Vec<i32>,
@@ -146,7 +146,25 @@ impl StringArray {
     }
 
     pub fn scatter(&self, indexes: &I32Array, into: &mut Self) {
-        todo!()
+        assert_eq!(self.len(), indexes.len());
+
+        let mut invert = vec![None].repeat(into.len());
+        for i in 0..self.len() {
+            if let Some(j) = indexes.get(i) {
+                invert[j as usize] = Some(i);
+            }
+        }
+
+        let mut builder = Self::with_capacity(into.len());
+        for i in 0..invert.len() {
+            if let Some(j) = invert[i] {
+                builder.push(self.get(j));
+            } else {
+                builder.push(None);
+            }
+        }
+
+        *into = builder
     }
 
     pub fn transpose(&self, stride: usize) -> Self {

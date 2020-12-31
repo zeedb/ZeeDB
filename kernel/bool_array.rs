@@ -2,7 +2,7 @@ use crate::{any_array::*, bitmask::*, primitive_array::*, string_array::*};
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BoolArray {
     values: Bitmask,
     is_valid: Bitmask,
