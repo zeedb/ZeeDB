@@ -30,7 +30,6 @@ pub enum Rule {
     LogicalInsertToInsert,
     LogicalValuesToValues,
     LogicalDeleteToDelete,
-    LogicalDropToDrop,
     LogicalAssignToAssign,
     LogicalCallToCall,
     LogicalExplainToExplain,
@@ -58,7 +57,6 @@ impl Rule {
             | Rule::LogicalInsertToInsert
             | Rule::LogicalValuesToValues
             | Rule::LogicalDeleteToDelete
-            | Rule::LogicalDropToDrop
             | Rule::LogicalAssignToAssign
             | Rule::LogicalScriptToScript => true,
             _ => false,
@@ -104,7 +102,6 @@ impl Rule {
             | (Rule::LogicalInsertToInsert, LogicalInsert { .. })
             | (Rule::LogicalValuesToValues, LogicalValues { .. })
             | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
-            | (Rule::LogicalDropToDrop, LogicalDrop { .. })
             | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
             | (Rule::LogicalCallToCall, LogicalCall { .. })
             | (Rule::LogicalExplainToExplain, LogicalExplain { .. })
@@ -488,11 +485,6 @@ impl Rule {
                     return Some(Delete { table, tid, input });
                 }
             }
-            Rule::LogicalDropToDrop => {
-                if let LogicalDrop { .. } = bind {
-                    todo!()
-                }
-            }
             Rule::LogicalAssignToAssign => {
                 if let LogicalAssign {
                     variable,
@@ -548,7 +540,6 @@ impl Rule {
             Rule::LogicalInsertToInsert,
             Rule::LogicalValuesToValues,
             Rule::LogicalDeleteToDelete,
-            Rule::LogicalDropToDrop,
             Rule::LogicalAssignToAssign,
             Rule::LogicalCallToCall,
             Rule::LogicalExplainToExplain,

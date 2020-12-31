@@ -365,24 +365,9 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughWith => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalWith {
-                        name,
-                        columns,
-                        left: left_left,
-                        right: left_right,
-                    } = subquery.as_ref()
-                    {
-                        todo!()
+                if let LogicalDependentJoin { subquery, .. } = expr {
+                    if let LogicalWith { .. } = subquery.as_ref() {
+                        panic!("WITH is not supported in correlated subqueries")
                     }
                 }
             }
@@ -473,22 +458,9 @@ impl RewriteRule {
                 }
             }
             RewriteRule::PushDependentJoinThroughSort => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalSort {
-                        order_by,
-                        input: subquery,
-                    } = subquery.as_ref()
-                    {
-                        todo!()
+                if let LogicalDependentJoin { subquery, .. } = expr {
+                    if let LogicalSort { .. } = subquery.as_ref() {
+                        panic!("ORDER BY is not supported in correlated subqueries");
                     }
                 }
             }

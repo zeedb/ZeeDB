@@ -583,15 +583,6 @@ impl Converter {
     }
 
     fn insert(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
-        if q.insert_mode != Some(InsertMode::OrError as i32) {
-            todo!("alternative insert modes")
-        }
-        if q.assert_rows_modified.is_some() {
-            todo!("assert_rows_modified")
-        }
-        if q.insert_column_list.is_empty() {
-            todo!("nested insert")
-        }
         let table = Table::from(q.table_scan.get());
         if let Some(scan) = &q.query {
             LogicalInsert {
@@ -682,9 +673,6 @@ impl Converter {
     }
 
     fn update(&mut self, q: &ResolvedUpdateStmtProto) -> Expr {
-        if q.table_scan.is_none() {
-            todo!("nested updates")
-        }
         let table = Table::from(q.table_scan.get());
         let (mut input, tid) = self.table_scan_for_update(q.table_scan.get());
         if let Some(from) = &q.from_scan {
