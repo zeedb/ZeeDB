@@ -1,19 +1,22 @@
 # combine_consecutive_filters
-plan: select 1 from (select * from person where first_name like 'A%') where last_name like 'A%'
+ok: explain select 1 from (select * from person where first_name like 'A%') where last_name like 'A%'
+plan                                                                                                                                                                                                                                             
 Map $query.$col1:1
 	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like person.last_name "A%") (Like person.first_name "A%")
 		Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax
 			SeqScan person
 
 # index_scan
-plan: select store_id from customer where customer_id = 1
+ok: explain select store_id from customer where customer_id = 1
+plan                                                                                                                                                              
 Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 	Map* customer.customer_id customer.store_id $xmin $xmax
 		IndexScan customer(customer_id:1)
 			TableFreeScan
 
 # project_then_filter
-plan: select 1 from (select *, 1234 as random from customer) where customer_id < random and customer_id <> 0
+ok: explain select 1 from (select *, 1234 as random from customer) where customer_id < random and customer_id <> 0
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Map $query.$col1:1
 	Filter (Less customer.customer_id $subquery1.random)
 		Map $subquery1.random:1234 customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
@@ -22,7 +25,8 @@ Map $query.$col1:1
 					SeqScan customer
 
 # project_then_filter_twice
-plan: select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100
+ok: explain select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100
+plan                                                                                                                                                                                                                                            
 Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 	Map $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -30,7 +34,8 @@ Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 				SeqScan customer
 
 # pull_filter_through_aggregate
-plan: select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
+ok: explain select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
 Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
 		Partition* store_id
@@ -47,7 +52,8 @@ Map $query.$col2:$aggregate.$agg1 store.store_id
 					SeqScan store
 
 # push_filter_through_project
-plan: select * from (select *, customer_id + 1 from customer) where customer_id = 1
+ok: explain select * from (select *, customer_id + 1 from customer) where customer_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                               
 Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(Add customer.customer_id 1)
 	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 		Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax

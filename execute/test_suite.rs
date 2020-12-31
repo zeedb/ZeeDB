@@ -28,22 +28,6 @@ impl TestSuite {
         writeln!(&mut self.log, "# {}", &comment).unwrap();
     }
 
-    pub fn plan(&mut self, sql: &str) {
-        writeln!(
-            &mut self.log,
-            "plan: {}\n{}\n",
-            trim(&sql),
-            plan(&mut self.storage, &sql, self.txn)
-        )
-        .unwrap();
-        self.txn += 1;
-    }
-
-    pub fn plan_error(&mut self, sql: &str) {
-        // TODO need to actually get the error from the planner here.
-        plan(&mut self.storage, &sql, self.txn);
-    }
-
     pub fn ok(&mut self, sql: &str) {
         writeln!(
             &mut self.log,

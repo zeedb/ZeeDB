@@ -1,5 +1,6 @@
 # semi_join
-plan: select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
+ok: explain select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map $query.$col1:1
 	HashJoin Semi (Is person.person_id person_id)
 		Partition* person_id
@@ -15,7 +16,8 @@ Map $query.$col1:1
 					SeqScan person
 
 # anti_join
-plan: select 1 from person where not exists (select 1 from customer where customer.person_id = person.person_id)
+ok: explain select 1 from person where not exists (select 1 from customer where customer.person_id = person.person_id)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map $query.$col1:1
 	HashJoin Anti (Is person.person_id person_id)
 		Partition* person_id
@@ -31,7 +33,8 @@ Map $query.$col1:1
 					SeqScan person
 
 # single_join
-plan: select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
+ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Partition* person_id
@@ -56,14 +59,16 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 							SeqScan customer
 
 # remove_single_join
-plan: select (select 1) from customer
+ok: explain select (select 1) from customer
+plan                                                                                                           
 Map $query.$col1:1
 	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 		Map* $xmin $xmax
 			SeqScan customer
 
 # remove_single_join_column
-plan: select (select customer_id) from customer
+ok: explain select (select customer_id) from customer
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 Map $query.$col1:$expr_subquery.customer_id
 	HashJoin Single (Is customer.customer_id customer_id)
 		Partition* customer_id
@@ -78,7 +83,8 @@ Map $query.$col1:$expr_subquery.customer_id
 					SeqScan customer
 
 # nested_loop
-plan: select customer.customer_id, store.store_id from customer, store
+ok: explain select customer.customer_id, store.store_id from customer, store
+plan                                                                                                                                                                                                                                                                                      
 Map customer.customer_id store.store_id
 	NestedLoop Inner
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -89,7 +95,8 @@ Map customer.customer_id store.store_id
 				SeqScan customer
 
 # equi_join
-plan: select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id
+ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id
+plan                                                                                                                                                                                                                                                                                                                                                                                                                
 Map customer.customer_id store.store_id
 	HashJoin Inner (Equal customer.store_id store.store_id)
 		Partition* store.store_id
@@ -102,7 +109,8 @@ Map customer.customer_id store.store_id
 					SeqScan customer
 
 # equi_full_outer_join
-plan: select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id
+ok: explain select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id
+plan                                                                                                                                                                                                                                                                                                                                                                                                                
 Map customer.customer_id store.store_id
 	HashJoin Outer (Equal customer.store_id store.store_id)
 		Partition* customer.store_id
@@ -115,7 +123,8 @@ Map customer.customer_id store.store_id
 					SeqScan store
 
 # join_left_index_scan
-plan: select customer.customer_id, store.store_id from customer, store where customer.customer_id = 1
+ok: explain select customer.customer_id, store.store_id from customer, store where customer.customer_id = 1
+plan                                                                                                                                                                                                                                                                                            
 Map customer.customer_id store.store_id
 	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 		Map* customer.customer_id $xmin $xmax, ..
@@ -125,7 +134,8 @@ Map customer.customer_id store.store_id
 						SeqScan store
 
 # join_right_index_scan
-plan: select customer.customer_id, store.store_id from customer, store where store.store_id = 1
+ok: explain select customer.customer_id, store.store_id from customer, store where store.store_id = 1
+plan                                                                                                                                                                                                                                                                                                                       
 Map customer.customer_id store.store_id
 	NestedLoop Inner
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -137,7 +147,8 @@ Map customer.customer_id store.store_id
 				SeqScan customer
 
 # equi_join_left_index_scan
-plan: select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and customer.customer_id = 1
+ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and customer.customer_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                     
 Map customer.customer_id store.store_id
 	HashJoin Inner (Equal customer.store_id store.store_id)
 		Partition* store.store_id
@@ -151,7 +162,8 @@ Map customer.customer_id store.store_id
 						TableFreeScan
 
 # equi_join_right_index_scan
-plan: select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and store.store_id = 1
+ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and store.store_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map customer.customer_id store.store_id
 	HashJoin Inner (Equal customer.store_id store.store_id)
 		Partition* store.store_id
@@ -165,7 +177,8 @@ Map customer.customer_id store.store_id
 					SeqScan customer
 
 # left_equi_join_right_index_scan
-plan: select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id where store.store_id = 1
+ok: explain select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id where store.store_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 Map customer.customer_id store.store_id
 	Filter (Equal store.store_id 1)
 		HashJoin Right (Equal customer.store_id store.store_id)
@@ -179,7 +192,8 @@ Map customer.customer_id store.store_id
 						SeqScan customer
 
 # right_equi_join_right_index_scan
-plan: select customer.customer_id, store.store_id from customer right join store on customer.store_id = store.store_id where store.store_id = 1
+ok: explain select customer.customer_id, store.store_id from customer right join store on customer.store_id = store.store_id where store.store_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map customer.customer_id store.store_id
 	HashJoin Right (Equal customer.store_id store.store_id)
 		Partition* customer.store_id
@@ -193,7 +207,8 @@ Map customer.customer_id store.store_id
 						TableFreeScan
 
 # two_inner_joins
-plan: select * from person join customer using (person_id) join store using (store_id)
+ok: explain select * from person join customer using (person_id) join store using (store_id)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map customer.store_id person.person_id person.first_name person.last_name person.modified_date customer.customer_id customer.account_number customer.modified_date store.name store.modified_date
 	HashJoin Inner (Equal person.person_id customer.person_id)
 		Partition* customer.person_id
@@ -212,7 +227,8 @@ Map customer.store_id person.person_id person.first_name person.last_name person
 					SeqScan person
 
 # remove_inner_join
-plan: select *  from (select 1 as x) join (select 1 as y) on x = y
+ok: explain select *  from (select 1 as x) join (select 1 as y) on x = y
+plan                                                                                       
 Filter (Equal $subquery1.x $subquery2.y)
 	Map $subquery2.y:1 $subquery1.x:1
 		TableFreeScan

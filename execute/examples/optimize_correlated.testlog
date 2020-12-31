@@ -1,10 +1,12 @@
 # redundant_table_free_single_join
-plan: select (select 1)
+ok: explain select (select 1)
+plan                             
 Map $query.$col1:1
 	TableFreeScan
 
 # semi_join
-plan: select first_name from person where person_id in (select person_id from customer)
+ok: explain select first_name from person where person_id in (select person_id from customer)
+plan                                                                                                                                                                                                                                                                                                                                                                                                    
 Map person.first_name
 	HashJoin Semi (Equal person.person_id customer.person_id)
 		Partition* customer.person_id
@@ -17,7 +19,8 @@ Map person.first_name
 					SeqScan person
 
 # semi_join_or
-plan: select first_name from person where person_id in (select person_id from customer) or person_id = 1
+ok: explain select first_name from person where person_id in (select person_id from customer) or person_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 Map person.first_name
 	Filter (Or $in (Equal person.person_id 1))
 		HashJoin Mark $in (Equal person.person_id customer.person_id)
@@ -31,7 +34,8 @@ Map person.first_name
 						SeqScan person
 
 # equi_join_semi_join
-plan: select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)
+ok: explain select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 Map $query.$col1:1
 	HashJoin Semi (Equal customer.store_id store.store_id)
 		Partition* store.store_id
@@ -50,7 +54,8 @@ Map $query.$col1:1
 							SeqScan person
 
 # single_join_in_where_clause
-plan: select person_id from person where modified_date = (select max(modified_date) from person)
+ok: explain select person_id from person where modified_date = (select max(modified_date) from person)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Map person.person_id
 	Filter (Equal person.modified_date $aggregate.$agg1)
 		NestedLoop Single
@@ -64,21 +69,24 @@ Map person.person_id
 					SeqScan person
 
 # insert_table_free_single_join
-plan: insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', (select current_timestamp()))
+ok: explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', (select current_timestamp()))
+plan                                                                                                                                                                                                  
 Insert person
 	Values person.person_id person.first_name person.last_name person.modified_date [1 "Foo" "Bar" $expr_subquery.$col1]
 		Map $expr_subquery.$col1:(CurrentTimestamp), ..
 			TableFreeScan
 
 # insert_two_table_free_single_joins
-plan: insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))
+ok: explain insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))
+plan                                                                                                                                                                                                                    
 Insert person
 	Values person.person_id person.modified_date [1 $expr_subquery.$col1] [2 $expr_subquery.$col1]
 		Map $expr_subquery.$col1:(CurrentTimestamp) $expr_subquery.$col1:(CurrentTimestamp), ..
 			TableFreeScan
 
 # update_semi_join
-plan: update customer set account_number = 0 where person_id in (select person_id from person where first_name = 'Joe')
+ok: explain update customer set account_number = 0 where person_id in (select person_id from person where first_name = 'Joe')
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date $tid
@@ -93,7 +101,8 @@ Insert customer
 							SeqScan customer
 
 # delete_semi_join
-plan: delete person where person_id in (select person_id from customer)
+ok: explain delete person where person_id in (select person_id from customer)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Delete person
 	Map $in:true $tid $xmax $xmin person.person_id
 		HashJoin Semi (Equal person.person_id customer.person_id)
@@ -107,7 +116,8 @@ Delete person
 						SeqScan person
 
 # delete_semi_join_with_condition
-plan: delete customer where person_id in (select person_id from customer where account_number = 0)
+ok: explain delete customer where person_id in (select person_id from customer where account_number = 0)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Delete customer
 	Map $in:true $tid $xmax $xmin customer.person_id
 		HashJoin Semi (Equal customer.person_id customer.person_id)
@@ -121,7 +131,8 @@ Delete customer
 						SeqScan customer
 
 # single_equi_join
-plan: select (select name from store where store.store_id = customer.store_id) from customer
+ok: explain select (select name from store where store.store_id = customer.store_id) from customer
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Map $query.$col1:store.name
 	HashJoin Single (Is customer.store_id store_id)
 		Partition* store_id
@@ -137,7 +148,8 @@ Map $query.$col1:store.name
 					SeqScan customer
 
 # single_equi_join_group_by
-plan: select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store
+ok: explain select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 Map $query.customers:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
 		Partition* store_id
@@ -154,7 +166,8 @@ Map $query.customers:$aggregate.$agg1 store.store_id
 					SeqScan store
 
 # semi_join_with_condition
-plan: select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)
+ok: explain select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
 Map $query.$col1:1
 	HashJoin Semi (Is store.store_id store_id) (Equal person.person_id customer.person_id)
 		Partition* store_id customer.person_id
@@ -174,7 +187,8 @@ Map $query.$col1:1
 						SeqScan person
 
 # semi_join_anti_join
-plan: select 1 from customer where exists (select 1 from person where person.person_id = customer.person_id) and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
+ok: explain select 1 from customer where exists (select 1 from person where person.person_id = customer.person_id) and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Map $query.$col1:1
 	HashJoin Anti (Is customer.store_id store_id) (Is customer.modified_date modified_date)
 		Partition* store_id modified_date
@@ -214,7 +228,8 @@ Map $query.$col1:1
 								SeqScan customer
 
 # single_join_twice
-plan: select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer
+ok: explain select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Partition* person_id
@@ -239,7 +254,8 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 							SeqScan customer
 
 # single_join_twice_plus_condition
-plan: select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
+ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Partition* person_id
@@ -264,7 +280,8 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 							SeqScan customer
 
 # semi_join_to_group_by
-plan: select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
+ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Equal customer.customer_id $aggregate.$agg1)
 		Partition* store_id $aggregate.$agg1
@@ -282,7 +299,8 @@ Map $query.$col1:1
 					SeqScan customer
 
 # semi_join_to_group_by_correlated_column
-plan: select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)
+ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Is customer.account_number account_number) (Equal customer.customer_id $aggregate.$agg1)
 		Partition* store_id account_number $aggregate.$agg1
@@ -305,7 +323,8 @@ Map $query.$col1:1
 					SeqScan customer
 
 # semi_equi_join
-plan: select 1 from person where person_id in (select person_id from customer where person.modified_date = customer.modified_date)
+ok: explain select 1 from person where person_id in (select person_id from customer where person.modified_date = customer.modified_date)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 Map $query.$col1:1
 	HashJoin Semi (Is person.modified_date modified_date) (Equal person.person_id customer.person_id)
 		Partition* modified_date customer.person_id
@@ -321,7 +340,8 @@ Map $query.$col1:1
 					SeqScan person
 
 # single_join_with_condition
-plan: select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like 'A%') from store
+ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like 'A%') from store
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id) (Is store.name name)
 		Partition* store_id name
@@ -343,7 +363,8 @@ Map $query.$col1:$aggregate.$agg1
 					SeqScan store
 
 # single_join_with_condition_and_group_by
-plan: select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100) from store
+ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100) from store
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id)
 		Partition* store_id
@@ -360,7 +381,8 @@ Map $query.$col1:$aggregate.$agg1
 					SeqScan store
 
 # semi_join_in_where_clause
-plan: select customer_id from customer c1, store where c1.store_id = store.store_id and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
+ok: explain select customer_id from customer c1, store where c1.store_id = store.store_id and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 Map customer.customer_id
 	HashJoin Semi (Is customer.account_number account_number) (Equal customer.modified_date customer.modified_date)
 		Partition* account_number customer.modified_date
@@ -389,7 +411,8 @@ Map customer.customer_id
 							SeqScan customer
 
 # semi_self_join
-plan: select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
+ok: explain select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map customer.customer_id
 	HashJoin Semi (Is c1.prev_account_number prev_account_number) (Equal customer.person_id customer.person_id)
 		Partition* prev_account_number customer.person_id
@@ -406,7 +429,8 @@ Map customer.customer_id
 						SeqScan customer
 
 # semi_join_then_order_by
-plan: select first_name from person where person_id in (select person_id from customer) order by modified_date limit 10
+ok: explain select first_name from person where person_id in (select person_id from customer) order by modified_date limit 10
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Limit 10 0
 	Sort person.modified_date
 		Map $in:true $xmax $xmin person.first_name person.modified_date person.person_id
@@ -421,7 +445,8 @@ Limit 10 0
 							SeqScan person
 
 # update_set_table_free_single_join
-plan: update person set first_name = (select last_name) where person_id = 1
+ok: explain update person set first_name = (select last_name) where person_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 Insert person
 	Delete person
 		Map person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
@@ -440,7 +465,8 @@ Insert person
 								TableFreeScan
 
 # update_set_redundant_single_join
-plan: update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id
+ok: explain update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:$expr_subquery.person_id customer.modified_date $tid

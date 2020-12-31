@@ -1,15 +1,18 @@
 # combine_consecutive_projects
-plan: select a + 1 as b from (select 1 as a)
+ok: explain select a + 1 as b from (select 1 as a)
+plan                                 
 Map $query.b:(Add 1 1)
 	TableFreeScan
 
 # combine_consecutive_projects_star
-plan: select *, a + 1 as b from (select 1 as a)
+ok: explain select *, a + 1 as b from (select 1 as a)
+plan                                                
 Map $query.b:(Add 1 1) $subquery1.a:1
 	TableFreeScan
 
 # count_and_sum_distinct
-plan: select count(distinct account_number), sum(distinct account_number) from customer
+ok: explain select count(distinct account_number), sum(distinct account_number) from customer
+plan                                                                                                                                                                                                                                                          
 Aggregate $aggregate.$agg1:(Count $count) $aggregate.$agg2:(Sum $sum)
 	Map $count:customer.account_number $sum:customer.account_number
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -17,7 +20,8 @@ Aggregate $aggregate.$agg1:(Count $count) $aggregate.$agg2:(Sum $sum)
 				SeqScan customer
 
 # group_by
-plan: select store_id from customer group by 1
+ok: explain select store_id from customer group by 1
+plan                                                                                                                                                                                  
 Aggregate $groupby.store_id
 	Map $groupby.store_id:customer.store_id
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -25,7 +29,8 @@ Aggregate $groupby.store_id
 				SeqScan customer
 
 # avg
-plan: select avg(store_id) from customer
+ok: explain select avg(store_id) from customer
+plan                                                                                                                                                                                                                                                                                  
 Map $aggregate.$agg1:(Divide (Cast $avg$sum DOUBLE) (Cast $avg$count DOUBLE))
 	Aggregate $avg$sum:(Sum $avg) $avg$count:(Count $avg)
 		Map $avg:customer.store_id

@@ -1,18 +1,21 @@
 # delete
-plan: delete customer where person_id = 1
+ok: explain delete customer where person_id = 1
+plan                                                                                                                                                             
 Delete customer
 	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.person_id 1)
 		Map* customer.person_id $xmin $xmax $tid
 			SeqScan customer
 
 # insert_values
-plan: insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', current_timestamp())
+ok: explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', current_timestamp())
+plan                                                                                                                                             
 Insert person
 	Values person.person_id person.first_name person.last_name person.modified_date [1 "Foo" "Bar" (CurrentTimestamp)]
 		TableFreeScan
 
 # update_where
-plan: update person set first_name = 'Foo' where person_id = 1
+ok: explain update person set first_name = 'Foo' where person_id = 1
+plan                                                                                                                                                                                                                                                                                                                                    
 Insert person
 	Delete person
 		Map person.person_id person.first_name:"Foo" person.last_name person.modified_date $tid
@@ -22,7 +25,8 @@ Insert person
 						TableFreeScan
 
 # update_equi_join
-plan: update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
+ok: explain update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(Add customer.account_number 1) customer.modified_date $tid
