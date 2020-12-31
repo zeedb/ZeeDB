@@ -1,7 +1,4 @@
-use crate::any_array::*;
-use crate::bool_array::*;
-use crate::data_type::*;
-use crate::primitive_array::*;
+use crate::{any_array::*, bool_array::*, data_type::*, primitive_array::*};
 use std::{cmp::Ordering, fmt::Debug, ops::Range};
 
 #[derive(Clone)]

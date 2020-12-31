@@ -1,7 +1,9 @@
 use ast::{AggregateFn, Column, Value};
 use kernel::*;
-use std::collections::HashMap;
-use std::hash::{Hash, Hasher};
+use std::{
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 pub struct GroupByAggregate {
     group_by_batches: Vec<Batch>,

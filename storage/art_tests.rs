@@ -1,6 +1,5 @@
 use crate::art::*;
-use rand::Rng;
-use rand::SeedableRng;
+use rand::{Rng, SeedableRng};
 
 #[test]
 fn set() {

@@ -1,9 +1,5 @@
-use crate::any_array::*;
-use crate::bitmask::*;
-use crate::bool_array::*;
-use crate::string_array::*;
-use std::cmp::Ordering;
-use std::ops::Range;
+use crate::{any_array::*, bitmask::*, bool_array::*, string_array::*};
+use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
 
 #[derive(Debug, Clone)]

@@ -1,7 +1,4 @@
-use crate::any_array::*;
-use crate::bitmask::*;
-use crate::primitive_array::*;
-use crate::string_array::*;
+use crate::{any_array::*, bitmask::*, primitive_array::*, string_array::*};
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
 

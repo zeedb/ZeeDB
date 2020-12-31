@@ -1,7 +1,8 @@
-use crate::art::Art;
-use crate::heap::*;
-use std::fmt;
-use std::sync::atomic::{AtomicI64, Ordering};
+use crate::{art::Art, heap::*};
+use std::{
+    fmt,
+    sync::atomic::{AtomicI64, Ordering},
+};
 
 pub struct Storage {
     tables: Vec<Heap>,

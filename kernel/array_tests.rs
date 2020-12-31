@@ -1,6 +1,4 @@
-use crate::bool_array::*;
-use crate::primitive_array::*;
-use crate::string_array::*;
+use crate::{bool_array::*, primitive_array::*, string_array::*};
 
 #[test]
 fn test_conflict() {

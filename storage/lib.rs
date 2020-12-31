@@ -21,6 +21,5 @@ mod storage;
 pub use art::Art;
 pub use byte_key::*;
 pub use heap::Heap;
-pub use page::Page;
-pub use page::PAGE_SIZE;
+pub use page::{Page, PAGE_SIZE};
 pub use storage::Storage;

@@ -1,7 +1,9 @@
 use kernel::*;
 use regex::Regex;
-use std::sync::atomic::*;
-use std::{fmt, sync::Arc};
+use std::{
+    fmt,
+    sync::{atomic::*, Arc},
+};
 
 pub const PAGE_SIZE: usize = 1024;
 

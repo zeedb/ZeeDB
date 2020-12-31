@@ -1,6 +1,4 @@
-use crate::bitmask::*;
-use crate::bool_array::*;
-use crate::primitive_array::*;
+use crate::{bitmask::*, bool_array::*, primitive_array::*};
 use regex::Regex;
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;

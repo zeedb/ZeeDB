@@ -1,9 +1,9 @@
-use crate::cost::*;
-use crate::rule::*;
+use crate::{cost::*, rule::*};
 use ast::*;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::ops;
+use std::{
+    collections::{HashMap, HashSet},
+    fmt, ops,
+};
 
 // SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
 pub struct SearchSpace {

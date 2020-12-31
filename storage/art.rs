@@ -1,6 +1,8 @@
-use std::cmp::Ordering;
-use std::fmt;
-use std::ops::{Bound, RangeBounds};
+use std::{
+    cmp::Ordering,
+    fmt,
+    ops::{Bound, RangeBounds},
+};
 
 #[derive(Clone)]
 pub struct Art {

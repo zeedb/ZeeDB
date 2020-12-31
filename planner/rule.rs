@@ -1,8 +1,10 @@
 use crate::search_space::*;
 use ast::*;
 use catalog::Index;
-use std::collections::{HashMap, HashSet};
-use std::ops::Deref;
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub enum Rule {

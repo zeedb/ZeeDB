@@ -1,6 +1,7 @@
-use std::fs;
-use std::io;
-use std::io::{Read, Write};
+use std::{
+    fs, io,
+    io::{Read, Write},
+};
 
 pub fn read_expected(path: &str) -> io::Result<String> {
     let mut file = fs::File::open(path)?;

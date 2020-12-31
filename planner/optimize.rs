@@ -1,11 +1,10 @@
-use crate::cost::*;
-use crate::rewrite::rewrite;
-use crate::rule::*;
-use crate::search_space::*;
+use crate::{cost::*, rewrite::rewrite, rule::*, search_space::*};
 use ast::*;
 use catalog::Index;
-use std::collections::{HashMap, HashSet};
-use std::ops::Deref;
+use std::{
+    collections::{HashMap, HashSet},
+    ops::Deref,
+};
 use storage::Storage;
 use zetasql::SimpleCatalogProto;
 

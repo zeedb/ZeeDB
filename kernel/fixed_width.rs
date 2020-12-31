@@ -1,6 +1,4 @@
-use crate::any_array::*;
-use crate::dates::*;
-use crate::record_batch::*;
+use crate::{any_array::*, dates::*, record_batch::*};
 
 pub fn fixed_width(batches: &Vec<RecordBatch>) -> String {
     let header: Vec<Vec<String>> = batches[0]

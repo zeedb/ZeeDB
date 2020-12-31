@@ -1,18 +1,13 @@
 use ast::*;
 use kernel::*;
-use std::borrow::Borrow;
-use std::collections::HashMap;
-use zetasql::any_resolved_aggregate_scan_base_proto::Node::*;
-use zetasql::any_resolved_create_statement_proto::Node::*;
-use zetasql::any_resolved_create_table_stmt_base_proto::Node::*;
-use zetasql::any_resolved_expr_proto::Node::*;
-use zetasql::any_resolved_function_call_base_proto::Node::*;
-use zetasql::any_resolved_non_scalar_function_call_base_proto::Node::*;
-use zetasql::any_resolved_scan_proto::Node::*;
-use zetasql::any_resolved_statement_proto::Node::*;
-use zetasql::resolved_insert_stmt_enums::*;
-use zetasql::value_proto::Value::*;
-use zetasql::*;
+use std::{borrow::Borrow, collections::HashMap};
+use zetasql::{
+    any_resolved_aggregate_scan_base_proto::Node::*, any_resolved_create_statement_proto::Node::*,
+    any_resolved_create_table_stmt_base_proto::Node::*, any_resolved_expr_proto::Node::*,
+    any_resolved_function_call_base_proto::Node::*,
+    any_resolved_non_scalar_function_call_base_proto::Node::*, any_resolved_scan_proto::Node::*,
+    any_resolved_statement_proto::Node::*, resolved_insert_stmt_enums::*, value_proto::Value::*, *,
+};
 
 pub fn convert(catalog_id: i64, q: &AnyResolvedStatementProto) -> Expr {
     Converter {

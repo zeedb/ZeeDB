@@ -1,12 +1,13 @@
-use crate::column::Column;
-use crate::values::*;
+use crate::{column::Column, values::*};
 use catalog::Index;
 use kernel::*;
-use std::cmp::Ordering;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::hash::Hash;
-use std::ops;
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt,
+    hash::Hash,
+    ops,
+};
 
 // Expr plan nodes combine inputs in a Plan tree.
 #[derive(Clone, Eq, PartialEq, Hash)]

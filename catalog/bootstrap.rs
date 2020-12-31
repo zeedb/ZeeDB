@@ -1,7 +1,6 @@
 use crate::catalog::*;
 use kernel::*;
-use zetasql::function_enums::*;
-use zetasql::*;
+use zetasql::{function_enums::*, *};
 
 pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
     vec![(

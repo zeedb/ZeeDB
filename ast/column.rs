@@ -1,5 +1,11 @@
 use kernel::DataType;
-use std::{cmp::Ordering, fmt, fmt::Debug, fmt::Display, hash::Hash, sync::Arc};
+use std::{
+    cmp::Ordering,
+    fmt,
+    fmt::{Debug, Display},
+    hash::Hash,
+    sync::Arc,
+};
 
 #[derive(Clone)]
 pub struct Column {

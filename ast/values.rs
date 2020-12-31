@@ -1,7 +1,6 @@
 use chrono::*;
 use kernel::*;
-use std::fmt;
-use std::hash;
+use std::{fmt, hash};
 
 #[derive(Debug, Clone)]
 pub enum Value {

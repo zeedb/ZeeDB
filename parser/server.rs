@@ -1,6 +1,5 @@
 use once_cell::sync::Lazy;
-use std::process::Command;
-use std::sync::Mutex;
+use std::{process::Command, sync::Mutex};
 use tokio::runtime::Runtime;
 use tonic::transport::channel::Channel;
 use zetasql::zeta_sql_local_service_client::ZetaSqlLocalServiceClient;

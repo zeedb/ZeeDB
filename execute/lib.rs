@@ -15,6 +15,8 @@ mod optimize_tests;
 #[cfg(test)]
 mod test_suite;
 
-pub use crate::adventure_works::adventure_works;
-pub use crate::catalog::{catalog, indexes};
-pub use crate::execute::{compile, Execute, Program};
+pub use crate::{
+    adventure_works::adventure_works,
+    catalog::{catalog, indexes},
+    execute::{compile, Execute, Program},
+};

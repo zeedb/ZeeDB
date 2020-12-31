@@ -1,5 +1,4 @@
-use crate::column::Column;
-use crate::expr::*;
+use crate::{column::Column, expr::*};
 use catalog::Index;
 use std::fmt::{Debug, Display, Formatter};
 

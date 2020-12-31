@@ -14,11 +14,7 @@ mod primitive_array;
 mod record_batch;
 mod string_array;
 
-pub use crate::any_array::*;
-pub use crate::bitmask::*;
-pub use crate::bool_array::*;
-pub use crate::data_type::*;
-pub use crate::fixed_width::*;
-pub use crate::primitive_array::*;
-pub use crate::record_batch::*;
-pub use crate::string_array::*;
+pub use crate::{
+    any_array::*, bitmask::*, bool_array::*, data_type::*, fixed_width::*, primitive_array::*,
+    record_batch::*, string_array::*,
+};
