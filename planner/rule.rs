@@ -60,10 +60,6 @@ impl Rule {
         }
     }
 
-    pub fn promise(&self) -> isize {
-        todo!("promise")
-    }
-
     // Quickly check if rule matches expression *without* exploring the inputs to the expression.
     pub fn matches_fast(&self, mexpr: &MultiExpr) -> bool {
         match (self, &mexpr.expr) {

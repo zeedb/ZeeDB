@@ -20,8 +20,6 @@ pub enum Expr {
     // LogicalGet { table } implements the FROM clause.
     LogicalGet {
         projects: Vec<Column>,
-        // TODO pushing predicates into scan operators is probably not worth it,
-        // because there is no benefit to actually implementing predicate pushdown in the execution layer.
         predicates: Vec<Scalar>,
         table: Table,
     },
@@ -162,16 +160,12 @@ pub enum Expr {
     TableFreeScan,
     SeqScan {
         projects: Vec<Column>,
-        // TODO pushing predicates into scan operators is probably not worth it,
-        // because there is no benefit to actually implementing predicate pushdown in the execution layer.
         predicates: Vec<Scalar>,
         table: Table,
     },
     IndexScan {
         include_existing: bool,
         projects: Vec<Column>,
-        // TODO pushing predicates into scan operators is probably not worth it,
-        // because there is no benefit to actually implementing predicate pushdown in the execution layer.
         predicates: Vec<Scalar>,
         lookup: Vec<Scalar>,
         index: Index,

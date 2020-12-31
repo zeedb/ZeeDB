@@ -1,0 +1,12 @@
+ok: select not(f) from (select false as f)
+$col1
+true 
+
+ok: select t and f from (select true as t, false as f)
+$col1
+false
+
+ok: select t or f from (select true as t, false as f)
+$col1
+true 
+
