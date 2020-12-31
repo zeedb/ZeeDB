@@ -1,4 +1,5 @@
 use ast::*;
+use chrono::{NaiveDate, TimeZone, Utc};
 use std::collections::{HashMap, HashSet};
 use zetasql::SimpleCatalogProto;
 
@@ -1228,12 +1229,28 @@ fn apply_all(before: Expr, rules: &Vec<RewriteRule>) -> Expr {
 
 pub fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
     let expr = rewrite_ddl(expr);
+    let expr = rewrite_scalars(expr);
     let expr = general_unnest(expr);
     let expr = predicate_push_down(expr);
     let expr = optimize_join_type(expr);
     let expr = projection_push_down(expr);
     let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
     expr
+}
+
+fn rewrite_scalars(expr: Expr) -> Expr {
+    expr.map_scalar(|scalar| {
+        scalar.bottom_up_rewrite(&|scalar| match scalar {
+            Scalar::Call(function) => match *function {
+                Function::CurrentDate => Scalar::Literal(Value::Date(Some(current_date()))),
+                Function::CurrentTimestamp => {
+                    Scalar::Literal(Value::Timestamp(Some(current_timestamp())))
+                }
+                other => Scalar::Call(Box::new(other)),
+            },
+            other => other,
+        })
+    })
 }
 
 fn rewrite_ddl(expr: Expr) -> Expr {
@@ -1311,3 +1328,17 @@ fn projection_push_down(expr: Expr) -> Expr {
         )
     })
 }
+
+fn current_timestamp() -> i64 {
+    let ts = Utc::now();
+    ts.timestamp() * MICROSECONDS + ts.timestamp_subsec_micros() as i64
+}
+
+fn current_date() -> i32 {
+    let d = Utc::today();
+    let epoch = Utc.from_utc_date(&NaiveDate::from_ymd(1970, 1, 1));
+    (d - epoch).num_days() as i32
+}
+
+/// Number of microseconds in a second
+const MICROSECONDS: i64 = 1_000_000;

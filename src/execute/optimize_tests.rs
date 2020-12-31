@@ -180,7 +180,7 @@ fn test_filter() {
     t.plan("select store_id from customer where customer_id = 1");
     t.comment("project_then_filter");
     t.plan(
-        "select 1 from (select *, rand() as random from customer) where customer_id < random and customer_id <> 0",
+        "select 1 from (select *, 1234 as random from customer) where customer_id < random and customer_id <> 0",
     );
     t.comment("project_then_filter_twice");
     t.plan(

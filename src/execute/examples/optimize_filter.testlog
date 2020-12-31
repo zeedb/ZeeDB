@@ -13,10 +13,10 @@ Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 			TableFreeScan
 
 # project_then_filter
-plan: select 1 from (select *, rand() as random from customer) where customer_id < random and customer_id <> 0
+plan: select 1 from (select *, 1234 as random from customer) where customer_id < random and customer_id <> 0
 Map $query.$col1:1
-	Filter (Less (Cast customer.customer_id DOUBLE) $subquery1.random)
-		Map $subquery1.random:(Rand) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+	Filter (Less customer.customer_id $subquery1.random)
+		Map $subquery1.random:1234 customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (NotEqual customer.customer_id 0)
 				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
 					SeqScan customer

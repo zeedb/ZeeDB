@@ -242,9 +242,7 @@ pub fn enabled_functions() -> Vec<i32> {
         // Non-deterministic functions
         FunctionSignatureId::FnCurrentDate as i32,
         FunctionSignatureId::FnCurrentTimestamp as i32,
-        FunctionSignatureId::FnRand as i32,
         // Aggregate functions
-        // TODO these are still not implemented in compiler
         FunctionSignatureId::FnCountStar as i32,
         FunctionSignatureId::FnAnyValue as i32,
         FunctionSignatureId::FnArrayAgg as i32,

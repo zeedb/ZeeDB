@@ -517,7 +517,6 @@ fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> 
             Function::Like(_, _) => 0.5,
             Function::CurrentDate
             | Function::CurrentTimestamp
-            | Function::Rand
             | Function::UnaryMinus(_, _)
             | Function::Add(_, _, _)
             | Function::Divide(_, _, _)

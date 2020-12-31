@@ -724,6 +724,133 @@ impl Expr {
         }
     }
 
+    pub fn map_scalar<F: Fn(Scalar) -> Scalar>(self, visitor: F) -> Expr {
+        let map_predicates = |mut predicates: Vec<Scalar>| -> Vec<Scalar> {
+            predicates.drain(..).map(|scalar| visitor(scalar)).collect()
+        };
+        let map_projects = |mut projects: Vec<(Scalar, Column)>| -> Vec<(Scalar, Column)> {
+            projects
+                .drain(..)
+                .map(|(scalar, column)| (visitor(scalar), column))
+                .collect()
+        };
+        let map_join = |join: Join| -> Join {
+            match join {
+                Join::Inner(predicates) => Join::Inner(map_predicates(predicates)),
+                Join::Right(predicates) => Join::Right(map_predicates(predicates)),
+                Join::Outer(predicates) => Join::Outer(map_predicates(predicates)),
+                Join::Semi(predicates) => Join::Semi(map_predicates(predicates)),
+                Join::Anti(predicates) => Join::Anti(map_predicates(predicates)),
+                Join::Single(predicates) => Join::Single(map_predicates(predicates)),
+                Join::Mark(column, predicates) => Join::Mark(column, map_predicates(predicates)),
+            }
+        };
+        let map_procedure = |procedure: Procedure| -> Procedure {
+            match procedure {
+                Procedure::CreateTable(argument) => Procedure::CreateTable(visitor(argument)),
+                Procedure::DropTable(argument) => Procedure::DropTable(visitor(argument)),
+                Procedure::CreateIndex(argument) => Procedure::CreateIndex(visitor(argument)),
+                Procedure::DropIndex(argument) => Procedure::DropIndex(visitor(argument)),
+            }
+        };
+        self.map(|expr| match expr {
+            Expr::Leaf { gid } => Expr::Leaf { gid },
+            Expr::LogicalSingleGet => Expr::LogicalSingleGet,
+            Expr::LogicalGet {
+                projects,
+                predicates,
+                table,
+            } => Expr::LogicalGet {
+                projects,
+                predicates: map_predicates(predicates),
+                table,
+            },
+            Expr::LogicalFilter { predicates, input } => Expr::LogicalFilter {
+                predicates: map_predicates(predicates),
+                input,
+            },
+            Expr::LogicalDependentJoin {
+                parameters,
+                predicates,
+                subquery,
+                domain,
+            } => Expr::LogicalDependentJoin {
+                parameters,
+                predicates: map_predicates(predicates),
+                subquery,
+                domain,
+            },
+            Expr::LogicalMap {
+                include_existing,
+                projects,
+                input,
+            } => Expr::LogicalMap {
+                include_existing,
+                projects: map_projects(projects),
+                input,
+            },
+            Expr::LogicalJoin { join, left, right } => Expr::LogicalJoin {
+                join: map_join(join),
+                left,
+                right,
+            },
+            Expr::LogicalAssign {
+                variable,
+                value,
+                input,
+            } => Expr::LogicalAssign {
+                variable,
+                value: visitor(value),
+                input,
+            },
+            Expr::LogicalCall { procedure, input } => Expr::LogicalCall {
+                procedure: map_procedure(procedure),
+                input,
+            },
+            Expr::LogicalOut { .. }
+            | Expr::LogicalWith { .. }
+            | Expr::LogicalCreateTempTable { .. }
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalAggregate { .. }
+            | Expr::LogicalLimit { .. }
+            | Expr::LogicalSort { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalValues { .. }
+            | Expr::LogicalUpdate { .. }
+            | Expr::LogicalDelete { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalRewrite { .. } => expr,
+            Expr::TableFreeScan
+            | Expr::SeqScan { .. }
+            | Expr::IndexScan { .. }
+            | Expr::Filter { .. }
+            | Expr::Out { .. }
+            | Expr::Map { .. }
+            | Expr::NestedLoop { .. }
+            | Expr::HashJoin { .. }
+            | Expr::CreateTempTable { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::Aggregate { .. }
+            | Expr::Limit { .. }
+            | Expr::Sort { .. }
+            | Expr::Union { .. }
+            | Expr::Insert { .. }
+            | Expr::Values { .. }
+            | Expr::Delete { .. }
+            | Expr::Script { .. }
+            | Expr::Assign { .. }
+            | Expr::Call { .. } => panic!(
+                "map_scalar is not implemented for physical operator {}",
+                expr.name()
+            ),
+        })
+    }
+
     pub fn bottom_up_rewrite(self, visitor: &mut impl FnMut(Expr) -> Expr) -> Expr {
         let operator = self.map(|child| child.bottom_up_rewrite(visitor));
         visitor(operator)
@@ -1395,6 +1522,19 @@ impl Scalar {
         }
     }
 
+    pub fn map(self, visitor: impl Fn(Scalar) -> Scalar) -> Self {
+        match self {
+            Scalar::Call(function) => Scalar::Call(Box::new(function.map(visitor))),
+            Scalar::Cast(scalar, data_type) => Scalar::Cast(Box::new(visitor(*scalar)), data_type),
+            other => other,
+        }
+    }
+
+    pub fn bottom_up_rewrite(self, visitor: &impl Fn(Scalar) -> Scalar) -> Self {
+        let scalar = self.map(|child| child.bottom_up_rewrite(visitor));
+        visitor(scalar)
+    }
+
     pub fn subst(self, map: &HashMap<Column, Column>) -> Self {
         match self {
             Scalar::Column(c) if map.contains_key(&c) => Scalar::Column(map[&c].clone()),
@@ -1428,7 +1568,6 @@ impl Scalar {
 pub enum Function {
     CurrentDate,
     CurrentTimestamp,
-    Rand,
     // Unary logical functions.
     IsNull(Scalar),
     Not(Scalar),
@@ -1479,7 +1618,6 @@ impl Function {
             0 => match name {
                 "ZetaSQL:current_date" => Function::CurrentDate,
                 "ZetaSQL:current_timestamp" => Function::CurrentTimestamp,
-                "ZetaSQL:rand" => Function::Rand,
                 other => panic!("{} is not a no-arg function", other),
             },
             1 => {
@@ -1578,6 +1716,7 @@ impl Function {
         // "ZetaSQL:ltrim" => Function::Ltrim,
         // "ZetaSQL:mod" => Function::Mod,
         // "ZetaSQL:pow" => Function::Pow,
+        // "ZetaSQL:rand" => Function::Rand,
         // "ZetaSQL:regexp_contains" => Function::RegexpContains,
         // "ZetaSQL:regexp_extract" => Function::RegexpExtract,
         // "ZetaSQL:regexp_extract_all" => Function::RegexpExtractAll,
@@ -1624,7 +1763,6 @@ impl Function {
         match self {
             Function::CurrentDate => "CurrentDate",
             Function::CurrentTimestamp => "CurrentTimestamp",
-            Function::Rand => "Rand",
             Function::IsNull(_) => "IsNull",
             Function::Not(_) => "Not",
             Function::UnaryMinus(_, _) => "UnaryMinus",
@@ -1651,9 +1789,7 @@ impl Function {
 
     pub fn arguments(&self) -> Vec<&Scalar> {
         match self {
-            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
-                vec![]
-            }
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Xid => vec![],
             Function::IsNull(argument)
             | Function::Not(argument)
             | Function::UnaryMinus(argument, _)
@@ -1681,7 +1817,6 @@ impl Function {
         match self {
             Function::CurrentDate => DataType::Date,
             Function::CurrentTimestamp => DataType::Timestamp,
-            Function::Rand => DataType::F64,
             Function::IsNull(_)
             | Function::Not(_)
             | Function::And(_, _)
@@ -1708,9 +1843,7 @@ impl Function {
 
     pub fn map(self, f: impl Fn(Scalar) -> Scalar) -> Self {
         match self {
-            Function::CurrentDate | Function::CurrentTimestamp | Function::Rand | Function::Xid => {
-                self
-            }
+            Function::CurrentDate | Function::CurrentTimestamp | Function::Xid => self,
             Function::IsNull(argument) => Function::IsNull(f(argument)),
             Function::Not(argument) => Function::Not(f(argument)),
             Function::And(left, right) => Function::And(f(left), f(right)),

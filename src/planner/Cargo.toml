@@ -11,6 +11,8 @@ path = "lib.rs"
 regex = "1.4.2"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
+chrono = { version = "0.4.11" }
+rand = "0.7.3"
 encoding = { path = "../encoding" }
 parser = { path = "../parser" }
 storage = { path = "../storage" }

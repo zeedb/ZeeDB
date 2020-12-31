@@ -8,12 +8,10 @@ fn test_literals() {
 }
 
 #[test]
-#[ignore]
 fn test_nondeterministic_functions() {
     let mut t = TestSuite::new(None);
-    t.ok("select current_date()");
-    t.ok("select current_timestamp()");
-    t.ok("select rand()");
+    t.ok("select current_date() < date '2020-12-30'");
+    t.ok("select current_timestamp() < timestamp '2020-12-30'");
     t.finish("examples/execute_nondeterministic_functions.testlog");
 }
 

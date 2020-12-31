@@ -1,0 +1,8 @@
+ok: select current_date() < date '2020-12-30'
+$col1
+false
+
+ok: select current_timestamp() < timestamp '2020-12-30'
+$col1
+false
+

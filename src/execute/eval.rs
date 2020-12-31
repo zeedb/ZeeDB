@@ -23,9 +23,9 @@ pub fn eval(scalar: &Scalar, input: &RecordBatch, state: &mut Session) -> Array 
             value.repeat(input.len())
         }
         Scalar::Call(function) => match function.as_ref() {
-            Function::CurrentDate => todo!(),
-            Function::CurrentTimestamp => todo!(),
-            Function::Rand => todo!(),
+            Function::CurrentDate | Function::CurrentTimestamp => panic!(
+                "Non-deterministic functions should have been eliminated in the rewrite phase"
+            ),
             Function::IsNull(argument) => Array::Bool(eval(argument, input, state).is_null()),
             Function::Not(argument) => {
                 Array::Bool(eval(argument, input, state).as_bool().unwrap().not())
