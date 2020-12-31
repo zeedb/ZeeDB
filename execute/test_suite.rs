@@ -10,9 +10,9 @@ pub struct TestSuite {
 }
 
 impl TestSuite {
-    pub fn new(persistent_storage: Option<Storage>) -> Self {
+    pub fn new(storage: Storage) -> Self {
         Self {
-            storage: persistent_storage.unwrap_or(Storage::new()),
+            storage,
             txn: 100,
             log: "".to_string(),
         }
