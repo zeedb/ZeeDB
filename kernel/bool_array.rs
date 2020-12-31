@@ -197,7 +197,7 @@ impl BoolArray {
         I32Array::from(indexes)
     }
 
-    pub fn select(&self, if_true: &Array, if_false: &Array) -> Array {
+    pub fn blend(&self, if_true: &Array, if_false: &Array) -> Array {
         match (if_true, if_false) {
             (Array::Bool(if_true), Array::Bool(if_false)) => {
                 let mut builder = BoolArray::with_capacity(self.len());

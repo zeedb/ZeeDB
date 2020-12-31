@@ -143,7 +143,7 @@ pub fn eval(scalar: &Scalar, input: &RecordBatch, state: &mut Session) -> Array 
                 let test = test.as_bool().unwrap();
                 let if_true = eval(if_true, input, state);
                 let if_false = eval(if_false, input, state);
-                test.select(&if_true, &if_false)
+                test.blend(&if_true, &if_false)
             }
             Function::NextVal(sequence) => {
                 let input = eval(sequence, input, state);
