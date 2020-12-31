@@ -303,94 +303,63 @@ impl RewriteRule {
                         match join {
                             Join::Inner(_) => {
                                 if free_parameters(parameters, left_subquery).is_empty() {
-                                    return Some(LogicalJoin {
-                                        join: join.clone(),
-                                        left: left_subquery.clone(),
-                                        right: Box::new(LogicalDependentJoin {
-                                            parameters: parameters.clone(),
-                                            predicates: vec![],
-                                            subquery: right_subquery.clone(),
-                                            domain: domain.clone(),
-                                        }),
-                                    });
+                                    return Some(push_right(
+                                        parameters,
+                                        join,
+                                        left_subquery,
+                                        right_subquery,
+                                        domain,
+                                    ));
                                 } else if free_parameters(parameters, right_subquery).is_empty() {
-                                    return Some(LogicalJoin {
-                                        join: join.clone(),
-                                        left: Box::new(LogicalDependentJoin {
-                                            parameters: parameters.clone(),
-                                            predicates: vec![],
-                                            subquery: left_subquery.clone(),
-                                            domain: domain.clone(),
-                                        }),
-                                        right: right_subquery.clone(),
-                                    });
+                                    return Some(push_left(
+                                        parameters,
+                                        join,
+                                        left_subquery,
+                                        right_subquery,
+                                        domain,
+                                    ));
                                 } else {
-                                    // Substitute fresh column names for the left side subquery.
-                                    let left_parameters: Vec<_> =
-                                        parameters.iter().map(Column::fresh).collect();
-                                    let left_parameters_map: HashMap<_, _> = (0..parameters.len())
-                                        .map(|i| {
-                                            (parameters[i].clone(), left_parameters[i].clone())
-                                        })
-                                        .collect();
-                                    let left_subquery =
-                                        left_subquery.clone().subst(&left_parameters_map);
-                                    let left_domain = domain.clone().subst(&left_parameters_map);
-                                    // Add natural-join on domain to the top join predicates.
-                                    let mut inner_join_predicates = join.predicates().clone();
-                                    for i in 0..parameters.len() {
-                                        inner_join_predicates.push(Scalar::Call(Box::new(
-                                            Function::Is(
-                                                Scalar::Column(left_parameters[i].clone()),
-                                                Scalar::Column(parameters[i].clone()),
-                                            ),
-                                        )));
-                                    }
-                                    // Push the rewritten dependent join down the left side, and the original dependent join down the right side.
-                                    return Some(LogicalJoin {
-                                        join: Join::Inner(inner_join_predicates),
-                                        left: Box::new(LogicalDependentJoin {
-                                            parameters: left_parameters,
-                                            predicates: vec![],
-                                            subquery: Box::new(left_subquery),
-                                            domain: Box::new(left_domain),
-                                        }),
-                                        right: Box::new(LogicalDependentJoin {
-                                            parameters: parameters.clone(),
-                                            predicates: vec![],
-                                            subquery: right_subquery.clone(),
-                                            domain: domain.clone(),
-                                        }),
-                                    });
+                                    return Some(push_both(
+                                        parameters,
+                                        join,
+                                        left_subquery,
+                                        right_subquery,
+                                        domain,
+                                    ));
                                 }
                             }
-                            Join::Right(predicates) => {
-                                // is left_subquery the right one?
+                            Join::Right(_)
+                            | Join::Semi(_)
+                            | Join::Anti(_)
+                            | Join::Single(_)
+                            | Join::Mark(_, _) => {
                                 if free_parameters(parameters, left_subquery).is_empty() {
-                                    todo!()
+                                    return Some(push_right(
+                                        parameters,
+                                        join,
+                                        left_subquery,
+                                        right_subquery,
+                                        domain,
+                                    ));
                                 } else {
-                                    todo!()
+                                    return Some(push_both(
+                                        parameters,
+                                        join,
+                                        left_subquery,
+                                        right_subquery,
+                                        domain,
+                                    ));
                                 }
                             }
-                            Join::Outer(predicates) => todo!(),
-                            Join::Semi(predicates) => {
-                                // is left_subquery the right one?
-                                if free_parameters(parameters, left_subquery).is_empty() {
-                                    todo!()
-                                } else {
-                                    todo!()
-                                }
+                            Join::Outer(_) => {
+                                return Some(push_both(
+                                    parameters,
+                                    join,
+                                    left_subquery,
+                                    right_subquery,
+                                    domain,
+                                ));
                             }
-                            Join::Anti(predicates) => {
-                                // is left_subquery the right one?
-                                if free_parameters(parameters, left_subquery).is_empty() {
-                                    todo!()
-                                } else {
-                                    todo!()
-                                }
-                            }
-                            Join::Single(predicates) => todo!(),
-                            Join::Mark(_, predicates) => todo!(),
                         }
                     }
                 }
@@ -678,6 +647,12 @@ impl RewriteRule {
                     assert!(!parameters.is_empty());
                     // Check if predicates contains subquery.a = domain.b for every b in domain.
                     let subquery_scope = subquery.attributes();
+                    // TODO this checks for predicates that have been pushed down into the dependent join.
+                    // The actual rules is more general: anytime there is a condition a=b higher in the tree,
+                    // it implies an equivalence class a~b, which means we can replace
+                    //   LogicalJoin [a] subquery domain
+                    // with
+                    //   Map a:b subquery
                     let match_equals = |x: &Scalar| {
                         if let Scalar::Call(function) = x {
                             if let Function::Equal(Scalar::Column(left), Scalar::Column(right)) =
@@ -1015,6 +990,93 @@ impl RewriteRule {
     }
 }
 
+fn push_right(
+    parameters: &Vec<Column>,
+    join: &Join,
+    left_subquery: &Box<Expr>,
+    right_subquery: &Box<Expr>,
+    domain: &Box<Expr>,
+) -> Expr {
+    LogicalJoin {
+        join: join.clone(),
+        left: left_subquery.clone(),
+        right: Box::new(LogicalDependentJoin {
+            parameters: parameters.clone(),
+            predicates: vec![],
+            subquery: right_subquery.clone(),
+            domain: domain.clone(),
+        }),
+    }
+}
+
+fn push_left(
+    parameters: &Vec<Column>,
+    join: &Join,
+    left_subquery: &Box<Expr>,
+    right_subquery: &Box<Expr>,
+    domain: &Box<Expr>,
+) -> Expr {
+    LogicalJoin {
+        join: join.clone(),
+        left: Box::new(LogicalDependentJoin {
+            parameters: parameters.clone(),
+            predicates: vec![],
+            subquery: left_subquery.clone(),
+            domain: domain.clone(),
+        }),
+        right: right_subquery.clone(),
+    }
+}
+
+fn push_both(
+    parameters: &Vec<Column>,
+    join: &Join,
+    left_subquery: &Box<Expr>,
+    right_subquery: &Box<Expr>,
+    domain: &Box<Expr>,
+) -> Expr {
+    // Substitute fresh column names for the left side subquery.
+    let left_parameters: Vec<_> = parameters.iter().map(Column::fresh).collect();
+    let left_parameters_map: HashMap<_, _> = (0..parameters.len())
+        .map(|i| (parameters[i].clone(), left_parameters[i].clone()))
+        .collect();
+    let left_subquery = left_subquery.clone().subst(&left_parameters_map);
+    let left_domain = domain.clone().subst(&left_parameters_map);
+    // Add natural-join on domain to the top join predicates.
+    let mut join_predicates = join.predicates().clone();
+    for i in 0..parameters.len() {
+        join_predicates.push(Scalar::Call(Box::new(Function::Is(
+            Scalar::Column(left_parameters[i].clone()),
+            Scalar::Column(parameters[i].clone()),
+        ))));
+    }
+    let join = match join {
+        Join::Inner(_) => Join::Inner(join_predicates),
+        Join::Right(_) => Join::Right(join_predicates),
+        Join::Outer(_) => Join::Outer(join_predicates),
+        Join::Semi(_) => Join::Semi(join_predicates),
+        Join::Anti(_) => Join::Anti(join_predicates),
+        Join::Single(_) => Join::Single(join_predicates),
+        Join::Mark(column, _) => Join::Mark(column.clone(), join_predicates),
+    };
+    // Push the rewritten dependent join down the left side, and the original dependent join down the right side.
+    LogicalJoin {
+        join,
+        left: Box::new(LogicalDependentJoin {
+            parameters: left_parameters,
+            predicates: vec![],
+            subquery: Box::new(left_subquery),
+            domain: Box::new(left_domain),
+        }),
+        right: Box::new(LogicalDependentJoin {
+            parameters: parameters.clone(),
+            predicates: vec![],
+            subquery: right_subquery.clone(),
+            domain: domain.clone(),
+        }),
+    }
+}
+
 fn any_value(attributes: HashSet<Column>) -> Vec<(AggregateFn, Column, Column)> {
     let mut attributes: Vec<_> = attributes
         .iter()
@@ -1230,8 +1292,9 @@ fn apply_all(before: Expr, rules: &Vec<RewriteRule>) -> Expr {
 pub fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
     let expr = rewrite_ddl(expr);
     let expr = rewrite_scalars(expr);
-    let expr = general_unnest(expr);
+    let expr = push_dependent_joins(expr);
     let expr = predicate_push_down(expr);
+    let expr = remove_dependent_joins(expr);
     let expr = optimize_join_type(expr);
     let expr = projection_push_down(expr);
     let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
@@ -1269,8 +1332,12 @@ fn rewrite_ddl(expr: Expr) -> Expr {
 }
 
 // Unnest all dependent joins, and simplify joins where possible.
-fn general_unnest(expr: Expr) -> Expr {
+fn push_dependent_joins(expr: Expr) -> Expr {
     expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
+}
+
+fn remove_dependent_joins(expr: Expr) -> Expr {
+    expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::RemoveDependentJoin]))
 }
 
 fn rewrite_logical_rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
@@ -1293,7 +1360,6 @@ fn optimize_join_type(expr: Expr) -> Expr {
                 RewriteRule::RemoveInnerJoin,
                 RewriteRule::RemoveWith,
                 RewriteRule::RemoveTableFreeScan,
-                RewriteRule::RemoveDependentJoin,
             ],
         )
     })

@@ -380,6 +380,19 @@ fn test_correlated_subquery() {
 }
 
 #[test]
+fn test_subquery_join() {
+    let mut t = TestSuite::new(None);
+    t.setup("create table integers (i int64);");
+    t.setup("insert into integers values (1), (2), (3), (null);");
+    t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 join integers i2 using (i)) from integers i3 order by i");
+    t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 left join integers i2 using (i)) from integers i3 order by i");
+    t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 right join integers i2 using (i)) from integers i3 order by i");
+    t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 full outer join integers i2 using (i)) from integers i3 order by i");
+    t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 full outer join (select * from integers where i = i3.i + 1) i2 using (i)) from integers i3 order by i");
+    t.finish("examples/execute_subquery_join.testlog");
+}
+
+#[test]
 fn test_explain() {
     let mut t = TestSuite::new(None);
     t.ok("explain select 1");
