@@ -1,8 +1,8 @@
 # combine_consecutive_filters
 ok: explain select 1 from (select * from person where first_name like 'A%') where last_name like 'A%'
-plan                                                                                                                                                                                                                                             
+plan                                                                                                                                                                                                                                                         
 Map $query.$col1:1
-	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like person.last_name "A%") (Like person.first_name "A%")
+	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike person.last_name "A%") (StringLike person.first_name "A%")
 		Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax
 			SeqScan person
 
@@ -26,9 +26,9 @@ Map $query.$col1:1
 
 # project_then_filter_twice
 ok: explain select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100
-plan                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                  
 Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
-	Map $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
+	Map $subquery2.id:(DivideDouble (Cast customer.customer_id DOUBLE) 2)
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 			Map* customer.customer_id $xmin $xmax
 				SeqScan customer
@@ -53,8 +53,8 @@ Map $query.$col2:$aggregate.$agg1 store.store_id
 
 # push_filter_through_project
 ok: explain select * from (select *, customer_id + 1 from customer) where customer_id = 1
-plan                                                                                                                                                                                                                                                                                                                                                                                               
-Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(Add customer.customer_id 1)
+plan                                                                                                                                                                                                                                                                                                                                                                                                    
+Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(AddInt64 customer.customer_id 1)
 	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 		Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
 			IndexScan customer(customer_id:1)

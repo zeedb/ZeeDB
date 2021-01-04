@@ -10,6 +10,7 @@ pub enum Value {
     Date(Option<i32>),
     Timestamp(Option<i64>),
     String(Option<String>),
+    EnumValue(i32),
 }
 
 impl Value {
@@ -40,13 +41,14 @@ impl Value {
             Value::Bool(value) => Array::Bool(BoolArray::from(vec![*value].repeat(len))),
             Value::I64(value) => Array::I64(I64Array::from(vec![*value].repeat(len))),
             Value::F64(value) => Array::F64(F64Array::from(vec![*value].repeat(len))),
-            Value::String(value) => Array::String(StringArray::from(
-                vec![value.as_ref().map(|s| s.as_str())].repeat(len),
-            )),
+            Value::Date(value) => Array::Date(DateArray::from(vec![*value].repeat(len))),
             Value::Timestamp(value) => {
                 Array::Timestamp(TimestampArray::from(vec![*value].repeat(len)))
             }
-            Value::Date(value) => Array::Date(DateArray::from(vec![*value].repeat(len))),
+            Value::String(value) => Array::String(StringArray::from(
+                vec![value.as_ref().map(|s| s.as_str())].repeat(len),
+            )),
+            Value::EnumValue(_) => panic!("Enum values have no array representation"),
         }
     }
 
@@ -58,6 +60,7 @@ impl Value {
             Value::Date(_) => DataType::Date,
             Value::Timestamp(_) => DataType::Timestamp,
             Value::String(_) => DataType::String,
+            Value::EnumValue(_) => panic!("Enum values have no array representation"),
         }
     }
 }
@@ -86,9 +89,9 @@ impl fmt::Display for Value {
                     write!(f, "null")
                 }
             }
-            Value::String(value) => {
+            Value::Date(value) => {
                 if let Some(value) = value {
-                    write!(f, "{:?}", value)
+                    write!(f, "{}", date_value(*value))
                 } else {
                     write!(f, "null")
                 }
@@ -100,13 +103,14 @@ impl fmt::Display for Value {
                     write!(f, "null")
                 }
             }
-            Value::Date(value) => {
+            Value::String(value) => {
                 if let Some(value) = value {
-                    write!(f, "{}", date_value(*value))
+                    write!(f, "{:?}", value)
                 } else {
                     write!(f, "null")
                 }
             }
+            Value::EnumValue(value) => write!(f, "{}", value),
         }
     }
 }
@@ -119,9 +123,9 @@ impl PartialEq for Value {
             (Value::Bool(left), Value::Bool(right)) => *left == *right,
             (Value::I64(left), Value::I64(right)) => *left == *right,
             (Value::F64(left), Value::F64(right)) => *left == *right,
-            (Value::String(left), Value::String(right)) => *left == *right,
-            (Value::Timestamp(left), Value::Timestamp(right)) => *left == *right,
             (Value::Date(left), Value::Date(right)) => *left == *right,
+            (Value::Timestamp(left), Value::Timestamp(right)) => *left == *right,
+            (Value::String(left), Value::String(right)) => *left == *right,
             (_, _) => false,
         }
     }
@@ -136,9 +140,10 @@ impl hash::Hash for Value {
                     value.to_ne_bytes().hash(state)
                 }
             }
-            Value::String(value) => value.hash(state),
-            Value::Timestamp(value) => value.hash(state),
             Value::Date(value) => value.hash(state),
+            Value::Timestamp(value) => value.hash(state),
+            Value::String(value) => value.hash(state),
+            Value::EnumValue(value) => value.hash(state),
         }
     }
 }

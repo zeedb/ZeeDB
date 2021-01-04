@@ -85,12 +85,12 @@ impl Converter {
         let xmin = Column::computed("$xmin", DataType::I64);
         let xmax = Column::computed("$xmax", DataType::I64);
         let predicates = vec![
-            Scalar::Call(Box::new(Function::LessOrEqual(
+            Scalar::Call(Box::new(F::LessOrEqual(
                 Scalar::Column(xmin.clone()),
-                Scalar::Call(Box::new(Function::Xid)),
+                Scalar::Call(Box::new(F::Xid)),
             ))),
-            Scalar::Call(Box::new(Function::Less(
-                Scalar::Call(Box::new(Function::Xid)),
+            Scalar::Call(Box::new(F::Less(
+                Scalar::Call(Box::new(F::Xid)),
                 Scalar::Column(xmax.clone()),
             ))),
         ];
@@ -116,12 +116,12 @@ impl Converter {
         let xmax = Column::computed("$xmax", DataType::I64);
         let tid = Column::computed("$tid", DataType::I64);
         let predicates = vec![
-            Scalar::Call(Box::new(Function::LessOrEqual(
+            Scalar::Call(Box::new(F::LessOrEqual(
                 Scalar::Column(xmin.clone()),
-                Scalar::Call(Box::new(Function::Xid)),
+                Scalar::Call(Box::new(F::Xid)),
             ))),
-            Scalar::Call(Box::new(Function::Less(
-                Scalar::Call(Box::new(Function::Xid)),
+            Scalar::Call(Box::new(F::Less(
+                Scalar::Call(Box::new(F::Xid)),
                 Scalar::Column(xmax.clone()),
             ))),
         ];
@@ -455,10 +455,9 @@ impl Converter {
                     input_column.clone(),
                     count_column.clone(),
                 ));
-                let avg_expr = Scalar::Call(Box::new(Function::Divide(
+                let avg_expr = Scalar::Call(Box::new(F::DivideDouble(
                     Scalar::Cast(Box::new(Scalar::Column(sum_column)), DataType::F64),
                     Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::F64),
-                    DataType::F64,
                 )));
                 let avg_column = self.column(aggregate.column.get());
                 output_projects.push((avg_expr, avg_column));
@@ -822,7 +821,7 @@ impl Converter {
                     })),
             } => {
                 let arguments = self.exprs(argument_list, outer);
-                Scalar::Call(Box::new(Function::from(function, signature, arguments)))
+                Scalar::Call(Box::new(F::from(function, signature, arguments)))
             }
             other => panic!("{:?}", other),
         }
@@ -884,7 +883,7 @@ impl Converter {
                     other => panic!("{:?}", other),
                 };
                 let check = self.single_column(x.subquery.get());
-                let join_filter = vec![Scalar::Call(Box::new(Function::Equal(find, check)))];
+                let join_filter = vec![Scalar::Call(Box::new(F::Equal(find, check)))];
                 let join = Join::Mark(mark.clone(), join_filter);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
@@ -973,7 +972,7 @@ impl Converter {
         //    +         +
         let mut join_predicates: Vec<Scalar> = (0..subquery_parameters.len())
             .map(|i| {
-                Scalar::Call(Box::new(Function::Is(
+                Scalar::Call(Box::new(F::Is(
                     Scalar::Column(subquery_parameters[i].clone()),
                     Scalar::Column(rename_subquery_parameters[i].clone()),
                 )))
@@ -1064,9 +1063,10 @@ fn literal(value: &ValueProto, data_type: &TypeProto) -> Value {
         Int64Value(x) => Value::I64(Some(*x)),
         BoolValue(x) => Value::Bool(Some(*x)),
         DoubleValue(x) => Value::F64(Some(*x)),
-        StringValue(x) => Value::String(Some(x.clone())),
         DateValue(x) => Value::Date(Some(*x)),
         TimestampValue(x) => Value::Timestamp(Some(microseconds_since_epoch(x))),
+        StringValue(x) => Value::String(Some(x.clone())),
+        EnumValue(i) => Value::EnumValue(*i),
         other => panic!("{:?}", other),
     }
 }

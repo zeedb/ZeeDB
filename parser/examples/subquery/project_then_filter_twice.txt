@@ -5,7 +5,7 @@ LogicalMap $subquery2.id
 	LogicalFilter (Less $subquery2.id 100)
 		LogicalMap $subquery2.id
 			LogicalFilter (Greater $subquery2.id 10)
-				LogicalMap $subquery2.id:(Divide (Cast customer.customer_id DOUBLE) 2)
+				LogicalMap $subquery2.id:(DivideDouble (Cast customer.customer_id DOUBLE) 2)
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* customer.customer_id $xmin $xmax
 							LogicalGet customer

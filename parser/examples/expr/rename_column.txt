@@ -1,7 +1,7 @@
 select a + 1 
 from (select customer_id as a from customer)
 
-LogicalMap $query.$col1:(Add customer.customer_id 1)
+LogicalMap $query.$col1:(AddInt64 customer.customer_id 1)
 	LogicalMap customer.customer_id
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 			Map* customer.customer_id $xmin $xmax

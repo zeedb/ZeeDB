@@ -1,4 +1,4 @@
-use crate::{bitmask::*, bool_array::*, primitive_array::*};
+use crate::{bitmask::*, bool_array::*, primitive_array::*, Array};
 use regex::Regex;
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
@@ -54,6 +54,27 @@ impl StringArray {
         let mut builder = Self::with_capacity(arrays.iter().map(|a| a.len()).sum());
         for array in arrays {
             builder.extend(&array);
+        }
+        builder
+    }
+
+    pub fn concat(arrays: Vec<Self>) -> Self {
+        for rest in &arrays[1..] {
+            assert_eq!(arrays[0].len(), rest.len());
+        }
+        let mut builder = Self::with_capacity(arrays.iter().map(|a| a.len()).sum());
+        for i in 0..arrays[0].len() {
+            let mut valid = true;
+            for j in 0..arrays.len() {
+                if let Some(next) = arrays[j].get(i) {
+                    // TODO this can push junk data.
+                    builder.buffer.push_str(next);
+                } else {
+                    valid = false;
+                }
+            }
+            builder.is_valid.push(valid);
+            builder.offsets.push(builder.buffer.len() as i32);
         }
         builder
     }
@@ -224,10 +245,6 @@ impl StringArray {
         array_comparison_operator!(self, other, left, right, left >= right)
     }
 
-    pub fn like(&self, other: &Self) -> BoolArray {
-        array_comparison_operator!(self, other, left, right, like(right).is_match(left))
-    }
-
     // Scalar comparison operators.
 
     pub fn is_scalar(&self, other: Option<&str>) -> BoolArray {
@@ -258,21 +275,6 @@ impl StringArray {
         scalar_comparison_operator!(self, other, left, right, left >= right)
     }
 
-    pub fn like_scalar(&self, pattern: Option<&str>) -> BoolArray {
-        if let Some(pattern) = pattern.map(like) {
-            let mut builder = BoolArray::with_capacity(self.len());
-            for i in 0..self.len() {
-                builder.push(match self.get(i) {
-                    Some(value) => Some(pattern.is_match(value)),
-                    None => None,
-                })
-            }
-            builder
-        } else {
-            BoolArray::nulls(self.len())
-        }
-    }
-
     pub fn is_null(&self) -> BoolArray {
         let mut builder = BoolArray::with_capacity(self.len());
         for i in 0..self.len() {
@@ -290,6 +292,20 @@ impl StringArray {
                 (Some(left), _) => builder.push(Some(left)),
                 (_, Some(right)) => builder.push(Some(right)),
                 (None, None) => builder.push(None),
+            }
+        }
+        builder
+    }
+
+    pub fn null_if(&self, other: &Self) -> Self {
+        assert_eq!(self.len(), other.len());
+
+        let mut builder = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            match (self.get(i), other.get(i)) {
+                (Some(left), Some(right)) if left == right => builder.push(None),
+                (Some(left), _) => builder.push(Some(left)),
+                (_, _) => builder.push(None),
             }
         }
         builder
@@ -341,7 +357,13 @@ impl StringArray {
             TimestampArray
         )
     }
+
+    pub fn as_array(self) -> Array {
+        Array::String(self)
+    }
 }
+
+// operator_support!(StringArray, String, &str);
 
 impl From<Vec<&str>> for StringArray {
     fn from(values: Vec<&str>) -> Self {
@@ -360,44 +382,5 @@ impl From<Vec<Option<&str>>> for StringArray {
             into.push(value);
         }
         into
-    }
-}
-
-fn like(pattern: &str) -> Regex {
-    let mut re = "^".to_string();
-    let mut i = 0;
-    let chars: Vec<_> = pattern.chars().collect();
-    while i < chars.len() {
-        match chars[i] {
-            '\\' => {
-                if i + 1 >= chars.len() {
-                    panic!("LIKE pattern ends with backslash");
-                }
-                if is_meta_character(chars[i + 1]) {
-                    re.push('\\');
-                }
-                re.push(chars[i + 1]);
-                i += 1;
-            }
-            '_' => re.push('.'),
-            '%' => re.push_str(".*"),
-            c => {
-                if is_meta_character(c) {
-                    re.push('\\');
-                }
-                re.push(c);
-            }
-        }
-        i += 1;
-    }
-    re.push('$');
-    Regex::new(&re).unwrap()
-}
-
-fn is_meta_character(c: char) -> bool {
-    match c {
-        '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{' | '}' | '^' | '$'
-        | '#' | '&' | '-' | '~' => true,
-        _ => false,
     }
 }

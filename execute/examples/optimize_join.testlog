@@ -34,7 +34,7 @@ Map $query.$col1:1
 
 # single_join
 ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Partition* person_id
@@ -50,7 +50,7 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 					Map store.name customer_id
 						Filter (Not (IsNull store.store_id))
 							Map customer_id:store.store_id, ..
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like store.name "A%")
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike store.name "A%")
 									Map* store.store_id store.name $xmin $xmax
 										SeqScan store
 				Partition* customer.customer_id

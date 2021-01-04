@@ -197,7 +197,77 @@ impl BoolArray {
         I32Array::from(indexes)
     }
 
-    pub fn blend(&self, if_true: &Array, if_false: &Array) -> Array {
+    pub fn blend(&self, if_true: &Array, if_false_or_null: &Array) -> Array {
+        match (if_true, if_false_or_null) {
+            (Array::Bool(if_true), Array::Bool(if_false)) => {
+                let mut builder = BoolArray::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match self.get(i) {
+                        Some(true) => builder.push(if_true.get(i)),
+                        _ => builder.push(if_false.get(i)),
+                    }
+                }
+                Array::Bool(builder)
+            }
+            (Array::I64(if_true), Array::I64(if_false)) => {
+                let mut builder = I64Array::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match self.get(i) {
+                        Some(true) => builder.push(if_true.get(i)),
+                        _ => builder.push(if_false.get(i)),
+                    }
+                }
+                Array::I64(builder)
+            }
+            (Array::F64(if_true), Array::F64(if_false)) => {
+                let mut builder = F64Array::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match self.get(i) {
+                        Some(true) => builder.push(if_true.get(i)),
+                        _ => builder.push(if_false.get(i)),
+                    }
+                }
+                Array::F64(builder)
+            }
+            (Array::Date(if_true), Array::Date(if_false)) => {
+                let mut builder = DateArray::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match self.get(i) {
+                        Some(true) => builder.push(if_true.get(i)),
+                        _ => builder.push(if_false.get(i)),
+                    }
+                }
+                Array::Date(builder)
+            }
+            (Array::Timestamp(if_true), Array::Timestamp(if_false)) => {
+                let mut builder = TimestampArray::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match self.get(i) {
+                        Some(true) => builder.push(if_true.get(i)),
+                        _ => builder.push(if_false.get(i)),
+                    }
+                }
+                Array::Timestamp(builder)
+            }
+            (Array::String(if_true), Array::String(if_false)) => {
+                let mut builder = StringArray::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match self.get(i) {
+                        Some(true) => builder.push(if_true.get(i)),
+                        _ => builder.push(if_false.get(i)),
+                    }
+                }
+                Array::String(builder)
+            }
+            (if_true, if_false) => panic!(
+                "{} does not match {}",
+                if_true.data_type(),
+                if_false.data_type()
+            ),
+        }
+    }
+
+    pub fn blend_or_null(&self, if_true: &Array, if_false: &Array) -> Array {
         match (if_true, if_false) {
             (Array::Bool(if_true), Array::Bool(if_false)) => {
                 let mut builder = BoolArray::with_capacity(self.len());
@@ -359,6 +429,20 @@ impl BoolArray {
         builder
     }
 
+    pub fn null_if(&self, other: &Self) -> Self {
+        assert_eq!(self.len(), other.len());
+
+        let mut builder = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            match (self.get(i), other.get(i)) {
+                (Some(left), Some(right)) if left == right => builder.push(None),
+                (Some(left), _) => builder.push(Some(left)),
+                (_, _) => builder.push(None),
+            }
+        }
+        builder
+    }
+
     // Logical operators.
 
     pub fn not(&self) -> Self {
@@ -376,6 +460,7 @@ impl BoolArray {
         for i in 0..self.len() {
             result.push(match (self.get(i), other.get(i)) {
                 (Some(true), _) | (_, Some(true)) => Some(true),
+                (Some(false), Some(false)) => Some(false),
                 (_, _) => None,
             });
         }
@@ -462,7 +547,13 @@ impl BoolArray {
             StringArray
         )
     }
+
+    pub fn as_array(self) -> Array {
+        Array::Bool(self)
+    }
 }
+
+// operator_support!(BoolArray, Bool, bool);
 
 impl From<Vec<bool>> for BoolArray {
     fn from(values: Vec<bool>) -> Self {

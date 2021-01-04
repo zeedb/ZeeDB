@@ -1010,7 +1010,7 @@ impl Node {
                 let input = input.next(state)?;
                 match procedure {
                     Procedure::CreateTable(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64().unwrap();
+                        let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.storage.create_table(id);
@@ -1018,7 +1018,7 @@ impl Node {
                         }
                     }
                     Procedure::DropTable(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64().unwrap();
+                        let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.storage.drop_table(id);
@@ -1026,7 +1026,7 @@ impl Node {
                         }
                     }
                     Procedure::CreateIndex(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64().unwrap();
+                        let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.storage.create_index(id);
@@ -1034,7 +1034,7 @@ impl Node {
                         }
                     }
                     Procedure::DropIndex(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64().unwrap();
+                        let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.storage.drop_index(id);

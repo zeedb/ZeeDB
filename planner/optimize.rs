@@ -456,7 +456,7 @@ fn is_equi_predicate(
 ) -> bool {
     match p {
         Scalar::Call(f) => match f.as_ref() {
-            Function::Equal(left, right) | Function::Is(left, right) => {
+            F::Equal(left, right) | F::Is(left, right) => {
                 let left_references = left.references();
                 let right_references = right.references();
                 (is_subset(&left_references, left_scope)
@@ -483,60 +483,7 @@ fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -
 }
 
 fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> f64 {
-    match predicate {
-        Scalar::Literal(value) => match value {
-            Value::Bool(Some(true)) => 1.0,
-            Value::Bool(_) => 0.0,
-            _ => panic!("{} is not a bool", value),
-        },
-        Scalar::Column(_) => 0.5,
-        Scalar::Parameter(_, _) => 0.5,
-        Scalar::Call(function) => match function.deref() {
-            Function::Not(argument) => predicate_selectivity(argument, scope),
-            Function::Is(left, right) | Function::Equal(left, right) => {
-                // Note that equi-joins are handled separately as a special case.
-                let left = scalar_unique_cardinality(left, scope) as f64;
-                let right = scalar_unique_cardinality(right, scope) as f64;
-                1.0 / left.min(right).max(1.0)
-            }
-            Function::And(left, right) => {
-                let left = predicate_selectivity(left, scope);
-                let right = predicate_selectivity(right, scope);
-                left * right
-            }
-            Function::Or(left, right) => {
-                let left = predicate_selectivity(left, scope);
-                let right = predicate_selectivity(right, scope);
-                1.0 - (1.0 - left) * (1.0 - right)
-            }
-            Function::IsNull(_)
-            | Function::NotEqual(_, _)
-            | Function::Less(_, _)
-            | Function::LessOrEqual(_, _)
-            | Function::Greater(_, _)
-            | Function::GreaterOrEqual(_, _) => 1.0,
-            Function::Like(_, _) => 0.5,
-            Function::CurrentDate
-            | Function::CurrentTimestamp
-            | Function::UnaryMinus(_, _)
-            | Function::Add(_, _, _)
-            | Function::Divide(_, _, _)
-            | Function::Multiply(_, _, _)
-            | Function::Subtract(_, _, _) => panic!("{:?} is not a logical function", function),
-            Function::Coalesce(left, right, _) => {
-                let left = predicate_selectivity(left, scope);
-                let right = predicate_selectivity(right, scope);
-                left.min(right)
-            }
-            Function::CaseNoValue(_, if_true, if_false, _) => {
-                let left = predicate_selectivity(if_true, scope);
-                let right = predicate_selectivity(if_false, scope);
-                (left + right) / 2.0
-            }
-            Function::NextVal(_) | Function::Xid => 1.0,
-        },
-        Scalar::Cast(_, _) => 0.5,
-    }
+    1.0 // TODO
 }
 
 fn apply_selectivity(cardinality: usize, selectivity: f64) -> usize {

@@ -121,40 +121,22 @@ impl Array {
     pub fn cat(mut arrays: Vec<Self>) -> Self {
         match arrays[0].data_type() {
             DataType::Bool => Array::Bool(BoolArray::cat(
-                arrays
-                    .drain(..)
-                    .map(|array| array.as_bool().unwrap())
-                    .collect(),
+                arrays.drain(..).map(|array| array.as_bool()).collect(),
             )),
             DataType::I64 => Array::I64(I64Array::cat(
-                arrays
-                    .drain(..)
-                    .map(|array| array.as_i64().unwrap())
-                    .collect(),
+                arrays.drain(..).map(|array| array.as_i64()).collect(),
             )),
             DataType::F64 => Array::F64(F64Array::cat(
-                arrays
-                    .drain(..)
-                    .map(|array| array.as_f64().unwrap())
-                    .collect(),
+                arrays.drain(..).map(|array| array.as_f64()).collect(),
             )),
             DataType::Date => Array::Date(DateArray::cat(
-                arrays
-                    .drain(..)
-                    .map(|array| array.as_date().unwrap())
-                    .collect(),
+                arrays.drain(..).map(|array| array.as_date()).collect(),
             )),
             DataType::Timestamp => Array::Timestamp(TimestampArray::cat(
-                arrays
-                    .drain(..)
-                    .map(|array| array.as_timestamp().unwrap())
-                    .collect(),
+                arrays.drain(..).map(|array| array.as_timestamp()).collect(),
             )),
             DataType::String => Array::String(StringArray::cat(
-                arrays
-                    .drain(..)
-                    .map(|array| array.as_string().unwrap())
-                    .collect(),
+                arrays.drain(..).map(|array| array.as_string()).collect(),
             )),
         }
     }
@@ -248,6 +230,34 @@ impl Array {
         binary_operator!(self, other, left, right, left.coalesce(right))
     }
 
+    pub fn null_if(&self, other: &Self) -> Self {
+        binary_operator!(self, other, left, right, left.null_if(right))
+    }
+
+    pub fn equal_any(&self, others: Vec<Self>) -> BoolArray {
+        let mut acc = self.equal(&others[0]);
+        for other in &others[1..] {
+            acc = acc.or(&self.equal(other));
+        }
+        acc
+    }
+
+    pub fn greatest(mut arrays: Vec<Self>) -> Self {
+        let mut acc = arrays.remove(0);
+        for other in arrays {
+            acc = acc.greater(&other).blend_or_null(&acc, &other);
+        }
+        acc
+    }
+
+    pub fn least(mut arrays: Vec<Self>) -> Self {
+        let mut acc = arrays.remove(0);
+        for other in arrays {
+            acc = acc.less(&other).blend_or_null(&acc, &other);
+        }
+        acc
+    }
+
     // Support operations for data structures.
 
     pub fn cmp(&self, i: usize, j: usize) -> Ordering {
@@ -260,45 +270,45 @@ impl Array {
 
     // Type coercion.
 
-    pub fn as_bool(self) -> Result<BoolArray, Array> {
+    pub fn as_bool(self) -> BoolArray {
         match self {
-            Array::Bool(array) => Ok(array),
-            other => Err(other),
+            Array::Bool(array) => array,
+            other => panic!("expected BOOL but found {}", other.data_type()),
         }
     }
 
-    pub fn as_i64(self) -> Result<I64Array, Array> {
+    pub fn as_i64(self) -> I64Array {
         match self {
-            Array::I64(array) => Ok(array),
-            other => Err(other),
+            Array::I64(array) => array,
+            other => panic!("expected I64 but found {}", other.data_type()),
         }
     }
 
-    pub fn as_f64(self) -> Result<F64Array, Array> {
+    pub fn as_f64(self) -> F64Array {
         match self {
-            Array::F64(array) => Ok(array),
-            other => Err(other),
+            Array::F64(array) => array,
+            other => panic!("expected F64 but found {}", other.data_type()),
         }
     }
 
-    pub fn as_date(self) -> Result<DateArray, Array> {
+    pub fn as_date(self) -> DateArray {
         match self {
-            Array::Date(array) => Ok(array),
-            other => Err(other),
+            Array::Date(array) => array,
+            other => panic!("expected DATE but found {}", other.data_type()),
         }
     }
 
-    pub fn as_timestamp(self) -> Result<TimestampArray, Array> {
+    pub fn as_timestamp(self) -> TimestampArray {
         match self {
-            Array::Timestamp(array) => Ok(array),
-            other => Err(other),
+            Array::Timestamp(array) => array,
+            other => panic!("expected TIMESTAMP but found {}", other.data_type()),
         }
     }
 
-    pub fn as_string(self) -> Result<StringArray, Array> {
+    pub fn as_string(self) -> StringArray {
         match self {
-            Array::String(array) => Ok(array),
-            other => Err(other),
+            Array::String(array) => array,
+            other => panic!("expected STRING but found {}", other.data_type()),
         }
     }
 

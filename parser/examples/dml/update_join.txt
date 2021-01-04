@@ -4,7 +4,7 @@ from person
 where customer.person_id = person.person_id
 
 LogicalUpdate customer
-	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:(Add customer.account_number 1) customer.modified_date $tid
+	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:(AddInt64 customer.account_number 1) customer.modified_date $tid
 		LogicalFilter (Equal customer.person_id person.person_id)
 			LogicalJoin Inner
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)

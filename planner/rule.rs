@@ -551,9 +551,7 @@ fn hash_join(
     let mut partition_right = vec![];
     for predicate in join_predicates.drain(0..) {
         if let Scalar::Call(function) = predicate {
-            if let Function::Equal(left_side, right_side) | Function::Is(left_side, right_side) =
-                *function
-            {
+            if let F::Equal(left_side, right_side) | F::Is(left_side, right_side) = *function {
                 if contains_all(&ss[left], left_side.references())
                     && contains_all(&ss[right], right_side.references())
                 {
@@ -602,8 +600,8 @@ fn check_index(
         for predicate in predicates {
             match predicate {
                 Scalar::Call(function) => match function.as_ref() {
-                    Function::Equal(Scalar::Column(column), lookup)
-                    | Function::Equal(lookup, Scalar::Column(column))
+                    F::Equal(Scalar::Column(column), lookup)
+                    | F::Equal(lookup, Scalar::Column(column))
                         if column_name == &column.name && table_columns.contains(column) =>
                     {
                         index_predicates.push(lookup.clone());

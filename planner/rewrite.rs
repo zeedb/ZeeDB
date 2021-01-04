@@ -511,7 +511,7 @@ impl RewriteRule {
                     {
                         let mut filter_predicates = filter_predicates.clone();
                         let semi = Scalar::Column(mark.clone());
-                        let anti = Scalar::Call(Box::new(Function::Not(semi.clone())));
+                        let anti = Scalar::Call(Box::new(F::Not(semi.clone())));
                         let mut combined_attributes = vec![];
                         for c in right.attributes() {
                             combined_attributes.push((Scalar::Column(c.clone()), c));
@@ -627,7 +627,7 @@ impl RewriteRule {
                     //   Map a:b subquery
                     let match_equals = |x: &Scalar| {
                         if let Scalar::Call(function) = x {
-                            if let Function::Equal(Scalar::Column(left), Scalar::Column(right)) =
+                            if let F::Equal(Scalar::Column(left), Scalar::Column(right)) =
                                 function.as_ref()
                             {
                                 if subquery_scope.contains(&left) && parameters.contains(&right) {
@@ -645,11 +645,9 @@ impl RewriteRule {
                     let mut filter_predicates = vec![];
                     for p in predicates {
                         if let Some((subquery_column, domain_column)) = match_equals(&p) {
-                            filter_predicates.push(Scalar::Call(Box::new(Function::Not(
-                                Scalar::Call(Box::new(Function::IsNull(Scalar::Column(
-                                    subquery_column.clone(),
-                                )))),
-                            ))));
+                            filter_predicates.push(Scalar::Call(Box::new(F::Not(Scalar::Call(
+                                Box::new(F::IsNull(Scalar::Column(subquery_column.clone()))),
+                            )))));
                             equiv_predicates.insert(domain_column, subquery_column);
                         } else {
                             filter_predicates.push(p.clone())
@@ -1017,7 +1015,7 @@ fn push_both(
     // Add natural-join on domain to the top join predicates.
     let mut join_predicates = join.predicates().clone();
     for i in 0..parameters.len() {
-        join_predicates.push(Scalar::Call(Box::new(Function::Is(
+        join_predicates.push(Scalar::Call(Box::new(F::Is(
             Scalar::Column(left_parameters[i].clone()),
             Scalar::Column(parameters[i].clone()),
         ))));
@@ -1277,10 +1275,8 @@ fn rewrite_scalars(expr: Expr) -> Expr {
     expr.map_scalar(|scalar| {
         scalar.bottom_up_rewrite(&|scalar| match scalar {
             Scalar::Call(function) => match *function {
-                Function::CurrentDate => Scalar::Literal(Value::Date(Some(current_date()))),
-                Function::CurrentTimestamp => {
-                    Scalar::Literal(Value::Timestamp(Some(current_timestamp())))
-                }
+                F::CurrentDate => Scalar::Literal(Value::Date(Some(current_date()))),
+                F::CurrentTimestamp => Scalar::Literal(Value::Timestamp(Some(current_timestamp()))),
                 other => Scalar::Call(Box::new(other)),
             },
             other => other,

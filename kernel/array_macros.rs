@@ -58,20 +58,6 @@ macro_rules! array_binary_operator {
     }};
 }
 
-#[macro_export]
-macro_rules! scalar_binary_operator {
-    ($self:ident, $other:ident, $left:ident, $right:ident, $op:expr) => {{
-        let mut result = Self::with_capacity($self.len());
-        for i in 0..$self.len() {
-            result.push(match ($self.get(i), $other) {
-                (Some($left), Some($right)) => Some($op),
-                (_, _) => None,
-            });
-        }
-        result
-    }};
-}
-
 macro_rules! cast_operator {
     ($self:ident, $value:ident, $cast:expr, $T:ident) => {{
         let mut result = $T::with_capacity($self.len());

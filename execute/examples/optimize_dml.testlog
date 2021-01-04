@@ -26,10 +26,10 @@ Insert person
 
 # update_equi_join
 ok: explain update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
 Insert customer
 	Delete customer
-		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(Add customer.account_number 1) customer.modified_date $tid
+		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(AddInt64 customer.account_number 1) customer.modified_date $tid
 			HashJoin Inner (Equal customer.person_id person.person_id)
 				Partition* customer.person_id
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)

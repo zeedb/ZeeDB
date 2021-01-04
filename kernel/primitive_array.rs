@@ -285,6 +285,20 @@ macro_rules! primitive_ops {
                 builder
             }
 
+            pub fn null_if(&self, other: &Self) -> Self {
+                assert_eq!(self.len(), other.len());
+
+                let mut builder = Self::with_capacity(self.len());
+                for i in 0..self.len() {
+                    match (self.get(i), other.get(i)) {
+                        (Some(left), Some(right)) if left == right => builder.push(None),
+                        (Some(left), _) => builder.push(Some(left)),
+                        (_, _) => builder.push(None),
+                    }
+                }
+                builder
+            }
+
             // Support operations for data structures.
 
             pub fn cmp(&self, i: usize, j: usize) -> Ordering {
@@ -335,51 +349,6 @@ primitive_ops!(F64Array, f64);
 primitive_ops!(DateArray, i32);
 primitive_ops!(TimestampArray, i64);
 
-macro_rules! math_ops {
-    ($T:ty, $t:ty) => {
-        impl $T {
-            pub fn minus(&self) -> Self {
-                array_unary_operator!(self, value, -value)
-            }
-
-            pub fn divide(&self, other: &Self) -> Self {
-                array_binary_operator!(self, other, left, right, left / right)
-            }
-
-            pub fn multiply(&self, other: &Self) -> Self {
-                array_binary_operator!(self, other, left, right, left * right)
-            }
-
-            pub fn add(&self, other: &Self) -> Self {
-                array_binary_operator!(self, other, left, right, left + right)
-            }
-
-            pub fn subtract(&self, other: &Self) -> Self {
-                array_binary_operator!(self, other, left, right, left - right)
-            }
-
-            pub fn divide_scalar(&self, other: Option<$t>) -> Self {
-                scalar_binary_operator!(self, other, left, right, left / right)
-            }
-
-            pub fn multiply_scalar(&self, other: Option<$t>) -> Self {
-                scalar_binary_operator!(self, other, left, right, left * right)
-            }
-
-            pub fn add_scalar(&self, other: Option<$t>) -> Self {
-                scalar_binary_operator!(self, other, left, right, left + right)
-            }
-
-            pub fn subtract_scalar(&self, other: Option<$t>) -> Self {
-                scalar_binary_operator!(self, other, left, right, left - right)
-            }
-        }
-    };
-}
-
-math_ops!(I64Array, i64);
-math_ops!(F64Array, f64);
-
 impl I32Array {
     pub fn conflict(&self, mask: &BoolArray, len: usize) -> bool {
         // Strategy for SIMD implementation:
@@ -426,6 +395,10 @@ impl I64Array {
     pub fn cast_string(&self) -> StringArray {
         cast_operator!(self, value, value.to_string().as_str(), StringArray)
     }
+
+    pub fn as_array(self) -> Array {
+        Array::I64(self)
+    }
 }
 
 impl F64Array {
@@ -439,6 +412,10 @@ impl F64Array {
 
     pub fn cast_string(&self) -> StringArray {
         cast_operator!(self, value, value.to_string().as_str(), StringArray)
+    }
+
+    pub fn as_array(self) -> Array {
+        Array::F64(self)
     }
 }
 
@@ -459,6 +436,10 @@ impl DateArray {
             crate::dates::date(value).format("%F").to_string().as_str(),
             StringArray
         )
+    }
+
+    pub fn as_array(self) -> Array {
+        Array::Date(self)
     }
 }
 
@@ -482,6 +463,10 @@ impl TimestampArray {
                 .as_str(),
             StringArray
         )
+    }
+
+    pub fn as_array(self) -> Array {
+        Array::Timestamp(self)
     }
 }
 

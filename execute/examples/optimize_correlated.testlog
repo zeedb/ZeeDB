@@ -255,7 +255,7 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 
 # single_join_twice_plus_condition
 ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Partition* person_id
@@ -271,7 +271,7 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 					Map store.name customer_id
 						Filter (Not (IsNull store.store_id))
 							Map customer_id:store.store_id, ..
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like store.name "A%")
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike store.name "A%")
 									Map* store.store_id store.name $xmin $xmax
 										SeqScan store
 				Partition* customer.customer_id
@@ -341,7 +341,7 @@ Map $query.$col1:1
 
 # single_join_with_condition
 ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like 'A%') from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id) (Is store.name name)
 		Partition* store_id name
@@ -350,7 +350,7 @@ Map $query.$col1:$aggregate.$agg1
 					HashJoin Inner (Equal customer.store_id store_id)
 						Partition* store_id
 							Aggregate store_id name
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Like name "A%")
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike name "A%")
 									Map* store_id name $xmin $xmax
 										SeqScan store
 						Partition* customer.store_id
@@ -412,7 +412,7 @@ Map customer.customer_id
 
 # semi_self_join
 ok: explain select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Map customer.customer_id
 	HashJoin Semi (Is c1.prev_account_number prev_account_number) (Equal customer.person_id customer.person_id)
 		Partition* prev_account_number customer.person_id
@@ -423,7 +423,7 @@ Map customer.customer_id
 							Map* customer.person_id customer.account_number $xmin $xmax
 								SeqScan customer
 		Partition* c1.prev_account_number customer.person_id
-			Map c1.prev_account_number:(Subtract customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+			Map c1.prev_account_number:(SubtractInt64 customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
 						SeqScan customer

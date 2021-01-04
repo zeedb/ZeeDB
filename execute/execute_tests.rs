@@ -10,60 +10,6 @@ fn test_literals() {
 }
 
 #[test]
-fn test_elementary_math() {
-    let mut t = TestSuite::new(Storage::new());
-    t.ok("select 1 + 2, 1 - 2, 2 * 3, 1 / 2");
-    t.ok("select 1.0 + 2.0, 1.0 - 2.0, 2.0 * 3.0, 1.0 / 2.0");
-    t.ok("select -x from (select 1 as x)");
-    t.finish("examples/execute_elementary_math.testlog");
-}
-
-#[test]
-fn test_logical_functions() {
-    let mut t = TestSuite::new(Storage::new());
-    t.ok("select not(f) from (select false as f)");
-    t.ok("select t and f from (select true as t, false as f)");
-    t.ok("select t or f from (select true as t, false as f)");
-    t.finish("examples/execute_logical_functions.testlog");
-}
-
-#[test]
-fn test_comparisons() {
-    let mut t = TestSuite::new(Storage::new());
-    t.ok("select i1 is null, inull is null from (select 1 as i1, cast(null as int64) as inull)");
-    t.ok("select i1 = i1, i1 = i2, i2 = i1, i1 = inull, inull = inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)");
-    t.ok("select i1 <> i1, i1 <> i2, i2 <> i1, i1 <> inull, inull <> inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)");
-    t.ok("select i1 > i1, i1 > i2, i2 > i1, i1 > inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)");
-    t.ok("select i1 >= i1, i1 >= i2, i2 >= i1, i1 >= inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)");
-    t.ok("select i1 < i1, i1 < i2, i2 < i1, i1 < inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)");
-    t.ok("select i1 <= i1, i1 <= i2, i2 <= i1, i1 <= inull, inull > inull from (select 1 as i1, 2 as i2, cast(null as int64) as inull)");
-    t.ok("select 'foobar' like 'foo%', 'foobar' like 'bar%', 'foobar' like '%bar', snull like 'foo%', 'foobar' like snull from (select cast(null as string) as snull)");
-    t.finish("examples/execute_comparisons.testlog");
-}
-
-#[test]
-fn test_string_functions() {
-    let mut t = TestSuite::new(Storage::new());
-    t.finish("examples/execute_string_functions.testlog");
-}
-
-#[test]
-fn test_control_flow() {
-    let mut t = TestSuite::new(Storage::new());
-    t.ok("select coalesce(null, 1), coalesce(2, 3)");
-    t.ok("select case when false then null else 1 end, case when true then 2 else 3 end");
-    t.finish("examples/execute_control_flow.testlog");
-}
-
-#[test]
-fn test_time_functions() {
-    let mut t = TestSuite::new(Storage::new());
-    t.ok("select current_date() < date '2020-12-30'");
-    t.ok("select current_timestamp() < timestamp '2020-12-30'");
-    t.finish("examples/execute_time_functions.testlog");
-}
-
-#[test]
 fn test_aggregate_functions() {
     let mut t = TestSuite::new(Storage::new());
     t.setup("create table booleans (x boolean);");
@@ -97,18 +43,6 @@ fn test_aggregate_functions() {
     t.ok("select booleans.x, integers.x from booleans, integers group by 1, 2 order by 1, 2");
     t.ok("select distinct booleans.x, integers.x from booleans, integers order by 1, 2");
     t.finish("examples/execute_aggregates.testlog");
-}
-
-#[test]
-fn test_casts() {
-    let mut t = TestSuite::new(Storage::new());
-    t.ok("select cast(t as int64), cast(t as string) from (select true as t)");
-    t.ok("select cast(i1 as bool), cast(i1 as float64), cast(i1 as string) from (select 1 as i1)");
-    t.ok("select cast(f1 as int64), cast(f1 as string) from (select 1.0 as f1)");
-    t.ok("select cast(d as timestamp), cast(d as string) from (select date '2020-01-01' as d)");
-    t.ok("select cast(ts as date), cast(ts as string) from (select timestamp '2020-01-01' as ts)");
-    t.ok("select cast(t as bool), cast(i1 as int64), cast(f1 as float64), cast(d as date), cast(ts as timestamp) from (select 'true' as t, '1' as i1, '1.0' as f1, '2020-01-01' as d, '2020-01-01T00:00:00+00:00' as ts)");
-    t.finish("examples/execute_casts.testlog");
 }
 
 #[test]

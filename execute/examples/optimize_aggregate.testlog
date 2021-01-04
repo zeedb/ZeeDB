@@ -1,13 +1,13 @@
 # combine_consecutive_projects
 ok: explain select a + 1 as b from (select 1 as a)
-plan                                 
-Map $query.b:(Add 1 1)
+plan                                      
+Map $query.b:(AddInt64 1 1)
 	TableFreeScan
 
 # combine_consecutive_projects_star
 ok: explain select *, a + 1 as b from (select 1 as a)
-plan                                                
-Map $query.b:(Add 1 1) $subquery1.a:1
+plan                                                     
+Map $query.b:(AddInt64 1 1) $subquery1.a:1
 	TableFreeScan
 
 # count_and_sum_distinct
@@ -30,8 +30,8 @@ Aggregate $groupby.store_id
 
 # avg
 ok: explain select avg(store_id) from customer
-plan                                                                                                                                                                                                                                                                                  
-Map $aggregate.$agg1:(Divide (Cast $avg$sum DOUBLE) (Cast $avg$count DOUBLE))
+plan                                                                                                                                                                                                                                                                                        
+Map $aggregate.$agg1:(DivideDouble (Cast $avg$sum DOUBLE) (Cast $avg$count DOUBLE))
 	Aggregate $avg$sum:(Sum $avg) $avg$count:(Count $avg)
 		Map $avg:customer.store_id
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
