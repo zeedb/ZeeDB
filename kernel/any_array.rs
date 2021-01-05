@@ -2,7 +2,7 @@ use crate::{bool_array::*, data_type::*, primitive_array::*, string_array::*};
 use std::{cmp::Ordering, ops::Range};
 
 #[derive(Debug, Clone)]
-pub enum Array {
+pub enum AnyArray {
     Bool(BoolArray),
     I64(I64Array),
     F64(F64Array),
@@ -32,12 +32,12 @@ pub enum Array {
 macro_rules! unary_method {
     ($self:ident, $matched:ident, $result:expr) => {
         match $self {
-            Array::Bool($matched) => $result,
-            Array::I64($matched) => $result,
-            Array::F64($matched) => $result,
-            Array::Date($matched) => $result,
-            Array::Timestamp($matched) => $result,
-            Array::String($matched) => $result,
+            AnyArray::Bool($matched) => $result,
+            AnyArray::I64($matched) => $result,
+            AnyArray::F64($matched) => $result,
+            AnyArray::Date($matched) => $result,
+            AnyArray::Timestamp($matched) => $result,
+            AnyArray::String($matched) => $result,
         }
     };
 }
@@ -45,12 +45,12 @@ macro_rules! unary_method {
 macro_rules! binary_method {
     ($self:ident, $other:ident, $left:ident, $right:ident, $result:expr) => {
         match ($self, $other) {
-            (Array::Bool($left), Array::Bool($right)) => $result,
-            (Array::I64($left), Array::I64($right)) => $result,
-            (Array::F64($left), Array::F64($right)) => $result,
-            (Array::Date($left), Array::Date($right)) => $result,
-            (Array::Timestamp($left), Array::Timestamp($right)) => $result,
-            (Array::String($left), Array::String($right)) => $result,
+            (AnyArray::Bool($left), AnyArray::Bool($right)) => $result,
+            (AnyArray::I64($left), AnyArray::I64($right)) => $result,
+            (AnyArray::F64($left), AnyArray::F64($right)) => $result,
+            (AnyArray::Date($left), AnyArray::Date($right)) => $result,
+            (AnyArray::Timestamp($left), AnyArray::Timestamp($right)) => $result,
+            (AnyArray::String($left), AnyArray::String($right)) => $result,
             (left, right) => panic!("{} does not match {}", left.data_type(), right.data_type()),
         }
     };
@@ -59,12 +59,12 @@ macro_rules! binary_method {
 macro_rules! unary_operator {
     ($self:ident, $matched:ident, $result:expr) => {
         match $self {
-            Array::Bool($matched) => Array::Bool($result),
-            Array::I64($matched) => Array::I64($result),
-            Array::F64($matched) => Array::F64($result),
-            Array::Date($matched) => Array::Date($result),
-            Array::Timestamp($matched) => Array::Timestamp($result),
-            Array::String($matched) => Array::String($result),
+            AnyArray::Bool($matched) => AnyArray::Bool($result),
+            AnyArray::I64($matched) => AnyArray::I64($result),
+            AnyArray::F64($matched) => AnyArray::F64($result),
+            AnyArray::Date($matched) => AnyArray::Date($result),
+            AnyArray::Timestamp($matched) => AnyArray::Timestamp($result),
+            AnyArray::String($matched) => AnyArray::String($result),
         }
     };
 }
@@ -72,70 +72,72 @@ macro_rules! unary_operator {
 macro_rules! binary_operator {
     ($self:ident, $other:ident, $left:ident, $right:ident, $result:expr) => {
         match ($self, $other) {
-            (Array::Bool($left), Array::Bool($right)) => Array::Bool($result),
-            (Array::I64($left), Array::I64($right)) => Array::I64($result),
-            (Array::F64($left), Array::F64($right)) => Array::F64($result),
-            (Array::Date($left), Array::Date($right)) => Array::Date($result),
-            (Array::Timestamp($left), Array::Timestamp($right)) => Array::Timestamp($result),
-            (Array::String($left), Array::String($right)) => Array::String($result),
+            (AnyArray::Bool($left), AnyArray::Bool($right)) => AnyArray::Bool($result),
+            (AnyArray::I64($left), AnyArray::I64($right)) => AnyArray::I64($result),
+            (AnyArray::F64($left), AnyArray::F64($right)) => AnyArray::F64($result),
+            (AnyArray::Date($left), AnyArray::Date($right)) => AnyArray::Date($result),
+            (AnyArray::Timestamp($left), AnyArray::Timestamp($right)) => {
+                AnyArray::Timestamp($result)
+            }
+            (AnyArray::String($left), AnyArray::String($right)) => AnyArray::String($result),
             (left, right) => panic!("{} does not match {}", left.data_type(), right.data_type()),
         }
     };
 }
 
-impl Array {
+impl AnyArray {
     // Constructors.
     pub fn new(data_type: DataType) -> Self {
         match data_type {
-            DataType::Bool => Array::Bool(BoolArray::new()),
-            DataType::I64 => Array::I64(I64Array::new()),
-            DataType::F64 => Array::F64(F64Array::new()),
-            DataType::Date => Array::Date(DateArray::new()),
-            DataType::Timestamp => Array::Timestamp(TimestampArray::new()),
-            DataType::String => Array::String(StringArray::new()),
+            DataType::Bool => AnyArray::Bool(BoolArray::new()),
+            DataType::I64 => AnyArray::I64(I64Array::new()),
+            DataType::F64 => AnyArray::F64(F64Array::new()),
+            DataType::Date => AnyArray::Date(DateArray::new()),
+            DataType::Timestamp => AnyArray::Timestamp(TimestampArray::new()),
+            DataType::String => AnyArray::String(StringArray::new()),
         }
     }
 
     pub fn with_capacity(data_type: DataType, capacity: usize) -> Self {
         match data_type {
-            DataType::Bool => Array::Bool(BoolArray::with_capacity(capacity)),
-            DataType::I64 => Array::I64(I64Array::with_capacity(capacity)),
-            DataType::F64 => Array::F64(F64Array::with_capacity(capacity)),
-            DataType::Date => Array::Date(DateArray::with_capacity(capacity)),
-            DataType::Timestamp => Array::Timestamp(TimestampArray::with_capacity(capacity)),
-            DataType::String => Array::String(StringArray::with_capacity(capacity)),
+            DataType::Bool => AnyArray::Bool(BoolArray::with_capacity(capacity)),
+            DataType::I64 => AnyArray::I64(I64Array::with_capacity(capacity)),
+            DataType::F64 => AnyArray::F64(F64Array::with_capacity(capacity)),
+            DataType::Date => AnyArray::Date(DateArray::with_capacity(capacity)),
+            DataType::Timestamp => AnyArray::Timestamp(TimestampArray::with_capacity(capacity)),
+            DataType::String => AnyArray::String(StringArray::with_capacity(capacity)),
         }
     }
 
     pub fn nulls(data_type: DataType, len: usize) -> Self {
         match data_type {
-            DataType::Bool => Array::Bool(BoolArray::nulls(len)),
-            DataType::I64 => Array::I64(I64Array::nulls(len)),
-            DataType::F64 => Array::F64(F64Array::nulls(len)),
-            DataType::Date => Array::Date(DateArray::nulls(len)),
-            DataType::Timestamp => Array::Timestamp(TimestampArray::nulls(len)),
-            DataType::String => Array::String(StringArray::nulls(len)),
+            DataType::Bool => AnyArray::Bool(BoolArray::nulls(len)),
+            DataType::I64 => AnyArray::I64(I64Array::nulls(len)),
+            DataType::F64 => AnyArray::F64(F64Array::nulls(len)),
+            DataType::Date => AnyArray::Date(DateArray::nulls(len)),
+            DataType::Timestamp => AnyArray::Timestamp(TimestampArray::nulls(len)),
+            DataType::String => AnyArray::String(StringArray::nulls(len)),
         }
     }
 
     pub fn cat(mut arrays: Vec<Self>) -> Self {
         match arrays[0].data_type() {
-            DataType::Bool => Array::Bool(BoolArray::cat(
+            DataType::Bool => AnyArray::Bool(BoolArray::cat(
                 arrays.drain(..).map(|array| array.as_bool()).collect(),
             )),
-            DataType::I64 => Array::I64(I64Array::cat(
+            DataType::I64 => AnyArray::I64(I64Array::cat(
                 arrays.drain(..).map(|array| array.as_i64()).collect(),
             )),
-            DataType::F64 => Array::F64(F64Array::cat(
+            DataType::F64 => AnyArray::F64(F64Array::cat(
                 arrays.drain(..).map(|array| array.as_f64()).collect(),
             )),
-            DataType::Date => Array::Date(DateArray::cat(
+            DataType::Date => AnyArray::Date(DateArray::cat(
                 arrays.drain(..).map(|array| array.as_date()).collect(),
             )),
-            DataType::Timestamp => Array::Timestamp(TimestampArray::cat(
+            DataType::Timestamp => AnyArray::Timestamp(TimestampArray::cat(
                 arrays.drain(..).map(|array| array.as_timestamp()).collect(),
             )),
-            DataType::String => Array::String(StringArray::cat(
+            DataType::String => AnyArray::String(StringArray::cat(
                 arrays.drain(..).map(|array| array.as_string()).collect(),
             )),
         }
@@ -149,12 +151,12 @@ impl Array {
 
     pub fn data_type(&self) -> DataType {
         match self {
-            Array::Bool(_) => DataType::Bool,
-            Array::I64(_) => DataType::I64,
-            Array::F64(_) => DataType::F64,
-            Array::Date(_) => DataType::Date,
-            Array::Timestamp(_) => DataType::Timestamp,
-            Array::String(_) => DataType::String,
+            AnyArray::Bool(_) => DataType::Bool,
+            AnyArray::I64(_) => DataType::I64,
+            AnyArray::F64(_) => DataType::F64,
+            AnyArray::Date(_) => DataType::Date,
+            AnyArray::Timestamp(_) => DataType::Timestamp,
+            AnyArray::String(_) => DataType::String,
         }
     }
 
@@ -192,7 +194,7 @@ impl Array {
         unary_method!(self, array, array.sort())
     }
 
-    // Array comparison operators.
+    // AnyArray comparison operators.
 
     pub fn is(&self, other: &Self) -> BoolArray {
         binary_method!(self, other, left, right, left.is(right))
@@ -272,71 +274,75 @@ impl Array {
 
     pub fn as_bool(self) -> BoolArray {
         match self {
-            Array::Bool(array) => array,
+            AnyArray::Bool(array) => array,
             other => panic!("expected BOOL but found {}", other.data_type()),
         }
     }
 
     pub fn as_i64(self) -> I64Array {
         match self {
-            Array::I64(array) => array,
+            AnyArray::I64(array) => array,
             other => panic!("expected I64 but found {}", other.data_type()),
         }
     }
 
     pub fn as_f64(self) -> F64Array {
         match self {
-            Array::F64(array) => array,
+            AnyArray::F64(array) => array,
             other => panic!("expected F64 but found {}", other.data_type()),
         }
     }
 
     pub fn as_date(self) -> DateArray {
         match self {
-            Array::Date(array) => array,
+            AnyArray::Date(array) => array,
             other => panic!("expected DATE but found {}", other.data_type()),
         }
     }
 
     pub fn as_timestamp(self) -> TimestampArray {
         match self {
-            Array::Timestamp(array) => array,
+            AnyArray::Timestamp(array) => array,
             other => panic!("expected TIMESTAMP but found {}", other.data_type()),
         }
     }
 
     pub fn as_string(self) -> StringArray {
         match self {
-            Array::String(array) => array,
+            AnyArray::String(array) => array,
             other => panic!("expected STRING but found {}", other.data_type()),
         }
     }
 
     pub fn cast(&self, data_type: DataType) -> Self {
         match (self, data_type) {
-            (Array::Bool(_), DataType::Bool) => self.clone(),
-            (Array::Bool(array), DataType::I64) => Array::I64(array.cast_i64()),
-            (Array::Bool(array), DataType::F64) => Array::F64(array.cast_f64()),
-            (Array::Bool(array), DataType::String) => Array::String(array.cast_string()),
-            (Array::I64(array), DataType::Bool) => Array::Bool(array.cast_bool()),
-            (Array::I64(_), DataType::I64) => self.clone(),
-            (Array::I64(array), DataType::F64) => Array::F64(array.cast_f64()),
-            (Array::I64(array), DataType::String) => Array::String(array.cast_string()),
-            (Array::F64(array), DataType::I64) => Array::I64(array.cast_i64()),
-            (Array::F64(_), DataType::F64) => self.clone(),
-            (Array::F64(array), DataType::String) => Array::String(array.cast_string()),
-            (Array::Date(_), DataType::Date) => self.clone(),
-            (Array::Date(array), DataType::Timestamp) => Array::Timestamp(array.cast_timestamp()),
-            (Array::Date(array), DataType::String) => Array::String(array.cast_string()),
-            (Array::Timestamp(array), DataType::Date) => Array::Date(array.cast_date()),
-            (Array::Timestamp(_), DataType::Timestamp) => self.clone(),
-            (Array::Timestamp(array), DataType::String) => Array::String(array.cast_string()),
-            (Array::String(array), DataType::Bool) => Array::Bool(array.cast_bool()),
-            (Array::String(array), DataType::I64) => Array::I64(array.cast_i64()),
-            (Array::String(array), DataType::F64) => Array::F64(array.cast_f64()),
-            (Array::String(array), DataType::Date) => Array::Date(array.cast_date()),
-            (Array::String(array), DataType::Timestamp) => Array::Timestamp(array.cast_timestamp()),
-            (Array::String(_), DataType::String) => self.clone(),
+            (AnyArray::Bool(_), DataType::Bool) => self.clone(),
+            (AnyArray::Bool(array), DataType::I64) => AnyArray::I64(array.cast_i64()),
+            (AnyArray::Bool(array), DataType::F64) => AnyArray::F64(array.cast_f64()),
+            (AnyArray::Bool(array), DataType::String) => AnyArray::String(array.cast_string()),
+            (AnyArray::I64(array), DataType::Bool) => AnyArray::Bool(array.cast_bool()),
+            (AnyArray::I64(_), DataType::I64) => self.clone(),
+            (AnyArray::I64(array), DataType::F64) => AnyArray::F64(array.cast_f64()),
+            (AnyArray::I64(array), DataType::String) => AnyArray::String(array.cast_string()),
+            (AnyArray::F64(array), DataType::I64) => AnyArray::I64(array.cast_i64()),
+            (AnyArray::F64(_), DataType::F64) => self.clone(),
+            (AnyArray::F64(array), DataType::String) => AnyArray::String(array.cast_string()),
+            (AnyArray::Date(_), DataType::Date) => self.clone(),
+            (AnyArray::Date(array), DataType::Timestamp) => {
+                AnyArray::Timestamp(array.cast_timestamp())
+            }
+            (AnyArray::Date(array), DataType::String) => AnyArray::String(array.cast_string()),
+            (AnyArray::Timestamp(array), DataType::Date) => AnyArray::Date(array.cast_date()),
+            (AnyArray::Timestamp(_), DataType::Timestamp) => self.clone(),
+            (AnyArray::Timestamp(array), DataType::String) => AnyArray::String(array.cast_string()),
+            (AnyArray::String(array), DataType::Bool) => AnyArray::Bool(array.cast_bool()),
+            (AnyArray::String(array), DataType::I64) => AnyArray::I64(array.cast_i64()),
+            (AnyArray::String(array), DataType::F64) => AnyArray::F64(array.cast_f64()),
+            (AnyArray::String(array), DataType::Date) => AnyArray::Date(array.cast_date()),
+            (AnyArray::String(array), DataType::Timestamp) => {
+                AnyArray::Timestamp(array.cast_timestamp())
+            }
+            (AnyArray::String(_), DataType::String) => self.clone(),
             (_, _) => panic!("cannot cast {} to {}", self.data_type(), data_type),
         }
     }

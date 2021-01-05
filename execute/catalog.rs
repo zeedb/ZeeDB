@@ -208,14 +208,14 @@ fn plan_query(storage: &mut Storage, q: &str) -> Expr {
 
 fn as_string(batch: &RecordBatch, column: usize) -> &StringArray {
     match &batch.columns[column] {
-        (_, Array::String(array)) => array,
+        (_, AnyArray::String(array)) => array,
         _ => panic!(),
     }
 }
 
 fn as_i64(batch: &RecordBatch, column: usize) -> &I64Array {
     match &batch.columns[column] {
-        (_, Array::I64(array)) => array,
+        (_, AnyArray::I64(array)) => array,
         _ => panic!(),
     }
 }

@@ -1,4 +1,4 @@
-use crate::{bitmask::*, bool_array::*, primitive_array::*, Array};
+use crate::{bitmask::*, bool_array::*, primitive_array::*, AnyArray};
 use regex::Regex;
 use std::{cmp::Ordering, ops::Range};
 use twox_hash::xxh3;
@@ -211,7 +211,7 @@ impl StringArray {
         I32Array::from(indexes)
     }
 
-    // Array comparison operators.
+    // AnyArray comparison operators.
 
     pub fn is(&self, other: &Self) -> BoolArray {
         let mut builder = BoolArray::with_capacity(self.len());
@@ -358,8 +358,8 @@ impl StringArray {
         )
     }
 
-    pub fn as_array(self) -> Array {
-        Array::String(self)
+    pub fn as_any(self) -> AnyArray {
+        AnyArray::String(self)
     }
 }
 

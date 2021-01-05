@@ -8,11 +8,11 @@ fn test_insert_delete() {
         &RecordBatch::new(vec![
             (
                 "a".to_string(),
-                Array::I64(I64Array::from(vec![Some(1), Some(2)])),
+                AnyArray::I64(I64Array::from(vec![Some(1), Some(2)])),
             ),
             (
                 "b".to_string(),
-                Array::I64(I64Array::from(vec![Some(10), Some(20)])),
+                AnyArray::I64(I64Array::from(vec![Some(10), Some(20)])),
             ),
         ]),
         1000,
@@ -45,7 +45,7 @@ fn test_insert_new_page() {
     let ints: Vec<_> = (0..crate::page::PAGE_SIZE as i64 * 2).collect();
     let mut heap = Heap::empty();
     heap.insert(
-        &RecordBatch::new(vec![("a".to_string(), Array::I64(I64Array::from(ints)))]),
+        &RecordBatch::new(vec![("a".to_string(), AnyArray::I64(I64Array::from(ints)))]),
         1000,
     );
 }

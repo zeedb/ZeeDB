@@ -21,9 +21,9 @@ impl Counter {
         self.count
     }
 
-    pub fn insert(&mut self, column: &Array) {
+    pub fn insert(&mut self, column: &AnyArray) {
         match column {
-            Array::Bool(array) => {
+            AnyArray::Bool(array) => {
                 for i in 0..array.len() {
                     if let Some(value) = array.get(i) {
                         if value {
@@ -34,35 +34,35 @@ impl Counter {
                     }
                 }
             }
-            Array::I64(array) => {
+            AnyArray::I64(array) => {
                 for i in 0..array.len() {
                     if let Some(value) = array.get(i) {
                         self.inner.add(&hash64(&value.to_ne_bytes()))
                     }
                 }
             }
-            Array::F64(array) => {
+            AnyArray::F64(array) => {
                 for i in 0..array.len() {
                     if let Some(value) = array.get(i) {
                         self.inner.add(&hash64(&value.to_ne_bytes()))
                     }
                 }
             }
-            Array::Date(array) => {
+            AnyArray::Date(array) => {
                 for i in 0..array.len() {
                     if let Some(value) = array.get(i) {
                         self.inner.add(&hash64(&value.to_ne_bytes()))
                     }
                 }
             }
-            Array::Timestamp(array) => {
+            AnyArray::Timestamp(array) => {
                 for i in 0..array.len() {
                     if let Some(value) = array.get(i) {
                         self.inner.add(&hash64(&value.to_ne_bytes()))
                     }
                 }
             }
-            Array::String(array) => {
+            AnyArray::String(array) => {
                 for i in 0..array.len() {
                     if let Some(value) = array.get(i) {
                         self.inner.add(&hash64(value.as_bytes()))

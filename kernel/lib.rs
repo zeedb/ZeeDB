@@ -1,6 +1,7 @@
 mod any_array;
 #[macro_use]
 mod array_macros;
+mod array;
 #[cfg(test)]
 mod array_tests;
 mod bitmask;
@@ -15,6 +16,6 @@ mod record_batch;
 mod string_array;
 
 pub use crate::{
-    any_array::*, bitmask::*, bool_array::*, data_type::*, fixed_width::*, primitive_array::*,
-    record_batch::*, string_array::*,
+    any_array::*, array::*, bitmask::*, bool_array::*, data_type::*, fixed_width::*,
+    primitive_array::*, record_batch::*, string_array::*,
 };

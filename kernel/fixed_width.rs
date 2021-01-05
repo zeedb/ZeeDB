@@ -40,39 +40,39 @@ pub fn fixed_width(batches: &Vec<RecordBatch>) -> String {
     rows.join("\n")
 }
 
-fn fixed_width_column(array: &Array) -> Vec<String> {
+fn fixed_width_column(array: &AnyArray) -> Vec<String> {
     match array {
-        Array::Bool(array) => (0..array.len())
+        AnyArray::Bool(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
                 Some(value) => value.to_string(),
             })
             .collect(),
-        Array::I64(array) => (0..array.len())
+        AnyArray::I64(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
                 Some(value) => value.to_string(),
             })
             .collect(),
-        Array::F64(array) => (0..array.len())
+        AnyArray::F64(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
                 Some(value) => value.to_string(),
             })
             .collect(),
-        Array::Date(array) => (0..array.len())
+        AnyArray::Date(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
                 Some(value) => date(value).format("%F").to_string(),
             })
             .collect(),
-        Array::Timestamp(array) => (0..array.len())
+        AnyArray::Timestamp(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
                 Some(value) => timestamp(value).format("%F %T").to_string(),
             })
             .collect(),
-        Array::String(array) => (0..array.len())
+        AnyArray::String(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
                 Some(value) => value.to_string(),

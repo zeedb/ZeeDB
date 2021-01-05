@@ -1032,7 +1032,7 @@ pub struct ValueProto {
 pub mod value_proto {
     /// An ordered collection of elements of arbitrary count.
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct Array {
+    pub struct AnyArray {
         #[prost(message, repeated, tag = "1")]
         pub element: ::std::vec::Vec<super::ValueProto>,
     }
@@ -1081,7 +1081,7 @@ pub mod value_proto {
         #[prost(int32, tag = "12")]
         EnumValue(i32),
         #[prost(message, tag = "13")]
-        ArrayValue(Array),
+        ArrayValue(AnyArray),
         #[prost(message, tag = "14")]
         StructValue(Struct),
         /// Stores a serialized protocol message.
@@ -1507,7 +1507,7 @@ pub enum FunctionSignatureId {
     // 1900-1999 Hashing/encryption functions  (NextId: 1924)
     // 2000-2199 Geography functions           (NextId: 2068)
     // 2300-2499 More math functions           (NextId: 2314)
-    // 2500-2599 Array functions               (NextId: 2504)
+    // 2500-2599 AnyArray functions               (NextId: 2504)
     /// enum value                       // Related function name
     /// ----------                       // ---------------------
     ///
@@ -2838,7 +2838,7 @@ pub enum FunctionSignatureId {
     FnStX = 2070,
     FnStY = 2071,
     FnStClusterdbscan = 2066,
-    /// Array functions.
+    /// AnyArray functions.
     ///
     /// flatten(array path) -> array
     FnFlatten = 2500,
@@ -3365,7 +3365,7 @@ pub mod resolved_subquery_expr_enums {
     #[repr(i32)]
     pub enum SubqueryType {
         Scalar = 0,
-        Array = 1,
+        AnyArray = 1,
         Exists = 2,
         In = 3,
     }
@@ -6671,7 +6671,7 @@ pub struct ResolvedUpdateItemProto {
     /// This column can be referenced inside the nested statements below.
     #[prost(message, optional, tag = "4")]
     pub element_column: ::std::option::Option<ResolvedColumnHolderProto>,
-    /// Array element modifications to apply. Each item runs on the value
+    /// AnyArray element modifications to apply. Each item runs on the value
     /// of <element_column> specified by ResolvedUpdateArrayItem.offset.
     /// This field is always empty if the analyzer option
     /// FEATURE_V_1_2_ARRAY_ELEMENTS_WITH_SET is disabled.

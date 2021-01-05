@@ -864,7 +864,7 @@ impl Converter {
                 let scalar = self.single_column(x.subquery.get());
                 (join, scalar)
             }
-            // Array
+            // AnyArray
             1 => unimplemented!(),
             // Exists
             2 => {

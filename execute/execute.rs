@@ -38,7 +38,7 @@ pub struct Session<'a> {
     pub storage: &'a mut Storage,
     pub temp_tables: Storage,
     pub temp_table_ids: HashMap<String, i64>,
-    pub variables: HashMap<String, Array>,
+    pub variables: HashMap<String, AnyArray>,
 }
 
 #[derive(Debug)]
@@ -502,7 +502,7 @@ impl Node {
             } => {
                 // Evaluate lookup scalars.
                 let input = input.next(state)?;
-                let columns: Vec<Array> = lookup
+                let columns: Vec<AnyArray> = lookup
                     .iter()
                     .map(|scalar| crate::eval::eval(scalar, &input, state))
                     .collect();
@@ -854,11 +854,11 @@ impl Node {
                             return Some(RecordBatch::new(columns));
                         }
                         Some(batch) => {
-                            let group_by_columns: Vec<Array> = group_by
+                            let group_by_columns: Vec<AnyArray> = group_by
                                 .iter()
                                 .map(|c| batch.find(&c.canonical_name()).unwrap().clone())
                                 .collect();
-                            let aggregate_columns: Vec<Array> = aggregate
+                            let aggregate_columns: Vec<AnyArray> = aggregate
                                 .iter()
                                 .map(|(_, c, _)| batch.find(&c.canonical_name()).unwrap().clone())
                                 .collect();
@@ -949,7 +949,7 @@ impl Node {
                         }
                         builder.push(value)
                     }
-                    output.push((columns[i].canonical_name(), Array::cat(builder)));
+                    output.push((columns[i].canonical_name(), AnyArray::cat(builder)));
                 }
                 Some(RecordBatch::new(output))
             }
@@ -961,7 +961,7 @@ impl Node {
                 }
                 // Identify rows to be updated by tid and sort them.
                 let tids = match input.find(&tid.canonical_name()) {
-                    Some(Array::I64(tids)) => tids,
+                    Some(AnyArray::I64(tids)) => tids,
                     _ => panic!(),
                 };
                 let tids = tids.gather(&tids.sort());
@@ -1053,7 +1053,7 @@ impl Node {
                     // that can be serialized to string and deserialized.
                     Some(RecordBatch::new(vec![(
                         "plan".to_string(),
-                        Array::String(StringArray::from(vec![input.to_string().as_str()])),
+                        AnyArray::String(StringArray::from(vec![input.to_string().as_str()])),
                     )]))
                 }
             }
@@ -1064,7 +1064,7 @@ impl Node {
 fn dummy_row() -> RecordBatch {
     RecordBatch::new(vec![(
         "$dummy".to_string(),
-        Array::Bool(BoolArray::from(vec![false])),
+        AnyArray::Bool(BoolArray::from(vec![false])),
     )])
 }
 

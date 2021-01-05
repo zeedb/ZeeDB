@@ -8,11 +8,11 @@ pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
         RecordBatch::new(vec![
             (
                 "sequence_id".to_string(),
-                Array::I64(I64Array::from(vec![0, 1, 2])),
+                AnyArray::I64(I64Array::from(vec![0, 1, 2])),
             ),
             (
                 "sequence_name".to_string(),
-                Array::String(StringArray::from(vec!["catalog", "table", "index"])),
+                AnyArray::String(StringArray::from(vec!["catalog", "table", "index"])),
             ),
         ]),
     )]

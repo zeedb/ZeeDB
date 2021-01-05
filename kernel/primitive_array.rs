@@ -199,7 +199,7 @@ macro_rules! primitive_ops {
                 I32Array::from(indexes)
             }
 
-            // Array comparison operators.
+            // AnyArray comparison operators.
 
             pub fn is(&self, other: &Self) -> BoolArray {
                 let mut builder = BoolArray::with_capacity(self.len());
@@ -372,7 +372,7 @@ impl I32Array {
 }
 
 impl U64Array {
-    pub fn hash_all(columns: &Vec<Array>) -> Self {
+    pub fn hash_all(columns: &Vec<AnyArray>) -> Self {
         let mut seeds = U64Array::zeros(columns[0].len());
         for column in columns {
             column.hash(&mut seeds);
@@ -396,8 +396,8 @@ impl I64Array {
         cast_operator!(self, value, value.to_string().as_str(), StringArray)
     }
 
-    pub fn as_array(self) -> Array {
-        Array::I64(self)
+    pub fn as_any(self) -> AnyArray {
+        AnyArray::I64(self)
     }
 }
 
@@ -414,8 +414,8 @@ impl F64Array {
         cast_operator!(self, value, value.to_string().as_str(), StringArray)
     }
 
-    pub fn as_array(self) -> Array {
-        Array::F64(self)
+    pub fn as_any(self) -> AnyArray {
+        AnyArray::F64(self)
     }
 }
 
@@ -438,8 +438,8 @@ impl DateArray {
         )
     }
 
-    pub fn as_array(self) -> Array {
-        Array::Date(self)
+    pub fn as_any(self) -> AnyArray {
+        AnyArray::Date(self)
     }
 }
 
@@ -465,8 +465,8 @@ impl TimestampArray {
         )
     }
 
-    pub fn as_array(self) -> Array {
-        Array::Timestamp(self)
+    pub fn as_any(self) -> AnyArray {
+        AnyArray::Timestamp(self)
     }
 }
 

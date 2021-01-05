@@ -3,7 +3,7 @@ use storage::*;
 
 pub(crate) fn insert(index: &mut Art, columns: &Vec<String>, input: &RecordBatch, tids: &I64Array) {
     // Convert each row into bytes that match the lexicographic order of rows.
-    let index_columns: Vec<&Array> = columns
+    let index_columns: Vec<&AnyArray> = columns
         .iter()
         .map(|name| input.find(name).unwrap())
         .collect();
@@ -69,7 +69,7 @@ impl PackedBytes {
     }
 }
 
-pub(crate) fn byte_keys(columns: Vec<&Array>, tids: &I64Array) -> PackedBytes {
+pub(crate) fn byte_keys(columns: Vec<&AnyArray>, tids: &I64Array) -> PackedBytes {
     let byte_len = columns.iter().map(|c| byte_len(*c)).sum::<usize>()
         + tids.len() * std::mem::size_of::<i64>();
     let mut result = PackedBytes::with_capacity(columns[0].len(), byte_len);
@@ -81,7 +81,7 @@ pub(crate) fn byte_keys(columns: Vec<&Array>, tids: &I64Array) -> PackedBytes {
     result
 }
 
-pub(crate) fn byte_key_prefix(columns: Vec<&Array>) -> PackedBytes {
+pub(crate) fn byte_key_prefix(columns: Vec<&AnyArray>) -> PackedBytes {
     let byte_len = columns.iter().map(|c| byte_len(*c)).sum::<usize>();
     let mut result = PackedBytes::with_capacity(columns[0].len(), byte_len);
     for i in 0..columns[0].len() {
@@ -91,21 +91,21 @@ pub(crate) fn byte_key_prefix(columns: Vec<&Array>) -> PackedBytes {
     result
 }
 
-fn byte_len(column: &Array) -> usize {
+fn byte_len(column: &AnyArray) -> usize {
     match column {
-        Array::Bool(array) => array.len(), // Unpacked representation.
-        Array::I64(array) => array.len() * std::mem::size_of::<i64>(),
-        Array::F64(array) => array.len() * std::mem::size_of::<f64>(),
-        Array::Date(array) => array.len() * std::mem::size_of::<i32>(),
-        Array::Timestamp(array) => array.len() * std::mem::size_of::<i64>(),
-        Array::String(array) => array.byte_len(),
+        AnyArray::Bool(array) => array.len(), // Unpacked representation.
+        AnyArray::I64(array) => array.len() * std::mem::size_of::<i64>(),
+        AnyArray::F64(array) => array.len() * std::mem::size_of::<f64>(),
+        AnyArray::Date(array) => array.len() * std::mem::size_of::<i32>(),
+        AnyArray::Timestamp(array) => array.len() * std::mem::size_of::<i64>(),
+        AnyArray::String(array) => array.byte_len(),
     }
 }
 
-fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usize) {
+fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&AnyArray>, i: usize) {
     for j in 0..columns.len() {
         match columns[j] {
-            Array::Bool(column) => {
+            AnyArray::Bool(column) => {
                 let b = match column.get(i) {
                     None => 0,
                     Some(false) => 1,
@@ -113,7 +113,7 @@ fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usiz
                 };
                 result.push(&[b]);
             }
-            Array::I64(column) => {
+            AnyArray::I64(column) => {
                 if let Some(value) = column.get(i) {
                     result.push(&byte_key_i64(value));
                     // Per https://db.in.tum.de/~leis/papers/ART.pdf section IV.B.e
@@ -124,7 +124,7 @@ fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usiz
                     result.push(&byte_key_i64(i64::MIN));
                 }
             }
-            Array::F64(column) => {
+            AnyArray::F64(column) => {
                 if let Some(value) = column.get(i) {
                     result.push(&byte_key_f64(value));
                     if value == f64::MIN {
@@ -134,7 +134,7 @@ fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usiz
                     result.push(&byte_key_f64(f64::MIN));
                 }
             }
-            Array::Date(column) => {
+            AnyArray::Date(column) => {
                 if let Some(value) = column.get(i) {
                     result.push(&byte_key_i32(value));
                     if value == i32::MIN {
@@ -144,7 +144,7 @@ fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usiz
                     result.push(&byte_key_i32(i32::MIN));
                 }
             }
-            Array::Timestamp(column) => {
+            AnyArray::Timestamp(column) => {
                 if let Some(value) = column.get(i) {
                     result.push(&byte_key_i64(value));
                     if value == i64::MIN {
@@ -154,7 +154,7 @@ fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&Array>, i: usiz
                     result.push(&byte_key_i64(i64::MIN));
                 }
             }
-            Array::String(column) => {
+            AnyArray::String(column) => {
                 // TODO UTF-8 order doesn't match the "Unicode Collation Algorithm" https://www.unicode.org/reports/tr10/.
                 // An implementation of unicode => binary comparable representation is available in https://docs.rs/crate/rust_icu.
                 if let Some(value) = column.get(i) {

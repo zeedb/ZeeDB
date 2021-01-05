@@ -102,33 +102,32 @@ impl Data {
         }
     }
 
-    fn slice(&self, len: usize) -> Array {
+    fn slice(&self, len: usize) -> AnyArray {
         match self {
-            Data::Bool { values, is_valid } => Array::Bool(BoolArray::from_slice(
+            Data::Bool { values, is_valid } => AnyArray::Bool(BoolArray::from_slice(
                 BitSlice::from_slice(values, 0..len),
                 BitSlice::from_slice(is_valid, 0..len),
             )),
-            Data::I64 { values, is_valid } => Array::I64(I64Array::from_slice(
+            Data::I64 { values, is_valid } => AnyArray::I64(I64Array::from_slice(
                 &values[..len],
                 BitSlice::from_slice(is_valid, 0..len),
             )),
-            Data::F64 { values, is_valid } => Array::F64(F64Array::from_slice(
+            Data::F64 { values, is_valid } => AnyArray::F64(F64Array::from_slice(
                 &values[..len],
                 BitSlice::from_slice(is_valid, 0..len),
             )),
-            Data::Date { values, is_valid } => Array::Date(DateArray::from_slice(
+            Data::Date { values, is_valid } => AnyArray::Date(DateArray::from_slice(
                 &values[..len],
                 BitSlice::from_slice(is_valid, 0..len),
             )),
-            Data::Timestamp { values, is_valid } => Array::Timestamp(TimestampArray::from_slice(
-                &values[..len],
-                BitSlice::from_slice(is_valid, 0..len),
-            )),
+            Data::Timestamp { values, is_valid } => AnyArray::Timestamp(
+                TimestampArray::from_slice(&values[..len], BitSlice::from_slice(is_valid, 0..len)),
+            ),
             Data::String {
                 buffer,
                 offsets,
                 is_valid,
-            } => Array::String(StringArray::from_slice(
+            } => AnyArray::String(StringArray::from_slice(
                 &buffer[..offsets[len] as usize],
                 &offsets[..len + 1],
                 BitSlice::from_slice(is_valid, 0..len),
@@ -136,9 +135,9 @@ impl Data {
         }
     }
 
-    fn extend(&mut self, start: usize, end: usize, from: &Array, offset: usize) {
+    fn extend(&mut self, start: usize, end: usize, from: &AnyArray, offset: usize) {
         match (self, from) {
-            (Data::Bool { values, is_valid }, Array::Bool(from)) => {
+            (Data::Bool { values, is_valid }, AnyArray::Bool(from)) => {
                 for i in 0..(end - start) {
                     let src = offset + i;
                     let dst = start + i;
@@ -154,7 +153,7 @@ impl Data {
                     }
                 }
             }
-            (Data::I64 { values, is_valid }, Array::I64(from)) => {
+            (Data::I64 { values, is_valid }, AnyArray::I64(from)) => {
                 for i in 0..(end - start) {
                     let src = offset + i;
                     let dst = start + i;
@@ -166,7 +165,7 @@ impl Data {
                     }
                 }
             }
-            (Data::F64 { values, is_valid }, Array::F64(from)) => {
+            (Data::F64 { values, is_valid }, AnyArray::F64(from)) => {
                 for i in 0..(end - start) {
                     let src = offset + i;
                     let dst = start + i;
@@ -178,7 +177,7 @@ impl Data {
                     }
                 }
             }
-            (Data::Date { values, is_valid }, Array::Date(from)) => {
+            (Data::Date { values, is_valid }, AnyArray::Date(from)) => {
                 for i in 0..(end - start) {
                     let src = offset + i;
                     let dst = start + i;
@@ -190,7 +189,7 @@ impl Data {
                     }
                 }
             }
-            (Data::Timestamp { values, is_valid }, Array::Timestamp(from)) => {
+            (Data::Timestamp { values, is_valid }, AnyArray::Timestamp(from)) => {
                 for i in 0..(end - start) {
                     let src = offset + i;
                     let dst = start + i;
@@ -208,7 +207,7 @@ impl Data {
                     offsets,
                     is_valid,
                 },
-                Array::String(from),
+                AnyArray::String(from),
             ) => {
                 for i in 0..(end - start) {
                     let src = offset + i;
@@ -266,7 +265,7 @@ impl Page {
 
     pub fn select(&self, projects: &Vec<String>) -> RecordBatch {
         let len = self.inner.len.load(Ordering::Relaxed);
-        let columns: Vec<(String, Array)> = projects
+        let columns: Vec<(String, AnyArray)> = projects
             .iter()
             .map(|find| {
                 let array = match find.as_str() {
@@ -276,7 +275,7 @@ impl Page {
                         let start = (self.inner.pid * PAGE_SIZE) as i64;
                         let end = start + len as i64;
                         let tids: Vec<i64> = (start..end).collect();
-                        Array::I64(I64Array::from(tids))
+                        AnyArray::I64(I64Array::from(tids))
                     }
                     find => self
                         .inner
@@ -292,9 +291,9 @@ impl Page {
         RecordBatch::new(columns)
     }
 
-    fn xcolumn(values: &[i64]) -> Array {
+    fn xcolumn(values: &[i64]) -> AnyArray {
         let is_valid = vec![u8::MAX].repeat((values.len() + 7) / 8);
-        Array::I64(I64Array::from_slice(
+        AnyArray::I64(I64Array::from_slice(
             values,
             BitSlice::from_slice(&is_valid, 0..values.len()),
         ))

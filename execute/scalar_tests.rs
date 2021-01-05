@@ -1,6 +1,6 @@
 use ast::Value;
 use chrono::{NaiveDate, TimeZone, Utc};
-use kernel::Array;
+use kernel::AnyArray;
 use storage::Storage;
 
 #[test]
@@ -639,12 +639,12 @@ fn eval(sql: &str) -> Value {
     let mut batch = program.execute(&mut storage, 100).last().unwrap();
     assert_eq!(1, batch.len(), "{}", &sql);
     match batch.columns.remove(0).1 {
-        Array::Bool(array) => Value::Bool(array.get(0)),
-        Array::I64(array) => Value::I64(array.get(0)),
-        Array::F64(array) => Value::F64(array.get(0)),
-        Array::Date(array) => Value::Date(array.get(0)),
-        Array::Timestamp(array) => Value::Timestamp(array.get(0)),
-        Array::String(array) => Value::String(array.get(0).map(|s| s.to_string())),
+        AnyArray::Bool(array) => Value::Bool(array.get(0)),
+        AnyArray::I64(array) => Value::I64(array.get(0)),
+        AnyArray::F64(array) => Value::F64(array.get(0)),
+        AnyArray::Date(array) => Value::Date(array.get(0)),
+        AnyArray::Timestamp(array) => Value::Timestamp(array.get(0)),
+        AnyArray::String(array) => Value::String(array.get(0).map(|s| s.to_string())),
     }
 }
 

@@ -3,11 +3,11 @@ use std::{cmp::Ordering, fmt::Debug, ops::Range};
 
 #[derive(Clone)]
 pub struct RecordBatch {
-    pub columns: Vec<(String, Array)>,
+    pub columns: Vec<(String, AnyArray)>,
 }
 
 impl RecordBatch {
-    pub fn new(columns: Vec<(String, Array)>) -> Self {
+    pub fn new(columns: Vec<(String, AnyArray)>) -> Self {
         assert!(!columns.is_empty());
         for i in 1..columns.len() {
             let (left_name, left_column) = &columns[0];
@@ -32,7 +32,7 @@ impl RecordBatch {
         Self {
             columns: columns
                 .drain(..)
-                .map(|(name, data_type)| (name, Array::nulls(data_type, len)))
+                .map(|(name, data_type)| (name, AnyArray::nulls(data_type, len)))
                 .collect(),
         }
     }
@@ -43,7 +43,7 @@ impl RecordBatch {
         Self {
             columns: columns
                 .drain(..)
-                .map(|(name, data_type)| (name, Array::new(data_type)))
+                .map(|(name, data_type)| (name, AnyArray::new(data_type)))
                 .collect(),
         }
     }
@@ -65,7 +65,7 @@ impl RecordBatch {
             .iter()
             .map(|(name, _)| name.clone())
             .collect();
-        let mut transpose: Vec<Vec<Array>> = (0..n_columns).map(|_| vec![]).collect();
+        let mut transpose: Vec<Vec<AnyArray>> = (0..n_columns).map(|_| vec![]).collect();
         batches.drain(..).for_each(|mut batch| {
             batch
                 .columns
@@ -75,10 +75,10 @@ impl RecordBatch {
                     transpose[i].push(array);
                 });
         });
-        let columns: Vec<(String, Array)> = transpose
+        let columns: Vec<(String, AnyArray)> = transpose
             .drain(..)
             .enumerate()
-            .map(|(i, arrays)| (names[i].clone(), Array::cat(arrays)))
+            .map(|(i, arrays)| (names[i].clone(), AnyArray::cat(arrays)))
             .collect();
         Self::new(columns)
     }
@@ -112,7 +112,7 @@ impl RecordBatch {
             .collect()
     }
 
-    pub fn find(&self, column: &str) -> Option<&Array> {
+    pub fn find(&self, column: &str) -> Option<&AnyArray> {
         self.columns
             .iter()
             .find(|(name, _)| name == column)
@@ -196,7 +196,7 @@ impl RecordBatch {
     }
 
     pub fn rename(mut self, renames: &Vec<(String, String)>) -> Self {
-        let columns: Vec<(String, Array)> = self
+        let columns: Vec<(String, AnyArray)> = self
             .columns
             .drain(..)
             .flat_map(|(old_name, array)| {

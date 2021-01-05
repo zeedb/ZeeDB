@@ -5,7 +5,7 @@ use kernel::*;
 pub fn hash_join(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<Array>,
+    partition_right: &Vec<AnyArray>,
     mut filter: impl FnMut(&RecordBatch) -> BoolArray,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
@@ -36,7 +36,7 @@ pub fn hash_join(
 pub fn hash_join_semi(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<Array>,
+    partition_right: &Vec<AnyArray>,
     mut filter: impl FnMut(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -51,7 +51,7 @@ pub fn hash_join_semi(
 pub fn hash_join_anti(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<Array>,
+    partition_right: &Vec<AnyArray>,
     mut filter: impl FnMut(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -68,7 +68,7 @@ pub fn hash_join_anti(
 pub fn hash_join_single(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<Array>,
+    partition_right: &Vec<AnyArray>,
     mut filter: impl FnMut(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -94,7 +94,7 @@ pub fn hash_join_mark(
     mark: &Column,
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<Array>,
+    partition_right: &Vec<AnyArray>,
     mut filter: impl FnMut(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -105,7 +105,7 @@ pub fn hash_join_mark(
     let matched_indexes = right_index.compress(&mask);
     let mut matched_mask = BoolArray::falses(right.len());
     BoolArray::trues(matched_indexes.len()).scatter(&matched_indexes, &mut matched_mask);
-    let right_column = RecordBatch::new(vec![(mark.canonical_name(), Array::Bool(matched_mask))]);
+    let right_column = RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(matched_mask))]);
     RecordBatch::zip(right.clone(), right_column)
 }
 
@@ -194,7 +194,7 @@ pub fn nested_loop_mark(
     let input = cross_product(left, right);
     let mask = filter(&input);
     let right_mask = mask.any(right.len());
-    let right_column = RecordBatch::new(vec![(mark.canonical_name(), Array::Bool(right_mask))]);
+    let right_column = RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(right_mask))]);
     RecordBatch::zip(right.clone(), right_column)
 }
 

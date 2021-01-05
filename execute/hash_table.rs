@@ -9,7 +9,7 @@ pub struct HashTable {
 }
 
 impl HashTable {
-    pub fn new(input: &RecordBatch, partition_by: &Vec<Array>) -> Self {
+    pub fn new(input: &RecordBatch, partition_by: &Vec<AnyArray>) -> Self {
         let n_rows = input.len();
         let n_buckets = size_hash_table(n_rows);
         let hashes = U64Array::hash_all(partition_by);
@@ -21,7 +21,7 @@ impl HashTable {
     }
 
     /// Identify matching rows from self (build side of join) and right (probe side of the join).
-    pub fn probe(&self, partition_by: &Vec<Array>) -> (I32Array, I32Array) {
+    pub fn probe(&self, partition_by: &Vec<AnyArray>) -> (I32Array, I32Array) {
         let n_buckets = self.offsets.len() - 1;
         let right_buckets = U64Array::hash_all(partition_by);
         let mut left_index = vec![];

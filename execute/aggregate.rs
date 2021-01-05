@@ -12,7 +12,7 @@ pub struct GroupByAggregate {
 }
 
 struct Batch {
-    group_by: Vec<Array>,
+    group_by: Vec<AnyArray>,
     hash: U64Array,
 }
 
@@ -46,7 +46,7 @@ impl GroupByAggregate {
     }
 
     /// Insert a batch of rows into the hash table.
-    pub fn insert(&mut self, group_by: Vec<Array>, aggregate: Vec<Array>) {
+    pub fn insert(&mut self, group_by: Vec<AnyArray>, aggregate: Vec<AnyArray>) {
         let len = group_by.first().or(aggregate.first()).unwrap().len();
         // Add batch to the universe of tuples that we know about.
         let hash = if group_by.is_empty() {
@@ -76,17 +76,17 @@ impl GroupByAggregate {
     }
 
     /// Return the results we've accumulated so far.
-    pub fn finish(&self) -> Vec<Array> {
+    pub fn finish(&self) -> Vec<AnyArray> {
         let num_rows = self.aggregate_slots.len();
-        let mut group_by_builders: Vec<Array> = self.group_by_batches[0]
+        let mut group_by_builders: Vec<AnyArray> = self.group_by_batches[0]
             .group_by
             .iter()
-            .map(|c| Array::with_capacity(c.data_type(), num_rows))
+            .map(|c| AnyArray::with_capacity(c.data_type(), num_rows))
             .collect();
-        let mut aggregate_builders: Vec<Array> = self
+        let mut aggregate_builders: Vec<AnyArray> = self
             .aggregate_slot_template
             .iter()
-            .map(|a| Array::with_capacity(a.data_type(), num_rows))
+            .map(|a| AnyArray::with_capacity(a.data_type(), num_rows))
             .collect();
         for (key, aggregate) in &self.aggregate_slots {
             let group_by = &self.group_by_batches[key.batch as usize].group_by;
@@ -111,32 +111,32 @@ impl GroupByAggregate {
         let tuple2 = row2.tuple as usize;
         for i in 0..batch1.len() {
             match (&batch1[i], &batch2[i]) {
-                (Array::Bool(column1), Array::Bool(column2)) => {
+                (AnyArray::Bool(column1), AnyArray::Bool(column2)) => {
                     if column1.get(tuple1) != column2.get(tuple2) {
                         return false;
                     }
                 }
-                (Array::I64(column1), Array::I64(column2)) => {
+                (AnyArray::I64(column1), AnyArray::I64(column2)) => {
                     if column1.get(tuple1) != column2.get(tuple2) {
                         return false;
                     }
                 }
-                (Array::F64(column1), Array::F64(column2)) => {
+                (AnyArray::F64(column1), AnyArray::F64(column2)) => {
                     if column1.get(tuple1) != column2.get(tuple2) {
                         return false;
                     }
                 }
-                (Array::Date(column1), Array::Date(column2)) => {
+                (AnyArray::Date(column1), AnyArray::Date(column2)) => {
                     if column1.get(tuple1) != column2.get(tuple2) {
                         return false;
                     }
                 }
-                (Array::Timestamp(column1), Array::Timestamp(column2)) => {
+                (AnyArray::Timestamp(column1), AnyArray::Timestamp(column2)) => {
                     if column1.get(tuple1) != column2.get(tuple2) {
                         return false;
                     }
                 }
-                (Array::String(column1), Array::String(column2)) => {
+                (AnyArray::String(column1), AnyArray::String(column2)) => {
                     if column1.get(tuple1) != column2.get(tuple2) {
                         return false;
                     }
@@ -189,105 +189,105 @@ impl Acc {
         }
     }
 
-    fn update(&mut self, column: &Array, tuple: u32) {
+    fn update(&mut self, column: &AnyArray, tuple: u32) {
         match (self, column) {
-            (Acc::AnyValue(Value::Bool(value)), Array::Bool(column)) => {
+            (Acc::AnyValue(Value::Bool(value)), AnyArray::Bool(column)) => {
                 *value = column.get(tuple as usize)
             }
-            (Acc::AnyValue(Value::I64(value)), Array::I64(column)) => {
+            (Acc::AnyValue(Value::I64(value)), AnyArray::I64(column)) => {
                 *value = column.get(tuple as usize)
             }
-            (Acc::AnyValue(Value::F64(value)), Array::F64(column)) => {
+            (Acc::AnyValue(Value::F64(value)), AnyArray::F64(column)) => {
                 *value = column.get(tuple as usize)
             }
-            (Acc::AnyValue(Value::Date(value)), Array::Date(column)) => {
+            (Acc::AnyValue(Value::Date(value)), AnyArray::Date(column)) => {
                 *value = column.get(tuple as usize)
             }
-            (Acc::AnyValue(Value::Timestamp(value)), Array::Timestamp(column)) => {
+            (Acc::AnyValue(Value::Timestamp(value)), AnyArray::Timestamp(column)) => {
                 *value = column.get(tuple as usize)
             }
-            (Acc::AnyValue(Value::String(value)), Array::String(column)) => {
+            (Acc::AnyValue(Value::String(value)), AnyArray::String(column)) => {
                 *value = column.get(tuple as usize).map(|s| s.to_string())
             }
-            (Acc::Count(value), Array::Bool(column)) => {
+            (Acc::Count(value), AnyArray::Bool(column)) => {
                 if column.get(tuple as usize).is_some() {
                     let prev = value.unwrap_or(0);
                     *value = Some(prev + 1)
                 }
             }
-            (Acc::Count(value), Array::I64(column)) => {
+            (Acc::Count(value), AnyArray::I64(column)) => {
                 if column.get(tuple as usize).is_some() {
                     let prev = value.unwrap_or(0);
                     *value = Some(prev + 1)
                 }
             }
-            (Acc::Count(value), Array::F64(column)) => {
+            (Acc::Count(value), AnyArray::F64(column)) => {
                 if column.get(tuple as usize).is_some() {
                     let prev = value.unwrap_or(0);
                     *value = Some(prev + 1)
                 }
             }
-            (Acc::Count(value), Array::Date(column)) => {
+            (Acc::Count(value), AnyArray::Date(column)) => {
                 if column.get(tuple as usize).is_some() {
                     let prev = value.unwrap_or(0);
                     *value = Some(prev + 1)
                 }
             }
-            (Acc::Count(value), Array::Timestamp(column)) => {
+            (Acc::Count(value), AnyArray::Timestamp(column)) => {
                 if column.get(tuple as usize).is_some() {
                     let prev = value.unwrap_or(0);
                     *value = Some(prev + 1)
                 }
             }
-            (Acc::Count(value), Array::String(column)) => {
+            (Acc::Count(value), AnyArray::String(column)) => {
                 if column.get(tuple as usize).is_some() {
                     let prev = value.unwrap_or(0);
                     *value = Some(prev + 1)
                 }
             }
-            (Acc::LogicalAnd(value), Array::Bool(column)) => {
+            (Acc::LogicalAnd(value), AnyArray::Bool(column)) => {
                 let prev = value.unwrap_or(true);
                 if let Some(next) = column.get(tuple as usize) {
                     *value = Some(prev && next)
                 }
             }
-            (Acc::LogicalOr(value), Array::Bool(column)) => {
+            (Acc::LogicalOr(value), AnyArray::Bool(column)) => {
                 let prev = value.unwrap_or(false);
                 if let Some(next) = column.get(tuple as usize) {
                     *value = Some(prev || next)
                 }
             }
-            (Acc::Max(Value::Bool(value)), Array::Bool(column)) => {
+            (Acc::Max(Value::Bool(value)), AnyArray::Bool(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(false);
                     *value = Some(prev.max(next));
                 }
             }
-            (Acc::Max(Value::I64(value)), Array::I64(column)) => {
+            (Acc::Max(Value::I64(value)), AnyArray::I64(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(i64::MIN);
                     *value = Some(prev.max(next));
                 }
             }
-            (Acc::Max(Value::F64(value)), Array::F64(column)) => {
+            (Acc::Max(Value::F64(value)), AnyArray::F64(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(f64::MIN);
                     *value = Some(prev.max(next));
                 }
             }
-            (Acc::Max(Value::Date(value)), Array::Date(column)) => {
+            (Acc::Max(Value::Date(value)), AnyArray::Date(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(i32::MIN);
                     *value = Some(prev.max(next));
                 }
             }
-            (Acc::Max(Value::Timestamp(value)), Array::Timestamp(column)) => {
+            (Acc::Max(Value::Timestamp(value)), AnyArray::Timestamp(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(i64::MIN);
                     *value = Some(prev.max(next));
                 }
             }
-            (Acc::Max(Value::String(value)), Array::String(column)) => {
+            (Acc::Max(Value::String(value)), AnyArray::String(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     if let Some(prev) = value {
                         *value = Some(next.min(prev).to_string())
@@ -296,37 +296,37 @@ impl Acc {
                     }
                 }
             }
-            (Acc::Min(Value::Bool(value)), Array::Bool(column)) => {
+            (Acc::Min(Value::Bool(value)), AnyArray::Bool(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(true);
                     *value = Some(prev.min(next));
                 }
             }
-            (Acc::Min(Value::I64(value)), Array::I64(column)) => {
+            (Acc::Min(Value::I64(value)), AnyArray::I64(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(i64::MAX);
                     *value = Some(prev.min(next));
                 }
             }
-            (Acc::Min(Value::F64(value)), Array::F64(column)) => {
+            (Acc::Min(Value::F64(value)), AnyArray::F64(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(f64::MAX);
                     *value = Some(prev.min(next));
                 }
             }
-            (Acc::Min(Value::Date(value)), Array::Date(column)) => {
+            (Acc::Min(Value::Date(value)), AnyArray::Date(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(i32::MAX);
                     *value = Some(prev.min(next));
                 }
             }
-            (Acc::Min(Value::Timestamp(value)), Array::Timestamp(column)) => {
+            (Acc::Min(Value::Timestamp(value)), AnyArray::Timestamp(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     let prev = value.unwrap_or(i64::MAX);
                     *value = Some(prev.min(next));
                 }
             }
-            (Acc::Min(Value::String(value)), Array::String(column)) => {
+            (Acc::Min(Value::String(value)), AnyArray::String(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     if let Some(prev) = value {
                         *value = Some(next.min(prev).to_string())
@@ -335,12 +335,12 @@ impl Acc {
                     }
                 }
             }
-            (Acc::Sum(Value::I64(value)), Array::I64(column)) => {
+            (Acc::Sum(Value::I64(value)), AnyArray::I64(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     *value = Some(value.unwrap_or(0) + next)
                 }
             }
-            (Acc::Sum(Value::F64(value)), Array::F64(column)) => {
+            (Acc::Sum(Value::F64(value)), AnyArray::F64(column)) => {
                 if let Some(next) = column.get(tuple as usize) {
                     *value = Some(value.unwrap_or(0.0) + next)
                 }
@@ -349,17 +349,17 @@ impl Acc {
         }
     }
 
-    fn append(&self, builder: &mut Array) {
+    fn append(&self, builder: &mut AnyArray) {
         match self {
             Acc::Count(value) => {
-                if let Array::I64(builder) = builder {
+                if let AnyArray::I64(builder) = builder {
                     builder.push(*value)
                 } else {
                     panic!("expected i64 but found {:?}", builder.data_type())
                 }
             }
             Acc::LogicalAnd(value) | Acc::LogicalOr(value) => {
-                if let Array::Bool(builder) = builder {
+                if let AnyArray::Bool(builder) = builder {
                     builder.push(*value)
                 } else {
                     panic!("expected bool but found {:?}", builder.data_type())
@@ -367,12 +367,12 @@ impl Acc {
             }
             Acc::AnyValue(value) | Acc::Max(value) | Acc::Min(value) | Acc::Sum(value) => {
                 match (value, builder) {
-                    (Value::Bool(value), Array::Bool(builder)) => builder.push(*value),
-                    (Value::I64(value), Array::I64(builder)) => builder.push(*value),
-                    (Value::F64(value), Array::F64(builder)) => builder.push(*value),
-                    (Value::Date(value), Array::Date(builder)) => builder.push(*value),
-                    (Value::Timestamp(value), Array::Timestamp(builder)) => builder.push(*value),
-                    (Value::String(value), Array::String(builder)) => {
+                    (Value::Bool(value), AnyArray::Bool(builder)) => builder.push(*value),
+                    (Value::I64(value), AnyArray::I64(builder)) => builder.push(*value),
+                    (Value::F64(value), AnyArray::F64(builder)) => builder.push(*value),
+                    (Value::Date(value), AnyArray::Date(builder)) => builder.push(*value),
+                    (Value::Timestamp(value), AnyArray::Timestamp(builder)) => builder.push(*value),
+                    (Value::String(value), AnyArray::String(builder)) => {
                         if let Some(value) = value {
                             builder.push(Some(&value));
                         } else {
@@ -400,14 +400,14 @@ impl Acc {
     }
 }
 
-fn push(into: &mut Array, from: &Array, i: usize) {
+fn push(into: &mut AnyArray, from: &AnyArray, i: usize) {
     match (into, from) {
-        (Array::Bool(into), Array::Bool(from)) => into.push(from.get(i)),
-        (Array::I64(into), Array::I64(from)) => into.push(from.get(i)),
-        (Array::F64(into), Array::F64(from)) => into.push(from.get(i)),
-        (Array::Date(into), Array::Date(from)) => into.push(from.get(i)),
-        (Array::Timestamp(into), Array::Timestamp(from)) => into.push(from.get(i)),
-        (Array::String(into), Array::String(from)) => into.push(from.get(i)),
+        (AnyArray::Bool(into), AnyArray::Bool(from)) => into.push(from.get(i)),
+        (AnyArray::I64(into), AnyArray::I64(from)) => into.push(from.get(i)),
+        (AnyArray::F64(into), AnyArray::F64(from)) => into.push(from.get(i)),
+        (AnyArray::Date(into), AnyArray::Date(from)) => into.push(from.get(i)),
+        (AnyArray::Timestamp(into), AnyArray::Timestamp(from)) => into.push(from.get(i)),
+        (AnyArray::String(into), AnyArray::String(from)) => into.push(from.get(i)),
         (into, from) => panic!("{} does not match {}", into.data_type(), from.data_type()),
     }
 }
