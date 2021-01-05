@@ -1,4 +1,7 @@
+#![feature(num_as_ne_bytes)]
+
 mod any_array;
+mod array_like;
 #[macro_use]
 mod array_macros;
 mod array;
@@ -16,6 +19,6 @@ mod record_batch;
 mod string_array;
 
 pub use crate::{
-    any_array::*, array::*, bitmask::*, bool_array::*, data_type::*, fixed_width::*,
+    any_array::*, array::*, array_like::*, bitmask::*, bool_array::*, data_type::*, fixed_width::*,
     primitive_array::*, record_batch::*, string_array::*,
 };

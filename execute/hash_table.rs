@@ -36,8 +36,8 @@ impl HashTable {
                 right_index.push(i_right as i32);
             }
         }
-        let left_index = I32Array::from(left_index);
-        let right_index = I32Array::from(right_index);
+        let left_index = I32Array::from_values(left_index);
+        let right_index = I32Array::from_values(right_index);
         (left_index, right_index)
     }
 

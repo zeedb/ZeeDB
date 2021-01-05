@@ -6,8 +6,8 @@ fn test_hash_table() {
     let a: Vec<i64> = (0..100).collect();
     let b: Vec<i64> = (1000..1100).collect();
     let columns = vec![
-        ("a".to_string(), AnyArray::I64(I64Array::from(a))),
-        ("b".to_string(), AnyArray::I64(I64Array::from(b))),
+        ("a".to_string(), AnyArray::I64(I64Array::from_values(a))),
+        ("b".to_string(), AnyArray::I64(I64Array::from_values(b))),
     ];
     let probe = RecordBatch::new(columns);
     let partition_by = vec![probe.columns[0].1.clone()];

@@ -36,7 +36,9 @@ fn eval_function(function: &F, input: &RecordBatch, state: &mut Session) -> AnyA
             "{} should have been eliminated in the rewrite phase",
             function.name()
         ),
-        F::Xid => I64Array::from(vec![state.txn]).repeat(input.len()).as_any(),
+        F::Xid => I64Array::from_values(vec![state.txn])
+            .repeat(input.len())
+            .as_any(),
         F::Coalesce(varargs) => {
             let mut tail = e(varargs.last().unwrap());
             for head in &varargs[..varargs.len() - 1] {
@@ -719,131 +721,45 @@ const MILLISECONDS: i64 = 1_000;
 /// Number of microseconds in a second
 const MICROSECONDS: i64 = 1_000_000;
 
-trait UnaryOperatorSupport<'a> {
-    type Element;
-
-    fn len(&'a self) -> usize;
-
-    fn get(&'a self, i: usize) -> Option<Self::Element>;
-
-    fn unary<T: ArrayBuilderSupport>(&'a self, f: impl Fn(Self::Element) -> T) -> AnyArray {
-        let mut builder = T::with_capacity(self.len());
+trait UnaryOperatorSupport<'a>: Array<'a> {
+    fn unary<Into: ArrayBuilder>(&'a self, f: impl Fn(Self::Element) -> Into) -> AnyArray {
+        let mut builder = Into::with_capacity(self.len());
         for i in 0..self.len() {
-            if let Some(a) = self.get(i) {
-                T::push_some(&mut builder, f(a));
-            } else {
-                T::push_none(&mut builder);
-            }
+            Into::push(&mut builder, self.get(i).map(|value| f(value)));
         }
-        T::as_any(builder)
+        Into::as_any(builder)
     }
 
-    fn unary_is<T: ArrayBuilderSupport>(
+    fn unary_is<Into: ArrayBuilder>(
         &'a self,
-        f: impl Fn(Option<Self::Element>) -> T,
+        f: impl Fn(Option<Self::Element>) -> Into,
     ) -> AnyArray {
-        let mut builder = T::with_capacity(self.len());
+        let mut builder = Into::with_capacity(self.len());
         for i in 0..self.len() {
-            T::push_some(&mut builder, f(self.get(i)));
+            Into::push(&mut builder, Some(f(self.get(i))));
         }
-        T::as_any(builder)
+        Into::as_any(builder)
     }
 }
 
-impl<'a> UnaryOperatorSupport<'a> for BoolArray {
-    type Element = bool;
+impl<'a, A: Array<'a>> UnaryOperatorSupport<'a> for A {}
 
-    fn len(&'a self) -> usize {
-        self.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<Self::Element> {
-        self.get(i)
-    }
-}
-
-impl<'a> UnaryOperatorSupport<'a> for I64Array {
-    type Element = i64;
-
-    fn len(&'a self) -> usize {
-        self.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<Self::Element> {
-        self.get(i)
-    }
-}
-
-impl<'a> UnaryOperatorSupport<'a> for F64Array {
-    type Element = f64;
-
-    fn len(&'a self) -> usize {
-        self.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<Self::Element> {
-        self.get(i)
-    }
-}
-
-impl<'a> UnaryOperatorSupport<'a> for DateArray {
-    type Element = i32;
-
-    fn len(&'a self) -> usize {
-        self.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<Self::Element> {
-        self.get(i)
-    }
-}
-
-impl<'a> UnaryOperatorSupport<'a> for TimestampArray {
-    type Element = i64;
-
-    fn len(&'a self) -> usize {
-        self.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<Self::Element> {
-        self.get(i)
-    }
-}
-
-impl<'a> UnaryOperatorSupport<'a> for StringArray {
-    type Element = &'a str;
-
-    fn len(&'a self) -> usize {
-        self.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<Self::Element> {
-        self.get(i)
-    }
-}
-
-trait ArrayBuilderSupport {
+trait ArrayBuilder: Sized {
     type Container;
-
     fn with_capacity(capacity: usize) -> Self::Container;
-    fn push_some(array: &mut Self::Container, next: Self);
-    fn push_none(array: &mut Self::Container);
+    fn push(array: &mut Self::Container, value: Option<Self>);
     fn as_any(array: Self::Container) -> AnyArray;
 }
 
-impl ArrayBuilderSupport for bool {
+impl ArrayBuilder for bool {
     type Container = BoolArray;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(next))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        array.push(value)
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -851,19 +767,15 @@ impl ArrayBuilderSupport for bool {
     }
 }
 
-impl ArrayBuilderSupport for i64 {
+impl ArrayBuilder for i64 {
     type Container = I64Array;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(next))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        array.push(value)
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -871,19 +783,15 @@ impl ArrayBuilderSupport for i64 {
     }
 }
 
-impl ArrayBuilderSupport for f64 {
+impl ArrayBuilder for f64 {
     type Container = F64Array;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(next))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        array.push(value)
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -891,19 +799,15 @@ impl ArrayBuilderSupport for f64 {
     }
 }
 
-impl ArrayBuilderSupport for &str {
+impl ArrayBuilder for &str {
     type Container = StringArray;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(next))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        array.push(value)
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -911,19 +815,18 @@ impl ArrayBuilderSupport for &str {
     }
 }
 
-impl ArrayBuilderSupport for String {
+impl ArrayBuilder for String {
     type Container = StringArray;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(next.as_str()))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        match value {
+            Some(value) => array.push(Some(value.as_str())),
+            None => array.push(None),
+        }
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -931,19 +834,15 @@ impl ArrayBuilderSupport for String {
     }
 }
 
-impl ArrayBuilderSupport for Date<Utc> {
+impl ArrayBuilder for Date<Utc> {
     type Container = DateArray;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(epoch_date(next)))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        array.push(value.map(epoch_date))
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -951,19 +850,15 @@ impl ArrayBuilderSupport for Date<Utc> {
     }
 }
 
-impl ArrayBuilderSupport for DateTime<Utc> {
+impl ArrayBuilder for DateTime<Utc> {
     type Container = TimestampArray;
 
     fn with_capacity(capacity: usize) -> Self::Container {
         Self::Container::with_capacity(capacity)
     }
 
-    fn push_some(array: &mut Self::Container, next: Self) {
-        array.push(Some(epoch_micros(next)))
-    }
-
-    fn push_none(array: &mut Self::Container) {
-        array.push(None)
+    fn push(array: &mut Self::Container, value: Option<Self>) {
+        array.push(value.map(epoch_micros))
     }
 
     fn as_any(array: Self::Container) -> AnyArray {
@@ -1009,36 +904,21 @@ trait BinaryOperatorSupport<'a> {
 
     fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)>;
 
-    fn binary<T: ArrayBuilderSupport>(
-        &'a self,
-        f: impl Fn(Self::Left, Self::Right) -> T,
-    ) -> AnyArray {
+    fn binary<T: ArrayBuilder>(&'a self, f: impl Fn(Self::Left, Self::Right) -> T) -> AnyArray {
         let mut builder = T::with_capacity(self.len());
         for i in 0..self.len() {
-            if let Some((a, b)) = self.get(i) {
-                T::push_some(&mut builder, f(a, b));
-            } else {
-                T::push_none(&mut builder);
-            }
+            T::push(&mut builder, self.get(i).map(|(a, b)| f(a, b)));
         }
         T::as_any(builder)
     }
 
-    fn binary_nullable<T: ArrayBuilderSupport>(
+    fn binary_nullable<T: ArrayBuilder>(
         &'a self,
         f: impl Fn(Self::Left, Self::Right) -> Option<T>,
     ) -> AnyArray {
         let mut builder = T::with_capacity(self.len());
         for i in 0..self.len() {
-            if let Some((a, b)) = self.get(i) {
-                if let Some(c) = f(a, b) {
-                    T::push_some(&mut builder, c);
-                } else {
-                    T::push_none(&mut builder);
-                }
-            } else {
-                T::push_none(&mut builder);
-            }
+            T::push(&mut builder, self.get(i).and_then(|(a, b)| f(a, b)));
         }
         T::as_any(builder)
     }
@@ -1248,17 +1128,10 @@ trait TernaryOperatorSupport<'a> {
 
     fn get(&'a self, i: usize) -> Option<(Self::A, Self::B, Self::C)>;
 
-    fn ternary<T: ArrayBuilderSupport>(
-        &'a self,
-        f: impl Fn(Self::A, Self::B, Self::C) -> T,
-    ) -> AnyArray {
+    fn ternary<T: ArrayBuilder>(&'a self, f: impl Fn(Self::A, Self::B, Self::C) -> T) -> AnyArray {
         let mut builder = T::with_capacity(self.len());
         for i in 0..self.len() {
-            if let Some((a, b, c)) = self.get(i) {
-                T::push_some(&mut builder, f(a, b, c));
-            } else {
-                T::push_none(&mut builder);
-            }
+            T::push(&mut builder, self.get(i).map(|(a, b, c)| f(a, b, c)));
         }
         T::as_any(builder)
     }

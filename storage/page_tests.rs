@@ -16,23 +16,23 @@ fn test_fixed_types() {
     let input = RecordBatch::new(vec![
         (
             "boolean".to_string(),
-            AnyArray::Bool(BoolArray::from(vec![Some(true)])),
+            AnyArray::Bool(BoolArray::from_options(vec![Some(true)])),
         ),
         (
             "int64".to_string(),
-            AnyArray::I64(I64Array::from(vec![Some(1i64)])),
+            AnyArray::I64(I64Array::from_options(vec![Some(1i64)])),
         ),
         (
             "float64".to_string(),
-            AnyArray::F64(F64Array::from(vec![Some(1.1f64)])),
+            AnyArray::F64(F64Array::from_options(vec![Some(1.1f64)])),
         ),
         (
             "date".to_string(),
-            AnyArray::Date(DateArray::from(vec![Some(1i32)])),
+            AnyArray::Date(DateArray::from_options(vec![Some(1i32)])),
         ),
         (
             "timestamp".to_string(),
-            AnyArray::Timestamp(TimestampArray::from(vec![Some(1i64)])),
+            AnyArray::Timestamp(TimestampArray::from_options(vec![Some(1i64)])),
         ),
     ]);
     let mut offset = 0;
@@ -74,11 +74,11 @@ fn test_var_types() {
     let input = RecordBatch::new(vec![
         (
             "int64".to_string(),
-            AnyArray::I64(I64Array::from(vec![Some(1i64), Some(2i64)])),
+            AnyArray::I64(I64Array::from_options(vec![Some(1i64), Some(2i64)])),
         ),
         (
             "string".to_string(),
-            AnyArray::String(StringArray::from(vec![Some("foo"), Some("bar")])),
+            AnyArray::String(StringArray::from_options(vec![Some("foo"), Some("bar")])),
         ),
     ]);
     let mut offset = 0;
@@ -123,11 +123,11 @@ fn test_insert_delete() {
     let input = RecordBatch::new(vec![
         (
             "a".to_string(),
-            AnyArray::I64(I64Array::from(vec![Some(1i64), Some(2i64)])),
+            AnyArray::I64(I64Array::from_options(vec![Some(1i64), Some(2i64)])),
         ),
         (
             "b".to_string(),
-            AnyArray::I64(I64Array::from(vec![Some(10i64), Some(20i64)])),
+            AnyArray::I64(I64Array::from_options(vec![Some(10i64), Some(20i64)])),
         ),
     ]);
     let mut offset = 0;
@@ -156,7 +156,7 @@ fn test_expand_string_pool() {
     let strs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let input = RecordBatch::new(vec![(
         "a".to_string(),
-        AnyArray::String(StringArray::from(strs)),
+        AnyArray::String(StringArray::from_values(strs)),
     )]);
     let mut offset = 0;
     let mut tids = I64Array::new();

@@ -1053,7 +1053,9 @@ impl Node {
                     // that can be serialized to string and deserialized.
                     Some(RecordBatch::new(vec![(
                         "plan".to_string(),
-                        AnyArray::String(StringArray::from(vec![input.to_string().as_str()])),
+                        AnyArray::String(StringArray::from_values(vec![input
+                            .to_string()
+                            .as_str()])),
                     )]))
                 }
             }
@@ -1064,7 +1066,7 @@ impl Node {
 fn dummy_row() -> RecordBatch {
     RecordBatch::new(vec![(
         "$dummy".to_string(),
-        AnyArray::Bool(BoolArray::from(vec![false])),
+        AnyArray::Bool(BoolArray::from_values(vec![false])),
     )])
 }
 

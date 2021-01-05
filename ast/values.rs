@@ -38,16 +38,16 @@ impl Value {
 
     pub fn repeat(&self, len: usize) -> AnyArray {
         match self {
-            Value::Bool(value) => AnyArray::Bool(BoolArray::from(vec![*value].repeat(len))),
-            Value::I64(value) => AnyArray::I64(I64Array::from(vec![*value].repeat(len))),
-            Value::F64(value) => AnyArray::F64(F64Array::from(vec![*value].repeat(len))),
-            Value::Date(value) => AnyArray::Date(DateArray::from(vec![*value].repeat(len))),
+            Value::Bool(value) => AnyArray::Bool(BoolArray::from_options(vec![*value].repeat(len))),
+            Value::I64(value) => AnyArray::I64(I64Array::from_options(vec![*value].repeat(len))),
+            Value::F64(value) => AnyArray::F64(F64Array::from_options(vec![*value].repeat(len))),
+            Value::Date(value) => AnyArray::Date(DateArray::from_options(vec![*value].repeat(len))),
             Value::Timestamp(value) => {
-                AnyArray::Timestamp(TimestampArray::from(vec![*value].repeat(len)))
+                AnyArray::Timestamp(TimestampArray::from_options(vec![*value].repeat(len)))
             }
-            Value::String(value) => AnyArray::String(StringArray::from(
-                vec![value.as_ref().map(|s| s.as_str())].repeat(len),
-            )),
+            Value::String(value) => AnyArray::String(
+                StringArray::from_options(vec![value.as_ref().map(|s| s.as_str())]).repeat(len),
+            ),
             Value::EnumValue(_) => panic!("Enum values have no array representation"),
         }
     }

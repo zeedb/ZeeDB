@@ -1,6 +1,6 @@
 use ast::Value;
 use chrono::{NaiveDate, TimeZone, Utc};
-use kernel::AnyArray;
+use kernel::{AnyArray, Array};
 use storage::Storage;
 
 #[test]

@@ -275,7 +275,7 @@ impl Page {
                         let start = (self.inner.pid * PAGE_SIZE) as i64;
                         let end = start + len as i64;
                         let tids: Vec<i64> = (start..end).collect();
-                        AnyArray::I64(I64Array::from(tids))
+                        AnyArray::I64(I64Array::from_values(tids))
                     }
                     find => self
                         .inner

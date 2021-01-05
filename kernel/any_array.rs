@@ -1,4 +1,7 @@
-use crate::{bool_array::*, data_type::*, primitive_array::*, string_array::*};
+use crate::{
+    Array, BoolArray, DataType, DateArray, F64Array, I32Array, I64Array, StringArray,
+    TimestampArray, U64Array,
+};
 use std::{cmp::Ordering, ops::Range};
 
 #[derive(Debug, Clone)]
@@ -123,22 +126,22 @@ impl AnyArray {
     pub fn cat(mut arrays: Vec<Self>) -> Self {
         match arrays[0].data_type() {
             DataType::Bool => AnyArray::Bool(BoolArray::cat(
-                arrays.drain(..).map(|array| array.as_bool()).collect(),
+                &arrays.drain(..).map(|array| array.as_bool()).collect(),
             )),
             DataType::I64 => AnyArray::I64(I64Array::cat(
-                arrays.drain(..).map(|array| array.as_i64()).collect(),
+                &arrays.drain(..).map(|array| array.as_i64()).collect(),
             )),
             DataType::F64 => AnyArray::F64(F64Array::cat(
-                arrays.drain(..).map(|array| array.as_f64()).collect(),
+                &arrays.drain(..).map(|array| array.as_f64()).collect(),
             )),
             DataType::Date => AnyArray::Date(DateArray::cat(
-                arrays.drain(..).map(|array| array.as_date()).collect(),
+                &arrays.drain(..).map(|array| array.as_date()).collect(),
             )),
             DataType::Timestamp => AnyArray::Timestamp(TimestampArray::cat(
-                arrays.drain(..).map(|array| array.as_timestamp()).collect(),
+                &arrays.drain(..).map(|array| array.as_timestamp()).collect(),
             )),
             DataType::String => AnyArray::String(StringArray::cat(
-                arrays.drain(..).map(|array| array.as_string()).collect(),
+                &arrays.drain(..).map(|array| array.as_string()).collect(),
             )),
         }
     }
@@ -172,7 +175,7 @@ impl AnyArray {
         unary_operator!(self, array, array.repeat(n))
     }
 
-    // Complex vector operations.
+    // Vector operations.
 
     pub fn gather(&self, indexes: &I32Array) -> Self {
         unary_operator!(self, array, array.gather(indexes))
@@ -194,7 +197,7 @@ impl AnyArray {
         unary_method!(self, array, array.sort())
     }
 
-    // AnyArray comparison operators.
+    // Array comparison operators.
 
     pub fn is(&self, other: &Self) -> BoolArray {
         binary_method!(self, other, left, right, left.is(right))

@@ -1,4 +1,4 @@
-use crate::{any_array::*, bool_array::*, data_type::*, primitive_array::*};
+use crate::{any_array::*, array_like::*, bool_array::*, data_type::*};
 use std::{cmp::Ordering, fmt::Debug, ops::Range};
 
 #[derive(Clone)]
@@ -192,7 +192,7 @@ impl RecordBatch {
             }
             Ordering::Equal
         });
-        I32Array::from(indexes)
+        I32Array::from_values(indexes)
     }
 
     pub fn rename(mut self, renames: &Vec<(String, String)>) -> Self {
