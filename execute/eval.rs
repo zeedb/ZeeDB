@@ -51,142 +51,161 @@ fn eval_function(function: &F, input: &RecordBatch, state: &mut Session) -> AnyA
         }
         F::Greatest(varargs) => AnyArray::greatest(varargs.iter().map(e).collect()),
         F::Least(varargs) => AnyArray::least(varargs.iter().map(e).collect()),
-        F::AbsDouble(a) => e(a).as_f64().unary(f64::abs),
-        F::AbsInt64(a) => e(a).as_i64().unary(i64::abs),
-        F::AcosDouble(a) => e(a).as_f64().unary(f64::acos),
-        F::AcoshDouble(a) => e(a).as_f64().unary(f64::acosh),
-        F::AsinDouble(a) => e(a).as_f64().unary(f64::asin),
-        F::AsinhDouble(a) => e(a).as_f64().unary(f64::asinh),
-        F::AtanDouble(a) => e(a).as_f64().unary(f64::atan),
-        F::AtanhDouble(a) => e(a).as_f64().unary(f64::atanh),
-        F::ByteLengthString(a) => e(a).as_string().unary(|a| a.len() as i64),
-        F::CeilDouble(a) => e(a).as_f64().unary(f64::ceil),
-        F::CharLengthString(a) => e(a).as_string().unary(|a| a.chars().count() as i64),
-        F::ChrString(a) => e(a).as_i64().unary(chr),
-        F::CosDouble(a) => e(a).as_f64().unary(f64::cos),
-        F::CoshDouble(a) => e(a).as_f64().unary(f64::cosh),
-        F::DateFromTimestamp(a) => e(a).as_timestamp().unary(date_from_timestamp),
-        F::DateFromUnixDate(a) => e(a).as_i64().unary(date_from_unix_date),
-        F::DecimalLogarithmDouble(a) => e(a).as_f64().unary(f64::log10),
-        F::ExpDouble(a) => e(a).as_f64().unary(f64::exp),
-        F::ExtractDateFromTimestamp(a) => e(a).as_timestamp().unary(date_from_timestamp),
-        F::FloorDouble(a) => e(a).as_f64().unary(f64::floor),
-        F::IsFalse(a) => e(a).as_bool().unary_is(|a| a == Some(false)),
-        F::IsInf(a) => e(a).as_f64().unary(f64::is_infinite),
-        F::IsNan(a) => e(a).as_f64().unary(f64::is_nan),
+        F::AbsDouble(a) => unary(&e(a).as_f64(), f64::abs),
+        F::AbsInt64(a) => unary(&e(a).as_i64(), i64::abs),
+        F::AcosDouble(a) => unary(&e(a).as_f64(), f64::acos),
+        F::AcoshDouble(a) => unary(&e(a).as_f64(), f64::acosh),
+        F::AsinDouble(a) => unary(&e(a).as_f64(), f64::asin),
+        F::AsinhDouble(a) => unary(&e(a).as_f64(), f64::asinh),
+        F::AtanDouble(a) => unary(&e(a).as_f64(), f64::atan),
+        F::AtanhDouble(a) => unary(&e(a).as_f64(), f64::atanh),
+        F::ByteLengthString(a) => unary(&e(a).as_string(), |a| a.len() as i64),
+        F::CeilDouble(a) => unary(&e(a).as_f64(), f64::ceil),
+        F::CharLengthString(a) => unary(&e(a).as_string(), |a| a.chars().count() as i64),
+        F::ChrString(a) => unary(&e(a).as_i64(), chr),
+        F::CosDouble(a) => unary(&e(a).as_f64(), f64::cos),
+        F::CoshDouble(a) => unary(&e(a).as_f64(), f64::cosh),
+        F::DateFromTimestamp(a) => unary(&e(a).as_timestamp(), date_from_timestamp),
+        F::DateFromUnixDate(a) => unary(&e(a).as_i64(), date_from_unix_date),
+        F::DecimalLogarithmDouble(a) => unary(&e(a).as_f64(), f64::log10),
+        F::ExpDouble(a) => unary(&e(a).as_f64(), f64::exp),
+        F::ExtractDateFromTimestamp(a) => unary(&e(a).as_timestamp(), date_from_timestamp),
+        F::FloorDouble(a) => unary(&e(a).as_f64(), f64::floor),
+        F::IsFalse(a) => unary_nullable(&e(a).as_bool(), |a| Some(a == Some(false))),
+        F::IsInf(a) => unary(&e(a).as_f64(), f64::is_infinite),
+        F::IsNan(a) => unary(&e(a).as_f64(), f64::is_nan),
         F::IsNull(a) => e(a).is_null().as_any(),
-        F::IsTrue(a) => e(a).as_bool().unary_is(|a| a == Some(true)),
-        F::LengthString(a) => e(a).as_string().unary(|a| a.chars().count() as i64),
-        F::LowerString(a) => e(a).as_string().unary(|a| a.to_lowercase()),
-        F::NaturalLogarithmDouble(a) => e(a).as_f64().unary(f64::ln),
-        F::NextVal(a) => e(a).as_i64().unary(|a| state.storage.next_val(a)),
-        F::Not(a) => e(a).as_bool().unary(|a| !a),
-        F::ReverseString(a) => e(a)
-            .as_string()
-            .unary(|a| a.chars().rev().collect::<String>()),
-        F::RoundDouble(a) => e(a).as_f64().unary(f64::round),
-        F::SignDouble(a) => e(a).as_f64().unary(f64::signum),
-        F::SignInt64(a) => e(a).as_i64().unary(i64::signum),
-        F::SinDouble(a) => e(a).as_f64().unary(f64::sin),
-        F::SinhDouble(a) => e(a).as_f64().unary(f64::sinh),
-        F::SqrtDouble(a) => e(a).as_f64().unary(f64::sqrt),
-        F::StringFromDate(a) => e(a).as_date().unary(string_from_date),
-        F::StringFromTimestamp(a) => e(a).as_timestamp().unary(string_from_timestamp),
-        F::TanDouble(a) => e(a).as_f64().unary(f64::tan),
-        F::TanhDouble(a) => e(a).as_f64().unary(f64::tanh),
-        F::TimestampFromDate(a) => e(a).as_date().unary(timestamp_from_date),
-        F::TimestampFromString(a) => e(a).as_string().unary(timestamp_from_string),
-        F::TimestampFromUnixMicrosInt64(a) => e(a).as_i64().unary(timestamp),
-        F::TruncDouble(a) => e(a).as_f64().unary(f64::trunc),
-        F::UnaryMinusDouble(a) => e(a).as_f64().unary(|a| -a),
-        F::UnaryMinusInt64(a) => e(a).as_i64().unary(|a| -a),
-        F::UnixDate(a) => e(a).as_date().unary(|a| a as i64),
-        F::UnixMicrosFromTimestamp(a) => e(a).as_timestamp().unary(|a| a),
-        F::UpperString(a) => e(a).as_string().unary(|a| a.to_uppercase()),
-        F::DateTruncDate(a, date_part) => e(a).as_date().unary(|a| date_trunc(date(a), *date_part)),
-        F::ExtractFromDate(a, date_part) => e(a)
-            .as_date()
-            .unary(|a| extract_from_date(date(a), *date_part)),
-        F::ExtractFromTimestamp(a, date_part) => e(a)
-            .as_timestamp()
-            .unary(|a| extract_from_timestamp(timestamp(a), *date_part)),
-        F::TimestampTrunc(a, date_part) => e(a)
-            .as_timestamp()
-            .unary(|a| timestamp_trunc(timestamp(a), *date_part)),
+        F::IsTrue(a) => unary_nullable(&e(a).as_bool(), |a| Some(a == Some(true))),
+        F::LengthString(a) => unary(&e(a).as_string(), |a| a.chars().count() as i64),
+        F::LowerString(a) => unary(&e(a).as_string(), |a| a.to_lowercase()),
+        F::NaturalLogarithmDouble(a) => unary(&e(a).as_f64(), f64::ln),
+        F::NextVal(a) => unary(&e(a).as_i64(), |a| state.storage.next_val(a)),
+        F::Not(a) => unary(&e(a).as_bool(), |a| !a),
+        F::ReverseString(a) => unary(&e(a).as_string(), |a| a.chars().rev().collect::<String>()),
+        F::RoundDouble(a) => unary(&e(a).as_f64(), f64::round),
+        F::SignDouble(a) => unary(&e(a).as_f64(), f64::signum),
+        F::SignInt64(a) => unary(&e(a).as_i64(), i64::signum),
+        F::SinDouble(a) => unary(&e(a).as_f64(), f64::sin),
+        F::SinhDouble(a) => unary(&e(a).as_f64(), f64::sinh),
+        F::SqrtDouble(a) => unary(&e(a).as_f64(), f64::sqrt),
+        F::StringFromDate(a) => unary(&e(a).as_date(), string_from_date),
+        F::StringFromTimestamp(a) => unary(&e(a).as_timestamp(), string_from_timestamp),
+        F::TanDouble(a) => unary(&e(a).as_f64(), f64::tan),
+        F::TanhDouble(a) => unary(&e(a).as_f64(), f64::tanh),
+        F::TimestampFromDate(a) => unary(&e(a).as_date(), timestamp_from_date),
+        F::TimestampFromString(a) => unary(&e(a).as_string(), timestamp_from_string),
+        F::TimestampFromUnixMicrosInt64(a) => unary(&e(a).as_i64(), timestamp),
+        F::TruncDouble(a) => unary(&e(a).as_f64(), f64::trunc),
+        F::UnaryMinusDouble(a) => unary(&e(a).as_f64(), |a| -a),
+        F::UnaryMinusInt64(a) => unary(&e(a).as_i64(), |a| -a),
+        F::UnixDate(a) => unary(&e(a).as_date(), |a| a as i64),
+        F::UnixMicrosFromTimestamp(a) => unary(&e(a).as_timestamp(), |a| a),
+        F::UpperString(a) => unary(&e(a).as_string(), |a| a.to_uppercase()),
+        F::DateTruncDate(a, date_part) => {
+            unary(&e(a).as_date(), |a| date_trunc(date(a), *date_part))
+        }
+        F::ExtractFromDate(a, date_part) => {
+            unary(&e(a).as_date(), |a| extract_from_date(date(a), *date_part))
+        }
+        F::ExtractFromTimestamp(a, date_part) => unary(&e(a).as_timestamp(), |a| {
+            extract_from_timestamp(timestamp(a), *date_part)
+        }),
+        F::TimestampTrunc(a, date_part) => unary(&e(a).as_timestamp(), |a| {
+            timestamp_trunc(timestamp(a), *date_part)
+        }),
         F::In(a, varargs) => e(a)
             .equal_any(varargs.iter().map(|a| e(a)).collect())
             .as_any(),
-        F::AddDouble(a, b) => (e(a), e(b)).as_f64().binary(|a, b| a + b),
-        F::AddInt64(a, b) => (e(a), e(b)).as_i64().binary(|a, b| a + b),
+        F::AddDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a + b),
+        F::AddInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a + b),
         F::And(a, b) => e(a).as_bool().and(&e(b).as_bool()).as_any(),
-        F::Atan2Double(a, b) => (e(a), e(b)).as_f64().binary(|a, b| a.atan2(b)),
-        F::DivideDouble(a, b) => (e(a), e(b)).as_f64().binary(|a, b| a / b),
-        F::DivInt64(a, b) => (e(a), e(b)).as_i64().binary(|a, b| a / b),
-        F::EndsWithString(a, b) => (e(a), e(b)).as_string().binary(|a, b| a.ends_with(b)),
-        F::Equal(a, b) => e(a).equal(&e(b)).as_any(),
-        F::FormatDate(a, b) => (e(a).as_string(), e(b).as_date()).binary(|a, b| format_date(a, b)),
-        F::FormatTimestamp(a, b) => {
-            (e(a).as_string(), e(b).as_timestamp()).binary(|a, b| format_timestamp(a, b))
+        F::Atan2Double(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a.atan2(b)),
+        F::DivideDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a / b),
+        F::DivInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a / b),
+        F::EndsWithString(a, b) => {
+            binary(&e(a).as_string(), &e(b).as_string(), |a, b| a.ends_with(b))
         }
+        F::Equal(a, b) => e(a).equal(&e(b)).as_any(),
+        F::FormatDate(a, b) => binary(&e(a).as_string(), &e(b).as_date(), |a, b| format_date(a, b)),
+        F::FormatTimestamp(a, b) => binary(&e(a).as_string(), &e(b).as_timestamp(), |a, b| {
+            format_timestamp(a, b)
+        }),
         F::Greater(a, b) => e(a).greater(&e(b)).as_any(),
         F::GreaterOrEqual(a, b) => e(a).greater_equal(&e(b)).as_any(),
         F::Ifnull(a, b) => e(a).coalesce(&e(b)),
         F::Is(a, b) => e(a).is(&e(b)).as_any(),
-        F::LeftString(a, b) => (e(a).as_string(), e(b).as_i64())
-            .binary(|a, b| a.chars().take(b as usize).collect::<String>()),
+        F::LeftString(a, b) => binary(&e(a).as_string(), &e(b).as_i64(), |a, b| {
+            a.chars().take(b as usize).collect::<String>()
+        }),
         F::Less(a, b) => e(a).less(&e(b)).as_any(),
         F::LessOrEqual(a, b) => e(a).less_equal(&e(b)).as_any(),
-        F::LogarithmDouble(a, b) => (e(a), e(b)).as_f64().binary(|a, b| a.log(b)),
-        F::LtrimString(a, None) => e(a).as_string().unary(|a| a.trim_start()),
-        F::LtrimString(a, Some(b)) => (e(a), e(b)).as_string().binary(ltrim),
-        F::ModInt64(a, b) => (e(a), e(b)).as_i64().binary(|a, b| a % b),
-        F::MultiplyDouble(a, b) => (e(a), e(b)).as_f64().binary(|a, b| a * b),
-        F::MultiplyInt64(a, b) => (e(a), e(b)).as_i64().binary(|a, b| a * b),
+        F::LogarithmDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a.log(b)),
+        F::LtrimString(a, None) => unary(&e(a).as_string(), |a| a.trim_start()),
+        F::LtrimString(a, Some(b)) => binary(&e(a).as_string(), &e(b).as_string(), ltrim),
+        F::ModInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a % b),
+        F::MultiplyDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a * b),
+        F::MultiplyInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a * b),
         F::NotEqual(a, b) => e(a).not_equal(&e(b)).as_any(),
         F::Nullif(a, b) => e(a).null_if(&e(b)),
         F::Or(a, b) => e(a).as_bool().or(&e(b).as_bool()).as_any(),
-        F::ParseDate(a, b) => (e(a), e(b)).as_string().binary(|a, b| parse_date(a, b)),
-        F::ParseTimestamp(a, b) => (e(a), e(b))
-            .as_string()
-            .binary(|a, b| parse_timestamp(a, b)),
-        F::PowDouble(a, b) => (e(a), e(b)).as_f64().binary(f64::powf),
-        F::RegexpContainsString(a, b) => (e(a), e(b))
-            .as_string()
-            .binary(|a, b| regexp_contains(a, b)),
-        F::RegexpExtractString(a, b) => (e(a), e(b))
-            .as_string()
-            .binary_nullable(|a, b| regexp_extract(a, b)),
-        F::RepeatString(a, b) => {
-            (e(a).as_string(), e(b).as_i64()).binary(|a, b| a.repeat(b as usize))
+        F::ParseDate(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+            parse_date(a, b)
+        }),
+        F::ParseTimestamp(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+            parse_timestamp(a, b)
+        }),
+        F::PowDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), f64::powf),
+        F::RegexpContainsString(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+            regexp_contains(a, b)
+        }),
+        F::RegexpExtractString(a, b) => {
+            binary_nullable(&e(a).as_string(), &e(b).as_string(), |a, b| match (a, b) {
+                (Some(a), Some(b)) => regexp_extract(a, b),
+                _ => None,
+            })
         }
-        F::RightString(a, b) => (e(a).as_string(), e(b).as_i64()).binary(right),
-        F::RoundWithDigitsDouble(a, b) => (e(a).as_f64(), e(b).as_i64()).binary(round),
-        F::RtrimString(a, None) => e(a).as_string().unary(|a| a.trim_end()),
-        F::RtrimString(a, Some(b)) => (e(a), e(b)).as_string().binary(rtrim),
-        F::StartsWithString(a, b) => (e(a), e(b)).as_string().binary(|a, b| a.starts_with(b)),
-        F::StringLike(a, b) => (e(a), e(b)).as_string().binary(like),
-        F::StrposString(a, b) => (e(a), e(b)).as_string().binary_nullable(strpos),
-        F::SubtractDouble(a, b) => (e(a), e(b)).as_f64().binary(|a, b| a - b),
-        F::SubtractInt64(a, b) => (e(a), e(b)).as_i64().binary(|a, b| a - b),
-        F::TrimString(a, None) => e(a).as_string().unary(&str::trim),
-        F::TrimString(a, Some(b)) => (e(a), e(b)).as_string().binary(trim),
-        F::TruncWithDigitsDouble(a, b) => (e(a).as_f64(), e(b).as_i64()).binary(trunc),
-        F::DateAddDate(a, b, date_part) => {
-            (e(a).as_date(), e(b).as_i64()).binary(|a, b| date_add(date(a), b, *date_part))
+        F::RepeatString(a, b) => binary(&e(a).as_string(), &e(b).as_i64(), |a, b| {
+            a.repeat(b as usize)
+        }),
+        F::RightString(a, b) => binary(&e(a).as_string(), &e(b).as_i64(), right),
+        F::RoundWithDigitsDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_i64(), round),
+        F::RtrimString(a, None) => unary(&e(a).as_string(), |a| a.trim_end()),
+        F::RtrimString(a, Some(b)) => binary(&e(a).as_string(), &e(b).as_string(), rtrim),
+        F::StartsWithString(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+            a.starts_with(b)
+        }),
+        F::StringLike(a, b) => binary(&e(a).as_string(), &e(b).as_string(), like),
+        F::StrposString(a, b) => {
+            binary_nullable(&e(a).as_string(), &e(b).as_string(), |a, b| match (a, b) {
+                (Some(a), Some(b)) => strpos(a, b),
+                _ => None,
+            })
         }
-        F::DateDiffDate(a, b, date_part) => (e(a), e(b))
-            .as_date()
-            .binary(|a, b| date_diff(date(a), date(b), *date_part)),
-        F::DateSubDate(a, b, date_part) => {
-            (e(a).as_date(), e(b).as_i64()).binary(|a, b| date_sub(date(a), b, *date_part))
+        F::SubtractDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a - b),
+        F::SubtractInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a - b),
+        F::TrimString(a, None) => unary(&e(a).as_string(), &str::trim),
+        F::TrimString(a, Some(b)) => binary(&e(a).as_string(), &e(b).as_string(), trim),
+        F::TruncWithDigitsDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_i64(), trunc),
+        F::DateAddDate(a, b, date_part) => binary(&e(a).as_date(), &e(b).as_i64(), |a, b| {
+            date_add(date(a), b, *date_part)
+        }),
+        F::DateDiffDate(a, b, date_part) => binary(&e(a).as_date(), &e(b).as_date(), |a, b| {
+            date_diff(date(a), date(b), *date_part)
+        }),
+        F::DateSubDate(a, b, date_part) => binary(&e(a).as_date(), &e(b).as_i64(), |a, b| {
+            date_sub(date(a), b, *date_part)
+        }),
+        F::TimestampAdd(a, b, date_part) => binary(&e(a).as_timestamp(), &e(b).as_i64(), |a, b| {
+            timestamp_add(timestamp(a), b, *date_part)
+        }),
+        F::TimestampDiff(a, b, date_part) => {
+            binary(&e(a).as_timestamp(), &e(b).as_timestamp(), |a, b| {
+                timestamp_diff(timestamp(a), timestamp(b), *date_part)
+            })
         }
-        F::TimestampAdd(a, b, date_part) => (e(a).as_timestamp(), e(b).as_i64())
-            .binary(|a, b| timestamp_add(timestamp(a), b, *date_part)),
-        F::TimestampDiff(a, b, date_part) => (e(a), e(b))
-            .as_timestamp()
-            .binary(|a, b| timestamp_diff(timestamp(a), timestamp(b), *date_part)),
-        F::TimestampSub(a, b, date_part) => (e(a).as_timestamp(), e(b).as_i64())
-            .binary(|a, b| timestamp_sub(timestamp(a), b, *date_part)),
+        F::TimestampSub(a, b, date_part) => binary(&e(a).as_timestamp(), &e(b).as_i64(), |a, b| {
+            timestamp_sub(timestamp(a), b, *date_part)
+        }),
         F::Between(a, b, c) => {
             let a = e(a);
             let b = e(b);
@@ -196,25 +215,44 @@ fn eval_function(function: &F, input: &RecordBatch, state: &mut Session) -> AnyA
             left.and(&right).as_any()
         }
         F::DateFromYearMonthDay(a, b, c) => {
-            (e(a).as_i64(), e(b).as_i64(), e(c).as_i64()).ternary(|a, b, c| date_from_ymd(a, b, c))
+            ternary(&e(a).as_i64(), &e(b).as_i64(), &e(c).as_i64(), |a, b, c| {
+                date_from_ymd(a, b, c)
+            })
         }
         F::If(a, b, c) => e(a).as_bool().blend(&e(b), &e(c)),
-        F::LpadString(a, b, c) => {
-            (e(a).as_string(), e(b).as_i64(), e(c).as_string()).ternary(|a, b, c| lpad(a, b, c))
-        }
-        F::RegexpReplaceString(a, b, c) => (e(a).as_string(), e(b).as_string(), e(c).as_string())
-            .ternary(|a, b, c| regexp_replace(a, b, c)),
-        F::ReplaceString(a, b, c) => (e(a).as_string(), e(b).as_string(), e(c).as_string())
-            .ternary(|a, b, c| a.replace(b, c)),
-        F::RpadString(a, b, c) => {
-            (e(a).as_string(), e(b).as_i64(), e(c).as_string()).ternary(|a, b, c| rpad(a, b, c))
-        }
-        F::SubstrString(a, b, None) => {
-            (e(a).as_string(), e(b).as_i64()).binary(|a, b| substr(a, b, i64::MAX))
-        }
-        F::SubstrString(a, b, Some(c)) => {
-            (e(a).as_string(), e(b).as_i64(), e(c).as_i64()).ternary(|a, b, c| substr(a, b, c))
-        }
+        F::LpadString(a, b, c) => ternary(
+            &e(a).as_string(),
+            &e(b).as_i64(),
+            &e(c).as_string(),
+            |a, b, c| lpad(a, b, c),
+        ),
+        F::RegexpReplaceString(a, b, c) => ternary(
+            &e(a).as_string(),
+            &e(b).as_string(),
+            &e(c).as_string(),
+            |a, b, c| regexp_replace(a, b, c),
+        ),
+        F::ReplaceString(a, b, c) => ternary(
+            &e(a).as_string(),
+            &e(b).as_string(),
+            &e(c).as_string(),
+            |a, b, c| a.replace(b, c),
+        ),
+        F::RpadString(a, b, c) => ternary(
+            &e(a).as_string(),
+            &e(b).as_i64(),
+            &e(c).as_string(),
+            |a, b, c| rpad(a, b, c),
+        ),
+        F::SubstrString(a, b, None) => binary(&e(a).as_string(), &e(b).as_i64(), |a, b| {
+            substr(a, b, i64::MAX)
+        }),
+        F::SubstrString(a, b, Some(c)) => ternary(
+            &e(a).as_string(),
+            &e(b).as_i64(),
+            &e(c).as_i64(),
+            |a, b, c| substr(a, b, c),
+        ),
         F::CaseNoValue(cases, default) => {
             let mut acc = e(default);
             for (test, value) in cases.iter().rev() {
@@ -721,486 +759,150 @@ const MILLISECONDS: i64 = 1_000;
 /// Number of microseconds in a second
 const MICROSECONDS: i64 = 1_000_000;
 
-trait UnaryOperatorSupport<'a>: Array<'a> {
-    fn unary<Into: ArrayBuilder>(&'a self, f: impl Fn(Self::Element) -> Into) -> AnyArray {
-        let mut builder = Into::with_capacity(self.len());
-        for i in 0..self.len() {
-            Into::push(&mut builder, self.get(i).map(|value| f(value)));
-        }
-        Into::as_any(builder)
-    }
-
-    fn unary_is<Into: ArrayBuilder>(
-        &'a self,
-        f: impl Fn(Option<Self::Element>) -> Into,
-    ) -> AnyArray {
-        let mut builder = Into::with_capacity(self.len());
-        for i in 0..self.len() {
-            Into::push(&mut builder, Some(f(self.get(i))));
-        }
-        Into::as_any(builder)
-    }
+fn unary<'a, A, F, Value>(a: &'a A, f: F) -> AnyArray
+where
+    A: Array<'a>,
+    F: Fn(A::Element) -> Value,
+    Value: ArrayFactory,
+{
+    unary_nullable(a, |a| match a {
+        Some(a) => Some(f(a)),
+        None => None,
+    })
 }
 
-impl<'a, A: Array<'a>> UnaryOperatorSupport<'a> for A {}
-
-trait ArrayBuilder: Sized {
-    type Container;
-    fn with_capacity(capacity: usize) -> Self::Container;
-    fn push(array: &mut Self::Container, value: Option<Self>);
-    fn as_any(array: Self::Container) -> AnyArray;
+fn unary_nullable<'a, A, F, Value>(a: &'a A, f: F) -> AnyArray
+where
+    A: Array<'a>,
+    F: Fn(Option<A::Element>) -> Option<Value>,
+    Value: ArrayFactory,
+{
+    let mut builder = Value::Container::with_capacity(a.len());
+    for i in 0..a.len() {
+        Value::push(&mut builder, f(a.get(i)))
+    }
+    builder.as_any()
 }
 
-impl ArrayBuilder for bool {
+fn binary<'a, A, B, F, Value>(a: &'a A, b: &'a B, f: F) -> AnyArray
+where
+    A: Array<'a>,
+    B: Array<'a>,
+    F: Fn(A::Element, B::Element) -> Value,
+    Value: ArrayFactory,
+{
+    binary_nullable(a, b, |a, b| match (a, b) {
+        (Some(a), Some(b)) => Some(f(a, b)),
+        _ => None,
+    })
+}
+
+fn binary_nullable<'a, A, B, F, Value>(a: &'a A, b: &'a B, f: F) -> AnyArray
+where
+    A: Array<'a>,
+    B: Array<'a>,
+    F: Fn(Option<A::Element>, Option<B::Element>) -> Option<Value>,
+    Value: ArrayFactory,
+{
+    assert_eq!(a.len(), b.len());
+    let mut builder = Value::Container::with_capacity(a.len());
+    for i in 0..a.len() {
+        Value::push(&mut builder, f(a.get(i), b.get(i)))
+    }
+    builder.as_any()
+}
+
+fn ternary<'a, A, B, C, F, Value>(a: &'a A, b: &'a B, c: &'a C, f: F) -> AnyArray
+where
+    A: Array<'a>,
+    B: Array<'a>,
+    C: Array<'a>,
+    F: Fn(A::Element, B::Element, C::Element) -> Value,
+    Value: ArrayFactory,
+{
+    ternary_nullable(a, b, c, |a, b, c| match (a, b, c) {
+        (Some(a), Some(b), Some(c)) => Some(f(a, b, c)),
+        _ => None,
+    })
+}
+
+fn ternary_nullable<'a, A, B, C, F, Value>(a: &'a A, b: &'a B, c: &'a C, f: F) -> AnyArray
+where
+    A: Array<'a>,
+    B: Array<'a>,
+    C: Array<'a>,
+    F: Fn(Option<A::Element>, Option<B::Element>, Option<C::Element>) -> Option<Value>,
+    Value: ArrayFactory,
+{
+    assert_eq!(a.len(), b.len());
+    assert_eq!(a.len(), c.len());
+    let mut builder = Value::Container::with_capacity(a.len());
+    for i in 0..a.len() {
+        Value::push(&mut builder, f(a.get(i), b.get(i), c.get(i)))
+    }
+    builder.as_any()
+}
+
+trait ArrayFactory: Sized {
+    type Container: Array<'static>;
+    fn push(array: &mut Self::Container, next: Option<Self>);
+}
+
+impl ArrayFactory for bool {
     type Container = BoolArray;
 
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        array.push(value)
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        array.push(next)
     }
 }
 
-impl ArrayBuilder for i64 {
+impl ArrayFactory for i64 {
     type Container = I64Array;
 
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        array.push(value)
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        array.push(next)
     }
 }
 
-impl ArrayBuilder for f64 {
+impl ArrayFactory for f64 {
     type Container = F64Array;
 
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        array.push(value)
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        array.push(next)
     }
 }
 
-impl ArrayBuilder for &str {
-    type Container = StringArray;
-
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        array.push(value)
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
-    }
-}
-
-impl ArrayBuilder for String {
-    type Container = StringArray;
-
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        match value {
-            Some(value) => array.push(Some(value.as_str())),
-            None => array.push(None),
-        }
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
-    }
-}
-
-impl ArrayBuilder for Date<Utc> {
+impl ArrayFactory for Date<Utc> {
     type Container = DateArray;
 
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        array.push(value.map(epoch_date))
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        array.push(next.map(epoch_date))
     }
 }
 
-impl ArrayBuilder for DateTime<Utc> {
+impl ArrayFactory for DateTime<Utc> {
     type Container = TimestampArray;
 
-    fn with_capacity(capacity: usize) -> Self::Container {
-        Self::Container::with_capacity(capacity)
-    }
-
-    fn push(array: &mut Self::Container, value: Option<Self>) {
-        array.push(value.map(epoch_micros))
-    }
-
-    fn as_any(array: Self::Container) -> AnyArray {
-        array.as_any()
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        array.push(next.map(epoch_micros))
     }
 }
 
-trait BinaryCastSupport {
-    fn as_bool(self) -> (BoolArray, BoolArray);
-    fn as_i64(self) -> (I64Array, I64Array);
-    fn as_f64(self) -> (F64Array, F64Array);
-    fn as_date(self) -> (DateArray, DateArray);
-    fn as_timestamp(self) -> (TimestampArray, TimestampArray);
-    fn as_string(self) -> (StringArray, StringArray);
-}
+impl ArrayFactory for &str {
+    type Container = StringArray;
 
-impl BinaryCastSupport for (AnyArray, AnyArray) {
-    fn as_bool(self) -> (BoolArray, BoolArray) {
-        (self.0.as_bool(), self.1.as_bool())
-    }
-    fn as_i64(self) -> (I64Array, I64Array) {
-        (self.0.as_i64(), self.1.as_i64())
-    }
-    fn as_f64(self) -> (F64Array, F64Array) {
-        (self.0.as_f64(), self.1.as_f64())
-    }
-    fn as_date(self) -> (DateArray, DateArray) {
-        (self.0.as_date(), self.1.as_date())
-    }
-    fn as_timestamp(self) -> (TimestampArray, TimestampArray) {
-        (self.0.as_timestamp(), self.1.as_timestamp())
-    }
-    fn as_string(self) -> (StringArray, StringArray) {
-        (self.0.as_string(), self.1.as_string())
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        array.push(next)
     }
 }
 
-trait BinaryOperatorSupport<'a> {
-    type Left;
-    type Right;
+impl ArrayFactory for String {
+    type Container = StringArray;
 
-    fn len(&'a self) -> usize;
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)>;
-
-    fn binary<T: ArrayBuilder>(&'a self, f: impl Fn(Self::Left, Self::Right) -> T) -> AnyArray {
-        let mut builder = T::with_capacity(self.len());
-        for i in 0..self.len() {
-            T::push(&mut builder, self.get(i).map(|(a, b)| f(a, b)));
-        }
-        T::as_any(builder)
-    }
-
-    fn binary_nullable<T: ArrayBuilder>(
-        &'a self,
-        f: impl Fn(Self::Left, Self::Right) -> Option<T>,
-    ) -> AnyArray {
-        let mut builder = T::with_capacity(self.len());
-        for i in 0..self.len() {
-            T::push(&mut builder, self.get(i).and_then(|(a, b)| f(a, b)));
-        }
-        T::as_any(builder)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (I64Array, I64Array) {
-    type Left = i64;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (F64Array, F64Array) {
-    type Left = f64;
-    type Right = f64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (F64Array, I64Array) {
-    type Left = f64;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (DateArray, DateArray) {
-    type Left = i32;
-    type Right = i32;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (DateArray, I64Array) {
-    type Left = i32;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (DateArray, StringArray) {
-    type Left = i32;
-    type Right = &'a str;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (TimestampArray, TimestampArray) {
-    type Left = i64;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (TimestampArray, I64Array) {
-    type Left = i64;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (TimestampArray, StringArray) {
-    type Left = i64;
-    type Right = &'a str;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (StringArray, StringArray) {
-    type Left = &'a str;
-    type Right = &'a str;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (StringArray, I64Array) {
-    type Left = &'a str;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (StringArray, DateArray) {
-    type Left = &'a str;
-    type Right = i32;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-impl<'a> BinaryOperatorSupport<'a> for (StringArray, TimestampArray) {
-    type Left = &'a str;
-    type Right = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::Left, Self::Right)> {
-        let a = self.0.get(i);
-        let b = self.1.get(i);
-        a.zip(b)
-    }
-}
-
-trait TernaryOperatorSupport<'a> {
-    type A;
-    type B;
-    type C;
-
-    fn len(&'a self) -> usize;
-
-    fn get(&'a self, i: usize) -> Option<(Self::A, Self::B, Self::C)>;
-
-    fn ternary<T: ArrayBuilder>(&'a self, f: impl Fn(Self::A, Self::B, Self::C) -> T) -> AnyArray {
-        let mut builder = T::with_capacity(self.len());
-        for i in 0..self.len() {
-            T::push(&mut builder, self.get(i).map(|(a, b, c)| f(a, b, c)));
-        }
-        T::as_any(builder)
-    }
-}
-
-impl<'a> TernaryOperatorSupport<'a> for (I64Array, I64Array, I64Array) {
-    type A = i64;
-    type B = i64;
-    type C = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::A, Self::B, Self::C)> {
-        match (self.0.get(i), self.1.get(i), self.2.get(i)) {
-            (Some(a), Some(b), Some(c)) => Some((a, b, c)),
-            _ => None,
-        }
-    }
-}
-
-impl<'a> TernaryOperatorSupport<'a> for (StringArray, StringArray, StringArray) {
-    type A = &'a str;
-    type B = &'a str;
-    type C = &'a str;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::A, Self::B, Self::C)> {
-        match (self.0.get(i), self.1.get(i), self.2.get(i)) {
-            (Some(a), Some(b), Some(c)) => Some((a, b, c)),
-            _ => None,
-        }
-    }
-}
-
-impl<'a> TernaryOperatorSupport<'a> for (StringArray, I64Array, StringArray) {
-    type A = &'a str;
-    type B = i64;
-    type C = &'a str;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::A, Self::B, Self::C)> {
-        match (self.0.get(i), self.1.get(i), self.2.get(i)) {
-            (Some(a), Some(b), Some(c)) => Some((a, b, c)),
-            _ => None,
-        }
-    }
-}
-
-impl<'a> TernaryOperatorSupport<'a> for (StringArray, I64Array, I64Array) {
-    type A = &'a str;
-    type B = i64;
-    type C = i64;
-
-    fn len(&'a self) -> usize {
-        self.0.len()
-    }
-
-    fn get(&'a self, i: usize) -> Option<(Self::A, Self::B, Self::C)> {
-        match (self.0.get(i), self.1.get(i), self.2.get(i)) {
-            (Some(a), Some(b), Some(c)) => Some((a, b, c)),
-            _ => None,
+    fn push(array: &mut Self::Container, next: Option<Self>) {
+        match next {
+            Some(next) => array.push(Some(next.as_str())),
+            None => array.push(None),
         }
     }
 }
