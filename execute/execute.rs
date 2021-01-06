@@ -103,7 +103,7 @@ enum Node {
     Aggregate {
         finished: bool,
         group_by: Vec<Column>,
-        aggregate: Vec<(AggregateFn, Column, Column)>,
+        aggregate: Vec<AggregateExpr>,
         input: Box<Node>,
     },
     Limit {
@@ -439,8 +439,8 @@ impl Node {
                 for column in group_by {
                     fields.push((column.canonical_name(), column.data_type));
                 }
-                for (_, _, column) in aggregate {
-                    fields.push((column.canonical_name(), column.data_type));
+                for a in aggregate {
+                    fields.push((a.output.canonical_name(), a.output.data_type));
                 }
                 fields
             }
@@ -860,7 +860,7 @@ impl Node {
                                 .collect();
                             let aggregate_columns: Vec<AnyArray> = aggregate
                                 .iter()
-                                .map(|(_, c, _)| batch.find(&c.canonical_name()).unwrap().clone())
+                                .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
                                 .collect();
                             operator.insert(group_by_columns, aggregate_columns);
                         }

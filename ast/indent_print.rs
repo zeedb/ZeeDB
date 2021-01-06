@@ -153,8 +153,18 @@ impl IndentPrint for Expr {
                 for column in group_by {
                     write!(f, " {}", column)?;
                 }
-                for (aggregate, parameter, result) in aggregate {
-                    write!(f, " {}:({} {})", result, aggregate, parameter)?;
+                for AggregateExpr {
+                    function,
+                    distinct,
+                    input,
+                    output,
+                } in aggregate
+                {
+                    if *distinct {
+                        write!(f, " {}:({} Distinct {})", output, function, input)?;
+                    } else {
+                        write!(f, " {}:({} {})", output, function, input)?;
+                    }
                 }
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
@@ -445,16 +455,16 @@ impl Display for Scalar {
     }
 }
 
-impl Display for AggregateFn {
+impl Display for AggregateFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AggregateFn::AnyValue => write!(f, "AnyValue"),
-            AggregateFn::Count => write!(f, "Count"),
-            AggregateFn::LogicalAnd => write!(f, "LogicalAnd"),
-            AggregateFn::LogicalOr => write!(f, "LogicalOr"),
-            AggregateFn::Max => write!(f, "Max"),
-            AggregateFn::Min => write!(f, "Min"),
-            AggregateFn::Sum => write!(f, "Sum"),
+            AggregateFunction::AnyValue => write!(f, "AnyValue"),
+            AggregateFunction::Count => write!(f, "Count"),
+            AggregateFunction::LogicalAnd => write!(f, "LogicalAnd"),
+            AggregateFunction::LogicalOr => write!(f, "LogicalOr"),
+            AggregateFunction::Max => write!(f, "Max"),
+            AggregateFunction::Min => write!(f, "Min"),
+            AggregateFunction::Sum => write!(f, "Sum"),
         }
     }
 }

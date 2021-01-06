@@ -1,6 +1,6 @@
 use crate::{column::Column, values::*};
 use catalog::Index;
-use chrono::{Duration, Weekday};
+use chrono::Weekday;
 use kernel::*;
 use std::{
     cmp::Ordering,
@@ -74,7 +74,7 @@ pub enum Expr {
     // LogicalAggregate { group_by, aggregate } implements the GROUP BY clause.
     LogicalAggregate {
         group_by: Vec<Column>,
-        aggregate: Vec<(AggregateFn, Column, Column)>,
+        aggregate: Vec<AggregateExpr>,
         input: Box<Expr>,
     },
     // LogicalLimit { n } implements the LIMIT / OFFSET / TOP clause.
@@ -209,7 +209,7 @@ pub enum Expr {
     },
     Aggregate {
         group_by: Vec<Column>,
-        aggregate: Vec<(AggregateFn, Column, Column)>,
+        aggregate: Vec<AggregateExpr>,
         input: Box<Expr>,
     },
     Limit {
@@ -973,8 +973,8 @@ impl Expr {
             } => {
                 let mut set = HashSet::new();
                 set.extend(group_by.clone());
-                for (_, _, c) in aggregate {
-                    set.insert(c.clone());
+                for AggregateExpr { output, .. } in aggregate {
+                    set.insert(output.clone());
                 }
                 set
             }
@@ -1049,8 +1049,8 @@ impl Expr {
                 ..
             } => {
                 set.extend(group_by.clone());
-                for (f, c, _) in aggregate {
-                    set.insert(c.clone());
+                for AggregateExpr { input, .. } in aggregate {
+                    set.insert(input.clone());
                 }
             }
             Expr::LogicalSort { order_by, .. } => {
@@ -1202,7 +1202,19 @@ impl Expr {
                 group_by: group_by.iter().map(subst_c).collect(),
                 aggregate: aggregate
                     .iter()
-                    .map(|(f, c_in, c_out)| (f.clone(), subst_c(c_in), subst_c(c_out)))
+                    .map(
+                        |AggregateExpr {
+                             function,
+                             distinct,
+                             input,
+                             output,
+                         }| AggregateExpr {
+                            function: *function,
+                            distinct: *distinct,
+                            input: subst_c(input),
+                            output: subst_c(output),
+                        },
+                    )
                     .collect(),
                 input: Box::new(input.subst(map)),
             },
@@ -2580,9 +2592,16 @@ impl F {
     }
 }
 
-// Aggregate functions appear in GROUP BY expressions.
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub struct AggregateExpr {
+    pub function: AggregateFunction,
+    pub distinct: bool,
+    pub input: Column,
+    pub output: Column,
+}
+
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum AggregateFn {
+pub enum AggregateFunction {
     AnyValue,
     Count,
     LogicalAnd,
@@ -2592,28 +2611,29 @@ pub enum AggregateFn {
     Sum,
 }
 
-impl AggregateFn {
+impl AggregateFunction {
     pub fn from(name: &str) -> Self {
         match name {
-            "ZetaSQL:any_value" => AggregateFn::AnyValue,
+            "ZetaSQL:any_value" => AggregateFunction::AnyValue,
             "ZetaSQL:avg" => panic!("avg should be converted into sum / count"),
-            "ZetaSQL:count" => AggregateFn::Count,
-            "ZetaSQL:logical_and" => AggregateFn::LogicalAnd,
-            "ZetaSQL:logical_or" => AggregateFn::LogicalOr,
-            "ZetaSQL:max" => AggregateFn::Max,
-            "ZetaSQL:min" => AggregateFn::Min,
-            "ZetaSQL:sum" => AggregateFn::Sum,
+            "ZetaSQL:count" => AggregateFunction::Count,
+            "ZetaSQL:logical_and" => AggregateFunction::LogicalAnd,
+            "ZetaSQL:logical_or" => AggregateFunction::LogicalOr,
+            "ZetaSQL:max" => AggregateFunction::Max,
+            "ZetaSQL:min" => AggregateFunction::Min,
+            "ZetaSQL:sum" => AggregateFunction::Sum,
             _ => panic!("{} is not supported", name),
         }
     }
 
     pub fn data_type(&self, column_type: DataType) -> DataType {
         match self {
-            AggregateFn::AnyValue | AggregateFn::Max | AggregateFn::Min | AggregateFn::Sum => {
-                column_type.clone()
-            }
-            AggregateFn::Count => DataType::I64,
-            AggregateFn::LogicalAnd | AggregateFn::LogicalOr => DataType::Bool,
+            AggregateFunction::AnyValue
+            | AggregateFunction::Max
+            | AggregateFunction::Min
+            | AggregateFunction::Sum => column_type.clone(),
+            AggregateFunction::Count => DataType::I64,
+            AggregateFunction::LogicalAnd | AggregateFunction::LogicalOr => DataType::Bool,
         }
     }
 }

@@ -1,4 +1,4 @@
-use ast::{AggregateFn, Column, Value};
+use ast::{AggregateExpr, AggregateFunction, Column, Value};
 use kernel::*;
 use std::{
     collections::HashMap,
@@ -34,13 +34,13 @@ enum Acc {
 }
 
 impl GroupByAggregate {
-    pub fn new(aggregate_fns: &Vec<(AggregateFn, Column, Column)>) -> Self {
+    pub fn new(aggregate_fns: &Vec<AggregateExpr>) -> Self {
         Self {
             group_by_batches: vec![],
             aggregate_slots: HashMap::new(),
             aggregate_slot_template: aggregate_fns
                 .iter()
-                .map(|(operator, parameter, _)| Acc::new(operator, parameter.data_type))
+                .map(|a| Acc::new(&a.function, a.input.data_type))
                 .collect(),
         }
     }
@@ -177,15 +177,15 @@ impl PartialEq for Key {
 impl Eq for Key {}
 
 impl Acc {
-    fn new(operator: &AggregateFn, data_type: DataType) -> Self {
+    fn new(operator: &AggregateFunction, data_type: DataType) -> Self {
         match operator {
-            AggregateFn::AnyValue => Self::AnyValue(Value::null(data_type)),
-            AggregateFn::Count => Self::Count(None),
-            AggregateFn::LogicalAnd => Self::LogicalAnd(None),
-            AggregateFn::LogicalOr => Self::LogicalOr(None),
-            AggregateFn::Max => Self::Max(Value::null(data_type)),
-            AggregateFn::Min => Self::Min(Value::null(data_type)),
-            AggregateFn::Sum => Self::Sum(Value::null(data_type)),
+            AggregateFunction::AnyValue => Self::AnyValue(Value::null(data_type)),
+            AggregateFunction::Count => Self::Count(None),
+            AggregateFunction::LogicalAnd => Self::LogicalAnd(None),
+            AggregateFunction::LogicalOr => Self::LogicalOr(None),
+            AggregateFunction::Max => Self::Max(Value::null(data_type)),
+            AggregateFunction::Min => Self::Min(Value::null(data_type)),
+            AggregateFunction::Sum => Self::Sum(Value::null(data_type)),
         }
     }
 

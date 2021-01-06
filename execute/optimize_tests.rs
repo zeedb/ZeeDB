@@ -1,3 +1,5 @@
+use storage::Storage;
+
 use crate::test_suite::*;
 
 #[test]
@@ -311,4 +313,16 @@ fn test_with() {
         "explain with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id",
     );
     t.finish("examples/optimize_with.testlog");
+}
+
+#[test]
+fn test_distinct() {
+    let mut t = TestSuite::new(Storage::new());
+    t.setup("create table integers (x int64)");
+    t.setup("insert into integers values (1), (1), (2), (3), (null)");
+    t.ok("explain select count(distinct x) from integers");
+    t.ok("explain select count(distinct x), count(distinct div(x, 2)) from integers");
+    t.ok("explain select div(x, 2), count(distinct x) from integers group by 1");
+    t.ok("explain select div(x, 2), count(distinct x), count(distinct div(x, 2)) from integers group by 1");
+    t.finish("examples/optimize_distinct.testlog");
 }

@@ -12,8 +12,8 @@ Map $query.b:(AddInt64 1 1) $subquery1.a:1
 
 # count_and_sum_distinct
 ok: explain select count(distinct account_number), sum(distinct account_number) from customer
-plan                                                                                                                                                                                                                                                          
-Aggregate $aggregate.$agg1:(Count $count) $aggregate.$agg2:(Sum $sum)
+plan                                                                                                                                                                                                                                                                            
+Aggregate $aggregate.$agg1:(Count Distinct $count) $aggregate.$agg2:(Sum Distinct $sum)
 	Map $count:customer.account_number $sum:customer.account_number
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 			Map* customer.account_number $xmin $xmax

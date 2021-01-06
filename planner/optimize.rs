@@ -1,10 +1,7 @@
 use crate::{cost::*, rewrite::rewrite, rule::*, search_space::*};
 use ast::*;
 use catalog::Index;
-use std::{
-    collections::{HashMap, HashSet},
-    ops::Deref,
-};
+use std::collections::{HashMap, HashSet};
 use storage::Storage;
 use zetasql::SimpleCatalogProto;
 
@@ -349,8 +346,8 @@ impl<'a> Optimizer<'a> {
                     cardinality *= n;
                 }
                 cardinality = self.ss[leaf(input)].props.cardinality.min(cardinality);
-                for (_, _, c) in aggregate {
-                    column_unique_cardinality.insert(c.clone(), cardinality);
+                for a in aggregate {
+                    column_unique_cardinality.insert(a.output.clone(), cardinality);
                 }
             }
             LogicalLimit { limit, input, .. } => {

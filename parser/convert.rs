@@ -416,7 +416,7 @@ impl Converter {
             group_by_columns.push(column);
         }
         // Organize each of the aggregation operations into stages.
-        let mut aggregate_operators: Vec<(AggregateFn, Column, Column)> = vec![];
+        let mut aggregate_operators: Vec<AggregateExpr> = vec![];
         let mut output_projects: Vec<(Scalar, Column)> = vec![];
         for aggregate in &q.aggregate_list {
             let function = match aggregate.expr.get().node.get() {
@@ -432,8 +432,11 @@ impl Converter {
                 other => panic!("{:?}", other),
             };
             let function = function.parent.get();
-            let distinct = function.distinct.unwrap_or(false); // TODO
-            let ignore_nulls = function.null_handling_modifier.unwrap_or(0) == 1; // TODO
+            let distinct = function.distinct.unwrap_or(false);
+            let ignore_nulls = function.null_handling_modifier.unwrap_or(0) == 1;
+            if ignore_nulls {
+                panic!("IGNORE NULLS is not supported");
+            }
             let function = function.parent.get();
             let arguments = &function.argument_list;
             let function = function.function.get().name.get().clone();
@@ -445,16 +448,18 @@ impl Converter {
                 input_projects.push((input_expr.clone(), input_column.clone()));
                 let sum_column = Column::computed("$avg$sum", input_expr.data_type());
                 let count_column = Column::computed("$avg$count", input_expr.data_type());
-                aggregate_operators.push((
-                    AggregateFn::Sum,
-                    input_column.clone(),
-                    sum_column.clone(),
-                ));
-                aggregate_operators.push((
-                    AggregateFn::Count,
-                    input_column.clone(),
-                    count_column.clone(),
-                ));
+                aggregate_operators.push(AggregateExpr {
+                    function: AggregateFunction::Sum,
+                    distinct,
+                    input: input_column.clone(),
+                    output: sum_column.clone(),
+                });
+                aggregate_operators.push(AggregateExpr {
+                    function: AggregateFunction::Count,
+                    distinct,
+                    input: input_column.clone(),
+                    output: count_column.clone(),
+                });
                 let avg_expr = Scalar::Call(Box::new(F::DivideDouble(
                     Scalar::Cast(Box::new(Scalar::Column(sum_column)), DataType::F64),
                     Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::F64),
@@ -468,7 +473,12 @@ impl Converter {
                 let input_column = Column::computed("$star", DataType::I64);
                 input_projects.push((input_expr, input_column.clone()));
                 let count_column = self.column(aggregate.column.get());
-                aggregate_operators.push((AggregateFn::Count, input_column, count_column));
+                aggregate_operators.push(AggregateExpr {
+                    function: AggregateFunction::Count,
+                    distinct,
+                    input: input_column,
+                    output: count_column,
+                });
             } else {
                 assert!(arguments.len() == 1);
 
@@ -477,11 +487,12 @@ impl Converter {
                     Column::computed(&function_name(&function), input_expr.data_type());
                 input_projects.push((input_expr, input_column.clone()));
                 let aggregate_column = self.column(aggregate.column.get());
-                aggregate_operators.push((
-                    AggregateFn::from(&function),
-                    input_column,
-                    aggregate_column,
-                ));
+                aggregate_operators.push(AggregateExpr {
+                    function: AggregateFunction::from(&function),
+                    distinct,
+                    input: input_column,
+                    output: aggregate_column,
+                });
             }
         }
         // Form the result, using as many stages as are necessary.

@@ -1047,12 +1047,17 @@ fn push_both(
     }
 }
 
-fn any_value(attributes: HashSet<Column>) -> Vec<(AggregateFn, Column, Column)> {
+fn any_value(attributes: HashSet<Column>) -> Vec<AggregateExpr> {
     let mut attributes: Vec<_> = attributes
         .iter()
-        .map(|column| (AggregateFn::AnyValue, column.clone(), column.clone()))
+        .map(|column| AggregateExpr {
+            function: AggregateFunction::AnyValue,
+            distinct: false,
+            input: column.clone(),
+            output: column.clone(),
+        })
         .collect();
-    attributes.sort_by(|(_, i, _), (_, j, _)| i.cmp(j));
+    attributes.sort_by(|a, b| a.input.cmp(&b.input));
     attributes
 }
 
