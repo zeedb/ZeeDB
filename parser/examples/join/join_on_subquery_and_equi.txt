@@ -6,13 +6,7 @@ LogicalMap $query.$col1:1
 	LogicalFilter (Equal person.person_id customer.person_id) $in
 		LogicalJoin Mark $in (Equal customer.store_id store.store_id)
 			LogicalMap store.store_id
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* store.store_id $xmin $xmax
-						LogicalGet store
+				LogicalGet store
 			LogicalJoin Inner
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id $xmin $xmax
-						LogicalGet person
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.person_id customer.store_id $xmin $xmax
-						LogicalGet customer
+				LogicalGet person
+				LogicalGet customer

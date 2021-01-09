@@ -6,6 +6,4 @@ offset 10
 
 LogicalLimit 100 10
 	LogicalSort customer.modified_date
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.customer_id customer.modified_date $xmin $xmax
-				LogicalGet customer
+		LogicalGet customer

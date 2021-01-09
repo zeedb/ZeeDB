@@ -7,9 +7,5 @@ LogicalUpdate customer
 	LogicalMap customer.customer_id customer.person_id customer.store_id customer.account_number:(AddInt64 customer.account_number 1) customer.modified_date $tid
 		LogicalFilter (Equal customer.person_id person.person_id)
 			LogicalJoin Inner
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-						LogicalGet customer
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id $xmin $xmax
-						LogicalGet person
+				LogicalGet customer
+				LogicalGet person

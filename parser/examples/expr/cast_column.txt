@@ -2,6 +2,4 @@ select cast(customer_id as string)
 from customer
 
 LogicalMap $query.$col1:(Cast customer.customer_id STRING)
-	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-		Map* customer.customer_id $xmin $xmax
-			LogicalGet customer
+	LogicalGet customer

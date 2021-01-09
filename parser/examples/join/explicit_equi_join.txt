@@ -5,9 +5,5 @@ join store on customer.store_id = store.store_id
 LogicalMap customer.customer_id store.store_id
 	LogicalFilter (Equal customer.store_id store.store_id)
 		LogicalJoin Inner
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.customer_id customer.store_id $xmin $xmax
-					LogicalGet customer
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* store.store_id $xmin $xmax
-					LogicalGet store
+			LogicalGet customer
+			LogicalGet store

@@ -9,16 +9,8 @@ LogicalMap $query.$col1:1
 				LogicalMap $expr_subquery.$col1:(Equal person_id person_id)
 					LogicalSingleGet
 				LogicalJoin Inner
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person_id $xmin $xmax
-							LogicalGet person
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person_id $xmin $xmax
-							LogicalGet customer
+					LogicalGet person
+					LogicalGet customer
 			LogicalJoin Inner
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id $xmin $xmax
-						LogicalGet person
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.person_id $xmin $xmax
-						LogicalGet customer
+				LogicalGet person
+				LogicalGet customer

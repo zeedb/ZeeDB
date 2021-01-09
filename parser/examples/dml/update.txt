@@ -5,6 +5,4 @@ where person_id = 1
 LogicalUpdate person
 	LogicalMap person.person_id person.first_name:"Foo" person.last_name person.modified_date $tid
 		LogicalFilter (Equal person.person_id 1)
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
-					LogicalGet person
+			LogicalGet person

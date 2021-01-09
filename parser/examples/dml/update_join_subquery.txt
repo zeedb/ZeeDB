@@ -11,17 +11,9 @@ LogicalUpdate customer
 					LogicalSingleGet
 				LogicalFilter (Equal customer.person_id person_id)
 					LogicalJoin Inner
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-								LogicalGet customer
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* person_id $xmin $xmax
-								LogicalGet person
+						LogicalGet customer
+						LogicalGet person
 			LogicalFilter (Equal customer.person_id person.person_id)
 				LogicalJoin Inner
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-							LogicalGet customer
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id $xmin $xmax
-							LogicalGet person
+					LogicalGet customer
+					LogicalGet person

@@ -8,9 +8,5 @@ LogicalUpdate customer
 			LogicalJoin Mark $in (Equal customer.person_id person.person_id)
 				LogicalMap person.person_id
 					LogicalFilter (Equal person.first_name "Joe")
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* person.person_id person.first_name $xmin $xmax
-								LogicalGet person
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-						LogicalGet customer
+						LogicalGet person
+				LogicalGet customer

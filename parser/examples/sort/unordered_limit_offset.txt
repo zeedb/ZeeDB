@@ -5,6 +5,4 @@ offset 10
 
 LogicalLimit 100 10
 	LogicalMap customer.customer_id
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.customer_id $xmin $xmax
-				LogicalGet customer
+		LogicalGet customer

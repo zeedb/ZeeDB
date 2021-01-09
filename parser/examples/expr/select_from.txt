@@ -2,6 +2,4 @@ select customer_id as a
 from customer
 
 LogicalMap customer.customer_id
-	Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-		Map* customer.customer_id $xmin $xmax
-			LogicalGet customer
+	LogicalGet customer

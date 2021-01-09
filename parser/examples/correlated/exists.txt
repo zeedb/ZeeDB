@@ -6,12 +6,6 @@ LogicalMap $query.ok:$exists
 		LogicalDependentJoin [store_id]
 			LogicalMap store.store_id
 				LogicalFilter (Equal store.store_id store_id)
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* store.store_id $xmin $xmax
-							LogicalGet store
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* store_id $xmin $xmax
-					LogicalGet customer
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.store_id $xmin $xmax
-				LogicalGet customer
+					LogicalGet store
+			LogicalGet customer
+		LogicalGet customer

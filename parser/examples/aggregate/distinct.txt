@@ -3,6 +3,4 @@ from customer
 
 LogicalAggregate $distinct.store_id
 	LogicalMap $distinct.store_id:customer.store_id
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.store_id $xmin $xmax
-				LogicalGet customer
+		LogicalGet customer

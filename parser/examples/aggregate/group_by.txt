@@ -5,6 +5,4 @@ group by 1
 LogicalMap $groupby.store_id
 	LogicalAggregate $groupby.store_id
 		LogicalMap $groupby.store_id:customer.store_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.store_id $xmin $xmax
-					LogicalGet customer
+			LogicalGet customer

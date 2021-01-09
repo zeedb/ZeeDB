@@ -3,6 +3,4 @@ where person_id = 1
 
 LogicalDelete customer
 	LogicalFilter (Equal customer.person_id 1)
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.person_id $xmin $xmax $tid
-				LogicalGet customer
+		LogicalGet customer

@@ -3,8 +3,6 @@ from foo
 
 LogicalWith foo
 	LogicalMap customer.customer_id
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* customer.customer_id $xmin $xmax
-				LogicalGet customer
+		LogicalGet customer
 	LogicalMap foo.customer_id
 		LogicalGetWith foo
