@@ -18,7 +18,7 @@ Script
 
 # drop_database
 ok: explain drop database foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
 Script
 	Assign catalog_id 0
 		TableFreeScan
@@ -37,10 +37,11 @@ Script
 	Delete column
 		Map $in:true $tid $xmax $xmin column.table_id
 			HashJoin Semi (Equal column.table_id table.table_id)
-				Broadcast
+				Exchange
 					Filter* (Equal table.catalog_id @catalog_id)
 						SeqScan table
-				SeqScan column
+				Exchange
+					SeqScan column
 	Delete table
 		Filter* (Equal table.catalog_id @catalog_id)
 			SeqScan table
@@ -74,7 +75,7 @@ Script
 
 # drop_database_nested
 ok: explain drop database nested.foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Script
 	Assign catalog_id 0
 		TableFreeScan
@@ -99,10 +100,11 @@ Script
 	Delete column
 		Map $in:true $tid $xmax $xmin column.table_id
 			HashJoin Semi (Equal column.table_id table.table_id)
-				Broadcast
+				Exchange
 					Filter* (Equal table.catalog_id @catalog_id)
 						SeqScan table
-				SeqScan column
+				Exchange
+					SeqScan column
 	Delete table
 		Filter* (Equal table.catalog_id @catalog_id)
 			SeqScan table

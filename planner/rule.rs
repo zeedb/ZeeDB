@@ -1,6 +1,5 @@
 use crate::search_space::*;
-use ast::*;
-use catalog::Index;
+use ast::{Index, *};
 use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
@@ -74,30 +73,37 @@ impl Rule {
 
     fn matches_expr(&self, mexpr: &MultiExpr) -> bool {
         match (self, &mexpr.expr) {
-            (
-                Rule::InnerJoinCommutivity,
-                LogicalJoin {
-                    join: Join::Inner(_),
-                    ..
-                },
-            )
-            | (
-                Rule::InnerJoinAssociativity,
-                LogicalJoin {
-                    join: Join::Inner(_),
-                    ..
-                },
-            )
-            | (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
+            // Only inner joins are commutative.
+            (Rule::InnerJoinCommutivity, LogicalJoin { join, .. })
+            | (Rule::InnerJoinAssociativity, LogicalJoin { join, .. }) => match join {
+                Join::Inner(_) => true,
+                Join::Right(_)
+                | Join::Outer(_)
+                | Join::Semi(_)
+                | Join::Anti(_)
+                | Join::Single(_)
+                | Join::Mark(_, _) => false,
+            },
+            // Index join is only available for inner joins.
+            // TODO: in principle, index scan can work for anything but outer joins.
+            (Rule::LogicalJoinToIndexScan, LogicalJoin { join, .. }) => match join {
+                Join::Inner(_) => true,
+                Join::Right(_)
+                | Join::Outer(_)
+                | Join::Semi(_)
+                | Join::Anti(_)
+                | Join::Single(_)
+                | Join::Mark(_, _) => false,
+            },
+            (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
+            | (Rule::LogicalJoinToBroadcastHashJoin, LogicalJoin { .. })
+            | (Rule::LogicalJoinToExchangeHashJoin, LogicalJoin { .. }) => true,
+            (Rule::LogicalGetToTableFreeScan, LogicalSingleGet)
             | (Rule::LogicalGetToSeqScan, LogicalGet { .. })
             | (Rule::LogicalGetToIndexScan, LogicalGet { .. })
             | (Rule::LogicalFilterToFilter, LogicalFilter { .. })
             | (Rule::LogicalOutToOut, LogicalOut { .. })
             | (Rule::LogicalMapToMap, LogicalMap { .. })
-            | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
-            | (Rule::LogicalJoinToBroadcastHashJoin, LogicalJoin { .. })
-            | (Rule::LogicalJoinToExchangeHashJoin, LogicalJoin { .. })
-            | (Rule::LogicalJoinToIndexScan, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
             | (Rule::LogicalSortToSort, LogicalSort { .. })
@@ -350,19 +356,20 @@ impl Rule {
                     table,
                 } = bind
                 {
-                    let indexes = indexes.get(&table.id)?;
                     // TODO return multiple indexes!
-                    let (index, lookup, predicates) =
-                        find_index(indexes, &projects, &predicates).pop()?;
-                    return Some(IndexScan {
-                        include_existing: false,
-                        projects,
-                        predicates,
-                        lookup,
-                        index,
-                        table,
-                        input: Box::new(LogicalSingleGet),
-                    });
+                    for index in indexes.get(&table.id)?.iter() {
+                        if let Some((lookup, predicates)) = index.matches(&predicates) {
+                            return Some(IndexScan {
+                                include_existing: true,
+                                projects,
+                                predicates,
+                                lookup,
+                                index: index.clone(),
+                                table,
+                                input: Box::new(LogicalSingleGet),
+                            });
+                        }
+                    }
                 }
             }
             Rule::LogicalFilterToFilter => {
@@ -401,7 +408,7 @@ impl Rule {
                 return to_hash_join(ss, bind, true);
             }
             Rule::LogicalJoinToExchangeHashJoin => {
-                return to_hash_join(ss, bind, true);
+                return to_hash_join(ss, bind, false);
             }
             Rule::LogicalJoinToIndexScan => {
                 if let LogicalJoin { join, left, right } = bind {
@@ -411,21 +418,22 @@ impl Rule {
                         table,
                     } = *left
                     {
-                        let mut predicates = join.predicates().clone();
-                        predicates.extend(table_predicates);
-                        let indexes = indexes.get(&table.id)?;
                         // TODO return multiple indexes!
-                        let (index, lookup, predicates) =
-                            find_index(indexes, &projects, &predicates).pop()?;
-                        return Some(IndexScan {
-                            include_existing: true,
-                            projects,
-                            predicates,
-                            lookup,
-                            index,
-                            table,
-                            input: right,
-                        });
+                        for index in indexes.get(&table.id)?.iter() {
+                            if let Some((lookup, mut predicates)) = index.matches(join.predicates())
+                            {
+                                predicates.extend(table_predicates);
+                                return Some(IndexScan {
+                                    include_existing: true,
+                                    projects,
+                                    predicates,
+                                    lookup,
+                                    index: index.clone(),
+                                    table,
+                                    input: right,
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -645,45 +653,4 @@ fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
     columns
         .iter()
         .all(|c| group.props.column_unique_cardinality.contains_key(c))
-}
-
-fn find_index(
-    indexes: &Vec<Index>,
-    table_columns: &Vec<Column>,
-    predicates: &Vec<Scalar>,
-) -> Vec<(Index, Vec<Scalar>, Vec<Scalar>)> {
-    indexes
-        .iter()
-        .flat_map(|index| check_index(index, table_columns, predicates))
-        .collect()
-}
-
-fn check_index(
-    index: &Index,
-    table_columns: &Vec<Column>,
-    predicates: &Vec<Scalar>,
-) -> Option<(Index, Vec<Scalar>, Vec<Scalar>)> {
-    let mut index_predicates = vec![];
-    let mut remaining_predicates = vec![];
-    for column_name in &index.columns {
-        for predicate in predicates {
-            match predicate {
-                Scalar::Call(function) => match function.as_ref() {
-                    F::Equal(Scalar::Column(column), lookup)
-                    | F::Equal(lookup, Scalar::Column(column))
-                        if column_name == &column.name && table_columns.contains(column) =>
-                    {
-                        index_predicates.push(lookup.clone());
-                    }
-                    _ => remaining_predicates.push(predicate.clone()),
-                },
-                _ => remaining_predicates.push(predicate.clone()),
-            }
-        }
-    }
-    if index.columns.len() == index_predicates.len() {
-        Some((index.clone(), index_predicates, remaining_predicates))
-    } else {
-        None
-    }
 }

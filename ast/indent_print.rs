@@ -1,5 +1,4 @@
-use crate::{column::Column, expr::*};
-use catalog::Index;
+use crate::{column::Column, expr::*, index::Index};
 use std::fmt::{Debug, Display, Formatter};
 
 pub trait IndentPrint {
@@ -288,7 +287,6 @@ impl IndentPrint for Expr {
                     newline(f, indent)?;
                     indent += 1;
                 }
-                newline(f, indent)?;
                 write!(
                     f,
                     "{} {}({})",

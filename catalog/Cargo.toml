@@ -8,5 +8,6 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
+ast = { path = "../ast" }
 kernel = { path = "../kernel" }
 zetasql = { path = "../zetasql" }

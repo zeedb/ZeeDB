@@ -186,10 +186,7 @@ impl fmt::Debug for SearchSpace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         for i in 0..self.groups.len() {
             let card = self[GroupID(i)].props.cardinality;
-            let cost = self[GroupID(i)].winners[PhysicalProp::None]
-                .map(|w| w.cost)
-                .unwrap_or(f64::NAN);
-            writeln!(f, "{} #{} ${}", i, card, cost)?;
+            writeln!(f, "{} #{}", i, card)?;
             for j in 0..self[GroupID(i)].logical.len() {
                 writeln!(f, "\t{:?}", self[self[GroupID(i)].logical[j]])?;
             }
@@ -203,6 +200,10 @@ impl fmt::Debug for SearchSpace {
                             } else {
                                 write!(f, " *{}", require.name())?;
                             }
+                            let cost = self[GroupID(i)].winners[require]
+                                .map(|w| w.cost)
+                                .unwrap_or(f64::NAN);
+                            write!(f, " ${}", cost)?;
                         }
                     }
                 }
@@ -212,8 +213,6 @@ impl fmt::Debug for SearchSpace {
         Ok(())
     }
 }
-
-impl Group {}
 
 impl MultiExpr {
     pub fn new(parent: GroupID, expr: Expr) -> Self {
@@ -227,10 +226,15 @@ impl MultiExpr {
 
 impl fmt::Debug for MultiExpr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let LogicalGet { table, .. } = &self.expr {
-            write!(f, "{} {}", self.expr.name(), &table.name)?;
-        } else {
-            write!(f, "{}", self.expr.name())?;
+        match &self.expr {
+            LogicalGet { table, .. } => write!(f, "{} {}", self.expr.name(), &table.name)?,
+            HashJoin {
+                broadcast: true, ..
+            } => write!(f, "{} (broadcast)", self.expr.name())?,
+            HashJoin {
+                broadcast: false, ..
+            } => write!(f, "{} (partitioned)", self.expr.name())?,
+            _ => write!(f, "{}", self.expr.name())?,
         }
         for i in 0..self.expr.len() {
             write!(f, " {}", self.expr[i])?;
@@ -298,6 +302,7 @@ impl PhysicalProp {
                 },
                 1,
             ) => PhysicalProp::ExchangeDist,
+            (IndexScan { .. }, 0) => PhysicalProp::BroadcastDist,
             (NestedLoop { .. }, 0) => PhysicalProp::BroadcastDist,
             (Aggregate { .. }, 0) => PhysicalProp::ExchangeDist,
             (_, _) => PhysicalProp::None,

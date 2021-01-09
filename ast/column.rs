@@ -11,27 +11,30 @@ use std::{
 pub struct Column {
     pub id: Arc<()>,
     pub name: String,
-    pub table: Option<String>,
+    pub table_id: Option<i64>,
+    pub table_name: Option<String>,
     pub data_type: DataType,
     pub created_late: bool,
 }
 
 impl Column {
-    pub fn computed(name: &str, data_type: DataType) -> Self {
+    pub fn computed(name: &str, table_name: &Option<String>, data_type: DataType) -> Self {
         Self {
             id: Arc::new(()),
             name: name.to_string(),
-            table: None,
+            table_id: None,
+            table_name: table_name.clone(),
             data_type: data_type.clone(),
             created_late: false,
         }
     }
 
-    pub fn table(name: &str, table: &str, data_type: DataType) -> Self {
+    pub fn table(name: &str, table_id: i64, table_name: &str, data_type: DataType) -> Self {
         Self {
             id: Arc::new(()),
             name: name.to_string(),
-            table: Some(table.to_string()),
+            table_id: Some(table_id),
+            table_name: Some(table_name.to_string()),
             data_type: data_type.clone(),
             created_late: false,
         }
@@ -41,14 +44,15 @@ impl Column {
         Self {
             id: Arc::new(()),
             name: copy.name.clone(),
-            table: copy.table.as_ref().map(|table| table.clone()),
+            table_id: copy.table_id.clone(),
+            table_name: copy.table_name.clone(),
             data_type: copy.data_type.clone(),
             created_late: true,
         }
     }
 
     pub fn canonical_name(&self) -> String {
-        if let Some(table) = &self.table {
+        if let Some(table) = &self.table_name {
             format!("{}.{}#{:?}", table, self.name, Arc::as_ptr(&self.id))
         } else {
             format!("{}#{:?}", self.name, Arc::as_ptr(&self.id))
@@ -87,13 +91,23 @@ impl Ord for Column {
 
 impl Debug for Column {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        Display::fmt(self, f)
+        match (&self.table_name, self.table_id) {
+            (Some(table_name), Some(table_id)) => {
+                write!(f, "{}#{}.{}", table_name, table_id, &self.name)?
+            }
+            (Some(table_name), _) => write!(f, "{}.{}", table_name, &self.name)?,
+            (_, _) => write!(f, "{}", &self.name)?,
+        }
+        if self.created_late {
+            write!(f, "'")?;
+        }
+        Ok(())
     }
 }
 
 impl Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(table) = &self.table {
+        if let Some(table) = &self.table_name {
             write!(f, "{}.", table)?;
         }
         write!(f, "{}", self.name)?;

@@ -117,19 +117,26 @@ fn test_dml() {
     t.setup("insert into foo values (1);");
     t.setup("update foo set id = 2 where id = 1;");
     t.ok("select * from foo;");
-    t.setup("create index foo_id on foo (id);");
-    t.setup("insert into foo values (1);");
-    t.ok("select * from foo where id = 1");
-    t.setup("create index foo_id on foo (id);");
-    t.setup("insert into foo values (1);");
-    t.setup("update foo set id = 2 where id = 1;");
-    t.ok("select * from foo where id = 2;");
     t.setup("drop table foo;");
     t.setup("create table foo (id int64, ok bool);");
     t.setup("insert into foo (id, ok) values (1, false);");
     t.setup("insert into foo (ok, id) values (true, 2);");
     t.ok("select * from foo;");
     t.finish("examples/execute_dml.testlog");
+}
+
+#[test]
+fn test_update_index() {
+    let mut t = TestSuite::new(Storage::new());
+    t.setup("create table foo (id int64);");
+    t.setup("create index foo_id on foo (id);");
+    let values: Vec<_> = (0..1000).map(|i| format!("({})", i)).collect();
+    t.setup(format!("insert into foo values {};", values.join(", ")).as_str());
+    t.ok("update foo set id = -1 where id = 500");
+    t.ok("explain select * from foo where id = -1");
+    t.ok("select * from foo where id = -1");
+    t.ok("select * from foo where id = 500");
+    t.finish("examples/execute_update_index.testlog");
 }
 
 #[test]

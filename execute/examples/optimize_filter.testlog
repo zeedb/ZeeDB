@@ -7,10 +7,10 @@ Map $query.$col1:1
 
 # index_scan
 ok: explain select store_id from customer where customer_id = 1
-plan                                               
-
-	IndexScan customer(customer_id:1)
-		TableFreeScan
+plan                                                          
+IndexScan customer(customer_id:1)
+		Broadcast
+			TableFreeScan
 
 # project_then_filter
 ok: explain select 1 from (select *, 1234 as random from customer) where customer_id < random and customer_id <> 0
@@ -30,23 +30,24 @@ Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 
 # pull_filter_through_aggregate
 ok: explain select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
-plan                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                              
 Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
-		Broadcast
+		Exchange
 			Aggregate store_id $aggregate.$agg1:(Count $star)
 				Exchange
 					Map $star:1 store_id
 						Filter (Not (IsNull customer.store_id))
 							Map store_id:customer.store_id, ..
 								SeqScan customer
-		SeqScan store
+		Exchange
+			SeqScan store
 
 # push_filter_through_project
 ok: explain select * from (select *, customer_id + 1 from customer) where customer_id = 1
-plan                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                             
 Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(AddInt64 customer.customer_id 1)
-	
-		IndexScan customer(customer_id:1)
-			TableFreeScan
+	IndexScan customer(customer_id:1)
+			Broadcast
+				TableFreeScan
 

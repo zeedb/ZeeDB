@@ -9,6 +9,5 @@ path = "lib.rs"
 
 [dependencies]
 chrono = { version = "0.4.11" }
-catalog = { path = "../catalog" }
 kernel = { path = "../kernel" }
 zetasql = { path = "../zetasql" }

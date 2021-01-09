@@ -1,4 +1,4 @@
-use catalog::Index;
+use ast::Index;
 use cpuprofiler::PROFILER;
 use execute::Program;
 use std::collections::HashMap;

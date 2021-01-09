@@ -1,5 +1,4 @@
-use crate::{column::Column, values::*};
-use catalog::Index;
+use crate::{column::Column, index::Index, values::*};
 use chrono::Weekday;
 use kernel::*;
 use std::{

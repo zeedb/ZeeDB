@@ -59,7 +59,12 @@ impl TestSuite {
 
 fn trim(sql: &str) -> String {
     let trim = Regex::new(r"(?m)^\s+").unwrap();
-    trim.replace_all(sql, "").trim().to_string()
+    let mut trimmed = trim.replace_all(sql, "").trim().to_string();
+    if trimmed.len() > 200 {
+        trimmed.truncate(197);
+        trimmed.push_str("...");
+    }
+    trimmed
 }
 
 fn plan(storage: &mut Storage, sql: &str, txn: i64) -> Expr {

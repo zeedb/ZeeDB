@@ -1,6 +1,5 @@
 use crate::hash_table::HashTable;
-use ast::*;
-use catalog::Index;
+use ast::{Index, *};
 use kernel::*;
 use std::collections::HashMap;
 use storage::*;

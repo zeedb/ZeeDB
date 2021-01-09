@@ -1,7 +1,6 @@
 use crate::{cost::*, rewrite::rewrite, rule::*, search_space::*};
-use ast::*;
-use catalog::Index;
-use std::collections::{HashMap, HashSet};
+use ast::{Index, *};
+use std::collections::HashMap;
 use storage::Storage;
 use zetasql::SimpleCatalogProto;
 
@@ -273,7 +272,12 @@ impl<'a> Optimizer<'a> {
             let mexpr = MultiExpr::new(gid, expr);
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
-            let props = self.compute_logical_props(&self.ss[mid]);
+            let props = crate::cardinality_estimation::compute_logical_props(
+                &self.ss,
+                &self.statistics,
+                &self.indexes,
+                mid,
+            );
             let lower_bound = compute_lower_bound(&self.ss, &self.ss[mid], &props);
             let group = Group {
                 logical: vec![mid],
@@ -286,212 +290,6 @@ impl<'a> Optimizer<'a> {
             };
             self.ss.add_group(gid, group);
             gid
-        }
-    }
-
-    fn compute_logical_props(&self, mexpr: &MultiExpr) -> LogicalProps {
-        let mut cardinality = 0 as usize;
-        let mut column_unique_cardinality: HashMap<Column, usize> = HashMap::new();
-        match &mexpr.expr {
-            LogicalSingleGet => cardinality = 1,
-            LogicalGet {
-                projects,
-                predicates,
-                table,
-            } => {
-                // Scan
-                cardinality = self.statistics.table_cardinality(table.id);
-                for c in projects {
-                    column_unique_cardinality.insert(
-                        c.clone(),
-                        self.statistics.column_unique_cardinality(table.id, &c.name),
-                    );
-                }
-                // Filter
-                let selectivity = total_selectivity(predicates, &column_unique_cardinality);
-                cardinality = apply_selectivity(cardinality, selectivity);
-                for (_, n) in column_unique_cardinality.iter_mut() {
-                    *n = cardinality.min(*n);
-                }
-            }
-            LogicalFilter { predicates, input } => {
-                let scope = &self.ss[leaf(input)].props.column_unique_cardinality;
-                let selectivity = total_selectivity(predicates, scope);
-                cardinality =
-                    apply_selectivity(self.ss[leaf(input)].props.cardinality, selectivity);
-                for (c, n) in &self.ss[leaf(input)].props.column_unique_cardinality {
-                    column_unique_cardinality.insert(c.clone(), cardinality.min(*n));
-                }
-            }
-            LogicalOut { projects, input } => {
-                let input = &self.ss[leaf(input)];
-                cardinality = input.props.cardinality;
-                for c in projects {
-                    let n = input.props.column_unique_cardinality.get(c).expect(
-                        format!(
-                            "no column {:?} in {:?}",
-                            c,
-                            input.props.column_unique_cardinality.keys()
-                        )
-                        .as_str(),
-                    );
-                    column_unique_cardinality.insert(c.clone(), *n);
-                }
-            }
-            LogicalMap {
-                include_existing,
-                projects,
-                input,
-            } => {
-                cardinality = self.ss[leaf(input)].props.cardinality;
-                if *include_existing {
-                    for (c, n) in &self.ss[leaf(input)].props.column_unique_cardinality {
-                        column_unique_cardinality.insert(c.clone(), *n);
-                    }
-                }
-                for (x, c) in projects {
-                    let n = scalar_unique_cardinality(
-                        &x,
-                        &self.ss[leaf(input)].props.column_unique_cardinality,
-                    );
-                    column_unique_cardinality.insert(c.clone(), n);
-                }
-            }
-            LogicalJoin {
-                join, left, right, ..
-            } => {
-                let left_cardinality = self.ss[leaf(left)].props.cardinality;
-                let right_cardinality = self.ss[leaf(right)].props.cardinality;
-                let left_scope = &self.ss[leaf(left)].props.column_unique_cardinality;
-                let right_scope = &self.ss[leaf(right)].props.column_unique_cardinality;
-                cardinality = left_cardinality * right_cardinality;
-                for (c, n) in left_scope {
-                    column_unique_cardinality.insert(c.clone(), *n);
-                }
-                for (c, n) in right_scope {
-                    column_unique_cardinality.insert(c.clone(), *n);
-                }
-                // Mark join projects the $mark attribute
-                if let Join::Mark(mark, _) = join {
-                    column_unique_cardinality.insert(mark.clone(), 2);
-                }
-                // Apply predicates
-                let mut is_equi_join = false;
-                for p in join.predicates() {
-                    if is_equi_predicate(p, left_scope, right_scope) {
-                        is_equi_join = true;
-                    } else {
-                        let selectivity = predicate_selectivity(p, &column_unique_cardinality);
-                        cardinality = apply_selectivity(cardinality, selectivity);
-                    }
-                }
-                if is_equi_join {
-                    cardinality = cardinality / left_cardinality.min(right_cardinality).max(1);
-                }
-                // We want (SemiJoin _ _) to have the same selectivity as (Filter $mark.$in (MarkJoin _ _))
-                if let Join::Semi(_) | Join::Anti(_) = join {
-                    cardinality = apply_selectivity(cardinality, 0.5);
-                    for (_, n) in column_unique_cardinality.iter_mut() {
-                        *n = cardinality.min(*n);
-                    }
-                }
-            }
-            LogicalDependentJoin { .. } | LogicalWith { .. } => panic!(
-                "{} should have been eliminated during rewrite phase",
-                mexpr.expr.name()
-            ),
-            LogicalGetWith { columns, .. } => {
-                cardinality = 1000; // TODO get from catalog somehow
-                for c in columns {
-                    column_unique_cardinality.insert(c.clone(), cardinality);
-                }
-            }
-            LogicalAggregate {
-                group_by,
-                aggregate,
-                input,
-            } => {
-                cardinality = 1;
-                for c in group_by {
-                    let n = self.ss[leaf(input)].props.column_unique_cardinality[c];
-                    column_unique_cardinality.insert(c.clone(), n);
-                    cardinality *= n;
-                }
-                cardinality = self.ss[leaf(input)].props.cardinality.min(cardinality);
-                for a in aggregate {
-                    column_unique_cardinality.insert(a.output.clone(), cardinality);
-                }
-            }
-            LogicalLimit { limit, input, .. } => {
-                cardinality = *limit;
-                for (c, n) in &self.ss[leaf(input)].props.column_unique_cardinality {
-                    if *limit < *n {
-                        column_unique_cardinality.insert(c.clone(), *limit);
-                    } else {
-                        column_unique_cardinality.insert(c.clone(), *n);
-                    }
-                }
-            }
-            LogicalSort { input, .. } => {
-                cardinality = self.ss[leaf(input)].props.cardinality;
-                column_unique_cardinality =
-                    self.ss[leaf(input)].props.column_unique_cardinality.clone();
-            }
-            LogicalUnion { left, right } => {
-                cardinality =
-                    self.ss[leaf(left)].props.cardinality + self.ss[leaf(right)].props.cardinality;
-                column_unique_cardinality = max_cuc(
-                    &self.ss[leaf(left)].props.column_unique_cardinality,
-                    &self.ss[leaf(right)].props.column_unique_cardinality,
-                );
-            }
-            LogicalScript { statements } => {
-                let last = statements.last().unwrap();
-                cardinality = self.ss[leaf(last)].props.cardinality;
-                column_unique_cardinality =
-                    self.ss[leaf(last)].props.column_unique_cardinality.clone();
-            }
-            LogicalInsert { .. }
-            | LogicalValues { .. }
-            | LogicalUpdate { .. }
-            | LogicalDelete { .. }
-            | LogicalCreateDatabase { .. }
-            | LogicalCreateTable { .. }
-            | LogicalCreateTempTable { .. }
-            | LogicalCreateIndex { .. }
-            | LogicalDrop { .. }
-            | LogicalAssign { .. }
-            | LogicalCall { .. }
-            | LogicalExplain { .. }
-            | LogicalRewrite { .. } => {}
-            Leaf { .. }
-            | TableFreeScan { .. }
-            | SeqScan { .. }
-            | IndexScan { .. }
-            | Filter { .. }
-            | Out { .. }
-            | Map { .. }
-            | NestedLoop { .. }
-            | HashJoin { .. }
-            | CreateTempTable { .. }
-            | GetTempTable { .. }
-            | Aggregate { .. }
-            | Limit { .. }
-            | Sort { .. }
-            | Union { .. }
-            | Broadcast { .. }
-            | Exchange { .. }
-            | Insert { .. }
-            | Values { .. }
-            | Delete { .. }
-            | Script { .. }
-            | Assign { .. }
-            | Call { .. }
-            | Explain { .. } => panic!("{} is a physical operator", mexpr.expr.name()),
-        };
-        LogicalProps {
-            cardinality,
-            column_unique_cardinality,
         }
     }
 
@@ -525,75 +323,6 @@ impl<'a> Optimizer<'a> {
             i += 1;
             self.winner(leaf(&child), require)
         })
-    }
-}
-
-fn is_equi_predicate(
-    p: &Scalar,
-    left_scope: &HashMap<Column, usize>,
-    right_scope: &HashMap<Column, usize>,
-) -> bool {
-    match p {
-        Scalar::Call(f) => match f.as_ref() {
-            F::Equal(left, right) | F::Is(left, right) => {
-                let left_references = left.references();
-                let right_references = right.references();
-                (is_subset(&left_references, left_scope)
-                    && is_subset(&right_references, right_scope))
-                    || (is_subset(&left_references, right_scope)
-                        && is_subset(&right_references, left_scope))
-            }
-            _ => false,
-        },
-        _ => false,
-    }
-}
-
-fn is_subset(references: &HashSet<Column>, scope: &HashMap<Column, usize>) -> bool {
-    references.iter().all(|column| scope.contains_key(column))
-}
-
-fn total_selectivity(predicates: &Vec<Scalar>, scope: &HashMap<Column, usize>) -> f64 {
-    let mut selectivity = 1.0;
-    for p in predicates {
-        selectivity *= predicate_selectivity(p, scope);
-    }
-    selectivity
-}
-
-fn predicate_selectivity(predicate: &Scalar, scope: &HashMap<Column, usize>) -> f64 {
-    1.0 // TODO
-}
-
-fn apply_selectivity(cardinality: usize, selectivity: f64) -> usize {
-    match (cardinality as f64 * selectivity) as usize {
-        0 => 1,
-        n => n,
-    }
-}
-
-fn max_cuc(
-    left: &HashMap<Column, usize>,
-    right: &HashMap<Column, usize>,
-) -> HashMap<Column, usize> {
-    let mut max = left.clone();
-    for (k, v) in right {
-        if v > &left[k] {
-            max.insert(k.clone(), *v);
-        }
-    }
-    max
-}
-
-fn scalar_unique_cardinality(expr: &Scalar, scope: &HashMap<Column, usize>) -> usize {
-    match expr {
-        Scalar::Literal(_) => 1,
-        Scalar::Column(column) => *scope
-            .get(column)
-            .unwrap_or_else(|| panic!("no key {:?} in {:?}", column, scope)),
-        Scalar::Parameter(_, _) => 1,
-        Scalar::Call(_) => 1, // TODO
-        Scalar::Cast(value, _) => scalar_unique_cardinality(value, scope),
     }
 }
 

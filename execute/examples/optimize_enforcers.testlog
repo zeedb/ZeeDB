@@ -8,12 +8,13 @@ Aggregate $groupby.x $aggregate.$agg1:(Count $count)
 			SeqScan integers
 
 ok: explain select * from integers i1 join integers i2 on i1.x = i2.x + 1
-plan                                                                                                                                   
+plan                                                                                                                                              
 Map integers.x integers.x
 	HashJoin Inner (Equal integers.x (AddInt64 integers.x 1))
-		Broadcast
+		Exchange
 			SeqScan integers
-		SeqScan integers
+		Exchange
+			SeqScan integers
 
 ok: explain select * from integers i1 join integers i2 on i1.x > i2.x
 plan                                                                                                                          

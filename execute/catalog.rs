@@ -1,5 +1,4 @@
-use ast::*;
-use catalog::Index;
+use ast::{Index, *};
 use kernel::*;
 use once_cell::sync::OnceCell;
 use planner::optimize;
