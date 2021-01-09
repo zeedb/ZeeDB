@@ -30,7 +30,7 @@ Map $query.b:2
 
 # use_with_clause_twice
 ok: explain with foo as (select customer_id, store_id from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id
-plan                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                             
 Script
 	CreateTempTable foo customer_id INT64 store_id INT64
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -38,14 +38,13 @@ Script
 				SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.store_id foo.store_id)
-			Partition* foo.store_id
+			Broadcast
 				GetTempTable foo
-			Partition* foo.store_id
-				GetTempTable foo
+			GetTempTable foo
 
 # use_with_project_twice
 ok: explain with foo as (select *, current_date() as r from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.r = f2.r
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 Script
 	CreateTempTable foo customer_id INT64 person_id INT64 store_id INT64 account_number INT64 modified_date TIMESTAMP r DATE
 		Map foo.r:(CurrentDate) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
@@ -54,14 +53,13 @@ Script
 					SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.r foo.r)
-			Partition* foo.r
+			Broadcast
 				GetTempTable foo
-			Partition* foo.r
-				GetTempTable foo
+			GetTempTable foo
 
 # use_with_select_star_twice
 ok: explain with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Script
 	CreateTempTable foo customer_id INT64 person_id INT64 store_id INT64 account_number INT64 modified_date TIMESTAMP
 		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
@@ -69,8 +67,7 @@ Script
 				SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.store_id foo.store_id)
-			Partition* foo.store_id
+			Broadcast
 				GetTempTable foo
-			Partition* foo.store_id
-				GetTempTable foo
+			GetTempTable foo
 

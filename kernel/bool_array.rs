@@ -10,28 +10,6 @@ pub struct BoolArray {
     is_valid: Bitmask,
 }
 
-macro_rules! logical_reduction {
-    ($self:ident, $stride:ident, $default:literal, $prev:ident, $next:ident, $op:expr) => {{
-        assert_eq!($self.len() % $stride, 0);
-
-        if $self.len() == 0 {
-            return Self::from_values(vec![$default].repeat($stride));
-        }
-
-        let mut builder = Self::nulls($stride);
-        for i in 0..$stride {
-            for j in 0..$self.len() / $stride {
-                if let Some($next) = $self.get(j * $stride + i) {
-                    let $prev = builder.get(i).unwrap_or($default);
-                    builder.set(i, Some($op));
-                }
-            }
-        }
-
-        builder
-    }};
-}
-
 impl BoolArray {
     // Constructors.
 
@@ -232,16 +210,38 @@ impl BoolArray {
 
     // Logical reduction operators.
 
+    fn logical_reduction(
+        &self,
+        stride: usize,
+        default: bool,
+        reduce: impl Fn(bool, bool) -> bool,
+    ) -> Self {
+        assert_eq!(self.len() % stride, 0);
+
+        let mut result = if default {
+            Self::trues(stride)
+        } else {
+            Self::falses(stride)
+        };
+        for i in 0..self.len() {
+            let prev = result.get(i % stride).unwrap();
+            if let Some(next) = self.get(i) {
+                result.set(i % stride, Some(reduce(prev, next)));
+            }
+        }
+        result
+    }
+
     pub fn any(&self, stride: usize) -> Self {
-        logical_reduction!(self, stride, false, prev, next, prev || next)
+        self.logical_reduction(stride, false, |prev, next| prev || next)
     }
 
     pub fn all(&self, stride: usize) -> Self {
-        logical_reduction!(self, stride, true, prev, next, prev && next)
+        self.logical_reduction(stride, true, |prev, next| prev && next)
     }
 
     pub fn none(&self, stride: usize) -> Self {
-        logical_reduction!(self, stride, true, prev, next, prev && !next)
+        self.logical_reduction(stride, true, |prev, next| prev && !next)
     }
 
     pub fn count(&self, stride: usize) -> I64Array {

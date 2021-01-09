@@ -326,3 +326,14 @@ fn test_distinct() {
     t.ok("explain select div(x, 2), count(distinct x), count(distinct div(x, 2)) from integers group by 1");
     t.finish("examples/optimize_distinct.testlog");
 }
+
+#[test]
+fn test_enforcers() {
+    let mut t = TestSuite::new(Storage::new());
+    t.setup("create table integers (x int64)");
+    t.setup("insert into integers values (1), (1), (2), (3), (null)");
+    t.ok("explain select x, count(x) from integers group by 1");
+    t.ok("explain select * from integers i1 join integers i2 on i1.x = i2.x + 1");
+    t.ok("explain select * from integers i1 join integers i2 on i1.x > i2.x");
+    t.finish("examples/optimize_enforcers.testlog");
+}

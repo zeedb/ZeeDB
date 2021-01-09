@@ -192,6 +192,7 @@ pub enum Expr {
         right: Box<Expr>,
     },
     HashJoin {
+        broadcast: bool,
         join: Join,
         partition_left: Vec<Scalar>,
         partition_right: Vec<Scalar>,
@@ -224,6 +225,14 @@ pub enum Expr {
     Union {
         left: Box<Expr>,
         right: Box<Expr>,
+    },
+    // Broadcast broadcasts the build side of a join to every node.
+    Broadcast {
+        input: Box<Expr>,
+    },
+    // Exchange shuffles data during joins and aggregations.
+    Exchange {
+        input: Box<Expr>,
     },
     Insert {
         table: Table,
@@ -304,6 +313,8 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -365,6 +376,8 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -401,6 +414,8 @@ impl Expr {
             | Expr::Aggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -596,12 +611,14 @@ impl Expr {
                 right: Box::new(visitor(*right)),
             },
             Expr::HashJoin {
+                broadcast,
                 join,
                 partition_left,
                 partition_right,
                 left,
                 right,
             } => Expr::HashJoin {
+                broadcast,
                 join,
                 partition_left,
                 partition_right,
@@ -660,6 +677,12 @@ impl Expr {
             Expr::Union { left, right } => Expr::Union {
                 left: Box::new(visitor(*left)),
                 right: Box::new(visitor(*right)),
+            },
+            Expr::Broadcast { input } => Expr::Broadcast {
+                input: Box::new(visitor(*input)),
+            },
+            Expr::Exchange { input } => Expr::Exchange {
+                input: Box::new(visitor(*input)),
             },
             Expr::Insert {
                 table,
@@ -854,6 +877,8 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -1004,6 +1029,8 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -1104,6 +1131,8 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -1295,6 +1324,8 @@ impl Expr {
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -1346,6 +1377,8 @@ impl ops::Index<usize> for Expr {
             | Expr::Aggregate { input, .. }
             | Expr::Limit { input, .. }
             | Expr::Sort { input, .. }
+            | Expr::Broadcast { input, .. }
+            | Expr::Exchange { input, .. }
             | Expr::Insert { input, .. }
             | Expr::Values { input, .. }
             | Expr::Delete { input, .. }

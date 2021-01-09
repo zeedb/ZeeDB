@@ -8,6 +8,7 @@ const BLOCK_SIZE: Cost = 1_000_000.0;
 const TUPLE_SIZE: Cost = 100.0;
 const COST_READ_BLOCK: Cost = 1.0;
 const COST_WRITE_BLOCK: Cost = COST_READ_BLOCK * 2.0;
+const COST_SEND_BLOCK: Cost = COST_READ_BLOCK + COST_WRITE_BLOCK;
 const COST_CPU_PRED: Cost = 0.0001;
 const COST_CPU_EVAL: Cost = COST_CPU_PRED;
 const COST_CPU_APPLY: Cost = COST_CPU_PRED * 2.0;
@@ -16,6 +17,8 @@ const COST_ARRAY_PROBE: Cost = COST_CPU_PRED;
 const COST_ARRAY_BUILD: Cost = COST_ARRAY_PROBE * 2.0;
 const COST_HASH_PROBE: Cost = COST_ARRAY_PROBE + COST_CPU_PRED;
 const COST_HASH_BUILD: Cost = COST_HASH_PROBE * 2.0;
+
+const NODES: Cost = 16.0; // TODO use the actual number of nodes at runtime.
 
 // physicalCost computes the local cost of the physical operator at the head of a multi-expression tree.
 // To compute the total physical cost of an expression, you need to choose a single physical expression
@@ -102,6 +105,16 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
             let card = ss[parent].props.cardinality.max(1) as f64;
             let log = 2.0 * card * f64::log2(card);
             log * COST_CPU_COMP_MOVE
+        }
+        Broadcast { input } => {
+            let n = ss[leaf(input)].props.cardinality as f64;
+            let blocks = f64::max(1.0, n * TUPLE_SIZE / BLOCK_SIZE);
+            blocks * COST_SEND_BLOCK * NODES
+        }
+        Exchange { input } => {
+            let n = ss[leaf(input)].props.cardinality as f64;
+            let blocks = f64::max(1.0, n * TUPLE_SIZE / BLOCK_SIZE);
+            blocks * COST_SEND_BLOCK
         }
         Insert { input, .. } | Delete { input, .. } => {
             let length = ss[leaf(input)].props.cardinality as f64;

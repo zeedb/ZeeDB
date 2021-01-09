@@ -203,6 +203,18 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
+            Expr::Broadcast { input } => {
+                write!(f, "{}", self.name())?;
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)?;
+                Ok(())
+            }
+            Expr::Exchange { input } => {
+                write!(f, "{}", self.name())?;
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)?;
+                Ok(())
+            }
             Expr::LogicalInsert { table, input, .. } | Expr::Insert { table, input, .. } => {
                 write!(f, "{} {}", self.name(), table.name)?;
                 newline(f, indent)?;
@@ -298,21 +310,13 @@ impl IndentPrint for Expr {
                 input.indent_print(f, indent + 2)
             }
             Expr::HashJoin {
-                join,
-                partition_left,
-                partition_right,
-                left,
-                right,
+                join, left, right, ..
             } => {
                 write!(f, "{} {}", self.name(), join)?;
                 newline(f, indent)?;
-                write!(f, "Partition* {}", join_scalars(partition_left))?;
-                newline(f, indent + 1)?;
-                left.indent_print(f, indent + 2)?;
+                left.indent_print(f, indent + 1)?;
                 newline(f, indent)?;
-                write!(f, "Partition* {}", join_scalars(partition_right))?;
-                newline(f, indent + 1)?;
-                right.indent_print(f, indent + 2)
+                right.indent_print(f, indent + 1)
             }
             Expr::LogicalScript { statements } | Expr::Script { statements } => {
                 write!(f, "{}", self.name())?;
@@ -400,6 +404,8 @@ impl Expr {
             Expr::Limit { .. } => "Limit",
             Expr::Sort { .. } => "Sort",
             Expr::Union { .. } => "Union",
+            Expr::Broadcast { .. } => "Broadcast",
+            Expr::Exchange { .. } => "Exchange",
             Expr::Insert { .. } => "Insert",
             Expr::Values { .. } => "Values",
             Expr::Delete { .. } => "Delete",

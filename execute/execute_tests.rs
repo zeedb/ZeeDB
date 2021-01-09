@@ -144,7 +144,7 @@ fn test_index() {
 fn test_join_nested_loop() {
     let mut t = TestSuite::new(Storage::new());
     t.setup("create table foo (id int64); create table bar (id int64);");
-    t.setup("insert into foo values (1), (2); insert into bar values (2), (3);");
+    t.setup("insert into foo values (1), (2); insert into bar values (2), (3), (4);");
     t.ok("select foo.id as foo_id, bar.id as bar_id from foo left join bar using (id)");
     t.ok("select foo.id as foo_id, bar.id as bar_id from foo right join bar using (id)");
     t.ok("select foo.id as foo_id, bar.id as bar_id from foo full join bar using (id)");

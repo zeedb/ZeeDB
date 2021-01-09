@@ -6,64 +6,62 @@ Map $query.$col1:1
 
 # semi_join
 ok: explain select first_name from person where person_id in (select person_id from customer)
-plan                                                                                                                                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                                                                                               
 Map person.first_name
 	HashJoin Semi (Equal person.person_id customer.person_id)
-		Partition* customer.person_id
+		Broadcast
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* customer.person_id $xmin $xmax
 					SeqScan customer
-		Partition* person.person_id
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* person.person_id person.first_name $xmin $xmax
+				SeqScan person
+
+# semi_join_or
+ok: explain select first_name from person where person_id in (select person_id from customer) or person_id = 1
+plan                                                                                                                                                                                                                                                                                                                                                                                                       
+Map person.first_name
+	Filter (Or $in (Equal person.person_id 1))
+		HashJoin Mark $in (Equal person.person_id customer.person_id)
+			Broadcast
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id $xmin $xmax
+						SeqScan customer
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* person.person_id person.first_name $xmin $xmax
 					SeqScan person
 
-# semi_join_or
-ok: explain select first_name from person where person_id in (select person_id from customer) or person_id = 1
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                             
-Map person.first_name
-	Filter (Or $in (Equal person.person_id 1))
-		HashJoin Mark $in (Equal person.person_id customer.person_id)
-			Partition* customer.person_id
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.person_id $xmin $xmax
-						SeqScan customer
-			Partition* person.person_id
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id person.first_name $xmin $xmax
-						SeqScan person
-
 # equi_join_semi_join
 ok: explain select 1 from person, customer where person.person_id = customer.person_id and customer.store_id in (select store_id from store)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Map $query.$col1:1
 	HashJoin Semi (Equal customer.store_id store.store_id)
-		Partition* store.store_id
+		Broadcast
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* store.store_id $xmin $xmax
 					SeqScan store
-		Partition* customer.store_id
-			HashJoin Inner (Equal person.person_id customer.person_id)
-				Partition* customer.person_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.person_id customer.store_id $xmin $xmax
-							SeqScan customer
-				Partition* person.person_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id $xmin $xmax
-							SeqScan person
+		HashJoin Inner (Equal person.person_id customer.person_id)
+			Broadcast
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id customer.store_id $xmin $xmax
+						SeqScan customer
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* person.person_id $xmin $xmax
+					SeqScan person
 
 # single_join_in_where_clause
 ok: explain select person_id from person where modified_date = (select max(modified_date) from person)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                        
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Map person.person_id
 	Filter (Equal person.modified_date $aggregate.$agg1)
 		NestedLoop Single
-			Aggregate $aggregate.$agg1:(Max $max)
-				Map $max:person.modified_date
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.modified_date $xmin $xmax
-							SeqScan person
+			Broadcast
+				Aggregate $aggregate.$agg1:(Max $max)
+					Exchange
+						Map $max:person.modified_date
+							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+								Map* person.modified_date $xmin $xmax
+									SeqScan person
 			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 				Map* person.person_id person.modified_date $xmin $xmax
 					SeqScan person
@@ -86,411 +84,396 @@ Insert person
 
 # update_semi_join
 ok: explain update customer set account_number = 0 where person_id in (select person_id from person where first_name = 'Joe')
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:0 customer.modified_date $tid
 			HashJoin Semi (Equal customer.person_id person.person_id)
-				Partition* person.person_id
+				Broadcast
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal person.first_name "Joe")
 						Map* person.person_id person.first_name $xmin $xmax
 							SeqScan person
-				Partition* customer.person_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-							SeqScan customer
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
+						SeqScan customer
 
 # delete_semi_join
 ok: explain delete person where person_id in (select person_id from customer)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                        
+plan                                                                                                                                                                                                                                                                                                                                                                                  
 Delete person
 	Map $in:true $tid $xmax $xmin person.person_id
 		HashJoin Semi (Equal person.person_id customer.person_id)
-			Partition* customer.person_id
+			Broadcast
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 					Map* customer.person_id $xmin $xmax
 						SeqScan customer
-			Partition* person.person_id
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id $xmin $xmax $tid
-						SeqScan person
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* person.person_id $xmin $xmax $tid
+					SeqScan person
 
 # delete_semi_join_with_condition
 ok: explain delete customer where person_id in (select person_id from customer where account_number = 0)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 Delete customer
 	Map $in:true $tid $xmax $xmin customer.person_id
 		HashJoin Semi (Equal customer.person_id customer.person_id)
-			Partition* customer.person_id
+			Broadcast
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal customer.account_number 0)
 					Map* customer.person_id customer.account_number $xmin $xmax
 						SeqScan customer
-			Partition* customer.person_id
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.person_id $xmin $xmax $tid
-						SeqScan customer
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.person_id $xmin $xmax $tid
+					SeqScan customer
 
 # single_equi_join
 ok: explain select (select name from store where store.store_id = customer.store_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map $query.$col1:store.name
 	HashJoin Single (Is customer.store_id store_id)
-		Partition* store_id
+		Broadcast
 			Map store.name store_id
 				Filter (Not (IsNull store.store_id))
 					Map store_id:store.store_id, ..
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* store.store_id store.name $xmin $xmax
 								SeqScan store
-		Partition* customer.store_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.store_id $xmin $xmax
-					SeqScan customer
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* customer.store_id $xmin $xmax
+				SeqScan customer
 
 # single_equi_join_group_by
 ok: explain select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
 Map $query.customers:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
-		Partition* store_id
+		Broadcast
 			Aggregate store_id $aggregate.$agg1:(Count $count)
-				Map $count:1 store_id
-					Filter (Not (IsNull customer.store_id))
-						Map store_id:customer.store_id, ..
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* customer.store_id $xmin $xmax
-									SeqScan customer
-		Partition* store.store_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* store.store_id $xmin $xmax
-					SeqScan store
+				Exchange
+					Map $count:1 store_id
+						Filter (Not (IsNull customer.store_id))
+							Map store_id:customer.store_id, ..
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* customer.store_id $xmin $xmax
+										SeqScan customer
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* store.store_id $xmin $xmax
+				SeqScan store
 
 # semi_join_with_condition
 ok: explain select 1 from person, store where person.person_id in (select person_id from customer where customer.store_id = store.store_id)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Map $query.$col1:1
 	HashJoin Semi (Is store.store_id store_id) (Equal person.person_id customer.person_id)
-		Partition* store_id customer.person_id
+		Broadcast
 			Map customer.person_id store_id
 				Filter (Not (IsNull customer.store_id))
 					Map store_id:customer.store_id, ..
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* customer.person_id customer.store_id $xmin $xmax
 								SeqScan customer
-		Partition* store.store_id person.person_id
-			NestedLoop Inner
+		NestedLoop Inner
+			Broadcast
 				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 					Map* store.store_id $xmin $xmax
 						SeqScan store
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* person.person_id $xmin $xmax
-						SeqScan person
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* person.person_id $xmin $xmax
+					SeqScan person
 
 # semi_join_anti_join
 ok: explain select 1 from customer where exists (select 1 from person where person.person_id = customer.person_id) and not exists (select 1 from store where store.store_id = customer.store_id and customer.modified_date > store.modified_date)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Map $query.$col1:1
 	HashJoin Anti (Is customer.store_id store_id) (Is customer.modified_date modified_date)
-		Partition* store_id modified_date
+		Broadcast
 			Map $expr_subquery.$col1:1 store_id modified_date
 				HashJoin Inner (Equal store.store_id store_id) (Greater modified_date store.modified_date)
-					Partition* store_id
-						Aggregate store_id modified_date
+					Broadcast
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* store.store_id store.modified_date $xmin $xmax
+								SeqScan store
+					Aggregate store_id modified_date
+						Exchange
 							HashJoin Mark $exists (Is customer.person_id person_id)
-								Partition* person_id
+								Broadcast
 									Map $expr_subquery.$col1:1 person_id
 										Filter (Not (IsNull person.person_id))
 											Map person_id:person.person_id, ..
 												Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 													Map* person.person_id $xmin $xmax
 														SeqScan person
-								Partition* customer.person_id
-									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-										Map* customer.person_id store_id modified_date $xmin $xmax
-											SeqScan customer
-					Partition* store.store_id
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* store.store_id store.modified_date $xmin $xmax
-								SeqScan store
-		Partition* customer.store_id customer.modified_date
-			Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
-				HashJoin Semi (Is customer.person_id person_id)
-					Partition* person_id
-						Map $expr_subquery.$col1:1 person_id
-							Filter (Not (IsNull person.person_id))
-								Map person_id:person.person_id, ..
-									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-										Map* person.person_id $xmin $xmax
-											SeqScan person
-					Partition* customer.person_id
-						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-							Map* customer.person_id customer.store_id customer.modified_date $xmin $xmax
-								SeqScan customer
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* customer.person_id store_id modified_date $xmin $xmax
+										SeqScan customer
+		Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
+			HashJoin Semi (Is customer.person_id person_id)
+				Broadcast
+					Map $expr_subquery.$col1:1 person_id
+						Filter (Not (IsNull person.person_id))
+							Map person_id:person.person_id, ..
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* person.person_id $xmin $xmax
+										SeqScan person
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* customer.person_id customer.store_id customer.modified_date $xmin $xmax
+						SeqScan customer
 
 # single_join_twice
 ok: explain select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
-		Partition* person_id
+		Broadcast
 			Map person.first_name person_id
 				Filter (Not (IsNull person.person_id))
 					Map person_id:person.person_id, ..
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* person.person_id person.first_name $xmin $xmax
 								SeqScan person
-		Partition* customer.person_id
-			HashJoin Single (Is customer.customer_id customer_id)
-				Partition* customer_id
-					Map store.name customer_id
-						Filter (Not (IsNull store.store_id))
-							Map customer_id:store.store_id, ..
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-									Map* store.store_id store.name $xmin $xmax
-										SeqScan store
-				Partition* customer.customer_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.customer_id customer.person_id $xmin $xmax
-							SeqScan customer
+		HashJoin Single (Is customer.customer_id customer_id)
+			Broadcast
+				Map store.name customer_id
+					Filter (Not (IsNull store.store_id))
+						Map customer_id:store.store_id, ..
+							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+								Map* store.store_id store.name $xmin $xmax
+									SeqScan store
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.customer_id customer.person_id $xmin $xmax
+					SeqScan customer
 
 # single_join_twice_plus_condition
 ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
-		Partition* person_id
+		Broadcast
 			Map person.first_name person_id
 				Filter (Not (IsNull person.person_id))
 					Map person_id:person.person_id, ..
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* person.person_id person.first_name $xmin $xmax
 								SeqScan person
-		Partition* customer.person_id
-			HashJoin Single (Is customer.customer_id customer_id)
-				Partition* customer_id
-					Map store.name customer_id
-						Filter (Not (IsNull store.store_id))
-							Map customer_id:store.store_id, ..
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike store.name "A%")
-									Map* store.store_id store.name $xmin $xmax
-										SeqScan store
-				Partition* customer.customer_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.customer_id customer.person_id $xmin $xmax
-							SeqScan customer
+		HashJoin Single (Is customer.customer_id customer_id)
+			Broadcast
+				Map store.name customer_id
+					Filter (Not (IsNull store.store_id))
+						Map customer_id:store.store_id, ..
+							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike store.name "A%")
+								Map* store.store_id store.name $xmin $xmax
+									SeqScan store
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.customer_id customer.person_id $xmin $xmax
+					SeqScan customer
 
 # semi_join_to_group_by
 ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Equal customer.customer_id $aggregate.$agg1)
-		Partition* store_id $aggregate.$agg1
+		Broadcast
 			Map $aggregate.$agg1 store_id
 				Aggregate $groupby.account_number store_id $aggregate.$agg1:(Max $max)
-					Map $groupby.account_number:customer.account_number $max:customer.customer_id store_id
-						Filter (Not (IsNull customer.store_id))
-							Map store_id:customer.store_id, ..
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-									Map* customer.customer_id customer.store_id customer.account_number $xmin $xmax
-										SeqScan customer
-		Partition* customer.store_id customer.customer_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.customer_id customer.store_id $xmin $xmax
-					SeqScan customer
+					Exchange
+						Map $groupby.account_number:customer.account_number $max:customer.customer_id store_id
+							Filter (Not (IsNull customer.store_id))
+								Map store_id:customer.store_id, ..
+									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+										Map* customer.customer_id customer.store_id customer.account_number $xmin $xmax
+											SeqScan customer
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* customer.customer_id customer.store_id $xmin $xmax
+				SeqScan customer
 
 # semi_join_to_group_by_correlated_column
 ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Is customer.account_number account_number) (Equal customer.customer_id $aggregate.$agg1)
-		Partition* store_id account_number $aggregate.$agg1
+		Broadcast
 			Map $aggregate.$agg1 store_id account_number
 				Aggregate $groupby.account_number $groupby.account_number store_id account_number $aggregate.$agg1:(Max $max)
-					Map $groupby.account_number:customer.account_number $groupby.account_number:account_number $max:customer.customer_id store_id account_number
-						HashJoin Inner (Equal store_id customer.store_id)
-							Partition* store_id
-								Aggregate store_id account_number
-									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-										Map* customer.customer_id store_id account_number $xmin $xmax
-											SeqScan customer
-							Partition* customer.store_id
+					Exchange
+						Map $groupby.account_number:customer.account_number $groupby.account_number:account_number $max:customer.customer_id store_id account_number
+							HashJoin Inner (Equal store_id customer.store_id)
+								Broadcast
+									Aggregate store_id account_number
+										Exchange
+											Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+												Map* customer.customer_id store_id account_number $xmin $xmax
+													SeqScan customer
 								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 									Map* customer.customer_id customer.store_id customer.account_number $xmin $xmax
 										SeqScan customer
-		Partition* customer.store_id customer.account_number customer.customer_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* customer.customer_id customer.store_id customer.account_number $xmin $xmax
-					SeqScan customer
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* customer.customer_id customer.store_id customer.account_number $xmin $xmax
+				SeqScan customer
 
 # semi_equi_join
 ok: explain select 1 from person where person_id in (select person_id from customer where person.modified_date = customer.modified_date)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map $query.$col1:1
 	HashJoin Semi (Is person.modified_date modified_date) (Equal person.person_id customer.person_id)
-		Partition* modified_date customer.person_id
+		Broadcast
 			Map customer.person_id modified_date
 				Filter (Not (IsNull customer.modified_date))
 					Map modified_date:customer.modified_date, ..
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* customer.person_id customer.modified_date $xmin $xmax
 								SeqScan customer
-		Partition* person.modified_date person.person_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* person.person_id person.modified_date $xmin $xmax
-					SeqScan person
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* person.person_id person.modified_date $xmin $xmax
+				SeqScan person
 
 # single_join_with_condition
 ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like 'A%') from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id) (Is store.name name)
-		Partition* store_id name
+		Broadcast
 			Aggregate store_id name $aggregate.$agg1:(Max $max)
-				Map $max:customer.modified_date store_id name
-					HashJoin Inner (Equal customer.store_id store_id)
-						Partition* store_id
-							Aggregate store_id name
-								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike name "A%")
-									Map* store_id name $xmin $xmax
-										SeqScan store
-						Partition* customer.store_id
+				Exchange
+					Map $max:customer.modified_date store_id name
+						HashJoin Inner (Equal customer.store_id store_id)
+							Broadcast
+								Aggregate store_id name
+									Exchange
+										Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (StringLike name "A%")
+											Map* store_id name $xmin $xmax
+												SeqScan store
 							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 								Map* customer.store_id customer.modified_date $xmin $xmax
 									SeqScan customer
-		Partition* store.store_id store.name
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* store.store_id store.name $xmin $xmax
-					SeqScan store
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* store.store_id store.name $xmin $xmax
+				SeqScan store
 
 # single_join_with_condition_and_group_by
 ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100) from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id)
-		Partition* store_id
+		Broadcast
 			Aggregate store_id $aggregate.$agg1:(Max $max)
-				Map $max:customer.modified_date store_id
-					Filter (Not (IsNull customer.store_id))
-						Map store_id:customer.store_id, ..
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Greater customer.account_number 100)
-								Map* customer.store_id customer.account_number customer.modified_date $xmin $xmax
-									SeqScan customer
-		Partition* store.store_id
-			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-				Map* store.store_id $xmin $xmax
-					SeqScan store
+				Exchange
+					Map $max:customer.modified_date store_id
+						Filter (Not (IsNull customer.store_id))
+							Map store_id:customer.store_id, ..
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Greater customer.account_number 100)
+									Map* customer.store_id customer.account_number customer.modified_date $xmin $xmax
+										SeqScan customer
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* store.store_id $xmin $xmax
+				SeqScan store
 
 # semi_join_in_where_clause
 ok: explain select customer_id from customer c1, store where c1.store_id = store.store_id and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Map customer.customer_id
 	HashJoin Semi (Is customer.account_number account_number) (Equal customer.modified_date customer.modified_date)
-		Partition* account_number customer.modified_date
+		Broadcast
 			Map customer.modified_date account_number
 				NestedLoop Inner (Greater customer.account_number account_number)
-					Aggregate account_number
-						NestedLoop Inner
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* store.store_id $xmin $xmax
-									SeqScan store
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* customer.customer_id customer.store_id account_number customer.modified_date $xmin $xmax
-									SeqScan customer
+					Broadcast
+						Aggregate account_number
+							Exchange
+								NestedLoop Inner
+									Broadcast
+										Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+											Map* store.store_id $xmin $xmax
+												SeqScan store
+									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+										Map* customer.customer_id customer.store_id account_number customer.modified_date $xmin $xmax
+											SeqScan customer
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* customer.account_number customer.modified_date $xmin $xmax
 							SeqScan customer
-		Partition* customer.account_number customer.modified_date
-			HashJoin Inner (Equal customer.store_id store.store_id)
-				Partition* store.store_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* store.store_id $xmin $xmax
-							SeqScan store
-				Partition* customer.store_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* customer.customer_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-							SeqScan customer
+		HashJoin Inner (Equal customer.store_id store.store_id)
+			Broadcast
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* store.store_id $xmin $xmax
+						SeqScan store
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.customer_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
+					SeqScan customer
 
 # semi_self_join
 ok: explain select customer_id from (select *, account_number - 1 as prev_account_number from customer) c1 where person_id in (select person_id from customer c2 where c1.prev_account_number = c2.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 Map customer.customer_id
 	HashJoin Semi (Is c1.prev_account_number prev_account_number) (Equal customer.person_id customer.person_id)
-		Partition* prev_account_number customer.person_id
+		Broadcast
 			Map customer.person_id prev_account_number
 				Filter (Not (IsNull customer.account_number))
 					Map prev_account_number:customer.account_number, ..
 						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 							Map* customer.person_id customer.account_number $xmin $xmax
 								SeqScan customer
-		Partition* c1.prev_account_number customer.person_id
-			Map c1.prev_account_number:(SubtractInt64 customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-						SeqScan customer
+		Map c1.prev_account_number:(SubtractInt64 customer.account_number 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
+					SeqScan customer
 
 # semi_join_then_order_by
 ok: explain select first_name from person where person_id in (select person_id from customer) order by modified_date limit 10
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Limit 10 0
 	Sort person.modified_date
 		Map $in:true $xmax $xmin person.first_name person.modified_date person.person_id
 			HashJoin Semi (Equal person.person_id customer.person_id)
-				Partition* customer.person_id
+				Broadcast
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* customer.person_id $xmin $xmax
 							SeqScan customer
-				Partition* person.person_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id person.first_name person.modified_date $xmin $xmax
-							SeqScan person
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* person.person_id person.first_name person.modified_date $xmin $xmax
+						SeqScan person
 
 # update_set_table_free_single_join
 ok: explain update person set first_name = (select last_name) where person_id = 1
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 Insert person
 	Delete person
 		Map person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
 			HashJoin Single (Is person.last_name last_name)
-				Partition* last_name
+				Broadcast
 					Map $expr_subquery.last_name:last_name last_name
 						Aggregate last_name
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* person.person_id person.first_name last_name person.modified_date $xmin $xmax $tid
-									IndexScan person(person_id:1)
-										TableFreeScan
-				Partition* person.last_name
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
-							IndexScan person(person_id:1)
-								TableFreeScan
+							Exchange
+								Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+									Map* person.person_id person.first_name last_name person.modified_date $xmin $xmax $tid
+										IndexScan person(person_id:1)
+											TableFreeScan
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
+						IndexScan person(person_id:1)
+							TableFreeScan
 
 # update_set_redundant_single_join
 ok: explain update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:$expr_subquery.person_id customer.modified_date $tid
 			HashJoin Single (Is person.person_id person_id)
-				Partition* person_id
+				Broadcast
 					Map $expr_subquery.person_id:person_id person_id
 						Aggregate person_id
-							HashJoin Inner (Equal customer.person_id person_id)
-								Partition* customer.person_id
-									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-										Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-											SeqScan customer
-								Partition* person_id
+							Exchange
+								HashJoin Inner (Equal customer.person_id person_id)
+									Broadcast
+										Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+											Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
+												SeqScan customer
 									Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 										Map* person_id $xmin $xmax
 											SeqScan person
-				Partition* person.person_id
-					HashJoin Inner (Equal customer.person_id person.person_id)
-						Partition* customer.person_id
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-									SeqScan customer
-						Partition* person.person_id
-							Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-								Map* person.person_id $xmin $xmax
-									SeqScan person
+				HashJoin Inner (Equal customer.person_id person.person_id)
+					Broadcast
+						Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+							Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
+								SeqScan customer
+					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+						Map* person.person_id $xmin $xmax
+							SeqScan person
 

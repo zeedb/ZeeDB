@@ -105,7 +105,8 @@ pub fn hash_join_mark(
     let matched_indexes = right_index.compress(&mask);
     let mut matched_mask = BoolArray::falses(right.len());
     BoolArray::trues(matched_indexes.len()).scatter(&matched_indexes, &mut matched_mask);
-    let right_column = RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(matched_mask))]);
+    let right_column =
+        RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(matched_mask))]);
     RecordBatch::zip(right.clone(), right_column)
 }
 
@@ -131,12 +132,12 @@ pub fn nested_loop(
     let matched = input.compress(&mask);
     let mut result = vec![matched];
     if let Some(unmatched_left) = keep_unmatched_left {
-        let left_mask = mask.transpose(right.len()).none(left.len());
-        *unmatched_left = unmatched_left.and_not(&left_mask);
+        let left_matched_mask = mask.transpose(right.len()).any(left.len());
+        *unmatched_left = unmatched_left.and_not(&left_matched_mask);
     }
     if keep_unmatched_right {
-        let right_mask = mask.none(left.len());
-        let right_unmatched = right.compress(&right_mask);
+        let right_unmatched_mask = mask.none(right.len());
+        let right_unmatched = right.compress(&right_unmatched_mask);
         let left_nulls = RecordBatch::nulls(left.schema(), right_unmatched.len());
         result.push(RecordBatch::zip(left_nulls, right_unmatched));
     }

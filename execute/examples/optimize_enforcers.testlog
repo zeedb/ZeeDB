@@ -1,0 +1,35 @@
+setup: create table integers (x int64)
+setup: insert into integers values (1), (1), (2), (3), (null)
+ok: explain select x, count(x) from integers group by 1
+plan                                                                                                                                                                                                                      
+Aggregate $groupby.x $aggregate.$agg1:(Count $count)
+	Exchange
+		Map $groupby.x:integers.x $count:integers.x
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
+
+ok: explain select * from integers i1 join integers i2 on i1.x = i2.x + 1
+plan                                                                                                                                                                                                                                                                                                                     
+Map integers.x integers.x
+	HashJoin Inner (Equal integers.x (AddInt64 integers.x 1))
+		Broadcast
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* integers.x $xmin $xmax
+				SeqScan integers
+
+ok: explain select * from integers i1 join integers i2 on i1.x > i2.x
+plan                                                                                                                                                                                                                                                                                                            
+Map integers.x integers.x
+	NestedLoop Inner (Greater integers.x integers.x)
+		Broadcast
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
+		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+			Map* integers.x $xmin $xmax
+				SeqScan integers
+

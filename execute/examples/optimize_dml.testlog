@@ -26,17 +26,16 @@ Insert person
 
 # update_equi_join
 ok: explain update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(AddInt64 customer.account_number 1) customer.modified_date $tid
 			HashJoin Inner (Equal customer.person_id person.person_id)
-				Partition* customer.person_id
+				Broadcast
 					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
 						Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
 							SeqScan customer
-				Partition* person.person_id
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-						Map* person.person_id $xmin $xmax
-							SeqScan person
+				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+					Map* person.person_id $xmin $xmax
+						SeqScan person
 

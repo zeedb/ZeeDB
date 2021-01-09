@@ -8,6 +8,9 @@ pub enum Rule {
     // Rewrite rules
     InnerJoinCommutivity,
     InnerJoinAssociativity,
+    // Enforcers.
+    InsertBroadcast,
+    InsertExchange,
     // Implementation rules
     LogicalGetToTableFreeScan,
     LogicalGetToSeqScan,
@@ -16,7 +19,8 @@ pub enum Rule {
     LogicalOutToOut,
     LogicalMapToMap,
     LogicalJoinToNestedLoop,
-    LogicalJoinToHashJoin,
+    LogicalJoinToBroadcastHashJoin,
+    LogicalJoinToExchangeHashJoin,
     LogicalJoinToIndexScan,
     LogicalAggregateToAggregate,
     LogicalLimitToLimit,
@@ -36,14 +40,17 @@ pub enum Rule {
 impl Rule {
     pub fn output_is_physical(&self) -> bool {
         match self {
-            Rule::LogicalGetToTableFreeScan
+            Rule::InsertBroadcast
+            | Rule::InsertExchange
+            | Rule::LogicalGetToTableFreeScan
             | Rule::LogicalGetToSeqScan
             | Rule::LogicalGetToIndexScan
             | Rule::LogicalFilterToFilter
             | Rule::LogicalOutToOut
             | Rule::LogicalMapToMap
             | Rule::LogicalJoinToNestedLoop
-            | Rule::LogicalJoinToHashJoin
+            | Rule::LogicalJoinToBroadcastHashJoin
+            | Rule::LogicalJoinToExchangeHashJoin
             | Rule::LogicalJoinToIndexScan
             | Rule::LogicalAggregateToAggregate
             | Rule::LogicalLimitToLimit
@@ -61,7 +68,11 @@ impl Rule {
     }
 
     // Quickly check if rule matches expression *without* exploring the inputs to the expression.
-    pub fn matches_fast(&self, mexpr: &MultiExpr) -> bool {
+    pub fn matches_fast(&self, mexpr: &MultiExpr, required: PhysicalProp) -> bool {
+        self.matches_expr(mexpr) && self.matches_required(required)
+    }
+
+    fn matches_expr(&self, mexpr: &MultiExpr) -> bool {
         match (self, &mexpr.expr) {
             (
                 Rule::InnerJoinCommutivity,
@@ -84,7 +95,8 @@ impl Rule {
             | (Rule::LogicalOutToOut, LogicalOut { .. })
             | (Rule::LogicalMapToMap, LogicalMap { .. })
             | (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
-            | (Rule::LogicalJoinToHashJoin, LogicalJoin { .. })
+            | (Rule::LogicalJoinToBroadcastHashJoin, LogicalJoin { .. })
+            | (Rule::LogicalJoinToExchangeHashJoin, LogicalJoin { .. })
             | (Rule::LogicalJoinToIndexScan, LogicalJoin { .. })
             | (Rule::LogicalAggregateToAggregate, LogicalAggregate { .. })
             | (Rule::LogicalLimitToLimit, LogicalLimit { .. })
@@ -98,8 +110,42 @@ impl Rule {
             | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
             | (Rule::LogicalCallToCall, LogicalCall { .. })
             | (Rule::LogicalExplainToExplain, LogicalExplain { .. })
-            | (Rule::LogicalScriptToScript, LogicalScript { .. }) => true,
+            | (Rule::LogicalScriptToScript, LogicalScript { .. })
+            | (Rule::InsertBroadcast, _)
+            | (Rule::InsertExchange, _) => true,
             _ => false,
+        }
+    }
+
+    fn matches_required(&self, required: PhysicalProp) -> bool {
+        match self {
+            Rule::InnerJoinCommutivity
+            | Rule::InnerJoinAssociativity
+            | Rule::LogicalGetToTableFreeScan
+            | Rule::LogicalGetToSeqScan
+            | Rule::LogicalGetToIndexScan
+            | Rule::LogicalFilterToFilter
+            | Rule::LogicalOutToOut
+            | Rule::LogicalMapToMap
+            | Rule::LogicalJoinToNestedLoop
+            | Rule::LogicalJoinToBroadcastHashJoin
+            | Rule::LogicalJoinToExchangeHashJoin
+            | Rule::LogicalJoinToIndexScan
+            | Rule::LogicalAggregateToAggregate
+            | Rule::LogicalLimitToLimit
+            | Rule::LogicalSortToSort
+            | Rule::LogicallUnionToUnion
+            | Rule::LogicalCreateTempTableToCreateTempTable
+            | Rule::LogicalGetWithToGetTempTable
+            | Rule::LogicalInsertToInsert
+            | Rule::LogicalValuesToValues
+            | Rule::LogicalDeleteToDelete
+            | Rule::LogicalAssignToAssign
+            | Rule::LogicalCallToCall
+            | Rule::LogicalExplainToExplain
+            | Rule::LogicalScriptToScript => required == PhysicalProp::None,
+            Rule::InsertBroadcast => required == PhysicalProp::BroadcastDist,
+            Rule::InsertExchange => required == PhysicalProp::ExchangeDist,
         }
     }
 
@@ -168,6 +214,9 @@ impl Rule {
                     }
                 }
             }
+            Rule::InsertBroadcast | Rule::InsertExchange => binds.push(Leaf {
+                gid: ss[mid].parent.0,
+            }),
             _ => binds.push(ss[mid].expr.clone().map(|group| group)),
         }
         binds
@@ -265,6 +314,16 @@ impl Rule {
                     }
                 }
             }
+            Rule::InsertBroadcast => {
+                return Some(Broadcast {
+                    input: Box::new(bind),
+                })
+            }
+            Rule::InsertExchange => {
+                return Some(Exchange {
+                    input: Box::new(bind),
+                });
+            }
             Rule::LogicalGetToTableFreeScan => {
                 if let LogicalSingleGet = bind {
                     return Some(TableFreeScan);
@@ -338,27 +397,11 @@ impl Rule {
                     return Some(NestedLoop { join, left, right });
                 }
             }
-            Rule::LogicalJoinToHashJoin => {
-                if let LogicalJoin { join, left, right } = bind {
-                    if let (Leaf { gid: left }, Leaf { gid: right }) =
-                        (left.as_ref(), right.as_ref())
-                    {
-                        if let Some((partition_left, partition_right)) = hash_join(
-                            ss,
-                            join.predicates().clone(),
-                            GroupID(*left),
-                            GroupID(*right),
-                        ) {
-                            return Some(HashJoin {
-                                join,
-                                partition_left,
-                                partition_right,
-                                left: Box::new(Leaf { gid: *left }),
-                                right: Box::new(Leaf { gid: *right }),
-                            });
-                        }
-                    }
-                }
+            Rule::LogicalJoinToBroadcastHashJoin => {
+                return to_hash_join(ss, bind, true);
+            }
+            Rule::LogicalJoinToExchangeHashJoin => {
+                return to_hash_join(ss, bind, true);
             }
             Rule::LogicalJoinToIndexScan => {
                 if let LogicalJoin { join, left, right } = bind {
@@ -515,6 +558,8 @@ impl Rule {
         vec![
             Rule::InnerJoinCommutivity,
             Rule::InnerJoinAssociativity,
+            Rule::InsertBroadcast,
+            Rule::InsertExchange,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,
@@ -522,7 +567,8 @@ impl Rule {
             Rule::LogicalOutToOut,
             Rule::LogicalMapToMap,
             Rule::LogicalJoinToNestedLoop,
-            Rule::LogicalJoinToHashJoin,
+            Rule::LogicalJoinToBroadcastHashJoin,
+            Rule::LogicalJoinToExchangeHashJoin,
             Rule::LogicalJoinToIndexScan,
             Rule::LogicalAggregateToAggregate,
             Rule::LogicalLimitToLimit,
@@ -539,6 +585,29 @@ impl Rule {
             Rule::LogicalScriptToScript,
         ]
     }
+}
+
+fn to_hash_join(ss: &SearchSpace, bind: Expr, broadcast: bool) -> Option<Expr> {
+    if let LogicalJoin { join, left, right } = bind {
+        if let (Leaf { gid: left }, Leaf { gid: right }) = (left.as_ref(), right.as_ref()) {
+            if let Some((partition_left, partition_right)) = hash_join(
+                ss,
+                join.predicates().clone(),
+                GroupID(*left),
+                GroupID(*right),
+            ) {
+                return Some(HashJoin {
+                    broadcast,
+                    join,
+                    partition_left,
+                    partition_right,
+                    left: Box::new(Leaf { gid: *left }),
+                    right: Box::new(Leaf { gid: *right }),
+                });
+            }
+        }
+    }
+    None
 }
 
 fn hash_join(

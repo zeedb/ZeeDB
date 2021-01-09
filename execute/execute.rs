@@ -120,6 +120,12 @@ enum Node {
         left: Box<Node>,
         right: Box<Node>,
     },
+    Broadcast {
+        input: Box<Node>,
+    },
+    Exchange {
+        input: Box<Node>,
+    },
     Insert {
         table: Table,
         indexes: Vec<Index>,
@@ -225,6 +231,7 @@ impl Node {
                 partition_right,
                 left,
                 right,
+                ..
             } => {
                 let left = Box::new(Node::compile(*left));
                 let right = Box::new(Node::compile(*right));
@@ -279,6 +286,12 @@ impl Node {
             Union { left, right } => Node::Union {
                 left: Box::new(Node::compile(*left)),
                 right: Box::new(Node::compile(*right)),
+            },
+            Broadcast { input } => Node::Broadcast {
+                input: Box::new(Node::compile(*input)),
+            },
+            Exchange { input } => Node::Exchange {
+                input: Box::new(Node::compile(*input)),
             },
             Insert {
                 table,
@@ -370,6 +383,8 @@ impl Node {
             | Node::Limit { input, .. }
             | Node::Sort { input, .. }
             | Node::Union { left: input, .. }
+            | Node::Broadcast { input, .. }
+            | Node::Exchange { input, .. }
             | Node::Delete { input, .. } => input.schema(),
             Node::SeqScan { projects, .. } | Node::Out { projects, .. } => projects
                 .iter()
@@ -906,6 +921,12 @@ impl Node {
                 Some(batch) => Some(batch),
                 None => right.next(state),
             },
+            Node::Broadcast { input } => {
+                input.next(state) // TODO
+            }
+            Node::Exchange { input } => {
+                input.next(state) // TODO
+            }
             Node::Insert {
                 table,
                 indexes,

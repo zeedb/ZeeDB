@@ -1,34 +1,38 @@
 setup: create table integers (x int64)
 setup: insert into integers values (1), (1), (2), (3), (null)
 ok: explain select count(distinct x) from integers
-plan                                                                                                                                                                                
+plan                                                                                                                                                                                              
 Aggregate $aggregate.$agg1:(Count Distinct $count)
-	Map $count:integers.x
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* integers.x $xmin $xmax
-				SeqScan integers
+	Exchange
+		Map $count:integers.x
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
 
 ok: explain select count(distinct x), count(distinct div(x, 2)) from integers
-plan                                                                                                                                                                                                                                                        
+plan                                                                                                                                                                                                                                                                      
 Aggregate $aggregate.$agg1:(Count Distinct $count) $aggregate.$agg2:(Count Distinct $count)
-	Map $count:integers.x $count:(DivInt64 integers.x 2)
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* integers.x $xmin $xmax
-				SeqScan integers
+	Exchange
+		Map $count:integers.x $count:(DivInt64 integers.x 2)
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
 
 ok: explain select div(x, 2), count(distinct x) from integers group by 1
-plan                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                                                                    
 Aggregate $groupby.$col1 $aggregate.$agg1:(Count Distinct $count)
-	Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* integers.x $xmin $xmax
-				SeqScan integers
+	Exchange
+		Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
 
 ok: explain select div(x, 2), count(distinct x), count(distinct div(x, 2)) from integers group by 1
-plan                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                            
 Aggregate $groupby.$col1 $aggregate.$agg1:(Count Distinct $count) $aggregate.$agg2:(Count Distinct $count)
-	Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x $count:(DivInt64 integers.x 2)
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-			Map* integers.x $xmin $xmax
-				SeqScan integers
+	Exchange
+		Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x $count:(DivInt64 integers.x 2)
+			Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+				Map* integers.x $xmin $xmax
+					SeqScan integers
 
