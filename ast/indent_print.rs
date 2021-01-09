@@ -40,8 +40,9 @@ impl IndentPrint for Expr {
                 predicates,
                 table,
             } => {
+                let predicates = visible_predicates(predicates);
                 if !predicates.is_empty() {
-                    write!(f, "Filter* {}", join_scalars(predicates))?;
+                    write!(f, "Filter* {}", join_scalars(&predicates))?;
                     newline(f, indent)?;
                     indent += 1;
                 }
@@ -289,8 +290,9 @@ impl IndentPrint for Expr {
                 table,
                 input,
             } => {
+                let predicates = visible_predicates(predicates);
                 if !predicates.is_empty() {
-                    write!(f, "Filter* {}", join_scalars(predicates))?;
+                    write!(f, "Filter* {}", join_scalars(&predicates))?;
                     newline(f, indent)?;
                     indent += 1;
                 }
@@ -509,4 +511,31 @@ fn join_index_lookups(index: &Index, lookup: &Vec<Scalar>) -> String {
         strings.push(format!("{}:{}", index.columns[i], lookup[i]));
     }
     strings.join(" ")
+}
+
+/// Hide (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
+fn visible_predicates(predicates: &Vec<Scalar>) -> Vec<Scalar> {
+    predicates
+        .iter()
+        .filter(|p| {
+            match p {
+                Scalar::Call(f) => match f.as_ref() {
+                    F::LessOrEqual(Scalar::Column(c), Scalar::Call(f))
+                        if c.name == "$xmin" && f.as_ref() == &F::Xid =>
+                    {
+                        return false;
+                    }
+                    F::Less(Scalar::Call(f), Scalar::Column(c))
+                        if f.as_ref() == &F::Xid && c.name == "$xmax" =>
+                    {
+                        return false;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+            true
+        })
+        .cloned()
+        .collect()
 }

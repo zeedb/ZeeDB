@@ -1,13 +1,13 @@
 # create_database
 ok: explain create database foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Script
 	Assign parent_catalog_id 0
 		TableFreeScan
 	Assign catalog_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "catalog")
+				Filter* (Equal sequence.sequence_name "catalog")
 					Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 						SeqScan sequence
 			TableFreeScan
@@ -19,21 +19,21 @@ Script
 
 # drop_database
 ok: explain drop database foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "foo") (Equal catalog.parent_catalog_id @catalog_id)
+				Filter* (Equal catalog.catalog_name "foo") (Equal catalog.parent_catalog_id @catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Call drop_table table.table_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @catalog_id)
+				Filter* (Equal table.catalog_id @catalog_id)
 					Map* table.catalog_id table.table_id $xmin $xmax
 						SeqScan table
 			TableFreeScan
@@ -41,38 +41,37 @@ Script
 		Map $in:true $tid $xmax $xmin column.table_id
 			HashJoin Semi (Equal column.table_id table.table_id)
 				Broadcast
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @catalog_id)
+					Filter* (Equal table.catalog_id @catalog_id)
 						Map* table.catalog_id table.table_id $xmin $xmax
 							SeqScan table
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* column.table_id $xmin $xmax $tid
-						SeqScan column
+				Map* column.table_id $xmin $xmax $tid
+					SeqScan column
 	Delete table
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @catalog_id)
+		Filter* (Equal table.catalog_id @catalog_id)
 			Map* table.catalog_id $xmin $xmax $tid
 				SeqScan table
 	Delete catalog
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_id @catalog_id)
+		Filter* (Equal catalog.catalog_id @catalog_id)
 			Map* catalog.catalog_id $xmin $xmax $tid
 				SeqScan catalog
 
 # create_database_nested
 ok: explain create database nested.foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Script
 	Assign parent_catalog_id 0
 		TableFreeScan
 	Assign parent_catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @parent_catalog_id)
+				Filter* (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @parent_catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Assign catalog_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "catalog")
+				Filter* (Equal sequence.sequence_name "catalog")
 					Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 						SeqScan sequence
 			TableFreeScan
@@ -84,28 +83,28 @@ Script
 
 # drop_database_nested
 ok: explain drop database nested.foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
+				Filter* (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "foo") (Equal catalog.parent_catalog_id @catalog_id)
+				Filter* (Equal catalog.catalog_name "foo") (Equal catalog.parent_catalog_id @catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Call drop_table table.table_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @catalog_id)
+				Filter* (Equal table.catalog_id @catalog_id)
 					Map* table.catalog_id table.table_id $xmin $xmax
 						SeqScan table
 			TableFreeScan
@@ -113,31 +112,30 @@ Script
 		Map $in:true $tid $xmax $xmin column.table_id
 			HashJoin Semi (Equal column.table_id table.table_id)
 				Broadcast
-					Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @catalog_id)
+					Filter* (Equal table.catalog_id @catalog_id)
 						Map* table.catalog_id table.table_id $xmin $xmax
 							SeqScan table
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax)
-					Map* column.table_id $xmin $xmax $tid
-						SeqScan column
+				Map* column.table_id $xmin $xmax $tid
+					SeqScan column
 	Delete table
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @catalog_id)
+		Filter* (Equal table.catalog_id @catalog_id)
 			Map* table.catalog_id $xmin $xmax $tid
 				SeqScan table
 	Delete catalog
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_id @catalog_id)
+		Filter* (Equal catalog.catalog_id @catalog_id)
 			Map* catalog.catalog_id $xmin $xmax $tid
 				SeqScan catalog
 
 # create_table
 ok: explain create table foo (person_id int64 primary key, store_id int64)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign table_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "table")
+				Filter* (Equal sequence.sequence_name "table")
 					Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 						SeqScan sequence
 			TableFreeScan
@@ -157,19 +155,19 @@ Script
 
 # drop_table
 ok: explain drop table foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
+				Filter* (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
 					Map* table.catalog_id table.table_id table.table_name $xmin $xmax
 						SeqScan table
 			TableFreeScan
 	Delete table
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.table_id @table_id)
+		Filter* (Equal table.table_id @table_id)
 			Map* table.table_id $xmin $xmax $tid
 				SeqScan table
 	Call drop_table @table_id
@@ -177,21 +175,21 @@ Script
 
 # create_table_nested
 ok: explain create table nested.foo (person_id int64 primary key, store_id int64)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
+				Filter* (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Assign table_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "table")
+				Filter* (Equal sequence.sequence_name "table")
 					Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 						SeqScan sequence
 			TableFreeScan
@@ -211,26 +209,26 @@ Script
 
 # drop_table_nested
 ok: explain drop table nested.foo
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
+				Filter* (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
+				Filter* (Equal table.table_name "foo") (Equal table.catalog_id @catalog_id)
 					Map* table.catalog_id table.table_id table.table_name $xmin $xmax
 						SeqScan table
 			TableFreeScan
 	Delete table
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.table_id @table_id)
+		Filter* (Equal table.table_id @table_id)
 			Map* table.table_id $xmin $xmax $tid
 				SeqScan table
 	Call drop_table @table_id
@@ -238,7 +236,7 @@ Script
 
 # create_index
 ok: explain create index foo_index on person (person_id)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
 Script
 	Assign index_catalog_id 0
 		TableFreeScan
@@ -247,14 +245,14 @@ Script
 	Assign index_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "index")
+				Filter* (Equal sequence.sequence_name "index")
 					Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 						SeqScan sequence
 			TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @table_catalog_id) (Equal table.table_name "person")
+				Filter* (Equal table.catalog_id @table_catalog_id) (Equal table.table_name "person")
 					Map* table.catalog_id table.table_id table.table_name $xmin $xmax
 						SeqScan table
 			TableFreeScan
@@ -266,7 +264,7 @@ Script
 	Assign column_id column.column_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal column.table_id @table_id) (Equal column.column_name "person_id")
+				Filter* (Equal column.table_id @table_id) (Equal column.column_name "person_id")
 					Map* column.table_id column.column_id column.column_name $xmin $xmax
 						SeqScan column
 			TableFreeScan
@@ -278,19 +276,19 @@ Script
 
 # drop_index
 ok: explain drop index foo_index
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign index_id index.index_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal index.index_name "foo_index") (Equal index.catalog_id @catalog_id)
+				Filter* (Equal index.index_name "foo_index") (Equal index.catalog_id @catalog_id)
 					Map* index.catalog_id index.index_id index.index_name $xmin $xmax
 						SeqScan index
 			TableFreeScan
 	Delete index
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal index.index_id @index_id)
+		Filter* (Equal index.index_id @index_id)
 			Map* index.index_id $xmin $xmax $tid
 				SeqScan index
 	Call drop_index @index_id
@@ -298,14 +296,14 @@ Script
 
 # create_index_nested
 ok: explain create index nested.foo_index on person (person_id)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
 Script
 	Assign index_catalog_id 0
 		TableFreeScan
 	Assign index_catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @index_catalog_id)
+				Filter* (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @index_catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
@@ -314,14 +312,14 @@ Script
 	Assign index_sequence_id sequence.sequence_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal sequence.sequence_name "index")
+				Filter* (Equal sequence.sequence_name "index")
 					Map* sequence.sequence_id sequence.sequence_name $xmin $xmax
 						SeqScan sequence
 			TableFreeScan
 	Assign table_id table.table_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal table.catalog_id @table_catalog_id) (Equal table.table_name "person")
+				Filter* (Equal table.catalog_id @table_catalog_id) (Equal table.table_name "person")
 					Map* table.catalog_id table.table_id table.table_name $xmin $xmax
 						SeqScan table
 			TableFreeScan
@@ -333,7 +331,7 @@ Script
 	Assign column_id column.column_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal column.table_id @table_id) (Equal column.column_name "person_id")
+				Filter* (Equal column.table_id @table_id) (Equal column.column_name "person_id")
 					Map* column.table_id column.column_id column.column_name $xmin $xmax
 						SeqScan column
 			TableFreeScan
@@ -345,26 +343,26 @@ Script
 
 # drop_index_nested
 ok: explain drop index nested.foo_index
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Script
 	Assign catalog_id 0
 		TableFreeScan
 	Assign catalog_id catalog.catalog_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
+				Filter* (Equal catalog.catalog_name "nested") (Equal catalog.parent_catalog_id @catalog_id)
 					Map* catalog.parent_catalog_id catalog.catalog_id catalog.catalog_name $xmin $xmax
 						SeqScan catalog
 			TableFreeScan
 	Assign index_id index.index_id
 		NestedLoop Single
 			Broadcast
-				Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal index.index_name "foo_index") (Equal index.catalog_id @catalog_id)
+				Filter* (Equal index.index_name "foo_index") (Equal index.catalog_id @catalog_id)
 					Map* index.catalog_id index.index_id index.index_name $xmin $xmax
 						SeqScan index
 			TableFreeScan
 	Delete index
-		Filter* (LessOrEqual $xmin (Xid)) (Less (Xid) $xmax) (Equal index.index_id @index_id)
+		Filter* (Equal index.index_id @index_id)
 			Map* index.index_id $xmin $xmax $tid
 				SeqScan index
 	Call drop_index @index_id
