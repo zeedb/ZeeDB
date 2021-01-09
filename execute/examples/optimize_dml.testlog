@@ -1,10 +1,9 @@
 # delete
 ok: explain delete customer where person_id = 1
-plan                                                                                                                
+plan                                                                    
 Delete customer
 	Filter* (Equal customer.person_id 1)
-		Map* customer.person_id $xmin $xmax $tid
-			SeqScan customer
+		SeqScan customer
 
 # insert_values
 ok: explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', current_timestamp())
@@ -15,24 +14,22 @@ Insert person
 
 # update_where
 ok: explain update person set first_name = 'Foo' where person_id = 1
-plan                                                                                                                                                                                                                                                                         
+plan                                                                                                                                                                           
 Insert person
 	Delete person
 		Map person.person_id person.first_name:"Foo" person.last_name person.modified_date $tid
-			Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax $tid
+			
 				IndexScan person(person_id:1)
 					TableFreeScan
 
 # update_equi_join
 ok: explain update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                                                                                                                          
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(AddInt64 customer.account_number 1) customer.modified_date $tid
 			HashJoin Inner (Equal customer.person_id person.person_id)
 				Broadcast
-					Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax $tid
-						SeqScan customer
-				Map* person.person_id $xmin $xmax
-					SeqScan person
+					SeqScan customer
+				SeqScan person
 

@@ -31,23 +31,16 @@ impl IndentPrint for Expr {
             Expr::Leaf { gid } => write!(f, "@{}", gid),
             Expr::LogicalSingleGet | Expr::TableFreeScan => write!(f, "{}", self.name()),
             Expr::LogicalGet {
-                projects,
-                predicates,
-                table,
+                predicates, table, ..
             }
             | Expr::SeqScan {
-                projects,
-                predicates,
-                table,
+                predicates, table, ..
             } => {
                 let predicates = visible_predicates(predicates);
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(&predicates))?;
                     newline(f, indent)?;
-                    indent += 1;
                 }
-                write!(f, "Map* {}", join_columns(projects))?;
-                newline(f, indent)?;
                 write!(f, "{} {}", self.name(), table.name)?;
                 Ok(())
             }
@@ -282,23 +275,18 @@ impl IndentPrint for Expr {
             }
             Expr::LogicalRewrite { sql } => write!(f, "{} {:?}", self.name(), sql),
             Expr::IndexScan {
-                include_existing,
-                projects,
                 predicates,
                 lookup,
                 index,
                 table,
                 input,
+                ..
             } => {
                 let predicates = visible_predicates(predicates);
                 if !predicates.is_empty() {
                     write!(f, "Filter* {}", join_scalars(&predicates))?;
                     newline(f, indent)?;
                     indent += 1;
-                }
-                write!(f, "Map* {}", join_columns(projects))?;
-                if *include_existing {
-                    write!(f, ", ..")?;
                 }
                 newline(f, indent)?;
                 write!(

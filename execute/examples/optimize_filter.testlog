@@ -1,39 +1,36 @@
 # combine_consecutive_filters
 ok: explain select 1 from (select * from person where first_name like 'A%') where last_name like 'A%'
-plan                                                                                                                                                                                                            
+plan                                                                                                               
 Map $query.$col1:1
 	Filter* (StringLike person.last_name "A%") (StringLike person.first_name "A%")
-		Map* person.person_id person.first_name person.last_name person.modified_date $xmin $xmax
-			SeqScan person
+		SeqScan person
 
 # index_scan
 ok: explain select store_id from customer where customer_id = 1
-plan                                                                                                      
-Map* customer.customer_id customer.store_id $xmin $xmax
+plan                                               
+
 	IndexScan customer(customer_id:1)
 		TableFreeScan
 
 # project_then_filter
 ok: explain select 1 from (select *, 1234 as random from customer) where customer_id < random and customer_id <> 0
-plan                                                                                                                                                                                                                                                                                                                                                                                                           
+plan                                                                                                                                                                                                                                                                            
 Map $query.$col1:1
 	Filter (Less customer.customer_id $subquery1.random)
 		Map $subquery1.random:1234 customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 			Filter* (NotEqual customer.customer_id 0)
-				Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-					SeqScan customer
+				SeqScan customer
 
 # project_then_filter_twice
 ok: explain select * from (select * from (select customer_id / 2 as id from customer) where id > 10) where id < 100
-plan                                                                                                                                                                                         
+plan                                                                                                                                                
 Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 	Map $subquery2.id:(DivideDouble (Cast customer.customer_id DOUBLE) 2)
-		Map* customer.customer_id $xmin $xmax
-			SeqScan customer
+		SeqScan customer
 
 # pull_filter_through_aggregate
 ok: explain select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                                                                                                   
 Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
 		Broadcast
@@ -42,16 +39,14 @@ Map $query.$col2:$aggregate.$agg1 store.store_id
 					Map $star:1 store_id
 						Filter (Not (IsNull customer.store_id))
 							Map store_id:customer.store_id, ..
-								Map* customer.store_id $xmin $xmax
-									SeqScan customer
-		Map* store.store_id $xmin $xmax
-			SeqScan store
+								SeqScan customer
+		SeqScan store
 
 # push_filter_through_project
 ok: explain select * from (select *, customer_id + 1 from customer) where customer_id = 1
-plan                                                                                                                                                                                                                                                                                                                                           
+plan                                                                                                                                                                                                                  
 Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(AddInt64 customer.customer_id 1)
-	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
+	
 		IndexScan customer(customer_id:1)
 			TableFreeScan
 

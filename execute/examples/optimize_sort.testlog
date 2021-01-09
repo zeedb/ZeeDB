@@ -1,7 +1,6 @@
 # order_by
 ok: explain select customer_id from customer order by modified_date
-plan                                                                                                        
+plan                                         
 Sort customer.modified_date
-	Map* customer.customer_id customer.modified_date $xmin $xmax
-		SeqScan customer
+	SeqScan customer
 

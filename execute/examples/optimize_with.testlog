@@ -1,23 +1,20 @@
 # redundant_with_clause_with_projection
 ok: explain with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo
-plan                                                                                                                  
+plan                                                                          
 Map foo.customer_id:customer.customer_id foo.r:(CurrentDate)
-	Map* customer.customer_id $xmin $xmax
-		SeqScan customer
+	SeqScan customer
 
 # redundant_with_clause
 ok: explain with foo as (select * from customer) select customer_id from foo
-plan                                                                                                                                                                                  
+plan                                                      
 Map foo.customer_id:customer.customer_id
-	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-		SeqScan customer
+	SeqScan customer
 
 # remove_with
 ok: explain with foo as (select * from customer) select * from foo
-plan                                                                                                                                                                                                                                                                                                                                      
+plan                                                                                                                                                                                                          
 Map foo.customer_id:customer.customer_id foo.person_id:customer.person_id foo.store_id:customer.store_id foo.account_number:customer.account_number foo.modified_date:customer.modified_date
-	Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-		SeqScan customer
+	SeqScan customer
 
 # unused_with
 ok: explain with foo as (select 1 as a) select 2 as b
@@ -27,11 +24,10 @@ Map $query.b:2
 
 # use_with_clause_twice
 ok: explain with foo as (select customer_id, store_id from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id
-plan                                                                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                         
 Script
 	CreateTempTable foo customer_id INT64 store_id INT64
-		Map* customer.customer_id customer.store_id $xmin $xmax
-			SeqScan customer
+		SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.store_id foo.store_id)
 			Broadcast
@@ -40,12 +36,11 @@ Script
 
 # use_with_project_twice
 ok: explain with foo as (select *, current_date() as r from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.r = f2.r
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                   
 Script
 	CreateTempTable foo customer_id INT64 person_id INT64 store_id INT64 account_number INT64 modified_date TIMESTAMP r DATE
 		Map foo.r:(CurrentDate) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
-			Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-				SeqScan customer
+			SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.r foo.r)
 			Broadcast
@@ -54,11 +49,10 @@ Script
 
 # use_with_select_star_twice
 ok: explain with foo as (select * from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.store_id = f2.store_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                      
 Script
 	CreateTempTable foo customer_id INT64 person_id INT64 store_id INT64 account_number INT64 modified_date TIMESTAMP
-		Map* customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $xmin $xmax
-			SeqScan customer
+		SeqScan customer
 	Map foo.customer_id foo.customer_id
 		HashJoin Inner (Equal foo.store_id foo.store_id)
 			Broadcast
