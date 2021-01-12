@@ -1,0 +1,13 @@
+[package]
+name = "sketch"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+hyperloglogplus = "0.2.2"
+rand = "0.7.3"
+twox-hash = "1.6.0"

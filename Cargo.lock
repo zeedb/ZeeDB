@@ -978,6 +978,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sketch"
+version = "0.1.0"
+dependencies = [
+ "hyperloglogplus",
+ "rand",
+ "twox-hash",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
