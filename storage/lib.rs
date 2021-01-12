@@ -7,9 +7,6 @@ mod art_tests;
 mod byte_key;
 #[cfg(test)]
 mod byte_key_tests;
-mod counter;
-#[cfg(test)]
-mod counter_tests;
 mod heap;
 #[cfg(test)]
 mod heap_tests;
