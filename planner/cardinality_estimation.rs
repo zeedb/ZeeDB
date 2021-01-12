@@ -27,12 +27,12 @@ pub(crate) fn compute_logical_props(
             if index_predicate {
                 cardinality = 1;
             } else {
-                cardinality = statistics.table_cardinality(table.id);
+                cardinality = statistics.approx_cardinality(table.id);
             }
             for c in projects {
                 column_unique_cardinality.insert(
                     c.clone(),
-                    statistics.column_unique_cardinality(table.id, &c.name),
+                    statistics.approx_count_distinct(table.id, &c.name),
                 );
             }
         }

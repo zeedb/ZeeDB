@@ -33,7 +33,7 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | Call { .. }
         | Explain { .. } => 0.0,
         SeqScan { table, .. } => {
-            let n = storage.table_cardinality(table.id) as f64;
+            let n = storage.approx_cardinality(table.id) as f64;
             n * SEQ_SCAN
         }
         IndexScan { .. } => {

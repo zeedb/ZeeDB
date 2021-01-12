@@ -1,15 +1,15 @@
 use rand::Rng;
 
-pub const DEFAULT_M: usize = 8;
-pub const DEFAULT_K: usize = 200;
-pub const MIN_K: usize = DEFAULT_M;
-pub const MAX_K: usize = (1 << 16) - 1;
+pub(crate) const DEFAULT_M: usize = 8;
+pub(crate) const DEFAULT_K: usize = 200;
+pub(crate) const MIN_K: usize = DEFAULT_M;
+pub(crate) const MAX_K: usize = (1 << 16) - 1;
 
 /// Histogram implements the approximate histogram described in:
 ///   "Streaming Quantiles Algorithms with Small Space and Update Time" https://arxiv.org/abs/1907.00236
 /// It is based on the C++ implementation in https://github.com/apache/datasketches-cpp/tree/master/kll
 #[derive(Debug, Clone)]
-pub struct Histogram<T: Ord + Default> {
+pub(crate) struct Histogram<T: Ord + Default> {
     /// k is the size of the final, largest level.
     k: usize,
     /// m is the minimum size of a level.
@@ -27,7 +27,7 @@ pub struct Histogram<T: Ord + Default> {
 }
 
 impl<T: Ord + Default> Histogram<T> {
-    pub fn with_capacity(k: usize) -> Self {
+    pub(crate) fn with_capacity(k: usize) -> Self {
         Self::new(k, DEFAULT_M)
     }
 
@@ -44,7 +44,7 @@ impl<T: Ord + Default> Histogram<T> {
         }
     }
 
-    pub fn insert(&mut self, value: T) {
+    pub(crate) fn insert(&mut self, value: T) {
         if self.is_full() {
             self.compress_while_updating();
         }
@@ -54,7 +54,7 @@ impl<T: Ord + Default> Histogram<T> {
         self.n += 1;
     }
 
-    pub fn merge(&mut self, other: Self) {
+    pub(crate) fn merge(&mut self, other: Self) {
         // Replace self with an empty histogram, and rename self/other to left/right.
         let mut left = std::mem::replace(self, Self::new(self.k, self.m));
         let mut right = other;
@@ -106,7 +106,7 @@ impl<T: Ord + Default> Histogram<T> {
         self.items.shrink_to(target);
     }
 
-    pub fn quantiles(&mut self, fractions: &[f64]) -> Option<Vec<&T>> {
+    pub(crate) fn quantiles(&mut self, fractions: &[f64]) -> Option<Vec<&T>> {
         // If no items have been added, quantile is unknown.
         if self.is_empty() {
             return None;
@@ -155,7 +155,7 @@ impl<T: Ord + Default> Histogram<T> {
         Some(values)
     }
 
-    pub fn rank(&self, value: T) -> Option<f64> {
+    pub(crate) fn rank(&self, value: T) -> Option<f64> {
         // If no items have been added, rank is unknown.
         if self.is_empty() {
             return None;
@@ -179,23 +179,23 @@ impl<T: Ord + Default> Histogram<T> {
         Some(total as f64 / self.count() as f64)
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub(crate) fn is_empty(&self) -> bool {
         self.items.is_empty()
     }
 
-    pub fn is_full(&self) -> bool {
+    pub(crate) fn is_full(&self) -> bool {
         self.items.len() == self.items.capacity()
     }
 
-    pub fn is_estimation_mode(&self) -> bool {
+    pub(crate) fn is_estimation_mode(&self) -> bool {
         self.levels.len() - 1 > 1
     }
 
-    pub fn count(&self) -> usize {
+    pub(crate) fn count(&self) -> usize {
         self.n
     }
 
-    pub fn retained(&self) -> usize {
+    pub(crate) fn retained(&self) -> usize {
         self.levels[0]
     }
 

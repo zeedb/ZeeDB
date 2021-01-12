@@ -1,11 +1,10 @@
 #![feature(shrink_to)]
 
-mod counter;
-#[cfg(test)]
-mod counter_tests;
 mod histogram;
 #[cfg(test)]
 mod histogram_tests;
+mod sketch;
+#[cfg(test)]
+mod sketch_tests;
 
-pub use counter::Counter;
-pub use histogram::Histogram;
+pub use sketch::Sketch;

@@ -1,5 +1,6 @@
-use crate::{counter::*, page::*};
+use crate::page::*;
 use kernel::*;
+use sketch::Sketch;
 use std::{collections::HashMap, fmt};
 
 // Heap represents a logical table as a list of pages.
@@ -8,14 +9,14 @@ use std::{collections::HashMap, fmt};
 #[derive(Clone)]
 pub struct Heap {
     pages: Vec<Page>,
-    counters: HashMap<String, Counter>,
+    stats: HashMap<String, Sketch>,
 }
 
 impl Heap {
     pub fn empty() -> Self {
         Self {
             pages: vec![],
-            counters: HashMap::new(),
+            stats: HashMap::new(),
         }
     }
 
@@ -50,8 +51,9 @@ impl Heap {
         if self.pages.is_empty() {
             self.pages
                 .push(Page::empty(self.pages.len(), records.schema()));
-            for (name, _) in &records.columns {
-                self.counters.insert(name.clone(), Counter::new());
+            for (name, array) in &records.columns {
+                self.stats
+                    .insert(name.clone(), Sketch::new(array.data_type()));
             }
         }
         // Allocate arrays to keep track of where we insert the rows.
@@ -84,7 +86,7 @@ impl Heap {
             match name.as_str() {
                 "$xmin" | "$xmax" | "$tid" => {}
                 name => {
-                    let counter = self.counters.get_mut(name).expect(name);
+                    let counter = self.stats.get_mut(name).expect(name);
                     counter.insert(array);
                 }
             }
@@ -107,11 +109,11 @@ impl Heap {
         }
     }
 
-    pub fn approx_unique_cardinality(&self, column: &String) -> usize {
+    pub fn approx_count_distinct(&self, column: &String) -> usize {
         if self.pages.is_empty() {
             return 0;
         }
-        self.counters.get(column).expect(column).count() as usize
+        self.stats.get(column).expect(column).count_distinct() as usize
     }
 
     pub(crate) fn is_uninitialized(&self) -> bool {

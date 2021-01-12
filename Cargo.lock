@@ -982,6 +982,7 @@ name = "sketch"
 version = "0.1.0"
 dependencies = [
  "hyperloglogplus",
+ "kernel",
  "rand",
  "twox-hash",
 ]
@@ -1014,11 +1015,11 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "catalog",
- "hyperloglogplus",
  "kernel",
  "packed_simd_2",
  "rand",
  "regex",
+ "sketch",
  "twox-hash",
 ]
 

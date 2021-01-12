@@ -1,4 +1,4 @@
-use ast::{AggregateExpr, AggregateFunction, Column, Value};
+use ast::{AggregateExpr, AggregateFunction, Value};
 use kernel::*;
 use std::{
     collections::HashMap,

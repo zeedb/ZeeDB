@@ -71,14 +71,14 @@ impl Storage {
         self.sequences[id as usize].fetch_add(1, Ordering::Relaxed)
     }
 
-    pub fn table_cardinality(&self, id: i64) -> usize {
+    pub fn approx_cardinality(&self, id: i64) -> usize {
         self.table(id).approx_cardinality()
     }
 
-    pub fn column_unique_cardinality(&self, id: i64, column: &String) -> usize {
+    pub fn approx_count_distinct(&self, id: i64, column: &String) -> usize {
         match column.as_str() {
-            "$xmin" | "$xmax" | "$tid" => self.table_cardinality(id),
-            _ => self.table(id).approx_unique_cardinality(column),
+            "$xmin" | "$xmax" | "$tid" => self.approx_cardinality(id),
+            _ => self.table(id).approx_count_distinct(column),
         }
     }
 }
