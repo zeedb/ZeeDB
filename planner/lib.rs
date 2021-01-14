@@ -7,5 +7,6 @@ mod cardinality_estimation;
 mod rewrite;
 mod rule;
 mod search_space;
+mod unnest;
 
 pub use optimize::optimize;
