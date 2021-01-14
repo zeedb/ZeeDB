@@ -5,10 +5,10 @@ use std::collections::HashMap;
 use storage::Storage;
 use zetasql::SimpleCatalogProto;
 
-/// View profiles with ~/go/bin/pprof --http localhost:8888 src/benchmarks/profiles/___.profile
+/// View profiles with ~/go/bin/pprof --http localhost:8888 benchmarks/profiles/___.profile
 fn main() {
     bench(
-        "src/benchmarks/profiles/index-lookup.profile",
+        "benchmarks/profiles/index-lookup.profile",
         "select * from person where person_id = 100",
     );
 }
