@@ -4,6 +4,18 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use std::collections::HashMap;
 use zetasql::SimpleCatalogProto;
 
+pub(crate) fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
+    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(rewrite_ddl, e));
+    let expr = rewrite_scalars(expr);
+    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(unnest_dependent_joins, e));
+    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_predicates, e));
+    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(remove_dependent_join, e));
+    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(optimize_join_type, e));
+    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_projections, e));
+    let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
+    expr
+}
+
 fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
     match expr {
         LogicalCreateDatabase { name } => {
@@ -121,6 +133,19 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
         }),
         _ => Err(expr),
     }
+}
+
+fn rewrite_scalars(expr: Expr) -> Expr {
+    expr.map_scalar(|scalar| {
+        scalar.bottom_up_rewrite(&|scalar| match scalar {
+            Scalar::Call(function) => match *function {
+                F::CurrentDate => Scalar::Literal(Value::Date(Some(current_date()))),
+                F::CurrentTimestamp => Scalar::Literal(Value::Timestamp(Some(current_timestamp()))),
+                other => Scalar::Call(Box::new(other)),
+            },
+            other => other,
+        })
+    })
 }
 
 fn optimize_join_type(expr: Expr) -> Result<Expr, Expr> {
@@ -575,6 +600,16 @@ fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
     }
 }
 
+fn rewrite_logical_rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
+    expr.bottom_up_rewrite(&|expr| match expr {
+        LogicalRewrite { sql } => {
+            let expr = parser::analyze(catalog_id, &catalog, &sql).expect(&sql);
+            rewrite(catalog_id, catalog, expr)
+        }
+        other => other,
+    })
+}
+
 fn apply_repeatedly(f: impl Fn(Expr) -> Result<Expr, Expr>, mut expr: Expr) -> Expr {
     loop {
         expr = match f(expr) {
@@ -765,41 +800,6 @@ fn combine_projects(
         inlined.push((outer_expr, outer_column));
     }
     inlined
-}
-
-pub fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
-    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(rewrite_ddl, e));
-    let expr = rewrite_scalars(expr);
-    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(unnest_dependent_joins, e));
-    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_predicates, e));
-    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(remove_dependent_join, e));
-    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(optimize_join_type, e));
-    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_projections, e));
-    let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
-    expr
-}
-
-fn rewrite_scalars(expr: Expr) -> Expr {
-    expr.map_scalar(|scalar| {
-        scalar.bottom_up_rewrite(&|scalar| match scalar {
-            Scalar::Call(function) => match *function {
-                F::CurrentDate => Scalar::Literal(Value::Date(Some(current_date()))),
-                F::CurrentTimestamp => Scalar::Literal(Value::Timestamp(Some(current_timestamp()))),
-                other => Scalar::Call(Box::new(other)),
-            },
-            other => other,
-        })
-    })
-}
-
-fn rewrite_logical_rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&|expr| match expr {
-        LogicalRewrite { sql } => {
-            let expr = parser::analyze(catalog_id, &catalog, &sql).expect(&sql);
-            rewrite(catalog_id, catalog, expr)
-        }
-        other => other,
-    })
 }
 
 fn current_timestamp() -> i64 {
