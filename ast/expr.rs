@@ -6,7 +6,6 @@ use std::{
     collections::{HashMap, HashSet},
     fmt,
     hash::Hash,
-    ops,
 };
 
 // Expr plan nodes combine inputs in a Plan tree.
@@ -442,7 +441,8 @@ impl Expr {
         }
     }
 
-    pub fn map(self, mut visitor: impl FnMut(Expr) -> Expr) -> Expr {
+    // TODO replace this with a version that updates in-place.
+    pub fn map(self, visitor: impl Fn(Expr) -> Expr) -> Expr {
         match self {
             Expr::LogicalFilter { predicates, input } => {
                 let input = Box::new(visitor(*input));
@@ -760,6 +760,7 @@ impl Expr {
         }
     }
 
+    // TODO replace this with a version that updates in-place.
     pub fn map_scalar<F: Fn(Scalar) -> Scalar>(self, visitor: F) -> Expr {
         let map_predicates = |mut predicates: Vec<Scalar>| -> Vec<Scalar> {
             predicates.drain(..).map(|scalar| visitor(scalar)).collect()
@@ -891,12 +892,12 @@ impl Expr {
         })
     }
 
-    pub fn bottom_up_rewrite(self, visitor: &mut impl FnMut(Expr) -> Expr) -> Expr {
+    pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
         let operator = self.map(|child| child.bottom_up_rewrite(visitor));
         visitor(operator)
     }
 
-    pub fn top_down_rewrite(self, visitor: &mut impl FnMut(Expr) -> Expr) -> Expr {
+    pub fn top_down_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
         let expr = visitor(self);
         expr.map(|child| child.top_down_rewrite(visitor))
     }
@@ -1339,7 +1340,7 @@ impl Expr {
     }
 }
 
-impl ops::Index<usize> for Expr {
+impl std::ops::Index<usize> for Expr {
     type Output = Expr;
 
     fn index(&self, index: usize) -> &Self::Output {
@@ -1409,6 +1410,76 @@ impl ops::Index<usize> for Expr {
     }
 }
 
+impl std::ops::IndexMut<usize> for Expr {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match self {
+            Expr::LogicalJoin { left, right, .. }
+            | Expr::LogicalDependentJoin {
+                subquery: left,
+                domain: right,
+                ..
+            }
+            | Expr::LogicalWith { left, right, .. }
+            | Expr::LogicalUnion { left, right, .. }
+            | Expr::NestedLoop { left, right, .. }
+            | Expr::HashJoin { left, right, .. }
+            | Expr::Union { left, right } => match index {
+                0 => left.as_mut(),
+                1 => right.as_mut(),
+                _ => panic!("{} is out of bounds [0,2)", index),
+            },
+            Expr::LogicalFilter { input, .. }
+            | Expr::LogicalOut { input, .. }
+            | Expr::LogicalMap { input, .. }
+            | Expr::LogicalAggregate { input, .. }
+            | Expr::LogicalLimit { input, .. }
+            | Expr::LogicalSort { input, .. }
+            | Expr::LogicalInsert { input, .. }
+            | Expr::LogicalValues { input, .. }
+            | Expr::LogicalUpdate { input, .. }
+            | Expr::LogicalDelete { input, .. }
+            | Expr::Filter { input, .. }
+            | Expr::Out { input, .. }
+            | Expr::Map { input, .. }
+            | Expr::IndexScan { input, .. }
+            | Expr::Aggregate { input, .. }
+            | Expr::Limit { input, .. }
+            | Expr::Sort { input, .. }
+            | Expr::Broadcast { input, .. }
+            | Expr::Exchange { input, .. }
+            | Expr::Insert { input, .. }
+            | Expr::Values { input, .. }
+            | Expr::Delete { input, .. }
+            | Expr::LogicalCreateTempTable { input, .. }
+            | Expr::CreateTempTable { input, .. }
+            | Expr::LogicalAssign { input, .. }
+            | Expr::Assign { input, .. }
+            | Expr::LogicalCall { input, .. }
+            | Expr::Call { input, .. }
+            | Expr::LogicalExplain { input, .. }
+            | Expr::Explain { input, .. } => match index {
+                0 => input.as_mut(),
+                _ => panic!("{} is out of bounds [0,1)", index),
+            },
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalGet { .. }
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::TableFreeScan { .. }
+            | Expr::SeqScan { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
+            Expr::LogicalScript { statements } | Expr::Script { statements } => {
+                &mut statements[index]
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Join {
     // Inner implements the default SQL join.
@@ -1448,12 +1519,12 @@ impl Join {
 
     pub fn replace(&self, predicates: Vec<Scalar>) -> Self {
         match self {
-            Join::Inner { .. } => Join::Inner(predicates),
-            Join::Right { .. } => Join::Right(predicates),
-            Join::Outer { .. } => Join::Outer(predicates),
-            Join::Semi { .. } => Join::Semi(predicates),
-            Join::Anti { .. } => Join::Anti(predicates),
-            Join::Single { .. } => Join::Single(predicates),
+            Join::Inner(_) => Join::Inner(predicates),
+            Join::Right(_) => Join::Right(predicates),
+            Join::Outer(_) => Join::Outer(predicates),
+            Join::Semi(_) => Join::Semi(predicates),
+            Join::Anti(_) => Join::Anti(predicates),
+            Join::Single(_) => Join::Single(predicates),
             Join::Mark(mark, _) => Join::Mark(mark.clone(), predicates),
         }
     }
@@ -2718,7 +2789,7 @@ impl<'it> Iterator for ExprIterator<'it> {
     }
 }
 
-fn map(mut visitor: impl FnMut(Expr) -> Expr, list: Vec<Expr>) -> Vec<Expr> {
+fn map(visitor: impl Fn(Expr) -> Expr, list: Vec<Expr>) -> Vec<Expr> {
     let mut mapped = Vec::with_capacity(list.len());
     for expr in list {
         mapped.push(visitor(expr))

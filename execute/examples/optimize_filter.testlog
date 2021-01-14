@@ -46,7 +46,7 @@ Map $query.$col2:$aggregate.$agg1 store.store_id
 # push_filter_through_project
 ok: explain select * from (select *, customer_id + 1 from customer) where customer_id = 1
 plan                                                                                                                                                                                                                             
-Map customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date $subquery1.$col2:(AddInt64 customer.customer_id 1)
+Map $subquery1.$col2:(AddInt64 customer.customer_id 1) customer.customer_id customer.person_id customer.store_id customer.account_number customer.modified_date
 	IndexScan customer(customer_id:1)
 			Broadcast
 				TableFreeScan

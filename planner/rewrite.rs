@@ -3,1014 +3,850 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use std::collections::{HashMap, HashSet};
 use zetasql::SimpleCatalogProto;
 
-#[derive(Debug)]
-enum RewriteRule {
-    // Rewrite DDL:
-    CreateDatabaseToScript,
-    CreateTableToScript,
-    CreateIndexToScript,
-    DropToScript,
-    UpdateToDeleteThenInsert,
-    // Unnest meta rule:
-    PushDependentJoin,
-    // Unnesting implementation rules:
-    PushDependentJoinThroughFilter,
-    PushDependentJoinThroughMap,
-    PushDependentJoinThroughJoin,
-    PushDependentJoinThroughWith,
-    PushDependentJoinThroughAggregate,
-    PushDependentJoinThroughLimit,
-    PushDependentJoinThroughSort,
-    PushDependentJoinThroughSetOperation,
-    // Optimize joins:
-    MarkJoinToSemiJoin,
-    SingleJoinToInnerJoin,
-    RemoveInnerJoin,
-    RemoveWith,
-    RemoveTableFreeScan,
-    RemoveDependentJoin,
-    // Predicate pushdown:
-    PushExplicitFilterIntoInnerJoin,
-    PushImplicitFilterThroughInnerJoin,
-    PushExplicitFilterThroughOuterJoin,
-    PushFilterThroughMap,
-    CombineConsecutiveFilters,
-    EmbedFilterIntoGet,
-    // Optimize projections:
-    CombineConsecutiveMaps,
-    EmbedMapIntoGet,
-    RemoveMap,
-}
-
-impl RewriteRule {
-    fn apply(&self, expr: &Expr) -> Option<Expr> {
-        match self {
-            RewriteRule::CreateDatabaseToScript => {
-                if let LogicalCreateDatabase { name } = expr {
-                    let mut lines = vec![];
-                    lines.push(format!("set parent_catalog_id = {:?};", name.catalog_id));
-                    for catalog_name in &name.path[0..name.path.len() - 1] {
-                        lines.push(format!("set parent_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @parent_catalog_id);", catalog_name));
-                    }
-                    lines.push("set catalog_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'catalog');".to_string());
-                    lines.push(
-                        "set next_catalog_id = metadata.next_val(@catalog_sequence_id);"
-                            .to_string(),
-                    );
-                    lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (@parent_catalog_id, @next_catalog_id, {:?});", name.path.last().unwrap()));
-                    return Some(LogicalRewrite {
-                        sql: lines.join("\n"),
-                    });
-                }
+fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalCreateDatabase { name } => {
+            let mut lines = vec![];
+            lines.push(format!("set parent_catalog_id = {:?};", name.catalog_id));
+            for catalog_name in &name.path[0..name.path.len() - 1] {
+                lines.push(format!("set parent_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @parent_catalog_id);", catalog_name));
             }
-            RewriteRule::CreateTableToScript => {
-                if let LogicalCreateTable { name, columns } = expr {
-                    let mut lines = vec![];
+            lines.push("set catalog_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'catalog');".to_string());
+            lines
+                .push("set next_catalog_id = metadata.next_val(@catalog_sequence_id);".to_string());
+            lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (@parent_catalog_id, @next_catalog_id, {:?});", name.path.last().unwrap()));
+            Ok(LogicalRewrite {
+                sql: lines.join("\n"),
+            })
+        }
+        LogicalCreateTable { name, columns } => {
+            let mut lines = vec![];
+            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+            for catalog_name in &name.path[0..name.path.len() - 1] {
+                lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+            }
+            lines.push("set table_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'table');".to_string());
+            lines.push("set next_table_id = metadata.next_val(@table_sequence_id);".to_string());
+            lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (@catalog_id, @next_table_id, {:?});", name.path.last().unwrap()));
+            for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
+                let column_type = column_type.to_string();
+                lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
+            }
+            lines.push("call metadata.create_table(@next_table_id);".to_string());
+            Ok(LogicalRewrite {
+                sql: lines.join("\n"),
+            })
+        }
+        LogicalCreateIndex {
+            name,
+            table,
+            columns,
+        } => {
+            let mut lines = vec![];
+            lines.push(format!("set index_catalog_id = {:?};", name.catalog_id));
+            for catalog_name in &name.path[0..name.path.len() - 1] {
+                lines.push(format!("set index_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @index_catalog_id);", catalog_name));
+            }
+            lines.push(format!("set table_catalog_id = {:?};", table.catalog_id));
+            for catalog_name in &table.path[0..table.path.len() - 1] {
+                lines.push(format!("set table_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @table_catalog_id);", catalog_name));
+            }
+            lines.push("set index_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'index');".to_string());
+            lines.push(format!("set table_id = (select table_id from metadata.table where catalog_id = @table_catalog_id and table_name = {:?});", table.path.last().unwrap()));
+            lines.push("set next_index_id = metadata.next_val(@index_sequence_id);".to_string());
+            lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (@index_catalog_id, @next_index_id, @table_id, {:?});", name.path.last().unwrap()));
+            for (index_order, column_name) in columns.iter().enumerate() {
+                lines.push(format!("set column_id = (select column_id from metadata.column where table_id = @table_id and column_name = {:?});", column_name));
+                lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (@next_index_id, @column_id, {:?});", index_order));
+            }
+            lines.push("call metadata.create_index(@next_index_id);".to_string());
+            let sql = lines.join("\n");
+            Ok(LogicalRewrite { sql })
+        }
+        LogicalDrop { object, name } => {
+            let mut lines = vec![];
+            match object {
+                ObjectType::Database => {
+                    lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                    for catalog_name in &name.path[0..name.path.len()] {
+                        lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                    }
+                    lines.push("call metadata.drop_table((select table_id from metadata.table where catalog_id = @catalog_id));".to_string());
+                    lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = @catalog_id);".to_string());
+                    lines.push(
+                        "delete from metadata.table where catalog_id = @catalog_id;".to_string(),
+                    );
+                    lines.push(
+                        "delete from metadata.catalog where catalog_id = @catalog_id;".to_string(),
+                    );
+                }
+                ObjectType::Table => {
                     lines.push(format!("set catalog_id = {:?};", name.catalog_id));
                     for catalog_name in &name.path[0..name.path.len() - 1] {
                         lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
                     }
-                    lines.push("set table_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'table');".to_string());
-                    lines.push(
-                        "set next_table_id = metadata.next_val(@table_sequence_id);".to_string(),
-                    );
-                    lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (@catalog_id, @next_table_id, {:?});", name.path.last().unwrap()));
-                    for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
-                        let column_type = column_type.to_string();
-                        lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
-                    }
-                    lines.push("call metadata.create_table(@next_table_id);".to_string());
-                    return Some(LogicalRewrite {
-                        sql: lines.join("\n"),
-                    });
+                    let table_name = name.path.last().unwrap();
+                    lines.push(format!("set table_id = (select table_id from metadata.table where table_name = {:?} and catalog_id = @catalog_id);", table_name));
+                    lines
+                        .push("delete from metadata.table where table_id = @table_id;".to_string());
+                    lines.push("call metadata.drop_table(@table_id);".to_string());
                 }
-            }
-            RewriteRule::CreateIndexToScript => {
-                if let LogicalCreateIndex {
-                    name,
-                    table,
-                    columns,
-                } = expr
-                {
-                    let mut lines = vec![];
-                    lines.push(format!("set index_catalog_id = {:?};", name.catalog_id));
+                ObjectType::Index => {
+                    lines.push(format!("set catalog_id = {:?};", name.catalog_id));
                     for catalog_name in &name.path[0..name.path.len() - 1] {
-                        lines.push(format!("set index_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @index_catalog_id);", catalog_name));
+                        lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
                     }
-                    lines.push(format!("set table_catalog_id = {:?};", table.catalog_id));
-                    for catalog_name in &table.path[0..table.path.len() - 1] {
-                        lines.push(format!("set table_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @table_catalog_id);", catalog_name));
-                    }
-                    lines.push("set index_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'index');".to_string());
-                    lines.push(format!("set table_id = (select table_id from metadata.table where catalog_id = @table_catalog_id and table_name = {:?});", table.path.last().unwrap()));
-                    lines.push(
-                        "set next_index_id = metadata.next_val(@index_sequence_id);".to_string(),
-                    );
-                    lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (@index_catalog_id, @next_index_id, @table_id, {:?});", name.path.last().unwrap()));
-                    for (index_order, column_name) in columns.iter().enumerate() {
-                        lines.push(format!("set column_id = (select column_id from metadata.column where table_id = @table_id and column_name = {:?});", column_name));
-                        lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (@next_index_id, @column_id, {:?});", index_order));
-                    }
-                    lines.push("call metadata.create_index(@next_index_id);".to_string());
-                    let sql = lines.join("\n");
-                    return Some(LogicalRewrite { sql });
+                    let index_name = name.path.last().unwrap();
+                    lines.push(format!("set index_id = (select index_id from metadata.index where index_name = {:?} and catalog_id = @catalog_id);", index_name));
+                    lines
+                        .push("delete from metadata.index where index_id = @index_id;".to_string());
+                    lines.push("call metadata.drop_index(@index_id);".to_string());
                 }
-            }
-            RewriteRule::DropToScript => {
-                if let LogicalDrop { object, name } = expr {
-                    let mut lines = vec![];
-                    match object {
-                        ObjectType::Database => {
-                            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
-                            for catalog_name in &name.path[0..name.path.len()] {
-                                lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
-                            }
-                            lines.push("call metadata.drop_table((select table_id from metadata.table where catalog_id = @catalog_id));".to_string());
-                            lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = @catalog_id);".to_string());
-                            lines.push(
-                                "delete from metadata.table where catalog_id = @catalog_id;"
-                                    .to_string(),
-                            );
-                            lines.push(
-                                "delete from metadata.catalog where catalog_id = @catalog_id;"
-                                    .to_string(),
-                            );
-                        }
-                        ObjectType::Table => {
-                            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
-                            for catalog_name in &name.path[0..name.path.len() - 1] {
-                                lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
-                            }
-                            let table_name = name.path.last().unwrap();
-                            lines.push(format!("set table_id = (select table_id from metadata.table where table_name = {:?} and catalog_id = @catalog_id);", table_name));
-                            lines.push(
-                                "delete from metadata.table where table_id = @table_id;"
-                                    .to_string(),
-                            );
-                            lines.push("call metadata.drop_table(@table_id);".to_string());
-                        }
-                        ObjectType::Index => {
-                            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
-                            for catalog_name in &name.path[0..name.path.len() - 1] {
-                                lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
-                            }
-                            let index_name = name.path.last().unwrap();
-                            lines.push(format!("set index_id = (select index_id from metadata.index where index_name = {:?} and catalog_id = @catalog_id);", index_name));
-                            lines.push(
-                                "delete from metadata.index where index_id = @index_id;"
-                                    .to_string(),
-                            );
-                            lines.push("call metadata.drop_index(@index_id);".to_string());
-                        }
-                        ObjectType::Column => todo!(),
-                    };
-                    return Some(LogicalRewrite {
-                        sql: lines.join("\n"),
-                    });
-                }
-            }
-            RewriteRule::UpdateToDeleteThenInsert => {
-                if let LogicalUpdate {
-                    table,
-                    tid,
-                    input,
-                    columns,
-                } = expr
-                {
-                    return Some(LogicalInsert {
-                        table: table.clone(),
-                        input: Box::new(LogicalDelete {
-                            table: table.clone(),
-                            tid: tid.clone(),
-                            input: input.clone(),
-                        }),
-                        columns: columns.clone(),
-                    });
-                }
-            }
-            RewriteRule::PushDependentJoin => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    subquery,
-                    ..
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    return Some(expr.clone().top_down_rewrite(&mut |expr| {
-                        apply_all(
-                            expr,
-                            &vec![
-                                RewriteRule::PushDependentJoinThroughFilter,
-                                RewriteRule::PushDependentJoinThroughMap,
-                                RewriteRule::PushDependentJoinThroughJoin,
-                                RewriteRule::PushDependentJoinThroughWith,
-                                RewriteRule::PushDependentJoinThroughAggregate,
-                                RewriteRule::PushDependentJoinThroughLimit,
-                                RewriteRule::PushDependentJoinThroughSort,
-                                RewriteRule::PushDependentJoinThroughSetOperation,
-                            ],
-                        )
-                    }));
-                }
-            }
-            RewriteRule::PushDependentJoinThroughFilter => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates: join_predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalFilter {
-                        predicates: filter_predicates,
-                        input: subquery,
-                    } = subquery.as_ref()
-                    {
-                        return Some(LogicalFilter {
-                            predicates: filter_predicates.clone(),
-                            input: Box::new(LogicalDependentJoin {
-                                parameters: parameters.clone(),
-                                predicates: join_predicates.clone(),
-                                subquery: subquery.clone(),
-                                domain: domain.clone(),
-                            }),
-                        });
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughMap => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalMap {
-                        include_existing,
-                        projects,
-                        input: subquery,
-                    } = subquery.as_ref()
-                    {
-                        let mut projects = projects.clone();
-                        for p in parameters {
-                            if !projects.iter().any(|(_, c)| c == p) {
-                                projects.push((Scalar::Column(p.clone()), p.clone()));
-                            }
-                        }
-                        return Some(LogicalMap {
-                            include_existing: *include_existing,
-                            projects,
-                            input: Box::new(LogicalDependentJoin {
-                                parameters: parameters.clone(),
-                                predicates: predicates.clone(),
-                                subquery: subquery.clone(),
-                                domain: domain.clone(),
-                            }),
-                        });
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughJoin => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    // PushExplicitFilterIntoInnerJoin hasn't yet run, so predicates should be empty.
-                    // We won't bother substituting fresh column names in parameters.
-                    assert!(predicates.is_empty());
+                ObjectType::Column => todo!(),
+            };
+            Ok(LogicalRewrite {
+                sql: lines.join("\n"),
+            })
+        }
+        LogicalUpdate {
+            table,
+            tid,
+            input,
+            columns,
+        } => Ok(LogicalInsert {
+            table: table.clone(),
+            input: Box::new(LogicalDelete { table, tid, input }),
+            columns,
+        }),
+        _ => Err(expr),
+    }
+}
 
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalJoin {
-                        join,
-                        left: left_subquery,
-                        right: right_subquery,
-                    } = subquery.as_ref()
-                    {
-                        match join {
-                            Join::Inner(_) => {
-                                if free_parameters(parameters, left_subquery).is_empty() {
-                                    return Some(push_right(
-                                        parameters,
-                                        join,
-                                        left_subquery,
-                                        right_subquery,
-                                        domain,
-                                    ));
-                                } else if free_parameters(parameters, right_subquery).is_empty() {
-                                    return Some(push_left(
-                                        parameters,
-                                        join,
-                                        left_subquery,
-                                        right_subquery,
-                                        domain,
-                                    ));
-                                } else {
-                                    return Some(push_both(
-                                        parameters,
-                                        join,
-                                        left_subquery,
-                                        right_subquery,
-                                        domain,
-                                    ));
-                                }
-                            }
-                            Join::Right(_)
-                            | Join::Semi(_)
-                            | Join::Anti(_)
-                            | Join::Single(_)
-                            | Join::Mark(_, _) => {
-                                if free_parameters(parameters, left_subquery).is_empty() {
-                                    return Some(push_right(
-                                        parameters,
-                                        join,
-                                        left_subquery,
-                                        right_subquery,
-                                        domain,
-                                    ));
-                                } else {
-                                    return Some(push_both(
-                                        parameters,
-                                        join,
-                                        left_subquery,
-                                        right_subquery,
-                                        domain,
-                                    ));
-                                }
-                            }
-                            Join::Outer(_) => {
-                                return Some(push_both(
-                                    parameters,
-                                    join,
-                                    left_subquery,
-                                    right_subquery,
-                                    domain,
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughWith => {
-                if let LogicalDependentJoin { subquery, .. } = expr {
-                    if let LogicalWith { .. } = subquery.as_ref() {
-                        panic!("WITH is not supported in correlated subqueries")
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughAggregate => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalAggregate {
-                        group_by,
-                        aggregate,
-                        input: subquery,
-                    } = subquery.as_ref()
-                    {
-                        let mut group_by = group_by.clone();
-                        for c in parameters {
-                            group_by.push(c.clone());
-                        }
-                        return Some(LogicalAggregate {
-                            group_by,
-                            aggregate: aggregate.clone(),
-                            input: Box::new(LogicalDependentJoin {
-                                parameters: parameters.clone(),
-                                predicates: predicates.clone(),
-                                subquery: subquery.clone(),
-                                domain: domain.clone(),
-                            }),
-                        });
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughLimit => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalLimit {
-                        limit,
-                        offset,
-                        input: subquery,
-                    } = subquery.as_ref()
-                    {
-                        if *offset > 0 {
-                            panic!("OFFSET is not supported in correlated subquery");
-                        }
-                        // Limit 0 means we ignore the result of the subquery.
-                        if *limit == 0 {
-                            return Some(LogicalLimit {
-                                limit: 0,
-                                offset: 0,
-                                input: Box::new(LogicalDependentJoin {
-                                    parameters: parameters.clone(),
-                                    predicates: predicates.clone(),
-                                    subquery: subquery.clone(),
-                                    domain: domain.clone(),
-                                }),
-                            });
-                        // Limit 1 can be converted to ANY_VALUE, which can be unnested:
-                        } else if *limit == 1 {
-                            return Some(LogicalDependentJoin {
-                                parameters: parameters.clone(),
-                                predicates: predicates.clone(),
-                                subquery: Box::new(LogicalAggregate {
-                                    group_by: vec![],
-                                    aggregate: any_value(subquery.attributes()),
-                                    input: subquery.clone(),
-                                }),
-                                domain: domain.clone(),
-                            });
-                        } else {
-                            // LIMIT N may actually be a no-op.
-                            // Either way, it's best to just make the user take it out.
-                            panic!("Only LIMIT 0 and LIMIT 1 are supported in subqueries");
-                        }
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughSort => {
-                if let LogicalDependentJoin { subquery, .. } = expr {
-                    if let LogicalSort { .. } = subquery.as_ref() {
-                        panic!("ORDER BY is not supported in correlated subqueries");
-                    }
-                }
-            }
-            RewriteRule::PushDependentJoinThroughSetOperation => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    if free_parameters(parameters, subquery).is_empty() {
-                        return None;
-                    }
-                    if let LogicalUnion {
-                        left: left_subquery,
-                        right: right_subquery,
-                    } = subquery.as_ref()
-                    {
-                        return Some(LogicalUnion {
-                            left: Box::new(LogicalDependentJoin {
-                                parameters: parameters.clone(),
-                                predicates: predicates.clone(),
-                                subquery: left_subquery.clone(),
-                                domain: domain.clone(),
-                            }),
-                            right: Box::new(LogicalDependentJoin {
-                                parameters: parameters.clone(),
-                                predicates: predicates.clone(),
-                                subquery: right_subquery.clone(),
-                                domain: domain.clone(),
-                            }),
-                        });
-                    }
-                }
-            }
-            RewriteRule::MarkJoinToSemiJoin => {
-                if let LogicalFilter {
+fn unnest_dependent_joins(expr: Expr) -> Result<Expr, Expr> {
+    match &expr {
+        LogicalDependentJoin {
+            parameters,
+            subquery,
+            ..
+        } if !free_parameters(parameters, subquery).is_empty() => {
+            Ok(expr.top_down_rewrite(&|expr| apply_repeatedly(push_dependent_join, expr)))
+        }
+        _ => Err(expr),
+    }
+}
+
+fn push_dependent_join(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalDependentJoin {
+            parameters,
+            predicates: join_predicates,
+            subquery,
+            domain,
+        } if !free_parameters(&parameters, &subquery).is_empty() => {
+            // PushExplicitFilterIntoInnerJoin hasn't yet run, so predicates should be empty.
+            // We won't bother substituting fresh column names in parameters.
+            assert!(join_predicates.is_empty());
+
+            match *subquery {
+                LogicalFilter {
                     predicates: filter_predicates,
-                    input,
-                } = expr
-                {
-                    if let LogicalJoin {
-                        join: Join::Mark(mark, join_predicates),
-                        left,
-                        right,
-                    } = input.as_ref()
-                    {
-                        let mut filter_predicates = filter_predicates.clone();
-                        let semi = Scalar::Column(mark.clone());
-                        let anti = Scalar::Call(Box::new(F::Not(semi.clone())));
-                        let mut combined_attributes = vec![];
-                        for c in right.attributes() {
-                            combined_attributes.push((Scalar::Column(c.clone()), c));
-                        }
-                        combined_attributes
-                            .push((Scalar::Literal(Value::Bool(Some(true))), mark.clone()));
-                        combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));
-                        for i in 0..filter_predicates.len() {
-                            if filter_predicates[i] == semi {
-                                filter_predicates.remove(i);
-                                return Some(maybe_filter(
-                                    &filter_predicates,
-                                    &LogicalMap {
-                                        include_existing: false,
-                                        projects: combined_attributes,
-                                        input: Box::new(LogicalJoin {
-                                            join: Join::Semi(join_predicates.clone()),
-                                            left: left.clone(),
-                                            right: right.clone(),
-                                        }),
-                                    },
-                                ));
-                            } else if filter_predicates[i] == anti {
-                                filter_predicates.remove(i);
-                                return Some(maybe_filter(
-                                    &filter_predicates,
-                                    &LogicalMap {
-                                        include_existing: false,
-                                        projects: combined_attributes,
-                                        input: Box::new(LogicalJoin {
-                                            join: Join::Anti(join_predicates.clone()),
-                                            left: left.clone(),
-                                            right: right.clone(),
-                                        }),
-                                    },
-                                ));
-                            }
-                        }
-                    }
-                }
-            }
-            RewriteRule::SingleJoinToInnerJoin => {
-                if let LogicalJoin {
-                    join: Join::Single(join_predicates),
-                    left,
-                    right,
-                } = expr
-                {
-                    if join_predicates.is_empty() && prove_singleton(left) {
-                        return Some(LogicalJoin {
-                            join: Join::Inner(vec![]),
-                            left: left.clone(),
-                            right: right.clone(),
-                        });
-                    }
-                }
-            }
-            RewriteRule::RemoveInnerJoin => {
-                if let LogicalJoin {
-                    join: Join::Inner(join_predicates),
-                    left,
-                    right,
-                } = expr
-                {
-                    if let Some(projects) = is_table_free_scan(left.as_ref()) {
-                        return Some(maybe_filter(join_predicates, &maybe_map(&projects, right)));
-                    }
-                    if let Some(projects) = is_table_free_scan(right.as_ref()) {
-                        return Some(maybe_filter(join_predicates, &maybe_map(&projects, left)));
-                    }
-                }
-            }
-            RewriteRule::RemoveWith => {
-                if let LogicalWith {
-                    name,
-                    columns,
-                    left,
-                    right,
-                } = expr
-                {
-                    match count_get_with(name, right) {
-                        0 if !left.has_side_effects() => return Some(right.as_ref().clone()),
-                        1 => return Some(inline_with(name, columns, left, right.as_ref().clone())),
-                        _ => return Some(with_to_script(name, columns, left, right)),
-                    }
-                }
-            }
-            RewriteRule::RemoveTableFreeScan => {
-                if let LogicalJoin { join, left, right } = expr {
-                    if let Join::Inner(join_predicates) = join {
-                        if let TableFreeScan = right.as_ref() {
-                            return Some(maybe_filter(join_predicates, left));
-                        }
-                    }
-                }
-            }
-            RewriteRule::RemoveDependentJoin => {
-                if let LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                } = expr
-                {
-                    assert!(!parameters.is_empty());
-                    // Check if predicates contains subquery.a = domain.b for every b in domain.
-                    let subquery_scope = subquery.attributes();
-                    // TODO this checks for predicates that have been pushed down into the dependent join.
-                    // The actual rules is more general: anytime there is a condition a=b higher in the tree,
-                    // it implies an equivalence class a~b, which means we can replace
-                    //   LogicalJoin [a] subquery domain
-                    // with
-                    //   Map a:b subquery
-                    let match_equals = |x: &Scalar| {
-                        if let Scalar::Call(function) = x {
-                            if let F::Equal(Scalar::Column(left), Scalar::Column(right)) =
-                                function.as_ref()
-                            {
-                                if subquery_scope.contains(&left) && parameters.contains(&right) {
-                                    return Some((left.clone(), right.clone()));
-                                } else if subquery_scope.contains(&right)
-                                    && parameters.contains(&left)
-                                {
-                                    return Some((right.clone(), left.clone()));
-                                }
-                            }
-                        }
-                        None
-                    };
-                    let mut equiv_predicates = HashMap::new();
-                    let mut filter_predicates = vec![];
-                    for p in predicates {
-                        if let Some((subquery_column, domain_column)) = match_equals(&p) {
-                            filter_predicates.push(Scalar::Call(Box::new(F::Not(Scalar::Call(
-                                Box::new(F::IsNull(Scalar::Column(subquery_column.clone()))),
-                            )))));
-                            equiv_predicates.insert(domain_column, subquery_column);
-                        } else {
-                            filter_predicates.push(p.clone())
-                        }
-                    }
-                    // If we can't remove the dependent join, turn it into an inner join.
-                    // Note that in principal, the inner join can be faster if it prunes the subquery early in the query plan.
-                    // Ideally we would consider both possibilities in the search phase.
-                    // However, for the time being, we are simply using a heuristic that eliminating the dependent join is probably better.
-                    if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
-                        return Some(LogicalJoin {
-                            join: Join::Inner(predicates.clone()),
-                            left: subquery.clone(),
-                            right: Box::new(LogicalAggregate {
-                                group_by: parameters.clone(),
-                                aggregate: vec![],
-                                input: domain.clone(),
-                            }),
-                        });
-                    }
-                    // Infer domain from subquery using equivalences from the join condition.
-                    let project_domain: Vec<(Scalar, Column)> = parameters
-                        .iter()
-                        .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
-                        .collect();
-                    return Some(maybe_filter(
-                        &filter_predicates,
-                        &LogicalMap {
-                            include_existing: true,
-                            projects: project_domain,
-                            input: subquery.clone(),
-                        },
-                    ));
-                }
-            }
-            RewriteRule::PushExplicitFilterIntoInnerJoin => {
-                if let LogicalFilter {
+                    input: subquery,
+                } => Ok(LogicalFilter {
                     predicates: filter_predicates,
-                    input,
-                } = expr
-                {
-                    if let LogicalJoin { join, left, right } = input.as_ref() {
-                        if let Join::Inner(join_predicates) | Join::Semi(join_predicates) = join {
-                            let mut combined = join_predicates.clone();
-                            for p in filter_predicates {
-                                combined.push(p.clone());
-                            }
-                            return Some(LogicalJoin {
-                                join: join.replace(combined),
-                                left: left.clone(),
-                                right: right.clone(),
-                            });
-                        }
-                    } else if let LogicalDependentJoin {
+                    input: Box::new(LogicalDependentJoin {
                         parameters,
                         predicates: join_predicates,
                         subquery,
                         domain,
-                    } = input.as_ref()
-                    {
-                        let mut combined = join_predicates.clone();
-                        for p in filter_predicates {
-                            combined.push(p.clone());
+                    }),
+                }),
+                LogicalMap {
+                    include_existing,
+                    mut projects,
+                    input: subquery,
+                } => {
+                    for p in &parameters {
+                        if !projects.iter().any(|(_, c)| c == p) {
+                            projects.push((Scalar::Column(p.clone()), p.clone()));
                         }
-                        return Some(LogicalDependentJoin {
-                            parameters: parameters.clone(),
-                            predicates: combined,
-                            subquery: subquery.clone(),
-                            domain: domain.clone(),
-                        });
+                    }
+                    Ok(LogicalMap {
+                        include_existing,
+                        projects,
+                        input: Box::new(LogicalDependentJoin {
+                            parameters,
+                            predicates: join_predicates,
+                            subquery,
+                            domain,
+                        }),
+                    })
+                }
+                LogicalJoin {
+                    join,
+                    left: left_subquery,
+                    right: right_subquery,
+                } => match join {
+                    Join::Inner(_) => {
+                        if free_parameters(&parameters, &left_subquery).is_empty() {
+                            Ok(push_right(
+                                parameters,
+                                join,
+                                left_subquery,
+                                right_subquery,
+                                domain,
+                            ))
+                        } else if free_parameters(&parameters, &right_subquery).is_empty() {
+                            Ok(push_left(
+                                parameters,
+                                join,
+                                left_subquery,
+                                right_subquery,
+                                domain,
+                            ))
+                        } else {
+                            Ok(push_both(
+                                parameters,
+                                join,
+                                left_subquery,
+                                right_subquery,
+                                domain,
+                            ))
+                        }
+                    }
+                    Join::Right(_)
+                    | Join::Semi(_)
+                    | Join::Anti(_)
+                    | Join::Single(_)
+                    | Join::Mark(_, _) => {
+                        if free_parameters(&parameters, &left_subquery).is_empty() {
+                            Ok(push_right(
+                                parameters,
+                                join,
+                                left_subquery,
+                                right_subquery,
+                                domain,
+                            ))
+                        } else {
+                            Ok(push_both(
+                                parameters,
+                                join,
+                                left_subquery,
+                                right_subquery,
+                                domain,
+                            ))
+                        }
+                    }
+                    Join::Outer(_) => Ok(push_both(
+                        parameters,
+                        join,
+                        left_subquery,
+                        right_subquery,
+                        domain,
+                    )),
+                },
+                LogicalWith { .. } => panic!("WITH is not supported in correlated subqueries"),
+                LogicalAggregate {
+                    group_by,
+                    aggregate,
+                    input: subquery,
+                } => {
+                    let mut group_by = group_by;
+                    for c in &parameters {
+                        group_by.push(c.clone());
+                    }
+                    Ok(LogicalAggregate {
+                        group_by,
+                        aggregate,
+                        input: Box::new(LogicalDependentJoin {
+                            parameters,
+                            predicates: join_predicates,
+                            subquery,
+                            domain,
+                        }),
+                    })
+                }
+                LogicalLimit {
+                    limit,
+                    offset,
+                    input: subquery,
+                } => {
+                    if offset > 0 {
+                        panic!("OFFSET is not supported in correlated subquery");
+                    }
+                    // Limit 0 means we ignore the result of the subquery.
+                    if limit == 0 {
+                        Ok(LogicalLimit {
+                            limit: 0,
+                            offset: 0,
+                            input: Box::new(LogicalDependentJoin {
+                                parameters,
+                                predicates: join_predicates,
+                                subquery,
+                                domain,
+                            }),
+                        })
+                    // Limit 1 can be converted to ANY_VALUE, which can be unnested:
+                    } else if limit == 1 {
+                        Ok(LogicalDependentJoin {
+                            parameters,
+                            predicates: join_predicates,
+                            subquery: Box::new(LogicalAggregate {
+                                group_by: vec![],
+                                aggregate: any_value(subquery.attributes()),
+                                input: subquery,
+                            }),
+                            domain,
+                        })
+                    } else {
+                        // LIMIT N may actually be a no-op.
+                        // Either way, it's best to just make the user take it out.
+                        panic!("Only LIMIT 0 and LIMIT 1 are supported in subqueries");
                     }
                 }
-            }
-            RewriteRule::PushImplicitFilterThroughInnerJoin => {
-                if let LogicalJoin { join, left, right } = expr {
-                    if let Join::Inner(join_predicates) | Join::Semi(join_predicates) = join {
-                        // Try to push down left.
-                        let (correlated, uncorrelated) =
-                            correlated_predicates(join_predicates, left);
-                        if !uncorrelated.is_empty() {
-                            return Some(LogicalJoin {
-                                join: join.replace(correlated),
-                                left: Box::new(LogicalFilter {
-                                    predicates: uncorrelated,
-                                    input: left.clone(),
-                                }),
-                                right: right.clone(),
-                            });
-                        }
-                        // Try to push down right.
-                        let (correlated, uncorrelated) =
-                            correlated_predicates(join_predicates, right);
-                        if !uncorrelated.is_empty() {
-                            return Some(LogicalJoin {
-                                join: join.replace(correlated),
-                                left: left.clone(),
-                                right: Box::new(LogicalFilter {
-                                    predicates: uncorrelated,
-                                    input: right.clone(),
-                                }),
-                            });
-                        }
-                    }
-                } else if let LogicalDependentJoin {
+                LogicalSort { .. } => {
+                    panic!("ORDER BY is not supported in correlated subqueries");
+                }
+                LogicalUnion {
+                    left: left_subquery,
+                    right: right_subquery,
+                } => Ok(LogicalUnion {
+                    left: Box::new(LogicalDependentJoin {
+                        parameters: parameters.clone(),
+                        predicates: join_predicates.clone(),
+                        subquery: left_subquery,
+                        domain: domain.clone(),
+                    }),
+                    right: Box::new(LogicalDependentJoin {
+                        parameters: parameters.clone(),
+                        predicates: join_predicates.clone(),
+                        subquery: right_subquery,
+                        domain: domain.clone(),
+                    }),
+                }),
+                _ => Err(LogicalDependentJoin {
                     parameters,
                     predicates: join_predicates,
                     subquery,
                     domain,
-                } = expr
-                {
-                    // Try to push down subquery.
+                }),
+            }
+        }
+        _ => Err(expr),
+    }
+}
+
+fn optimize_join_type(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalFilter {
+            predicates: filter_predicates,
+            input,
+        } => {
+            if let LogicalJoin {
+                join: Join::Mark(mark, join_predicates),
+                left,
+                right,
+            } = *input
+            {
+                // Try to turn mark-join into semi-join or anti-join.
+                let semi = Scalar::Column(mark.clone());
+                let anti = Scalar::Call(Box::new(F::Not(semi.clone())));
+                let mut combined_attributes = vec![];
+                for c in &right.attributes() {
+                    combined_attributes.push((Scalar::Column(c.clone()), c.clone()));
+                }
+                combined_attributes.push((Scalar::Literal(Value::Bool(Some(true))), mark.clone()));
+                combined_attributes.sort_by(|(_, a), (_, b)| a.cmp(b));
+                for i in 0..filter_predicates.len() {
+                    // WHERE $mark can be turned into a semi-join.
+                    if filter_predicates[i] == semi {
+                        let mut remaining_predicates = filter_predicates;
+                        remaining_predicates.remove(i);
+                        return Ok(maybe_filter(
+                            remaining_predicates,
+                            LogicalMap {
+                                include_existing: false,
+                                projects: combined_attributes,
+                                input: Box::new(LogicalJoin {
+                                    join: Join::Semi(join_predicates),
+                                    left,
+                                    right,
+                                }),
+                            },
+                        ));
+                    // WHERE NOT $mark can be turned into an anti-join.
+                    } else if filter_predicates[i] == anti {
+                        let mut remaining_predicates = filter_predicates;
+                        remaining_predicates.remove(i);
+                        return Ok(maybe_filter(
+                            remaining_predicates,
+                            LogicalMap {
+                                include_existing: false,
+                                projects: combined_attributes,
+                                input: Box::new(LogicalJoin {
+                                    join: Join::Anti(join_predicates),
+                                    left,
+                                    right,
+                                }),
+                            },
+                        ));
+                    }
+                }
+                // Give up, re-assemble expr.
+                Err(LogicalFilter {
+                    predicates: filter_predicates,
+                    input: Box::new(LogicalJoin {
+                        join: Join::Mark(mark, join_predicates),
+                        left,
+                        right,
+                    }),
+                })
+            } else {
+                Err(LogicalFilter {
+                    predicates: filter_predicates,
+                    input,
+                })
+            }
+        }
+        LogicalJoin {
+            join: Join::Single(join_predicates),
+            left,
+            right,
+        } if join_predicates.is_empty() && prove_singleton(left.as_ref()) => Ok(LogicalJoin {
+            join: Join::Inner(vec![]),
+            left,
+            right,
+        }),
+        LogicalJoin {
+            join: Join::Inner(join_predicates),
+            left,
+            right,
+        } => {
+            if let Some(projects) = is_table_free_scan(left.as_ref()) {
+                Ok(maybe_filter(join_predicates, maybe_map(projects, *right)))
+            } else if let Some(projects) = is_table_free_scan(right.as_ref()) {
+                Ok(maybe_filter(join_predicates, maybe_map(projects, *left)))
+            } else {
+                Err(LogicalJoin {
+                    join: Join::Inner(join_predicates),
+                    left,
+                    right,
+                })
+            }
+        }
+        LogicalWith {
+            name,
+            columns,
+            left,
+            right,
+        } => match count_get_with(&name, &right) {
+            0 if !left.has_side_effects() => Ok(*right),
+            1 => Ok(inline_with(&name, &columns, left.as_ref(), *right)),
+            _ => Ok(with_to_script(name, columns, *left, *right)),
+        },
+        _ => Err(expr),
+    }
+}
+
+fn remove_dependent_join(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalDependentJoin {
+            parameters,
+            predicates,
+            subquery,
+            domain,
+        } => {
+            assert!(!parameters.is_empty());
+            // Check if predicates contains subquery.a = domain.b for every b in domain.
+            let subquery_scope = subquery.attributes();
+            // TODO this checks for predicates that have been pushed down into the dependent join.
+            // The actual rules is more general: anytime there is a condition a=b higher in the tree,
+            // it implies an equivalence class a~b, which means we can replace
+            //   LogicalJoin [a] subquery domain
+            // with
+            //   Map a:b subquery
+            let match_equals = |x: &Scalar| -> Option<(Column, Column)> {
+                if let Scalar::Call(function) = x {
+                    if let F::Equal(Scalar::Column(left), Scalar::Column(right)) = function.as_ref()
+                    {
+                        if subquery_scope.contains(left) && parameters.contains(right) {
+                            return Some((left.clone(), right.clone()));
+                        } else if subquery_scope.contains(right) && parameters.contains(left) {
+                            return Some((right.clone(), left.clone()));
+                        }
+                    }
+                }
+                None
+            };
+            let mut equiv_predicates = HashMap::new();
+            let mut filter_predicates = vec![];
+            for p in &predicates {
+                if let Some((subquery_column, domain_column)) = match_equals(p) {
+                    filter_predicates.push(Scalar::Call(Box::new(F::Not(Scalar::Call(Box::new(
+                        F::IsNull(Scalar::Column(subquery_column.clone())),
+                    ))))));
+                    equiv_predicates.insert(domain_column, subquery_column);
+                } else {
+                    filter_predicates.push(p.clone())
+                }
+            }
+            // If we can't remove the dependent join, turn it into an inner join.
+            // Note that in principal, the inner join can be faster if it prunes the subquery early in the query plan.
+            // Ideally we would consider both possibilities in the search phase.
+            // However, for the time being, we are simply using a heuristic that eliminating the dependent join is probably better.
+            if !parameters.iter().all(|c| equiv_predicates.contains_key(c)) {
+                return Ok(LogicalJoin {
+                    join: Join::Inner(predicates),
+                    left: subquery,
+                    right: Box::new(LogicalAggregate {
+                        group_by: parameters,
+                        aggregate: vec![],
+                        input: domain,
+                    }),
+                });
+            }
+            // Infer domain from subquery using equivalences from the join condition.
+            let project_domain: Vec<(Scalar, Column)> = parameters
+                .iter()
+                .map(|c| (Scalar::Column(equiv_predicates[c].clone()), c.clone()))
+                .collect();
+            Ok(maybe_filter(
+                filter_predicates,
+                LogicalMap {
+                    include_existing: true,
+                    projects: project_domain,
+                    input: subquery,
+                },
+            ))
+        }
+        _ => Err(expr),
+    }
+}
+
+fn push_down_predicates(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalFilter {
+            predicates: filter_predicates,
+            input,
+        } => match *input {
+            LogicalJoin { join, left, right } => match join {
+                Join::Inner(join_predicates) => Ok(LogicalJoin {
+                    join: Join::Inner(combine_predicates(join_predicates, filter_predicates)),
+                    left,
+                    right,
+                }),
+                Join::Semi(join_predicates) => Ok(LogicalJoin {
+                    join: Join::Semi(combine_predicates(join_predicates, filter_predicates)),
+                    left,
+                    right,
+                }),
+                Join::Right(_)
+                | Join::Outer(_)
+                | Join::Anti(_)
+                | Join::Single(_)
+                | Join::Mark(_, _) => {
                     let (correlated, uncorrelated) =
-                        correlated_predicates(join_predicates, subquery);
+                        correlated_predicates(&filter_predicates, right.as_ref());
                     if !uncorrelated.is_empty() {
-                        return Some(LogicalDependentJoin {
-                            parameters: parameters.clone(),
-                            predicates: correlated,
-                            subquery: Box::new(LogicalFilter {
+                        Ok(maybe_filter(
+                            correlated,
+                            LogicalJoin {
+                                join,
+                                left,
+                                right: Box::new(LogicalFilter {
+                                    predicates: uncorrelated,
+                                    input: right,
+                                }),
+                            },
+                        ))
+                    } else {
+                        Err(LogicalFilter {
+                            predicates: filter_predicates,
+                            input: Box::new(LogicalJoin { join, left, right }),
+                        })
+                    }
+                }
+            },
+            LogicalDependentJoin {
+                parameters,
+                predicates: join_predicates,
+                subquery,
+                domain,
+            } => Ok(LogicalDependentJoin {
+                parameters,
+                predicates: combine_predicates(join_predicates, filter_predicates),
+                subquery,
+                domain,
+            }),
+            LogicalMap {
+                include_existing,
+                projects,
+                input,
+            } => {
+                let (correlated, uncorrelated) =
+                    correlated_predicates(&filter_predicates, input.as_ref());
+                if !uncorrelated.is_empty() {
+                    Ok(maybe_filter(
+                        correlated,
+                        LogicalMap {
+                            include_existing,
+                            projects,
+                            input: Box::new(LogicalFilter {
                                 predicates: uncorrelated,
-                                input: subquery.clone(),
+                                input,
                             }),
-                            domain: domain.clone(),
+                        },
+                    ))
+                } else {
+                    Err(LogicalFilter {
+                        predicates: filter_predicates,
+                        input: Box::new(LogicalMap {
+                            include_existing,
+                            projects,
+                            input,
+                        }),
+                    })
+                }
+            }
+            LogicalFilter {
+                predicates: inner_predicates,
+                input,
+            } => Ok(LogicalFilter {
+                predicates: combine_predicates(filter_predicates, inner_predicates),
+                input,
+            }),
+            LogicalGet {
+                projects,
+                predicates: get_predicates,
+                table,
+            } => Ok(LogicalGet {
+                projects,
+                predicates: combine_predicates(filter_predicates, get_predicates),
+                table,
+            }),
+            _ => Err(LogicalFilter {
+                predicates: filter_predicates,
+                input,
+            }),
+        },
+        LogicalJoin { join, left, right } => {
+            match join {
+                // Push predicates down both sides of inner join.
+                Join::Inner(_) | Join::Semi(_) => {
+                    // Try to push down left.
+                    let (correlated, uncorrelated) =
+                        correlated_predicates(join.predicates(), left.as_ref());
+                    if !uncorrelated.is_empty() {
+                        return Ok(LogicalJoin {
+                            join: join.replace(correlated),
+                            left: Box::new(LogicalFilter {
+                                predicates: uncorrelated,
+                                input: left,
+                            }),
+                            right,
                         });
                     }
-                    // Try to push down domain.
-                    let (correlated, uncorrelated) = correlated_predicates(join_predicates, domain);
+                    // Try to push down right.
+                    let (correlated, uncorrelated) =
+                        correlated_predicates(join.predicates(), right.as_ref());
                     if !uncorrelated.is_empty() {
-                        return Some(LogicalDependentJoin {
-                            parameters: parameters.clone(),
-                            predicates: correlated,
-                            subquery: subquery.clone(),
-                            domain: Box::new(LogicalFilter {
+                        return Ok(LogicalJoin {
+                            join: join.replace(correlated),
+                            left,
+                            right: Box::new(LogicalFilter {
                                 predicates: uncorrelated,
-                                input: domain.clone(),
+                                input: right,
                             }),
                         });
                     }
                 }
+                // Push predicates down right side of right join.
+                Join::Right(_) | Join::Anti(_) | Join::Single(_) | Join::Mark(_, _) => {
+                    // Try to push down right.
+                    let (correlated, uncorrelated) =
+                        correlated_predicates(join.predicates(), right.as_ref());
+                    if !uncorrelated.is_empty() {
+                        return Ok(LogicalJoin {
+                            join: join.replace(correlated),
+                            left,
+                            right: Box::new(LogicalFilter {
+                                predicates: uncorrelated,
+                                input: right,
+                            }),
+                        });
+                    }
+                }
+                Join::Outer(_) => {}
             }
-            RewriteRule::PushExplicitFilterThroughOuterJoin => {
-                if let LogicalFilter {
-                    predicates: filter_predicates,
+            Err(LogicalJoin { join, left, right })
+        }
+        LogicalDependentJoin {
+            parameters,
+            predicates: join_predicates,
+            subquery,
+            domain,
+        } => {
+            // Try to push down subquery.
+            let (correlated, uncorrelated) =
+                correlated_predicates(&join_predicates, subquery.as_ref());
+            if !uncorrelated.is_empty() {
+                return Ok(LogicalDependentJoin {
+                    parameters,
+                    predicates: correlated,
+                    subquery: Box::new(LogicalFilter {
+                        predicates: uncorrelated,
+                        input: subquery,
+                    }),
+                    domain,
+                });
+            }
+            // Try to push down domain.
+            let (correlated, uncorrelated) =
+                correlated_predicates(&join_predicates, domain.as_ref());
+            if !uncorrelated.is_empty() {
+                return Ok(LogicalDependentJoin {
+                    parameters,
+                    predicates: correlated,
+                    subquery,
+                    domain: Box::new(LogicalFilter {
+                        predicates: uncorrelated,
+                        input: domain,
+                    }),
+                });
+            }
+            // All predicates are correlated with both sides.
+            Err(LogicalDependentJoin {
+                parameters,
+                predicates: join_predicates,
+                subquery,
+                domain,
+            })
+        }
+        _ => Err(expr),
+    }
+}
+
+fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalMap {
+            include_existing: outer_include_existing,
+            projects: outer,
+            input,
+        } => {
+            // If map is a no-op, remove it.
+            if outer.len() == input.attributes().len() && outer.iter().all(|(x, c)| x.is_just(c)) {
+                return Ok(*input);
+            }
+            match *input {
+                LogicalMap {
+                    include_existing: inner_include_existing,
+                    projects: inner,
                     input,
-                } = expr
-                {
-                    if let LogicalJoin { join, left, right } = input.as_ref() {
-                        let (correlated, uncorrelated) =
-                            correlated_predicates(filter_predicates, right);
-                        if !uncorrelated.is_empty() {
-                            return Some(maybe_filter(
-                                &correlated,
-                                &LogicalJoin {
-                                    join: join.clone(),
-                                    left: left.clone(),
-                                    right: Box::new(LogicalFilter {
-                                        predicates: uncorrelated,
-                                        input: right.clone(),
-                                    }),
-                                },
-                            ));
+                } => Ok(LogicalMap {
+                    include_existing: outer_include_existing && inner_include_existing,
+                    projects: combine_projects(outer, outer_include_existing, inner),
+                    input,
+                }),
+                LogicalGet {
+                    projects: inner,
+                    predicates,
+                    table,
+                } => {
+                    let mut combined = inner.clone();
+                    for (x, c) in &outer {
+                        // TODO if some* mapped items can be embedded, embed them.
+                        // TODO if column is renamed, that should be embedd-able, but it's not presently because we use column names as ids.
+                        if !x.is_just(c) {
+                            return Err(LogicalMap {
+                                include_existing: outer_include_existing,
+                                projects: outer,
+                                input: Box::new(LogicalGet {
+                                    projects: inner,
+                                    predicates,
+                                    table,
+                                }),
+                            });
+                        }
+                        if !combined.contains(c) {
+                            combined.push(c.clone());
                         }
                     }
-                }
-            }
-            RewriteRule::PushFilterThroughMap => {
-                if let LogicalFilter { predicates, input } = expr {
-                    if let LogicalMap {
-                        include_existing,
-                        projects,
-                        input,
-                    } = input.as_ref()
-                    {
-                        let (correlated, uncorrelated) = correlated_predicates(predicates, input);
-                        if !uncorrelated.is_empty() {
-                            return Some(maybe_filter(
-                                &correlated,
-                                &LogicalMap {
-                                    include_existing: *include_existing,
-                                    projects: projects.clone(),
-                                    input: Box::new(LogicalFilter {
-                                        predicates: uncorrelated,
-                                        input: input.clone(),
-                                    }),
-                                },
-                            ));
-                        }
-                    }
-                }
-            }
-            RewriteRule::CombineConsecutiveFilters => {
-                if let LogicalFilter {
-                    predicates: outer,
-                    input,
-                } = expr
-                {
-                    if let LogicalFilter {
-                        predicates: inner,
-                        input,
-                    } = input.as_ref()
-                    {
-                        return combine_consecutive_filters(outer, inner, input);
-                    }
-                }
-            }
-            RewriteRule::EmbedFilterIntoGet => {
-                if let LogicalFilter {
-                    predicates: filter_predicates,
-                    input,
-                } = expr
-                {
-                    if let LogicalGet {
-                        projects,
+                    Ok(LogicalGet {
+                        projects: combined,
                         predicates,
                         table,
-                    } = input.as_ref()
-                    {
-                        let mut filter_predicates = filter_predicates.clone();
-                        let mut predicates = predicates.clone();
-                        let projects = projects.clone();
-                        let table = table.clone();
-                        predicates.append(&mut filter_predicates);
-                        return Some(LogicalGet {
-                            projects,
-                            predicates,
-                            table,
-                        });
-                    }
+                    })
                 }
-            }
-            RewriteRule::CombineConsecutiveMaps => {
-                // Map(x, Map(y, _)) => Map(x & y, _)
-                if let LogicalMap {
+                _ => Err(LogicalMap {
                     include_existing: outer_include_existing,
                     projects: outer,
                     input,
-                } = expr
-                {
-                    if let LogicalMap {
-                        include_existing: inner_include_existing,
-                        projects: inner,
-                        input,
-                    } = input.as_ref()
-                    {
-                        let mut inlined = if *outer_include_existing {
-                            inner.clone()
-                        } else {
-                            vec![]
-                        };
-                        for (outer_expr, outer_column) in outer {
-                            let mut outer_expr = outer_expr.clone();
-                            for (inner_expr, inner_column) in inner {
-                                outer_expr = outer_expr.inline(inner_expr, inner_column);
-                            }
-                            inlined.push((outer_expr, outer_column.clone()));
-                        }
-                        return Some(LogicalMap {
-                            include_existing: *outer_include_existing && *inner_include_existing,
-                            projects: inlined,
-                            input: input.clone(),
-                        });
-                    }
-                }
+                }),
             }
-            RewriteRule::EmbedMapIntoGet => {
-                if let LogicalMap {
-                    projects: outer,
-                    input,
-                    ..
-                } = expr
-                {
-                    if let LogicalGet {
-                        projects: inner,
-                        predicates,
-                        table,
-                    } = input.as_ref()
-                    {
-                        let mut combined = inner.clone();
-                        for (x, c) in outer {
-                            // TODO if *some* mapped items can be embedded, embed them.
-                            // TODO if column is renamed, that should be embedd-able, but it's not presently because we use column names as ids.
-                            if !x.is_just(c) {
-                                return None;
-                            }
-                            if !combined.contains(c) {
-                                combined.push(c.clone());
-                            }
-                        }
-                        return Some(LogicalGet {
-                            projects: combined,
-                            predicates: predicates.clone(),
-                            table: table.clone(),
-                        });
-                    }
-                }
-            }
-            RewriteRule::RemoveMap => {
-                if let LogicalMap {
-                    projects, input, ..
-                } = expr
-                {
-                    if projects.len() == input.attributes().len()
-                        && projects.iter().all(|(x, c)| x.is_just(c))
-                    {
-                        return Some(input.as_ref().clone());
-                    }
-                }
-            }
-        };
-        None
+        }
+        _ => Err(expr),
+    }
+}
+
+fn apply_repeatedly(f: impl Fn(Expr) -> Result<Expr, Expr>, mut expr: Expr) -> Expr {
+    loop {
+        expr = match f(expr) {
+            Ok(expr) => expr,
+            Err(expr) => return expr,
+        }
     }
 }
 
 fn push_right(
-    parameters: &Vec<Column>,
-    join: &Join,
-    left_subquery: &Box<Expr>,
-    right_subquery: &Box<Expr>,
-    domain: &Box<Expr>,
+    parameters: Vec<Column>,
+    join: Join,
+    left_subquery: Box<Expr>,
+    right_subquery: Box<Expr>,
+    domain: Box<Expr>,
 ) -> Expr {
     LogicalJoin {
-        join: join.clone(),
-        left: left_subquery.clone(),
+        join,
+        left: left_subquery,
         right: Box::new(LogicalDependentJoin {
-            parameters: parameters.clone(),
+            parameters,
             predicates: vec![],
-            subquery: right_subquery.clone(),
-            domain: domain.clone(),
+            subquery: right_subquery,
+            domain,
         }),
     }
 }
 
 fn push_left(
-    parameters: &Vec<Column>,
-    join: &Join,
-    left_subquery: &Box<Expr>,
-    right_subquery: &Box<Expr>,
-    domain: &Box<Expr>,
+    parameters: Vec<Column>,
+    join: Join,
+    left_subquery: Box<Expr>,
+    right_subquery: Box<Expr>,
+    domain: Box<Expr>,
 ) -> Expr {
     LogicalJoin {
-        join: join.clone(),
+        join,
         left: Box::new(LogicalDependentJoin {
-            parameters: parameters.clone(),
+            parameters,
             predicates: vec![],
-            subquery: left_subquery.clone(),
-            domain: domain.clone(),
+            subquery: left_subquery,
+            domain,
         }),
-        right: right_subquery.clone(),
+        right: right_subquery,
     }
 }
 
 fn push_both(
-    parameters: &Vec<Column>,
-    join: &Join,
-    left_subquery: &Box<Expr>,
-    right_subquery: &Box<Expr>,
-    domain: &Box<Expr>,
+    parameters: Vec<Column>,
+    join: Join,
+    left_subquery: Box<Expr>,
+    right_subquery: Box<Expr>,
+    domain: Box<Expr>,
 ) -> Expr {
     // Substitute fresh column names for the left side subquery.
     let left_parameters: Vec<_> = parameters.iter().map(Column::fresh).collect();
     let left_parameters_map: HashMap<_, _> = (0..parameters.len())
         .map(|i| (parameters[i].clone(), left_parameters[i].clone()))
         .collect();
-    let left_subquery = left_subquery.clone().subst(&left_parameters_map);
+    let left_subquery = left_subquery.subst(&left_parameters_map);
     let left_domain = domain.clone().subst(&left_parameters_map);
     // Add natural-join on domain to the top join predicates.
     let mut join_predicates = join.predicates().clone();
@@ -1020,18 +856,9 @@ fn push_both(
             Scalar::Column(parameters[i].clone()),
         ))));
     }
-    let join = match join {
-        Join::Inner(_) => Join::Inner(join_predicates),
-        Join::Right(_) => Join::Right(join_predicates),
-        Join::Outer(_) => Join::Outer(join_predicates),
-        Join::Semi(_) => Join::Semi(join_predicates),
-        Join::Anti(_) => Join::Anti(join_predicates),
-        Join::Single(_) => Join::Single(join_predicates),
-        Join::Mark(column, _) => Join::Mark(column.clone(), join_predicates),
-    };
     // Push the rewritten dependent join down the left side, and the original dependent join down the right side.
     LogicalJoin {
-        join,
+        join: join.replace(join_predicates),
         left: Box::new(LogicalDependentJoin {
             parameters: left_parameters,
             predicates: vec![],
@@ -1039,10 +866,10 @@ fn push_both(
             domain: Box::new(left_domain),
         }),
         right: Box::new(LogicalDependentJoin {
-            parameters: parameters.clone(),
+            parameters,
             predicates: vec![],
-            subquery: right_subquery.clone(),
-            domain: domain.clone(),
+            subquery: right_subquery,
+            domain,
         }),
     }
 }
@@ -1186,92 +1013,81 @@ fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -
     }
 }
 
-fn with_to_script(name: &String, columns: &Vec<Column>, left: &Expr, right: &Expr) -> Expr {
+fn with_to_script(name: String, columns: Vec<Column>, left: Expr, right: Expr) -> Expr {
     LogicalScript {
         statements: vec![
             LogicalCreateTempTable {
-                name: name.clone(),
-                columns: columns.clone(),
-                input: Box::new(left.clone()),
+                name: name,
+                columns,
+                input: Box::new(left),
             },
-            right.clone(),
+            right,
         ],
     }
 }
 
-fn maybe_filter(predicates: &Vec<Scalar>, input: &Expr) -> Expr {
+fn maybe_filter(predicates: Vec<Scalar>, input: Expr) -> Expr {
     if predicates.is_empty() {
-        input.clone()
+        input
     } else {
         LogicalFilter {
-            predicates: predicates.clone(),
-            input: Box::new(input.clone()),
+            predicates,
+            input: Box::new(input),
         }
     }
 }
 
-fn maybe_map(projects: &Vec<(Scalar, Column)>, input: &Expr) -> Expr {
+fn maybe_map(projects: Vec<(Scalar, Column)>, input: Expr) -> Expr {
     if projects.is_empty() {
-        input.clone()
+        input
     } else {
         LogicalMap {
             include_existing: true,
-            projects: projects.clone(),
-            input: Box::new(input.clone()),
+            projects,
+            input: Box::new(input),
         }
     }
 }
 
-fn combine_consecutive_filters(
-    outer: &Vec<Scalar>,
-    inner: &Vec<Scalar>,
-    input: &Expr,
-) -> Option<Expr> {
-    let mut combined = vec![];
-    for p in outer {
-        combined.push(p.clone());
-    }
-    for p in inner {
-        combined.push(p.clone());
-    }
-    Some(LogicalFilter {
-        predicates: combined,
-        input: Box::new(input.clone()),
-    })
-}
-
-fn combine_predicates(outer: &Vec<Scalar>, inner: &Vec<Scalar>) -> Vec<Scalar> {
+fn combine_predicates(outer: Vec<Scalar>, inner: Vec<Scalar>) -> Vec<Scalar> {
     let mut combined = Vec::with_capacity(outer.len() + inner.len());
     for p in outer {
-        combined.push(p.clone());
+        combined.push(p);
     }
     for p in inner {
-        combined.push(p.clone());
+        combined.push(p);
     }
     combined
 }
 
-fn apply_all(before: Expr, rules: &Vec<RewriteRule>) -> Expr {
-    for rule in rules {
-        match rule.apply(&before) {
-            // Abandon previous expr.
-            Some(after) => {
-                return apply_all(after, rules);
-            }
-            None => (),
+fn combine_projects(
+    outer: Vec<(Scalar, Column)>,
+    include_existing: bool,
+    inner: Vec<(Scalar, Column)>,
+) -> Vec<(Scalar, Column)> {
+    let mut inlined = if include_existing {
+        inner.clone()
+    } else {
+        vec![]
+    };
+    for (outer_expr, outer_column) in outer {
+        let mut outer_expr = outer_expr;
+        for (inner_expr, inner_column) in &inner {
+            outer_expr = outer_expr.inline(&inner_expr, &inner_column);
         }
+        inlined.push((outer_expr, outer_column));
     }
-    before
+    inlined
 }
 
 pub fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
-    let expr = rewrite_ddl(expr);
+    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(rewrite_ddl, e));
     let expr = rewrite_scalars(expr);
-    let expr = push_dependent_joins(expr);
-    let expr = predicate_push_down(expr);
-    let expr = remove_dependent_joins(expr);
-    let expr = optimize_join_type(expr);
-    let expr = projection_push_down(expr);
+    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(unnest_dependent_joins, e));
+    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_predicates, e));
+    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(remove_dependent_join, e));
+    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(optimize_join_type, e));
+    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_projections, e));
     let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
     expr
 }
@@ -1289,82 +1105,13 @@ fn rewrite_scalars(expr: Expr) -> Expr {
     })
 }
 
-fn rewrite_ddl(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&mut |expr| {
-        apply_all(
-            expr,
-            &vec![
-                RewriteRule::CreateDatabaseToScript,
-                RewriteRule::CreateTableToScript,
-                RewriteRule::CreateIndexToScript,
-                RewriteRule::DropToScript,
-                RewriteRule::UpdateToDeleteThenInsert,
-            ],
-        )
-    })
-}
-
-// Unnest all dependent joins, and simplify joins where possible.
-fn push_dependent_joins(expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::PushDependentJoin]))
-}
-
-fn remove_dependent_joins(expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&mut |expr| apply_all(expr, &vec![RewriteRule::RemoveDependentJoin]))
-}
-
 fn rewrite_logical_rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&mut |expr| match expr {
+    expr.bottom_up_rewrite(&|expr| match expr {
         LogicalRewrite { sql } => {
             let expr = parser::analyze(catalog_id, &catalog, &sql).expect(&sql);
             rewrite(catalog_id, catalog, expr)
         }
         other => other,
-    })
-}
-
-fn optimize_join_type(expr: Expr) -> Expr {
-    expr.bottom_up_rewrite(&mut |expr| {
-        apply_all(
-            expr,
-            &vec![
-                RewriteRule::MarkJoinToSemiJoin,
-                RewriteRule::SingleJoinToInnerJoin,
-                RewriteRule::RemoveInnerJoin,
-                RewriteRule::RemoveWith,
-                RewriteRule::RemoveTableFreeScan,
-            ],
-        )
-    })
-}
-
-// Push predicates into metadata.joins and scans.
-fn predicate_push_down(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&mut |expr| {
-        apply_all(
-            expr,
-            &vec![
-                RewriteRule::PushExplicitFilterIntoInnerJoin,
-                RewriteRule::PushImplicitFilterThroughInnerJoin,
-                RewriteRule::PushExplicitFilterThroughOuterJoin,
-                RewriteRule::PushFilterThroughMap,
-                RewriteRule::CombineConsecutiveFilters,
-                RewriteRule::EmbedFilterIntoGet,
-            ],
-        )
-    })
-}
-
-fn projection_push_down(expr: Expr) -> Expr {
-    expr.top_down_rewrite(&mut |expr| {
-        apply_all(
-            expr,
-            &vec![
-                RewriteRule::CombineConsecutiveMaps,
-                RewriteRule::EmbedMapIntoGet,
-                RewriteRule::RemoveMap,
-            ],
-        )
     })
 }
 

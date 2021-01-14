@@ -22,8 +22,12 @@ pub fn optimize(
         statistics,
         ss: SearchSpace::new(),
     };
-    let expr = rewrite(catalog_id, catalog, expr);
-    let gid = optimizer.copy_in_new(expr);
+    let mut expr = rewrite(catalog_id, catalog, expr);
+    optimizer.copy_in_new(&mut expr);
+    let gid = match expr {
+        Leaf { gid } => GroupID(gid),
+        _ => panic!("copy_in_new did not replace expr with Leaf"),
+    };
     optimizer.optimize_group(gid, PhysicalProp::None);
     optimizer.winner(gid, PhysicalProp::None)
 }
@@ -238,11 +242,11 @@ impl<'a> Optimizer<'a> {
         }
     }
 
-    fn copy_in(&mut self, expr: Expr, gid: GroupID) -> Option<MultiExprID> {
+    fn copy_in(&mut self, mut expr: Expr, gid: GroupID) -> Option<MultiExprID> {
         // Recursively copy in the children.
-        let expr = expr.map(|child| Leaf {
-            gid: self.copy_in_new(child).0,
-        });
+        for i in 0..expr.len() {
+            self.copy_in_new(&mut expr[i]);
+        }
         // If this is the first time we observe expr as a member of gid, add it to the group.
         if let Some(mid) = self.ss.add_mexpr(MultiExpr::new(gid, expr)) {
             // Add expr to group.
@@ -257,19 +261,22 @@ impl<'a> Optimizer<'a> {
         }
     }
 
-    fn copy_in_new(&mut self, expr: Expr) -> GroupID {
+    fn copy_in_new(&mut self, expr: &mut Expr) {
         if let Leaf { gid } = expr {
-            GroupID(gid)
+            // Nothing to do.
         } else if let Some(mid) = self.ss.find_dup(&expr) {
-            self.ss[mid].parent
+            let gid = self.ss[mid].parent;
+            *expr = Leaf { gid: gid.0 };
         } else {
-            let gid = self.ss.reserve();
             // Recursively copy in the children.
-            let expr = expr.map(|child| Leaf {
-                gid: self.copy_in_new(child).0,
-            });
+            for i in 0..expr.len() {
+                self.copy_in_new(&mut expr[i]);
+            }
+            // Replace expr with a Leaf node.
+            let gid = self.ss.reserve();
+            let removed = std::mem::replace(expr, Leaf { gid: gid.0 });
             // Initialize a new MultiExpr.
-            let mexpr = MultiExpr::new(gid, expr);
+            let mexpr = MultiExpr::new(gid, removed);
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
             let props = crate::cardinality_estimation::compute_logical_props(
@@ -289,7 +296,6 @@ impl<'a> Optimizer<'a> {
                 explored: false,
             };
             self.ss.add_group(gid, group);
-            gid
         }
     }
 
@@ -316,13 +322,12 @@ impl<'a> Optimizer<'a> {
                 )
             })
             .plan;
-        let parent = &self.ss[mid].expr;
-        let mut i = 0;
-        parent.clone().map(|child| {
-            let require = PhysicalProp::required(parent, i);
-            i += 1;
-            self.winner(leaf(&child), require)
-        })
+        let mut expr = self.ss[mid].expr.clone();
+        for i in 0..expr.len() {
+            let require = PhysicalProp::required(&expr, i);
+            expr[i] = self.winner(leaf(&expr[i]), require);
+        }
+        expr
     }
 }
 
