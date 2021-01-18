@@ -8,7 +8,7 @@ members = [
     "kernel",
     "parser",
     "planner",
-    "sketch",
+    "statistics",
     "storage",
     "zetasql",
     "zetasql_build",

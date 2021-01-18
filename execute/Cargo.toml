@@ -18,6 +18,7 @@ catalog = { path = "../catalog" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
+statistics = { path = "../statistics" }
 storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
 

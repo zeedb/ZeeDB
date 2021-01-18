@@ -1,4 +1,4 @@
-use crate::search_space::*;
+use crate::{cardinality_estimation::LogicalProps, search_space::*};
 use ast::*;
 use storage::Storage;
 
@@ -33,24 +33,24 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | Call { .. }
         | Explain { .. } => 0.0,
         SeqScan { table, .. } => {
-            let n = storage.approx_cardinality(table.id) as f64;
-            n * SEQ_SCAN
+            let n = storage.statistics(table.id).approx_cardinality();
+            n as f64 * SEQ_SCAN
         }
         IndexScan { .. } => {
-            let n = ss[parent].props.cardinality as f64;
+            let n = ss[parent].props.cardinality;
             n * INDEX_SCAN
         }
         Filter { input, .. } => {
-            let n = ss[leaf(input)].props.cardinality as f64;
+            let n = ss[leaf(input)].props.cardinality;
             n * FILTER
         }
         Map { .. } => {
-            let n = ss[parent].props.cardinality as f64;
+            let n = ss[parent].props.cardinality;
             n * MAP
         }
         NestedLoop { left, right, .. } => {
-            let build = ss[leaf(left)].props.cardinality as f64;
-            let probe = ss[leaf(right)].props.cardinality as f64;
+            let build = ss[leaf(left)].props.cardinality;
+            let probe = ss[leaf(right)].props.cardinality;
             build * probe * NESTED_LOOP
         }
         HashJoin {
@@ -59,8 +59,8 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
             right,
             ..
         } => {
-            let build = ss[leaf(left)].props.cardinality as f64;
-            let probe = ss[leaf(right)].props.cardinality as f64;
+            let build = ss[leaf(left)].props.cardinality;
+            let probe = ss[leaf(right)].props.cardinality;
             build * NODES * HASH_BUILD + probe * HASH_PROBE
         }
         HashJoin {
@@ -69,30 +69,30 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
             right,
             ..
         } => {
-            let build = ss[leaf(left)].props.cardinality as f64;
-            let probe = ss[leaf(right)].props.cardinality as f64;
+            let build = ss[leaf(left)].props.cardinality;
+            let probe = ss[leaf(right)].props.cardinality;
             build * HASH_BUILD + probe * HASH_PROBE
         }
-        CreateTempTable { input, .. } => ss[leaf(input)].props.cardinality as f64,
-        GetTempTable { .. } => ss[parent].props.cardinality as f64,
+        CreateTempTable { input, .. } => ss[leaf(input)].props.cardinality,
+        GetTempTable { .. } => ss[parent].props.cardinality,
         Aggregate { input, .. } => {
-            let n = ss[leaf(input)].props.cardinality as f64;
+            let n = ss[leaf(input)].props.cardinality;
             n * HASH_BUILD
         }
         Sort { .. } => {
-            let n = ss[parent].props.cardinality.max(1) as f64;
+            let n = ss[parent].props.cardinality.max(1.0);
             n * n.log2() * SORT
         }
         Broadcast { input } => {
-            let n = ss[leaf(input)].props.cardinality as f64;
+            let n = ss[leaf(input)].props.cardinality;
             n * EXCHANGE * NODES
         }
         Exchange { input } => {
-            let n = ss[leaf(input)].props.cardinality as f64;
+            let n = ss[leaf(input)].props.cardinality;
             n * EXCHANGE
         }
         Insert { input, .. } | Delete { input, .. } => {
-            let n = ss[leaf(input)].props.cardinality as f64;
+            let n = ss[leaf(input)].props.cardinality;
             n * INSERT
         }
         Leaf { .. }

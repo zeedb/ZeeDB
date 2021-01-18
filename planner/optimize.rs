@@ -14,12 +14,12 @@ pub fn optimize(
     catalog_id: i64,
     catalog: &SimpleCatalogProto,
     indexes: &HashMap<i64, Vec<Index>>,
-    statistics: &Storage,
+    storage: &Storage,
     expr: Expr,
 ) -> Expr {
     let mut optimizer = Optimizer {
         indexes,
-        statistics,
+        storage,
         ss: SearchSpace::new(),
     };
     let mut expr = rewrite(catalog_id, catalog, expr);
@@ -34,7 +34,7 @@ pub fn optimize(
 
 struct Optimizer<'a> {
     indexes: &'a HashMap<i64, Vec<Index>>,
-    statistics: &'a Storage,
+    storage: &'a Storage,
     ss: SearchSpace,
 }
 
@@ -159,7 +159,7 @@ impl<'a> Optimizer<'a> {
         // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
         let parent = self.ss[mid].parent;
         let upper_bound = self.ss[parent].upper_bound[require].unwrap_or(f64::MAX);
-        let physical_cost = physical_cost(&self.ss, &self.statistics, mid);
+        let physical_cost = physical_cost(&self.ss, &self.storage, mid);
         // If we can find a winning strategy for each input and an associated cost,
         // try to declare the current MultiExpr as the winner of its group.
         if self.optimize_inputs(mid, physical_cost, upper_bound) {
@@ -262,7 +262,7 @@ impl<'a> Optimizer<'a> {
     }
 
     fn copy_in_new(&mut self, expr: &mut Expr) {
-        if let Leaf { gid } = expr {
+        if let Leaf { .. } = expr {
             // Nothing to do.
         } else if let Some(mid) = self.ss.find_dup(&expr) {
             let gid = self.ss[mid].parent;
@@ -281,8 +281,7 @@ impl<'a> Optimizer<'a> {
             // Initialize a new Group.
             let props = crate::cardinality_estimation::compute_logical_props(
                 &self.ss,
-                &self.statistics,
-                &self.indexes,
+                &mut self.storage,
                 mid,
             );
             let lower_bound = compute_lower_bound(&self.ss, &self.ss[mid], &props);

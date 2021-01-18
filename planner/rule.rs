@@ -287,10 +287,8 @@ impl Rule {
                             {
                                 let mut new_parent_predicates = vec![];
                                 let mut new_right_predicates = vec![];
-                                let middle_scope =
-                                    &ss[GroupID(*left_middle)].props.column_unique_cardinality;
-                                let right_scope =
-                                    &ss[GroupID(*right)].props.column_unique_cardinality;
+                                let middle_scope = &ss[GroupID(*left_middle)].props.columns;
+                                let right_scope = &ss[GroupID(*right)].props.columns;
                                 let mut redistribute_predicate = |p: Scalar| {
                                     if p.references().iter().all(|c| {
                                         middle_scope.contains_key(c) || right_scope.contains_key(c)
@@ -650,7 +648,5 @@ fn hash_join(
 }
 
 fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
-    columns
-        .iter()
-        .all(|c| group.props.column_unique_cardinality.contains_key(c))
+    columns.iter().all(|c| group.props.columns.contains_key(c))
 }

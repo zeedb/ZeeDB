@@ -9,7 +9,7 @@ pub(crate) const MAX_K: usize = (1 << 16) - 1;
 ///   "Streaming Quantiles Algorithms with Small Space and Update Time" https://arxiv.org/abs/1907.00236
 /// It is based on the C++ implementation in https://github.com/apache/datasketches-cpp/tree/master/kll
 #[derive(Debug, Clone)]
-pub(crate) struct Histogram<T: Ord + Default> {
+pub struct Histogram<T: Ord + Default> {
     /// k is the size of the final, largest level.
     k: usize,
     /// m is the minimum size of a level.
@@ -156,7 +156,7 @@ impl<T: Ord + Default> Histogram<T> {
     }
 
     pub(crate) fn rank(&self, value: T) -> Option<f64> {
-        // If no items have been added, rank is unknown.
+        // If no items have been added, rank is undefined.
         if self.is_empty() {
             return None;
         }
@@ -169,7 +169,7 @@ impl<T: Ord + Default> Histogram<T> {
             for i in from_index..to_index {
                 if self.items[i] < value {
                     total += weight;
-                } else if (level > 0) || self.is_level_zero_sorted {
+                } else if level > 0 || self.is_level_zero_sorted {
                     break; // levels above 0 are sorted, no point comparing further
                 }
             }
@@ -177,6 +177,49 @@ impl<T: Ord + Default> Histogram<T> {
             weight *= 2;
         }
         Some(total as f64 / self.count() as f64)
+    }
+
+    pub(crate) fn probability(&self, value: T) -> (f64, f64) {
+        // If we have an exact histogram, return an exact answer.
+        if !self.is_estimation_mode() {
+            let exact = if self.items.contains(&value) {
+                1.0 / self.count() as f64
+            } else {
+                0.0
+            };
+            return (exact, exact);
+        }
+        // Otherwise, check if value is in one of the levels.
+        let mut level = 0;
+        let mut weight = 1;
+        while level < self.levels.len() - 1 {
+            let from_index = self.levels[level + 1];
+            let to_index = self.levels[level];
+            // If level is sorted, use binary search.
+            let contains_value = if level > 0 || self.is_level_zero_sorted {
+                self.items[from_index..to_index]
+                    .binary_search(&value)
+                    .is_ok()
+            } else {
+                self.items[from_index..to_index].contains(&value)
+            };
+            // If level contains value, we know there are *at least* weight / count observations of value.
+            if contains_value {
+                let observed = weight as f64 / self.count() as f64;
+                // TODO I'm pretty sure this is not the number we want.
+                // This is the two-sided 99% CI of an estimate of the probability mass function (fraction of observations between two arbitrary splits).
+                // What we want is the 99% upper-bound on the number of observations of value that might have occurred, but been lost during compaction.
+                let error = normalized_rank_error(self.k, true);
+                return (observed, observed + error);
+            }
+            // Otherwise, keep checking higher levels.
+            level += 1;
+            weight *= 2;
+        }
+        // If value is not in any of the levels, we might have observed the value, but it was forgotten during compaction.
+        // TODO I'm pretty sure this is not the number we want. See above comment.
+        let error = normalized_rank_error(self.k, true);
+        (0.0, error)
     }
 
     pub(crate) fn is_empty(&self) -> bool {
@@ -358,5 +401,18 @@ fn random_bit() -> usize {
         1
     } else {
         0
+    }
+}
+
+/// Gets the normalized rank error given k and pmf.
+/// k - the configuration parameter
+/// pmf - if true, returns the "double-sided" normalized rank error for the get_PMF() function.
+/// Otherwise, it is the "single-sided" normalized rank error for all the other queries.
+/// Constants were derived as the best fit to 99 percentile empirically measured max error in thousands of trials
+fn normalized_rank_error(k: usize, pmf: bool) -> f64 {
+    if pmf {
+        2.446 / (k as f64).powf(0.9433)
+    } else {
+        2.296 / (k as f64).powf(0.9723)
     }
 }

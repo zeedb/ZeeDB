@@ -932,26 +932,30 @@ impl Node {
                 input,
                 columns,
             } => {
-                let input = input.next(state)?;
-                // Rename columns from query to match table.
-                let renames = columns
-                    .iter()
-                    .map(|(from, to)| (from.canonical_name(), to.clone()))
-                    .collect();
-                let input = input.rename(&renames);
-                // Append rows to the table heap.
-                let heap = state.storage.table_mut(table.id);
-                let tids = heap.insert(&input, state.txn);
-                // Append entries to each index.
-                for index in indexes {
-                    crate::index::insert(
-                        state.storage.index_mut(index.index_id),
-                        &index.columns,
-                        &input,
-                        &tids,
-                    );
+                loop {
+                    let input = input.next(state)?;
+                    // Rename columns from query to match table.
+                    let renames = columns
+                        .iter()
+                        .map(|(from, to)| (from.canonical_name(), to.clone()))
+                        .collect();
+                    let input = input.rename(&renames);
+                    // Append rows to the table heap.
+                    let heap = state.storage.table_mut(table.id);
+                    let tids = heap.insert(&input, state.txn);
+                    // Update statistics.
+                    let statistics = state.storage.statistics_mut(table.id);
+                    statistics.insert(&input);
+                    // Append entries to each index.
+                    for index in indexes.iter_mut() {
+                        crate::index::insert(
+                            state.storage.index_mut(index.index_id),
+                            &index.columns,
+                            &input,
+                            &tids,
+                        );
+                    }
                 }
-                None
             }
             Node::Values {
                 columns,

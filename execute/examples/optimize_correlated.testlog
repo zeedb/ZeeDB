@@ -94,15 +94,14 @@ Delete person
 
 # delete_semi_join_with_condition
 ok: explain delete customer where person_id in (select person_id from customer where account_number = 0)
-plan                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                
 Delete customer
 	Map $in:true $tid $xmax $xmin customer.person_id
 		HashJoin Semi (Equal customer.person_id customer.person_id)
-			Exchange
+			Broadcast
 				Filter* (Equal customer.account_number 0)
 					SeqScan customer
-			Exchange
-				SeqScan customer
+			SeqScan customer
 
 # single_equi_join
 ok: explain select (select name from store where store.store_id = customer.store_id) from customer
@@ -149,25 +148,24 @@ Map $query.$col1:1
 
 # semi_join_anti_join
 ok: explain select 1 from customer where exists (select 1 from person where person.person_id = customer.person_id) and not exists (select 1 from store where store.store_id = customer.store_id and custo...
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
 Map $query.$col1:1
 	HashJoin Anti (Is customer.store_id store_id) (Is customer.modified_date modified_date)
 		Exchange
 			Map $expr_subquery.$col1:1 store_id modified_date
 				HashJoin Inner (Equal store.store_id store_id) (Greater modified_date store.modified_date)
-					Exchange
+					Broadcast
 						SeqScan store
-					Exchange
-						Aggregate store_id modified_date
-							Exchange
-								HashJoin Mark $exists (Is customer.person_id person_id)
-									Exchange
-										Map $expr_subquery.$col1:1 person_id
-											Filter (Not (IsNull person.person_id))
-												Map person_id:person.person_id, ..
-													SeqScan person
-									Exchange
-										SeqScan customer
+					Aggregate store_id modified_date
+						Exchange
+							HashJoin Mark $exists (Is customer.person_id person_id)
+								Exchange
+									Map $expr_subquery.$col1:1 person_id
+										Filter (Not (IsNull person.person_id))
+											Map person_id:person.person_id, ..
+												SeqScan person
+								Exchange
+									SeqScan customer
 		Exchange
 			Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
 				HashJoin Semi (Is customer.person_id person_id)
@@ -181,44 +179,42 @@ Map $query.$col1:1
 
 # single_join_twice
 ok: explain select (select name from store where store.store_id = customer.customer_id), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
-		Exchange
+		Broadcast
 			Map person.first_name person_id
 				Filter (Not (IsNull person.person_id))
 					Map person_id:person.person_id, ..
 						SeqScan person
-		Exchange
-			HashJoin Single (Is customer.customer_id customer_id)
-				Exchange
-					Map store.name customer_id
-						Filter (Not (IsNull store.store_id))
-							Map customer_id:store.store_id, ..
-								SeqScan store
-				Exchange
-					SeqScan customer
+		HashJoin Single (Is customer.customer_id customer_id)
+			Exchange
+				Map store.name customer_id
+					Filter (Not (IsNull store.store_id))
+						Map customer_id:store.store_id, ..
+							SeqScan store
+			Exchange
+				SeqScan customer
 
 # single_join_twice_plus_condition
 ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
-		Exchange
+		Broadcast
 			Map person.first_name person_id
 				Filter (Not (IsNull person.person_id))
 					Map person_id:person.person_id, ..
 						SeqScan person
-		Exchange
-			HashJoin Single (Is customer.customer_id customer_id)
-				Exchange
-					Map store.name customer_id
-						Filter (Not (IsNull store.store_id))
-							Map customer_id:store.store_id, ..
-								Filter* (StringLike store.name "A%")
-									SeqScan store
-				Exchange
-					SeqScan customer
+		HashJoin Single (Is customer.customer_id customer_id)
+			Exchange
+				Map store.name customer_id
+					Filter (Not (IsNull store.store_id))
+						Map customer_id:store.store_id, ..
+							Filter* (StringLike store.name "A%")
+								SeqScan store
+			Exchange
+				SeqScan customer
 
 # semi_join_to_group_by
 ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
@@ -238,7 +234,7 @@ Map $query.$col1:1
 
 # semi_join_to_group_by_correlated_column
 ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Is customer.account_number account_number) (Equal customer.customer_id $aggregate.$agg1)
 		Exchange
@@ -247,12 +243,11 @@ Map $query.$col1:1
 					Exchange
 						Map $groupby.account_number:customer.account_number $groupby.account_number:account_number $max:customer.customer_id store_id account_number
 							HashJoin Inner (Equal store_id customer.store_id)
-								Exchange
-									Aggregate store_id account_number
-										Exchange
-											SeqScan customer
-								Exchange
+								Broadcast
 									SeqScan customer
+								Aggregate store_id account_number
+									Exchange
+										SeqScan customer
 		Exchange
 			SeqScan customer
 
@@ -271,7 +266,7 @@ Map $query.$col1:1
 
 # single_join_with_condition
 ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like 'A%') from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id) (Is store.name name)
 		Exchange
@@ -279,13 +274,12 @@ Map $query.$col1:$aggregate.$agg1
 				Exchange
 					Map $max:customer.modified_date store_id name
 						HashJoin Inner (Equal customer.store_id store_id)
-							Exchange
-								Aggregate store_id name
-									Exchange
-										Filter* (StringLike name "A%")
-											SeqScan store
-							Exchange
+							Broadcast
 								SeqScan customer
+							Aggregate store_id name
+								Exchange
+									Filter* (StringLike name "A%")
+										SeqScan store
 		Exchange
 			SeqScan store
 

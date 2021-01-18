@@ -1,4 +1,4 @@
-use crate::{cost::*, rule::*};
+use crate::{cardinality_estimation::*, cost::*, rule::*};
 use ast::*;
 use std::{
     collections::{HashMap, HashSet},
@@ -70,13 +70,6 @@ pub struct MultiExpr {
 pub struct Winner {
     pub plan: MultiExprID,
     pub cost: Cost,
-}
-
-pub struct LogicalProps {
-    // cardinality contains the estimated number of rows in the query.
-    pub cardinality: usize,
-    // column_unique_cardinality contains the number of distinct values in each column.
-    pub column_unique_cardinality: HashMap<Column, usize>,
 }
 
 pub struct Context<T> {

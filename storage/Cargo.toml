@@ -13,7 +13,7 @@ regex = "1.4.2"
 twox-hash = "1.6.0"
 catalog = { path = "../catalog" }
 kernel = { path = "../kernel" }
-sketch = { path = "../sketch" }
+statistics = { path = "../statistics" }
 
 [dev-dependencies]
 rand = "0.7.3"

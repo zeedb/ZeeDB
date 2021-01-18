@@ -26,24 +26,23 @@ Map $query.$col1:1
 
 # single_join
 ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
-		Exchange
+		Broadcast
 			Map person.first_name person_id
 				Filter (Not (IsNull person.person_id))
 					Map person_id:person.person_id, ..
 						SeqScan person
-		Exchange
-			HashJoin Single (Is customer.customer_id customer_id)
-				Exchange
-					Map store.name customer_id
-						Filter (Not (IsNull store.store_id))
-							Map customer_id:store.store_id, ..
-								Filter* (StringLike store.name "A%")
-									SeqScan store
-				Exchange
-					SeqScan customer
+		HashJoin Single (Is customer.customer_id customer_id)
+			Exchange
+				Map store.name customer_id
+					Filter (Not (IsNull store.store_id))
+						Map customer_id:store.store_id, ..
+							Filter* (StringLike store.name "A%")
+								SeqScan store
+			Exchange
+				SeqScan customer
 
 # remove_single_join
 ok: explain select (select 1) from customer
@@ -117,20 +116,19 @@ Map customer.customer_id store.store_id
 
 # equi_join_left_index_scan
 ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and customer.customer_id = 1
-plan                                                                                                                                                                                                  
+plan                                                                                                                                                                        
 Map customer.customer_id store.store_id
-	NestedLoop Inner (Equal customer.store_id store.store_id)
-		Broadcast
-			IndexScan customer(customer_id:1)
-					Broadcast
-						TableFreeScan
-		SeqScan store
+	IndexScan store(store_id:customer.store_id)
+			Broadcast
+				IndexScan customer(customer_id:1)
+						Broadcast
+							TableFreeScan
 
 # equi_join_right_index_scan
 ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and store.store_id = 1
-plan                                                                                                                                                                                               
+plan                                                                                                                                                                                             
 Map customer.customer_id store.store_id
-	NestedLoop Inner (Equal customer.store_id store.store_id)
+	HashJoin Inner (Equal customer.store_id store.store_id)
 		Broadcast
 			IndexScan store(store_id:1)
 					Broadcast

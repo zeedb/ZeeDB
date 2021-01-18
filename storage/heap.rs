@@ -1,7 +1,6 @@
 use crate::page::*;
 use kernel::*;
-use sketch::Sketch;
-use std::{collections::HashMap, fmt};
+use std::fmt;
 
 // Heap represents a logical table as a list of pages.
 // New tuples are added to the end of the heap.
@@ -9,15 +8,11 @@ use std::{collections::HashMap, fmt};
 #[derive(Clone)]
 pub struct Heap {
     pages: Vec<Page>,
-    stats: HashMap<String, Sketch>,
 }
 
 impl Heap {
     pub fn empty() -> Self {
-        Self {
-            pages: vec![],
-            stats: HashMap::new(),
-        }
+        Self { pages: vec![] }
     }
 
     pub fn scan(&self) -> Vec<Page> {
@@ -51,10 +46,6 @@ impl Heap {
         if self.pages.is_empty() {
             self.pages
                 .push(Page::empty(self.pages.len(), records.schema()));
-            for (name, array) in &records.columns {
-                self.stats
-                    .insert(name.clone(), Sketch::new(array.data_type()));
-            }
         }
         // Allocate arrays to keep track of where we insert the rows.
         let mut tids = I64Array::with_capacity(records.len());
@@ -81,16 +72,6 @@ impl Heap {
                 .push(Page::empty(self.pages.len(), records.schema()));
             self.insert_more(records, txn, tids, offset);
         }
-        // Update counters.
-        for (name, array) in &records.columns {
-            match name.as_str() {
-                "$xmin" | "$xmax" | "$tid" => {}
-                name => {
-                    let counter = self.stats.get_mut(name).expect(name);
-                    counter.insert(array);
-                }
-            }
-        }
     }
 
     pub fn page(&self, pid: usize) -> &Page {
@@ -99,21 +80,6 @@ impl Heap {
 
     pub fn truncate(&mut self) {
         self.pages = vec![];
-    }
-
-    pub fn approx_cardinality(&self) -> usize {
-        if let Some(last) = self.pages.last() {
-            last.approx_num_rows() + PAGE_SIZE * (self.pages.len() - 1)
-        } else {
-            0
-        }
-    }
-
-    pub fn approx_count_distinct(&self, column: &String) -> usize {
-        if self.pages.is_empty() {
-            return 0;
-        }
-        self.stats.get(column).expect(column).count_distinct() as usize
     }
 
     pub(crate) fn is_uninitialized(&self) -> bool {
