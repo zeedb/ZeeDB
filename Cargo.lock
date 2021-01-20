@@ -175,6 +175,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "client"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "protos",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "cpuprofiler"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -833,6 +844,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "protos"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "tonic",
+ "tonic-build",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1358,6 +1379,18 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
+
+[[package]]
+name = "worker"
+version = "0.1.0"
+dependencies = [
+ "execute",
+ "prost",
+ "prost-types",
+ "protos",
+ "tokio",
+ "tonic",
+]
 
 [[package]]
 name = "zetasql"

@@ -2,14 +2,17 @@
 members = [
     "ast",
     "benchmarks",
+    "client",
     "catalog",
     "encoding",
     "execute",
     "kernel",
     "parser",
     "planner",
+    "protos",
     "statistics",
     "storage",
+    "worker",
     "zetasql",
     "zetasql_build",
 ]
