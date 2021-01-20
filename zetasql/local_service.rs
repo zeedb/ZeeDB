@@ -1,132 +1,134 @@
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PrepareRequest {
     #[prost(string, optional, tag = "1")]
-    pub sql: ::std::option::Option<std::string::String>,
+    pub sql: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub options: ::std::option::Option<super::AnalyzerOptionsProto>,
+    pub options: ::core::option::Option<super::AnalyzerOptionsProto>,
     /// Serialized descriptor pools of all types in the request.
     #[prost(message, repeated, tag = "3")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
     #[prost(message, optional, tag = "4")]
-    pub simple_catalog: ::std::option::Option<super::SimpleCatalogProto>,
+    pub simple_catalog: ::core::option::Option<super::SimpleCatalogProto>,
     #[prost(int64, optional, tag = "5")]
-    pub registered_catalog_id: ::std::option::Option<i64>,
+    pub registered_catalog_id: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PreparedState {
     #[prost(int64, optional, tag = "1")]
-    pub prepared_expression_id: ::std::option::Option<i64>,
+    pub prepared_expression_id: ::core::option::Option<i64>,
     /// No file_descriptor_set returned. Use the same descriptor pools as sent in
     /// the request deserialize the type.
     #[prost(message, optional, tag = "2")]
-    pub output_type: ::std::option::Option<super::TypeProto>,
+    pub output_type: ::core::option::Option<super::TypeProto>,
     #[prost(string, repeated, tag = "3")]
-    pub referenced_columns: ::std::vec::Vec<std::string::String>,
+    pub referenced_columns: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "4")]
-    pub referenced_parameters: ::std::vec::Vec<std::string::String>,
+    pub referenced_parameters: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "5")]
-    pub positional_parameter_count: ::std::option::Option<i64>,
+    pub positional_parameter_count: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct PrepareResponse {
     /// TODO: Remove these fields
     #[prost(int64, optional, tag = "1")]
-    pub prepared_expression_id: ::std::option::Option<i64>,
+    pub prepared_expression_id: ::core::option::Option<i64>,
     #[prost(message, optional, tag = "2")]
-    pub output_type: ::std::option::Option<super::TypeProto>,
+    pub output_type: ::core::option::Option<super::TypeProto>,
     /// Never add fields to this proto, add them to PreparedState instead.
     #[prost(message, optional, tag = "3")]
-    pub prepared: ::std::option::Option<PreparedState>,
+    pub prepared: ::core::option::Option<PreparedState>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluateRequest {
     #[prost(string, optional, tag = "1")]
-    pub sql: ::std::option::Option<std::string::String>,
+    pub sql: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "2")]
-    pub columns: ::std::vec::Vec<evaluate_request::Parameter>,
+    pub columns: ::prost::alloc::vec::Vec<evaluate_request::Parameter>,
     #[prost(message, repeated, tag = "3")]
-    pub params: ::std::vec::Vec<evaluate_request::Parameter>,
+    pub params: ::prost::alloc::vec::Vec<evaluate_request::Parameter>,
     /// Serialized descriptor pools of all types in the request.
     #[prost(message, repeated, tag = "4")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
     /// Set if the expression is already prepared, in which case sql and
     /// file_descriptor_set will be ignored.
     #[prost(int64, optional, tag = "5")]
-    pub prepared_expression_id: ::std::option::Option<i64>,
+    pub prepared_expression_id: ::core::option::Option<i64>,
     #[prost(message, optional, tag = "6")]
-    pub options: ::std::option::Option<super::AnalyzerOptionsProto>,
+    pub options: ::core::option::Option<super::AnalyzerOptionsProto>,
 }
+/// Nested message and enum types in `EvaluateRequest`.
 pub mod evaluate_request {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Parameter {
         #[prost(string, optional, tag = "1")]
-        pub name: ::std::option::Option<std::string::String>,
+        pub name: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "2")]
-        pub value: ::std::option::Option<super::super::ValueProto>,
+        pub value: ::core::option::Option<super::super::ValueProto>,
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluateResponse {
     #[prost(message, optional, tag = "1")]
-    pub value: ::std::option::Option<super::ValueProto>,
+    pub value: ::core::option::Option<super::ValueProto>,
     /// TODO: Remove these fields
     #[prost(message, optional, tag = "2")]
-    pub r#type: ::std::option::Option<super::TypeProto>,
+    pub r#type: ::core::option::Option<super::TypeProto>,
     #[prost(int64, optional, tag = "3")]
-    pub prepared_expression_id: ::std::option::Option<i64>,
+    pub prepared_expression_id: ::core::option::Option<i64>,
     #[prost(message, optional, tag = "4")]
-    pub prepared: ::std::option::Option<PreparedState>,
+    pub prepared: ::core::option::Option<PreparedState>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluateRequestBatch {
     #[prost(message, repeated, tag = "1")]
-    pub request: ::std::vec::Vec<EvaluateRequest>,
+    pub request: ::prost::alloc::vec::Vec<EvaluateRequest>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EvaluateResponseBatch {
     #[prost(message, repeated, tag = "1")]
-    pub response: ::std::vec::Vec<EvaluateResponse>,
+    pub response: ::prost::alloc::vec::Vec<EvaluateResponse>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnprepareRequest {
     #[prost(int64, optional, tag = "1")]
-    pub prepared_expression_id: ::std::option::Option<i64>,
+    pub prepared_expression_id: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TableFromProtoRequest {
     #[prost(message, optional, tag = "1")]
-    pub proto: ::std::option::Option<super::ProtoTypeProto>,
+    pub proto: ::core::option::Option<super::ProtoTypeProto>,
     #[prost(message, optional, tag = "2")]
-    pub file_descriptor_set: ::std::option::Option<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::core::option::Option<::prost_types::FileDescriptorSet>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RegisteredParseResumeLocationProto {
     #[prost(int64, optional, tag = "1")]
-    pub registered_id: ::std::option::Option<i64>,
+    pub registered_id: ::core::option::Option<i64>,
     #[prost(int32, optional, tag = "2")]
-    pub byte_position: ::std::option::Option<i32>,
+    pub byte_position: ::core::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzeRequest {
     #[prost(message, optional, tag = "1")]
-    pub options: ::std::option::Option<super::AnalyzerOptionsProto>,
+    pub options: ::core::option::Option<super::AnalyzerOptionsProto>,
     #[prost(message, optional, tag = "2")]
-    pub simple_catalog: ::std::option::Option<super::SimpleCatalogProto>,
+    pub simple_catalog: ::core::option::Option<super::SimpleCatalogProto>,
     #[prost(message, repeated, tag = "3")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
     /// Set if using a registered catalog, in which case simple_catalog and
     /// file_descriptor_set will be ignored.
     #[prost(int64, optional, tag = "4")]
-    pub registered_catalog_id: ::std::option::Option<i64>,
+    pub registered_catalog_id: ::core::option::Option<i64>,
     #[prost(oneof = "analyze_request::Target", tags = "5, 6, 7, 8")]
-    pub target: ::std::option::Option<analyze_request::Target>,
+    pub target: ::core::option::Option<analyze_request::Target>,
 }
+/// Nested message and enum types in `AnalyzeRequest`.
 pub mod analyze_request {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Target {
         /// Single statement.
         #[prost(string, tag = "5")]
-        SqlStatement(std::string::String),
+        SqlStatement(::prost::alloc::string::String),
         /// Multiple statement.
         #[prost(message, tag = "6")]
         ParseResumeLocation(super::super::ParseResumeLocationProto),
@@ -135,17 +137,18 @@ pub mod analyze_request {
         RegisteredParseResumeLocation(super::RegisteredParseResumeLocationProto),
         /// Expression.
         #[prost(string, tag = "8")]
-        SqlExpression(std::string::String),
+        SqlExpression(::prost::alloc::string::String),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzeResponse {
     /// Set only if the request had parse_resume_location.
     #[prost(int32, optional, tag = "2")]
-    pub resume_byte_position: ::std::option::Option<i32>,
+    pub resume_byte_position: ::core::option::Option<i32>,
     #[prost(oneof = "analyze_response::Result", tags = "1, 3")]
-    pub result: ::std::option::Option<analyze_response::Result>,
+    pub result: ::core::option::Option<analyze_response::Result>,
 }
+/// Nested message and enum types in `AnalyzeResponse`.
 pub mod analyze_response {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Result {
@@ -158,16 +161,17 @@ pub mod analyze_response {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BuildSqlRequest {
     #[prost(message, optional, tag = "1")]
-    pub simple_catalog: ::std::option::Option<super::SimpleCatalogProto>,
+    pub simple_catalog: ::core::option::Option<super::SimpleCatalogProto>,
     #[prost(message, repeated, tag = "2")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
     /// Set if using a registered catalog, in which case simple_catalog and
     /// file_descriptor_set will be ignored.
     #[prost(int64, optional, tag = "3")]
-    pub registered_catalog_id: ::std::option::Option<i64>,
+    pub registered_catalog_id: ::core::option::Option<i64>,
     #[prost(oneof = "build_sql_request::Target", tags = "4, 5")]
-    pub target: ::std::option::Option<build_sql_request::Target>,
+    pub target: ::core::option::Option<build_sql_request::Target>,
 }
+/// Nested message and enum types in `BuildSqlRequest`.
 pub mod build_sql_request {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Target {
@@ -180,31 +184,33 @@ pub mod build_sql_request {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct BuildSqlResponse {
     #[prost(string, optional, tag = "1")]
-    pub sql: ::std::option::Option<std::string::String>,
+    pub sql: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExtractTableNamesFromStatementRequest {
     #[prost(string, optional, tag = "1")]
-    pub sql_statement: ::std::option::Option<std::string::String>,
+    pub sql_statement: ::core::option::Option<::prost::alloc::string::String>,
     /// If language options are not provided, the parser would use a default
     /// LanguageOptions object. See ExtractTableNamesFromNextStatementRequest
     /// for further details.
     #[prost(message, optional, tag = "2")]
-    pub options: ::std::option::Option<super::LanguageOptionsProto>,
+    pub options: ::core::option::Option<super::LanguageOptionsProto>,
     /// sql_statement is interpreted as a script rather than a single statement.
     #[prost(bool, optional, tag = "3")]
-    pub allow_script: ::std::option::Option<bool>,
+    pub allow_script: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExtractTableNamesFromStatementResponse {
     #[prost(message, repeated, tag = "1")]
-    pub table_name: ::std::vec::Vec<extract_table_names_from_statement_response::TableName>,
+    pub table_name:
+        ::prost::alloc::vec::Vec<extract_table_names_from_statement_response::TableName>,
 }
+/// Nested message and enum types in `ExtractTableNamesFromStatementResponse`.
 pub mod extract_table_names_from_statement_response {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct TableName {
         #[prost(string, repeated, tag = "1")]
-        pub table_name_segment: ::std::vec::Vec<std::string::String>,
+        pub table_name_segment: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -230,48 +236,50 @@ pub struct ExtractTableNamesFromNextStatementRequest {
     /// LanguageOptions::supported_statement_kinds_ definitions for the source of
     /// truth on this example.
     #[prost(message, optional, tag = "2")]
-    pub options: ::std::option::Option<super::LanguageOptionsProto>,
+    pub options: ::core::option::Option<super::LanguageOptionsProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ExtractTableNamesFromNextStatementResponse {
     #[prost(message, repeated, tag = "1")]
-    pub table_name: ::std::vec::Vec<extract_table_names_from_next_statement_response::TableName>,
+    pub table_name:
+        ::prost::alloc::vec::Vec<extract_table_names_from_next_statement_response::TableName>,
     #[prost(int32, optional, tag = "2")]
-    pub resume_byte_position: ::std::option::Option<i32>,
+    pub resume_byte_position: ::core::option::Option<i32>,
 }
+/// Nested message and enum types in `ExtractTableNamesFromNextStatementResponse`.
 pub mod extract_table_names_from_next_statement_response {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct TableName {
         #[prost(string, repeated, tag = "1")]
-        pub table_name_segment: ::std::vec::Vec<std::string::String>,
+        pub table_name_segment: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FormatSqlRequest {
     #[prost(string, optional, tag = "1")]
-    pub sql: ::std::option::Option<std::string::String>,
+    pub sql: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FormatSqlResponse {
     #[prost(string, optional, tag = "1")]
-    pub sql: ::std::option::Option<std::string::String>,
+    pub sql: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RegisterCatalogRequest {
     #[prost(message, optional, tag = "1")]
-    pub simple_catalog: ::std::option::Option<super::SimpleCatalogProto>,
+    pub simple_catalog: ::core::option::Option<super::SimpleCatalogProto>,
     #[prost(message, repeated, tag = "2")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct RegisterResponse {
     #[prost(int64, optional, tag = "1")]
-    pub registered_id: ::std::option::Option<i64>,
+    pub registered_id: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct UnregisterRequest {
     #[prost(int64, optional, tag = "1")]
-    pub registered_id: ::std::option::Option<i64>,
+    pub registered_id: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct GetBuiltinFunctionsResponse {
@@ -279,23 +287,23 @@ pub struct GetBuiltinFunctionsResponse {
     /// have arguments of enum type which need to be added manually when
     /// deserializing.
     #[prost(message, repeated, tag = "1")]
-    pub function: ::std::vec::Vec<super::FunctionProto>,
+    pub function: ::prost::alloc::vec::Vec<super::FunctionProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AddSimpleTableRequest {
     #[prost(int64, optional, tag = "1")]
-    pub registered_catalog_id: ::std::option::Option<i64>,
+    pub registered_catalog_id: ::core::option::Option<i64>,
     #[prost(message, optional, tag = "2")]
-    pub table: ::std::option::Option<super::SimpleTableProto>,
+    pub table: ::core::option::Option<super::SimpleTableProto>,
     #[prost(message, repeated, tag = "3")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LanguageOptionsRequest {
     #[prost(bool, optional, tag = "1")]
-    pub maximum_features: ::std::option::Option<bool>,
+    pub maximum_features: ::core::option::Option<bool>,
     #[prost(enumeration = "super::LanguageVersion", optional, tag = "2")]
-    pub language_version: ::std::option::Option<i32>,
+    pub language_version: ::core::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzerOptionsRequest {}

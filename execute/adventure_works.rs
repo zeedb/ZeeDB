@@ -1,7 +1,7 @@
 use chrono::*;
 use once_cell::sync::OnceCell;
 use planner::*;
-use rand::*;
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 use storage::Storage;
 
 pub fn adventure_works() -> Storage {
@@ -42,12 +42,12 @@ fn generate_adventure_works(n_store: usize) -> Storage {
     // Populate tables.
     const LOW_TIME: i64 = 946688400;
     const HIGH_TIME: i64 = 1577840400;
-    let mut rng = rngs::SmallRng::from_seed([0; 16]);
+    let mut rng = SmallRng::from_seed([0; 32]);
     // Store.
     let lines: Vec<_> = (0..n_store)
         .map(|store_id| {
-            let store_name = rng.gen_range(0, 1_000_000);
-            let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
+            let store_name = rng.gen_range(0..1_000_000);
+            let modified_date = timestamp(rng.gen_range(LOW_TIME..HIGH_TIME)).to_rfc3339();
             format!(
                 "({}, '{}', timestamp '{}')",
                 store_id, store_name, modified_date
@@ -67,9 +67,9 @@ fn generate_adventure_works(n_store: usize) -> Storage {
             .map(|customer_id| {
                 let person_id = customers[customer_id];
                 // TODO some stores might have no customers.
-                let store_id = rng.gen_range(0, n_store);
-                let account_number = rng.gen_range(0, n_customer * 10);
-                let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
+                let store_id = rng.gen_range(0..n_store);
+                let account_number = rng.gen_range(0..n_customer * 10);
+                let modified_date = timestamp(rng.gen_range(LOW_TIME..HIGH_TIME)).to_rfc3339();
                 format!(
                     "({}, {}, {}, {}, timestamp '{}')",
                     customer_id, person_id, store_id, account_number, modified_date
@@ -87,9 +87,9 @@ fn generate_adventure_works(n_store: usize) -> Storage {
     for person_id_start in (0..n_person).step_by(10_000) {
         let lines: Vec<_> = (person_id_start..n_person.min(person_id_start + 10_000))
             .map(|person_id| {
-                let first_name = rng.gen_range(0, 1_000_000);
-                let last_name = rng.gen_range(0, 1_000_000);
-                let modified_date = timestamp(rng.gen_range(LOW_TIME, HIGH_TIME)).to_rfc3339();
+                let first_name = rng.gen_range(0..1_000_000);
+                let last_name = rng.gen_range(0..1_000_000);
+                let modified_date = timestamp(rng.gen_range(LOW_TIME..HIGH_TIME)).to_rfc3339();
                 format!(
                     "({}, '{}', '{}', timestamp '{}')",
                     person_id, first_name, last_name, modified_date
@@ -108,10 +108,10 @@ fn generate_adventure_works(n_store: usize) -> Storage {
 }
 
 fn sample(universe: usize, n: usize) -> Vec<usize> {
-    let mut rng = rngs::SmallRng::from_seed([0; 16]);
+    let mut rng = SmallRng::from_seed([0; 32]);
     let mut array: Vec<_> = (0..universe).collect();
     for i in 0..n {
-        let j = rng.gen_range(i, universe);
+        let j = rng.gen_range(i..universe);
         array.swap(i, j);
     }
     array.drain(0..n).collect()

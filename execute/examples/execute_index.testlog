@@ -1,8 +1,8 @@
 ok: select * from customer where customer_id = 1
 customer_id person_id store_id account_number modified_date      
-1           3305      48       15822          2008-12-13 02:02:36
+1           7645      146      40533          2001-01-05 07:22:02
 
 ok: select * from customer join store using (store_id) where customer_id = 1
 store_id customer_id person_id account_number modified_date       name   modified_date      
-48       1           3305      15822          2008-12-13 02:02:36 836340 2010-12-24 15:06:03
+146      1           7645      40533          2001-01-05 07:22:02 850690 2017-01-24 04:57:07
 

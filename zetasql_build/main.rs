@@ -2,17 +2,17 @@ fn main() {
     tonic_build::configure()
         .build_client(true)
         .build_server(false)
-        .out_dir("./src/zetasql_build")
+        .out_dir("./zetasql_build")
         .compile(
-            &["src/zetasql_build/protos/zetasql/local_service/local_service.proto"],
-            &["src/zetasql_build/protos"],
+            &["zetasql_build/protos/zetasql/local_service/local_service.proto"],
+            &["zetasql_build/protos"],
         )
         .unwrap();
     std::fs::rename(
-        "./src/zetasql_build/zetasql.local_service.rs",
-        "./src/zetasql/local_service.rs",
+        "./zetasql_build/zetasql.local_service.rs",
+        "./zetasql/local_service.rs",
     )
     .unwrap();
-    std::fs::rename("./src/zetasql_build/zetasql.rs", "./src/zetasql/zetasql.rs").unwrap();
-    std::fs::remove_file("./src/zetasql_build/google.protobuf.rs").unwrap();
+    std::fs::rename("./zetasql_build/zetasql.rs", "./zetasql/zetasql.rs").unwrap();
+    std::fs::remove_file("./zetasql_build/google.protobuf.rs").unwrap();
 }

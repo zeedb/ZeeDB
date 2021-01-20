@@ -1,5 +1,5 @@
 use crate::art::*;
-use rand::{Rng, SeedableRng};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
 
 #[test]
 fn set() {
@@ -284,13 +284,13 @@ fn delete_value() {
 #[test]
 fn monte_carlo_delete() {
     let mut m = Art::empty();
-    let mut rng1 = rand::rngs::SmallRng::from_seed([0; 16]);
+    let mut rng1 = SmallRng::from_seed([0; 32]);
     for i in 0..1000000 {
         let k: [u8; 10] = rng1.gen();
         let v = i;
         assert!(m.insert(&k, v) == None);
     }
-    let mut rng2 = rand::rngs::SmallRng::from_seed([0; 16]);
+    let mut rng2 = SmallRng::from_seed([0; 32]);
     for i in 0..1000000 {
         let k: [u8; 10] = rng2.gen();
         let get_res = m.get(&k);

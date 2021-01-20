@@ -16,4 +16,4 @@ kernel = { path = "../kernel" }
 statistics = { path = "../statistics" }
 
 [dev-dependencies]
-rand = "0.7.3"
+rand = { version = "0.8.2", features = ["small_rng"]}

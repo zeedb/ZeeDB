@@ -10,9 +10,9 @@ pub struct ErrorLocation {
     /// with \n, \r or \r\n, and <column> is computed assuming tabs
     /// expand to eight characters.
     #[prost(int32, optional, tag = "1", default = "1")]
-    pub line: ::std::option::Option<i32>,
+    pub line: ::core::option::Option<i32>,
     #[prost(int32, optional, tag = "2", default = "1")]
-    pub column: ::std::option::Option<i32>,
+    pub column: ::core::option::Option<i32>,
     /// An optional filename related to the error, if applicable.  May be used
     /// to express more general error source information than a filename, for
     /// instance if the error comes from a module imported from datascape.
@@ -20,13 +20,13 @@ pub struct ErrorLocation {
     /// this field content should make sense in this format (i.e., it should
     /// probably avoid whitespace).
     #[prost(string, optional, tag = "3")]
-    pub filename: ::std::option::Option<std::string::String>,
+    pub filename: ::core::option::Option<::prost::alloc::string::String>,
     /// An optional list of error source information for the related Status.
     /// The last element in this list is the immediate error cause, with
     /// the previous element being its cause, etc.  These error sources should
     /// normally be displayed in reverse order.
     #[prost(message, repeated, tag = "4")]
-    pub error_source: ::std::vec::Vec<ErrorSource>,
+    pub error_source: ::prost::alloc::vec::Vec<ErrorSource>,
 }
 /// This proto indicates an error that is the source of another error.
 /// It is expected that all of <error_message>, <error_message_caret_string>,
@@ -44,19 +44,19 @@ pub struct ErrorLocation {
 pub struct ErrorSource {
     /// The error message for this ErrorSource.
     #[prost(string, optional, tag = "1")]
-    pub error_message: ::std::option::Option<std::string::String>,
+    pub error_message: ::core::option::Option<::prost::alloc::string::String>,
     /// An additional error string added to <error_message> when in
     /// ErrorMessageMode ERROR_MESSAGE_MODE_MULTI_LINE_WITH_CARET.  This
     /// is constructed as one line of input text, a newline, and then a
     /// second line with the caret in the position pointing at the error
     /// in the first line.
     #[prost(string, optional, tag = "2")]
-    pub error_message_caret_string: ::std::option::Option<std::string::String>,
+    pub error_message_caret_string: ::core::option::Option<::prost::alloc::string::String>,
     /// The error location indicating a position in the original input file
     /// containing the statement with the error.
     /// This <error_location> should not itself have <error_source> filled in.
     #[prost(message, optional, tag = "3")]
-    pub error_location: ::std::option::Option<ErrorLocation>,
+    pub error_location: ::core::option::Option<ErrorLocation>,
 }
 /// Contains information about a deprecation warning emitted by the
 /// analyzer. Currently attached to any absl::Status returned by
@@ -64,8 +64,9 @@ pub struct ErrorSource {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeprecationWarning {
     #[prost(enumeration = "deprecation_warning::Kind", optional, tag = "1")]
-    pub kind: ::std::option::Option<i32>,
+    pub kind: ::core::option::Option<i32>,
 }
+/// Nested message and enum types in `DeprecationWarning`.
 pub mod deprecation_warning {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -88,16 +89,17 @@ pub mod deprecation_warning {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FreestandingDeprecationWarning {
     #[prost(string, optional, tag = "1")]
-    pub message: ::std::option::Option<std::string::String>,
+    pub message: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
-    pub caret_string: ::std::option::Option<std::string::String>,
+    pub caret_string: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub error_location: ::std::option::Option<ErrorLocation>,
+    pub error_location: ::core::option::Option<ErrorLocation>,
     #[prost(message, optional, tag = "4")]
-    pub deprecation_warning: ::std::option::Option<DeprecationWarning>,
+    pub deprecation_warning: ::core::option::Option<DeprecationWarning>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionEnums {}
+/// Nested message and enum types in `FunctionEnums`.
 pub mod function_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -306,18 +308,18 @@ pub struct LanguageFeatureOptions {
     /// reason to disable a feature is if it exists only to support backwards
     /// compatibility with older ZetaSQL behavior.)
     #[prost(bool, optional, tag = "1", default = "true")]
-    pub ideally_enabled: ::std::option::Option<bool>,
+    pub ideally_enabled: ::core::option::Option<bool>,
     /// Indicates whether a feature is still undergoing development. Users should
     /// not enable features that are still in development, but internal ZetaSQL
     /// tests may do so.
     #[prost(bool, optional, tag = "2", default = "false")]
-    pub in_development: ::std::option::Option<bool>,
+    pub in_development: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAstRewriteOptions {
     /// Whether the rewrite is enabled by default or not.
     #[prost(bool, optional, tag = "1")]
-    pub default_enabled: ::std::option::Option<bool>,
+    pub default_enabled: ::core::option::Option<bool>,
 }
 /// ZetaSQL language versions.
 /// See (broken link) for more detail.
@@ -878,44 +880,44 @@ pub struct ParseLocationRangeProto {
     /// expected that the start and end of a parsed string would both be located in
     /// just one file, so we have only one field to store the filename.
     #[prost(string, optional, tag = "1")]
-    pub filename: ::std::option::Option<std::string::String>,
+    pub filename: ::core::option::Option<::prost::alloc::string::String>,
     /// Byte offset of the first character of the symbol string.
     #[prost(int32, optional, tag = "2")]
-    pub start: ::std::option::Option<i32>,
+    pub start: ::core::option::Option<i32>,
     /// Byte offset of the character after the last character of the symbol string.
     #[prost(int32, optional, tag = "3")]
-    pub end: ::std::option::Option<i32>,
+    pub end: ::core::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ParseResumeLocationProto {
     /// The filename associated with the input string (if any).
     #[prost(string, optional, tag = "4")]
-    pub filename: ::std::option::Option<std::string::String>,
+    pub filename: ::core::option::Option<::prost::alloc::string::String>,
     /// The input string.
     #[prost(string, optional, tag = "1")]
-    pub input: ::std::option::Option<std::string::String>,
+    pub input: ::core::option::Option<::prost::alloc::string::String>,
     /// The current byte position, the parser will resume from this position in the
     /// next round.
     #[prost(int32, optional, tag = "2")]
-    pub byte_position: ::std::option::Option<i32>,
+    pub byte_position: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "3")]
-    pub allow_resume: ::std::option::Option<bool>,
+    pub allow_resume: ::core::option::Option<bool>,
 }
 /// This represents the serialized form of the zetasql::Type.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TypeProto {
     #[prost(enumeration = "TypeKind", optional, tag = "1")]
-    pub type_kind: ::std::option::Option<i32>,
+    pub type_kind: ::core::option::Option<i32>,
     /// If the type is not a simple type, then one (and only one) of these
     /// will be populated.
     #[prost(message, optional, boxed, tag = "2")]
-    pub array_type: ::std::option::Option<::std::boxed::Box<ArrayTypeProto>>,
+    pub array_type: ::core::option::Option<::prost::alloc::boxed::Box<ArrayTypeProto>>,
     #[prost(message, optional, tag = "3")]
-    pub struct_type: ::std::option::Option<StructTypeProto>,
+    pub struct_type: ::core::option::Option<StructTypeProto>,
     #[prost(message, optional, tag = "4")]
-    pub proto_type: ::std::option::Option<ProtoTypeProto>,
+    pub proto_type: ::core::option::Option<ProtoTypeProto>,
     #[prost(message, optional, tag = "5")]
-    pub enum_type: ::std::option::Option<EnumTypeProto>,
+    pub enum_type: ::core::option::Option<EnumTypeProto>,
     /// These <file_descriptor_set>s may (optionally) be populated only for
     /// the 'outermost' TypeProto when serializing a ZetaSQL Type,
     /// in particular when the TypeProto is created using
@@ -930,48 +932,48 @@ pub struct TypeProto {
     /// For example, serializing a struct with two proto fields from different
     /// DescriptorPools would result in two FileDescriptorSets.
     #[prost(message, repeated, tag = "6")]
-    pub file_descriptor_set: ::std::vec::Vec<::prost_types::FileDescriptorSet>,
+    pub file_descriptor_set: ::prost::alloc::vec::Vec<::prost_types::FileDescriptorSet>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ArrayTypeProto {
     #[prost(message, optional, boxed, tag = "1")]
-    pub element_type: ::std::option::Option<::std::boxed::Box<TypeProto>>,
+    pub element_type: ::core::option::Option<::prost::alloc::boxed::Box<TypeProto>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StructFieldProto {
     #[prost(string, optional, tag = "1")]
-    pub field_name: ::std::option::Option<std::string::String>,
+    pub field_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub field_type: ::std::option::Option<TypeProto>,
+    pub field_type: ::core::option::Option<TypeProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct StructTypeProto {
     #[prost(message, repeated, tag = "1")]
-    pub field: ::std::vec::Vec<StructFieldProto>,
+    pub field: ::prost::alloc::vec::Vec<StructFieldProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ProtoTypeProto {
     /// The _full_ name of the proto.
     #[prost(string, optional, tag = "1")]
-    pub proto_name: ::std::option::Option<std::string::String>,
+    pub proto_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
-    pub proto_file_name: ::std::option::Option<std::string::String>,
+    pub proto_file_name: ::core::option::Option<::prost::alloc::string::String>,
     /// The index of the FileDescriptorSet in the top-level TypeProto that can be
     /// used to deserialize this particular ProtoType.
     #[prost(int32, optional, tag = "3", default = "0")]
-    pub file_descriptor_set_index: ::std::option::Option<i32>,
+    pub file_descriptor_set_index: ::core::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct EnumTypeProto {
     /// The _full_ name of the enum.
     #[prost(string, optional, tag = "1")]
-    pub enum_name: ::std::option::Option<std::string::String>,
+    pub enum_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
-    pub enum_file_name: ::std::option::Option<std::string::String>,
+    pub enum_file_name: ::core::option::Option<::prost::alloc::string::String>,
     /// The index of the FileDescriptorSet in the top-level TypeProto that can be
     /// used to deserialize this particular EnumType.
     #[prost(int32, optional, tag = "3", default = "0")]
-    pub file_descriptor_set_index: ::std::option::Option<i32>,
+    pub file_descriptor_set_index: ::core::option::Option<i32>,
 }
 /// NEXT_ID: 28
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -1027,31 +1029,32 @@ pub struct ValueProto {
         oneof = "value_proto::Value",
         tags = "1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 255"
     )]
-    pub value: ::std::option::Option<value_proto::Value>,
+    pub value: ::core::option::Option<value_proto::Value>,
 }
+/// Nested message and enum types in `ValueProto`.
 pub mod value_proto {
     /// An ordered collection of elements of arbitrary count.
     #[derive(Clone, PartialEq, ::prost::Message)]
-    pub struct AnyArray {
+    pub struct Array {
         #[prost(message, repeated, tag = "1")]
-        pub element: ::std::vec::Vec<super::ValueProto>,
+        pub element: ::prost::alloc::vec::Vec<super::ValueProto>,
     }
     /// A collection of fields. The count, order, and type of the fields is
     /// determined by the type associated with this value.
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Struct {
         #[prost(message, repeated, tag = "1")]
-        pub field: ::std::vec::Vec<super::ValueProto>,
+        pub field: ::prost::alloc::vec::Vec<super::ValueProto>,
     }
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct Datetime {
         /// Represents bit field encoding of year/month/day/hour/minute/second.
         /// See class DatetimeValue in civil_time.h for details of encoding.
         #[prost(int64, optional, tag = "1")]
-        pub bit_field_datetime_seconds: ::std::option::Option<i64>,
+        pub bit_field_datetime_seconds: ::core::option::Option<i64>,
         /// Non-negative fractions of a second at nanosecond resolution.
         #[prost(int32, optional, tag = "2")]
-        pub nanos: ::std::option::Option<i32>,
+        pub nanos: ::core::option::Option<i32>,
     }
     /// Each non-null value will have exactly one of these fields specified.
     /// Null values will have no fields set.
@@ -1072,21 +1075,21 @@ pub mod value_proto {
         #[prost(double, tag = "7")]
         DoubleValue(f64),
         #[prost(string, tag = "8")]
-        StringValue(std::string::String),
+        StringValue(::prost::alloc::string::String),
         #[prost(bytes, tag = "9")]
-        BytesValue(std::vec::Vec<u8>),
+        BytesValue(::prost::alloc::vec::Vec<u8>),
         #[prost(int32, tag = "10")]
         DateValue(i32),
         /// Tag 11 was used for specifying micros timestamps as int64, now obsolete.
         #[prost(int32, tag = "12")]
         EnumValue(i32),
         #[prost(message, tag = "13")]
-        ArrayValue(AnyArray),
+        ArrayValue(Array),
         #[prost(message, tag = "14")]
         StructValue(Struct),
         /// Stores a serialized protocol message.
         #[prost(bytes, tag = "15")]
-        ProtoValue(std::vec::Vec<u8>),
+        ProtoValue(::prost::alloc::vec::Vec<u8>),
         #[prost(message, tag = "16")]
         TimestampValue(::prost_types::Timestamp),
         #[prost(message, tag = "17")]
@@ -1097,19 +1100,19 @@ pub mod value_proto {
         TimeValue(i64),
         /// Geography encoded using ::stlib::STGeographyEncoder
         #[prost(bytes, tag = "19")]
-        GeographyValue(std::vec::Vec<u8>),
+        GeographyValue(::prost::alloc::vec::Vec<u8>),
         /// Encoded numeric value. For the encoding format see documentation for
         /// NumericValue::SerializeAsProtoBytes().
         #[prost(bytes, tag = "20")]
-        NumericValue(std::vec::Vec<u8>),
+        NumericValue(::prost::alloc::vec::Vec<u8>),
         /// Encoded bignumeric value. For the encoding format see documentation for
         /// BigNumericValue::SerializeAsProtoBytes().
         #[prost(bytes, tag = "21")]
-        BignumericValue(std::vec::Vec<u8>),
+        BignumericValue(::prost::alloc::vec::Vec<u8>),
         /// Tag 22 was used for json value as bytes, now obsolete.
         /// Json value represented as a string document.
         #[prost(string, tag = "23")]
-        JsonValue(std::string::String),
+        JsonValue(::prost::alloc::string::String),
         /// User code that switches on this oneoff enum must have a default case so
         /// builds won't break when new fields are added.
         #[prost(bool, tag = "255")]
@@ -1120,55 +1123,55 @@ pub mod value_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedColumnProto {
     #[prost(int64, optional, tag = "1")]
-    pub column_id: ::std::option::Option<i64>,
+    pub column_id: ::core::option::Option<i64>,
     #[prost(string, optional, tag = "2")]
-    pub table_name: ::std::option::Option<std::string::String>,
+    pub table_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "3")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "4")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ValueWithTypeProto {
     #[prost(message, optional, tag = "1")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(message, optional, tag = "2")]
-    pub value: ::std::option::Option<ValueProto>,
+    pub value: ::core::option::Option<ValueProto>,
 }
 /// Reference to a table.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TableRefProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "2")]
-    pub serialization_id: ::std::option::Option<i64>,
+    pub serialization_id: ::core::option::Option<i64>,
     #[prost(string, optional, tag = "3")]
-    pub full_name: ::std::option::Option<std::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Reference to a model.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ModelRefProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "2")]
-    pub serialization_id: ::std::option::Option<i64>,
+    pub serialization_id: ::core::option::Option<i64>,
     #[prost(string, optional, tag = "3")]
-    pub full_name: ::std::option::Option<std::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Reference to a connection
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConnectionRefProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "3")]
-    pub full_name: ::std::option::Option<std::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Reference to a named constant.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ConstantRefProto {
     /// Full name of the function, e.g., catalog1.catalog2.Constant.
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Reference to a function.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1176,44 +1179,44 @@ pub struct FunctionRefProto {
     /// TODO: Optimize this by generating unique serialization IDs.
     /// Full name of the function, e.g., group:pathname.
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Reference to a table-valued function.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TableValuedFunctionRefProto {
     /// Full name of the function, e.g., group:pathname.
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedNodeProto {
     /// Parse location range if present in the ResolvedNode.
     #[prost(message, optional, tag = "1")]
-    pub parse_location_range: ::std::option::Option<ParseLocationRangeProto>,
+    pub parse_location_range: ::core::option::Option<ParseLocationRangeProto>,
 }
 /// Reference to a proto field descriptor.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FieldDescriptorRefProto {
     #[prost(message, optional, tag = "1")]
-    pub containing_proto: ::std::option::Option<ProtoTypeProto>,
+    pub containing_proto: ::core::option::Option<ProtoTypeProto>,
     #[prost(int32, optional, tag = "2")]
-    pub number: ::std::option::Option<i32>,
+    pub number: ::core::option::Option<i32>,
 }
 /// Reference to a proto2::OneofDescriptor, which describes the fields of an
 /// Oneof.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct OneofDescriptorRefProto {
     #[prost(message, optional, tag = "1")]
-    pub containing_proto: ::std::option::Option<ProtoTypeProto>,
+    pub containing_proto: ::core::option::Option<ProtoTypeProto>,
     /// 0-based offset which aligns with the order Oneof fields are defined in the
     /// containing message.
     #[prost(int32, optional, tag = "2")]
-    pub index: ::std::option::Option<i32>,
+    pub index: ::core::option::Option<i32>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ProcedureRefProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
 }
 // Wire format of Function related messages, these shouldn't be exposed to end
 // users normally.
@@ -1221,42 +1224,42 @@ pub struct ProcedureRefProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfRelationColumnProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(bool, optional, tag = "3")]
-    pub is_pseudo_column: ::std::option::Option<bool>,
+    pub is_pseudo_column: ::core::option::Option<bool>,
     /// Store the parse location ranges for column name and type.
     #[prost(message, optional, tag = "4")]
-    pub name_parse_location_range: ::std::option::Option<ParseLocationRangeProto>,
+    pub name_parse_location_range: ::core::option::Option<ParseLocationRangeProto>,
     #[prost(message, optional, tag = "5")]
-    pub type_parse_location_range: ::std::option::Option<ParseLocationRangeProto>,
+    pub type_parse_location_range: ::core::option::Option<ParseLocationRangeProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfRelationProto {
     #[prost(message, repeated, tag = "1")]
-    pub column: ::std::vec::Vec<TvfRelationColumnProto>,
+    pub column: ::prost::alloc::vec::Vec<TvfRelationColumnProto>,
     #[prost(bool, optional, tag = "2", default = "false")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfModelProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
-    pub full_name: ::std::option::Option<std::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfConnectionProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
-    pub full_name: ::std::option::Option<std::string::String>,
+    pub full_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfDescriptorProto {
     #[prost(string, repeated, tag = "1")]
-    pub column_name: ::std::vec::Vec<std::string::String>,
+    pub column_name: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// The fields in here are in FunctionArgumentTypeOptions in the c++ API.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -1266,159 +1269,160 @@ pub struct FunctionArgumentTypeOptionsProto {
         optional,
         tag = "1"
     )]
-    pub cardinality: ::std::option::Option<i32>,
+    pub cardinality: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "2")]
-    pub must_be_constant: ::std::option::Option<bool>,
+    pub must_be_constant: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "3")]
-    pub must_be_non_null: ::std::option::Option<bool>,
+    pub must_be_non_null: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "4")]
-    pub is_not_aggregate: ::std::option::Option<bool>,
+    pub is_not_aggregate: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "5")]
-    pub must_support_equality: ::std::option::Option<bool>,
+    pub must_support_equality: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "6")]
-    pub must_support_ordering: ::std::option::Option<bool>,
+    pub must_support_ordering: ::core::option::Option<bool>,
     #[prost(int64, optional, tag = "7")]
-    pub min_value: ::std::option::Option<i64>,
+    pub min_value: ::core::option::Option<i64>,
     #[prost(int64, optional, tag = "8")]
-    pub max_value: ::std::option::Option<i64>,
+    pub max_value: ::core::option::Option<i64>,
     #[prost(bool, optional, tag = "9")]
-    pub extra_relation_input_columns_allowed: ::std::option::Option<bool>,
+    pub extra_relation_input_columns_allowed: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "10")]
-    pub relation_input_schema: ::std::option::Option<TvfRelationProto>,
+    pub relation_input_schema: ::core::option::Option<TvfRelationProto>,
     #[prost(string, optional, tag = "11")]
-    pub argument_name: ::std::option::Option<std::string::String>,
+    pub argument_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "12")]
-    pub argument_name_parse_location: ::std::option::Option<ParseLocationRangeProto>,
+    pub argument_name_parse_location: ::core::option::Option<ParseLocationRangeProto>,
     #[prost(message, optional, tag = "13")]
-    pub argument_type_parse_location: ::std::option::Option<ParseLocationRangeProto>,
+    pub argument_type_parse_location: ::core::option::Option<ParseLocationRangeProto>,
     #[prost(
         enumeration = "function_enums::ProcedureArgumentMode",
         optional,
         tag = "14"
     )]
-    pub procedure_argument_mode: ::std::option::Option<i32>,
+    pub procedure_argument_mode: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "15", default = "false")]
-    pub argument_name_is_mandatory: ::std::option::Option<bool>,
+    pub argument_name_is_mandatory: ::core::option::Option<bool>,
     #[prost(int32, optional, tag = "16", default = "-1")]
-    pub descriptor_resolution_table_offset: ::std::option::Option<i32>,
+    pub descriptor_resolution_table_offset: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "17")]
-    pub default_value: ::std::option::Option<ValueProto>,
+    pub default_value: ::core::option::Option<ValueProto>,
     /// Type of `default_value`. Only serialized for templated arguments. For fixed
     /// type arguments, deserialization of `default_value` relies on the
     /// `FunctionArgumentTypeProto.type` instead.  Only one of `default_value_type`
     /// or `FunctionArgumentTypeProto.type` will ever be set.
     #[prost(message, optional, tag = "18")]
-    pub default_value_type: ::std::option::Option<TypeProto>,
+    pub default_value_type: ::core::option::Option<TypeProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ArgumentTypeLambdaProto {
     #[prost(message, repeated, tag = "5")]
-    pub argument: ::std::vec::Vec<FunctionArgumentTypeProto>,
+    pub argument: ::prost::alloc::vec::Vec<FunctionArgumentTypeProto>,
     #[prost(message, optional, boxed, tag = "6")]
-    pub body: ::std::option::Option<::std::boxed::Box<FunctionArgumentTypeProto>>,
+    pub body: ::core::option::Option<::prost::alloc::boxed::Box<FunctionArgumentTypeProto>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionArgumentTypeProto {
     #[prost(enumeration = "SignatureArgumentKind", optional, tag = "1")]
-    pub kind: ::std::option::Option<i32>,
+    pub kind: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "2")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(int32, optional, tag = "4")]
-    pub num_occurrences: ::std::option::Option<i32>,
+    pub num_occurrences: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "3")]
-    pub options: ::std::option::Option<FunctionArgumentTypeOptionsProto>,
+    pub options: ::core::option::Option<FunctionArgumentTypeOptionsProto>,
     #[prost(message, optional, boxed, tag = "5")]
-    pub lambda: ::std::option::Option<::std::boxed::Box<ArgumentTypeLambdaProto>>,
+    pub lambda: ::core::option::Option<::prost::alloc::boxed::Box<ArgumentTypeLambdaProto>>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionSignatureOptionsProto {
     /// optional uint64 timestamp_modes = 1;  bitset<TimestampMode>
     #[prost(bool, optional, tag = "2", default = "false")]
-    pub is_deprecated: ::std::option::Option<bool>,
+    pub is_deprecated: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "3")]
-    pub additional_deprecation_warning: ::std::vec::Vec<FreestandingDeprecationWarning>,
+    pub additional_deprecation_warning: ::prost::alloc::vec::Vec<FreestandingDeprecationWarning>,
     #[prost(enumeration = "LanguageFeature", repeated, packed = "false", tag = "4")]
-    pub required_language_feature: ::std::vec::Vec<i32>,
+    pub required_language_feature: ::prost::alloc::vec::Vec<i32>,
     #[prost(bool, optional, tag = "5", default = "false")]
-    pub is_aliased_signature: ::std::option::Option<bool>,
+    pub is_aliased_signature: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionSignatureProto {
     #[prost(message, repeated, tag = "1")]
-    pub argument: ::std::vec::Vec<FunctionArgumentTypeProto>,
+    pub argument: ::prost::alloc::vec::Vec<FunctionArgumentTypeProto>,
     #[prost(message, optional, tag = "2")]
-    pub return_type: ::std::option::Option<FunctionArgumentTypeProto>,
+    pub return_type: ::core::option::Option<FunctionArgumentTypeProto>,
     #[prost(int64, optional, tag = "3")]
-    pub context_id: ::std::option::Option<i64>,
+    pub context_id: ::core::option::Option<i64>,
     #[prost(message, optional, tag = "4")]
-    pub options: ::std::option::Option<FunctionSignatureOptionsProto>,
+    pub options: ::core::option::Option<FunctionSignatureOptionsProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionOptionsProto {
     #[prost(bool, optional, tag = "1", default = "false")]
-    pub supports_over_clause: ::std::option::Option<bool>,
+    pub supports_over_clause: ::core::option::Option<bool>,
     #[prost(
         enumeration = "function_enums::WindowOrderSupport",
         optional,
         tag = "2",
         default = "OrderUnsupported"
     )]
-    pub window_ordering_support: ::std::option::Option<i32>,
+    pub window_ordering_support: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "3", default = "false")]
-    pub supports_window_framing: ::std::option::Option<bool>,
+    pub supports_window_framing: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "4", default = "true")]
-    pub arguments_are_coercible: ::std::option::Option<bool>,
+    pub arguments_are_coercible: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "5", default = "false")]
-    pub is_deprecated: ::std::option::Option<bool>,
+    pub is_deprecated: ::core::option::Option<bool>,
     #[prost(string, optional, tag = "6")]
-    pub alias_name: ::std::option::Option<std::string::String>,
+    pub alias_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "7")]
-    pub sql_name: ::std::option::Option<std::string::String>,
+    pub sql_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(bool, optional, tag = "8", default = "true")]
-    pub allow_external_usage: ::std::option::Option<bool>,
+    pub allow_external_usage: ::core::option::Option<bool>,
     #[prost(
         enumeration = "function_enums::Volatility",
         optional,
         tag = "9",
         default = "Immutable"
     )]
-    pub volatility: ::std::option::Option<i32>,
+    pub volatility: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "10", default = "false")]
-    pub supports_order_by: ::std::option::Option<bool>,
+    pub supports_order_by: ::core::option::Option<bool>,
     #[prost(
         enumeration = "LanguageFeature",
         repeated,
         packed = "false",
         tag = "11"
     )]
-    pub required_language_feature: ::std::vec::Vec<i32>,
+    pub required_language_feature: ::prost::alloc::vec::Vec<i32>,
     #[prost(bool, optional, tag = "12", default = "false")]
-    pub supports_limit: ::std::option::Option<bool>,
+    pub supports_limit: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "13", default = "false")]
-    pub supports_null_handling_modifier: ::std::option::Option<bool>,
+    pub supports_null_handling_modifier: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "14", default = "true")]
-    pub supports_safe_error_mode: ::std::option::Option<bool>,
+    pub supports_safe_error_mode: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "15", default = "true")]
-    pub supports_having_modifier: ::std::option::Option<bool>,
+    pub supports_having_modifier: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "17", default = "true")]
-    pub uses_upper_case_sql_name: ::std::option::Option<bool>,
+    pub uses_upper_case_sql_name: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FunctionProto {
     #[prost(string, repeated, tag = "1")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "2")]
-    pub group: ::std::option::Option<std::string::String>,
+    pub group: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(enumeration = "function_enums::Mode", optional, tag = "3")]
-    pub mode: ::std::option::Option<i32>,
+    pub mode: ::core::option::Option<i32>,
     #[prost(message, repeated, tag = "4")]
-    pub signature: ::std::vec::Vec<FunctionSignatureProto>,
+    pub signature: ::prost::alloc::vec::Vec<FunctionSignatureProto>,
     #[prost(message, optional, tag = "5")]
-    pub options: ::std::option::Option<FunctionOptionsProto>,
+    pub options: ::core::option::Option<FunctionOptionsProto>,
     #[prost(message, optional, tag = "8")]
-    pub parse_resume_location: ::std::option::Option<ParseResumeLocationProto>,
+    pub parse_resume_location: ::core::option::Option<ParseResumeLocationProto>,
     #[prost(string, repeated, tag = "7")]
-    pub templated_sql_function_argument_name: ::std::vec::Vec<std::string::String>,
+    pub templated_sql_function_argument_name:
+        ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Nothing in here for now.
 /// TODO: add extra fields in here for derived context objects.
@@ -1427,57 +1431,57 @@ pub struct ResolvedFunctionCallInfoProto {}
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TableValuedFunctionProto {
     #[prost(string, repeated, tag = "1")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
     #[prost(
         enumeration = "function_enums::TableValuedFunctionType",
         optional,
         tag = "3"
     )]
-    pub r#type: ::std::option::Option<i32>,
+    pub r#type: ::core::option::Option<i32>,
     #[prost(enumeration = "function_enums::Volatility", optional, tag = "8")]
-    pub volatility: ::std::option::Option<i32>,
+    pub volatility: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "6")]
-    pub parse_resume_location: ::std::option::Option<ParseResumeLocationProto>,
+    pub parse_resume_location: ::core::option::Option<ParseResumeLocationProto>,
     #[prost(string, repeated, tag = "5")]
-    pub argument_name: ::std::vec::Vec<std::string::String>,
+    pub argument_name: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "7")]
-    pub custom_context: ::std::option::Option<std::string::String>,
+    pub custom_context: ::core::option::Option<::prost::alloc::string::String>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfArgumentProto {
     #[prost(message, optional, tag = "1")]
-    pub scalar_argument: ::std::option::Option<ValueWithTypeProto>,
+    pub scalar_argument: ::core::option::Option<ValueWithTypeProto>,
     #[prost(message, optional, tag = "2")]
-    pub relation_argument: ::std::option::Option<TvfRelationProto>,
+    pub relation_argument: ::core::option::Option<TvfRelationProto>,
     #[prost(message, optional, tag = "3")]
-    pub model_argument: ::std::option::Option<TvfModelProto>,
+    pub model_argument: ::core::option::Option<TvfModelProto>,
     #[prost(message, optional, tag = "4")]
-    pub connection_argument: ::std::option::Option<TvfConnectionProto>,
+    pub connection_argument: ::core::option::Option<TvfConnectionProto>,
     #[prost(message, optional, tag = "5")]
-    pub descriptor_argument: ::std::option::Option<TvfDescriptorProto>,
+    pub descriptor_argument: ::core::option::Option<TvfDescriptorProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfSignatureOptionsProto {
     #[prost(message, repeated, tag = "1")]
-    pub additional_deprecation_warning: ::std::vec::Vec<FreestandingDeprecationWarning>,
+    pub additional_deprecation_warning: ::prost::alloc::vec::Vec<FreestandingDeprecationWarning>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct TvfSignatureProto {
     #[prost(message, repeated, tag = "1")]
-    pub argument: ::std::vec::Vec<TvfArgumentProto>,
+    pub argument: ::prost::alloc::vec::Vec<TvfArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub output_schema: ::std::option::Option<TvfRelationProto>,
+    pub output_schema: ::core::option::Option<TvfRelationProto>,
     #[prost(message, optional, tag = "3")]
-    pub options: ::std::option::Option<TvfSignatureOptionsProto>,
+    pub options: ::core::option::Option<TvfSignatureOptionsProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ProcedureProto {
     #[prost(string, repeated, tag = "1")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
 }
 /// A unique ID for ZetaSQL function signatures.  Resolved ZetaSQL functions
 /// will provide one of these enums, and ZetaSQL implementations should map
@@ -1507,7 +1511,7 @@ pub enum FunctionSignatureId {
     // 1900-1999 Hashing/encryption functions  (NextId: 1924)
     // 2000-2199 Geography functions           (NextId: 2068)
     // 2300-2499 More math functions           (NextId: 2314)
-    // 2500-2599 AnyArray functions               (NextId: 2504)
+    // 2500-2599 Array functions               (NextId: 2504)
     /// enum value                       // Related function name
     /// ----------                       // ---------------------
     ///
@@ -2838,7 +2842,7 @@ pub enum FunctionSignatureId {
     FnStX = 2070,
     FnStY = 2071,
     FnStClusterdbscan = 2066,
-    /// AnyArray functions.
+    /// Array functions.
     ///
     /// flatten(array path) -> array
     FnFlatten = 2500,
@@ -3030,73 +3034,75 @@ pub enum ResolvedNodeKind {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ZetaSqlBuiltinFunctionOptionsProto {
     #[prost(message, optional, tag = "1")]
-    pub language_options: ::std::option::Option<LanguageOptionsProto>,
+    pub language_options: ::core::option::Option<LanguageOptionsProto>,
     #[prost(
         enumeration = "FunctionSignatureId",
         repeated,
         packed = "false",
         tag = "2"
     )]
-    pub include_function_ids: ::std::vec::Vec<i32>,
+    pub include_function_ids: ::prost::alloc::vec::Vec<i32>,
     #[prost(
         enumeration = "FunctionSignatureId",
         repeated,
         packed = "false",
         tag = "3"
     )]
-    pub exclude_function_ids: ::std::vec::Vec<i32>,
+    pub exclude_function_ids: ::prost::alloc::vec::Vec<i32>,
 }
 /// Serialized form of LanguageOptions.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct LanguageOptionsProto {
     #[prost(enumeration = "NameResolutionMode", optional, tag = "2")]
-    pub name_resolution_mode: ::std::option::Option<i32>,
+    pub name_resolution_mode: ::core::option::Option<i32>,
     #[prost(enumeration = "ProductMode", optional, tag = "3")]
-    pub product_mode: ::std::option::Option<i32>,
+    pub product_mode: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "4")]
-    pub error_on_deprecated_syntax: ::std::option::Option<bool>,
+    pub error_on_deprecated_syntax: ::core::option::Option<bool>,
     #[prost(enumeration = "LanguageFeature", repeated, packed = "false", tag = "5")]
-    pub enabled_language_features: ::std::vec::Vec<i32>,
+    pub enabled_language_features: ::prost::alloc::vec::Vec<i32>,
     #[prost(
         enumeration = "ResolvedNodeKind",
         repeated,
         packed = "false",
         tag = "6"
     )]
-    pub supported_statement_kinds: ::std::vec::Vec<i32>,
+    pub supported_statement_kinds: ::prost::alloc::vec::Vec<i32>,
     #[prost(string, repeated, tag = "7")]
-    pub supported_generic_entity_types: ::std::vec::Vec<std::string::String>,
+    pub supported_generic_entity_types: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Serialized form of AllowedHintsAndOptions.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AllowedHintsAndOptionsProto {
     #[prost(bool, optional, tag = "1")]
-    pub disallow_unknown_options: ::std::option::Option<bool>,
+    pub disallow_unknown_options: ::core::option::Option<bool>,
     #[prost(string, repeated, tag = "2")]
-    pub disallow_unknown_hints_with_qualifier: ::std::vec::Vec<std::string::String>,
+    pub disallow_unknown_hints_with_qualifier:
+        ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "3")]
-    pub hint: ::std::vec::Vec<allowed_hints_and_options_proto::HintProto>,
+    pub hint: ::prost::alloc::vec::Vec<allowed_hints_and_options_proto::HintProto>,
     #[prost(message, repeated, tag = "4")]
-    pub option: ::std::vec::Vec<allowed_hints_and_options_proto::OptionProto>,
+    pub option: ::prost::alloc::vec::Vec<allowed_hints_and_options_proto::OptionProto>,
 }
+/// Nested message and enum types in `AllowedHintsAndOptionsProto`.
 pub mod allowed_hints_and_options_proto {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct HintProto {
         #[prost(string, optional, tag = "1")]
-        pub qualifier: ::std::option::Option<std::string::String>,
+        pub qualifier: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(string, optional, tag = "2")]
-        pub name: ::std::option::Option<std::string::String>,
+        pub name: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "3")]
-        pub r#type: ::std::option::Option<super::TypeProto>,
+        pub r#type: ::core::option::Option<super::TypeProto>,
         #[prost(bool, optional, tag = "4")]
-        pub allow_unqualified: ::std::option::Option<bool>,
+        pub allow_unqualified: ::core::option::Option<bool>,
     }
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct OptionProto {
         #[prost(string, optional, tag = "1")]
-        pub name: ::std::option::Option<std::string::String>,
+        pub name: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "2")]
-        pub r#type: ::std::option::Option<super::TypeProto>,
+        pub r#type: ::core::option::Option<super::TypeProto>,
     }
 }
 /// Serialized form of AnalyzerOptions.
@@ -3104,151 +3110,154 @@ pub mod allowed_hints_and_options_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzerOptionsProto {
     #[prost(message, optional, tag = "1")]
-    pub language_options: ::std::option::Option<LanguageOptionsProto>,
+    pub language_options: ::core::option::Option<LanguageOptionsProto>,
     #[prost(message, repeated, tag = "2")]
-    pub query_parameters: ::std::vec::Vec<analyzer_options_proto::QueryParameterProto>,
+    pub query_parameters: ::prost::alloc::vec::Vec<analyzer_options_proto::QueryParameterProto>,
     #[prost(message, repeated, tag = "12")]
-    pub positional_query_parameters: ::std::vec::Vec<TypeProto>,
+    pub positional_query_parameters: ::prost::alloc::vec::Vec<TypeProto>,
     #[prost(message, repeated, tag = "3")]
-    pub expression_columns: ::std::vec::Vec<analyzer_options_proto::QueryParameterProto>,
+    pub expression_columns: ::prost::alloc::vec::Vec<analyzer_options_proto::QueryParameterProto>,
     #[prost(message, optional, tag = "4")]
     pub in_scope_expression_column:
-        ::std::option::Option<analyzer_options_proto::QueryParameterProto>,
+        ::core::option::Option<analyzer_options_proto::QueryParameterProto>,
     #[prost(message, repeated, tag = "15")]
-    pub ddl_pseudo_columns: ::std::vec::Vec<analyzer_options_proto::QueryParameterProto>,
+    pub ddl_pseudo_columns: ::prost::alloc::vec::Vec<analyzer_options_proto::QueryParameterProto>,
     /// base::SequenceNumber does not support getting and setting the current
     /// value, so it is not serializable. Reserving tag number 5 in case we want
     /// to support it in some other way later.
     #[prost(enumeration = "ErrorMessageMode", optional, tag = "6")]
-    pub error_message_mode: ::std::option::Option<i32>,
+    pub error_message_mode: ::core::option::Option<i32>,
     /// In the form that can be parsed by C++ absl::LoadTimeZone().
     #[prost(string, optional, tag = "7")]
-    pub default_timezone: ::std::option::Option<std::string::String>,
+    pub default_timezone: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(bool, optional, tag = "8")]
-    pub record_parse_locations: ::std::option::Option<bool>,
+    pub record_parse_locations: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "20")]
-    pub create_new_column_for_each_projected_output: ::std::option::Option<bool>,
+    pub create_new_column_for_each_projected_output: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "9")]
-    pub prune_unused_columns: ::std::option::Option<bool>,
+    pub prune_unused_columns: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "10")]
-    pub allow_undeclared_parameters: ::std::option::Option<bool>,
+    pub allow_undeclared_parameters: ::core::option::Option<bool>,
     #[prost(enumeration = "ParameterMode", optional, tag = "13")]
-    pub parameter_mode: ::std::option::Option<i32>,
+    pub parameter_mode: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "11")]
-    pub allowed_hints_and_options: ::std::option::Option<AllowedHintsAndOptionsProto>,
+    pub allowed_hints_and_options: ::core::option::Option<AllowedHintsAndOptionsProto>,
     #[prost(enumeration = "StatementContext", optional, tag = "14")]
-    pub statement_context: ::std::option::Option<i32>,
+    pub statement_context: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "17")]
-    pub preserve_column_aliases: ::std::option::Option<bool>,
+    pub preserve_column_aliases: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "18")]
-    pub system_variables: ::std::vec::Vec<analyzer_options_proto::SystemVariableProto>,
+    pub system_variables: ::prost::alloc::vec::Vec<analyzer_options_proto::SystemVariableProto>,
     #[prost(message, repeated, tag = "19")]
-    pub target_column_types: ::std::vec::Vec<TypeProto>,
+    pub target_column_types: ::prost::alloc::vec::Vec<TypeProto>,
     #[prost(
         enumeration = "ResolvedAstRewrite",
         repeated,
         packed = "false",
         tag = "21"
     )]
-    pub enabled_rewrites: ::std::vec::Vec<i32>,
+    pub enabled_rewrites: ::prost::alloc::vec::Vec<i32>,
 }
+/// Nested message and enum types in `AnalyzerOptionsProto`.
 pub mod analyzer_options_proto {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct QueryParameterProto {
         #[prost(string, optional, tag = "1")]
-        pub name: ::std::option::Option<std::string::String>,
+        pub name: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "2")]
-        pub r#type: ::std::option::Option<super::TypeProto>,
+        pub r#type: ::core::option::Option<super::TypeProto>,
     }
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct SystemVariableProto {
         #[prost(string, repeated, tag = "1")]
-        pub name_path: ::std::vec::Vec<std::string::String>,
+        pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "2")]
-        pub r#type: ::std::option::Option<super::TypeProto>,
+        pub r#type: ::core::option::Option<super::TypeProto>,
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimpleConstantProto {
     #[prost(string, repeated, tag = "1")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(message, optional, tag = "3")]
-    pub value: ::std::option::Option<ValueProto>,
+    pub value: ::core::option::Option<ValueProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimpleTableProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, optional, tag = "2")]
-    pub serialization_id: ::std::option::Option<i64>,
+    pub serialization_id: ::core::option::Option<i64>,
     #[prost(bool, optional, tag = "3")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "4")]
-    pub column: ::std::vec::Vec<SimpleColumnProto>,
+    pub column: ::prost::alloc::vec::Vec<SimpleColumnProto>,
     #[prost(int32, repeated, packed = "false", tag = "9")]
-    pub primary_key_column_index: ::std::vec::Vec<i32>,
+    pub primary_key_column_index: ::prost::alloc::vec::Vec<i32>,
     /// Alias name of the table when it is added to the parent catalog.  This is
     /// only set when the Table is added to the Catalog using a different name
     /// than the Table's name.  This name is not part of the SimpleTable, but
     /// will be used as the Table's name in the Catalog.
     #[prost(string, optional, tag = "5")]
-    pub name_in_catalog: ::std::option::Option<std::string::String>,
+    pub name_in_catalog: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(bool, optional, tag = "6")]
-    pub allow_anonymous_column_name: ::std::option::Option<bool>,
+    pub allow_anonymous_column_name: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "7")]
-    pub allow_duplicate_column_names: ::std::option::Option<bool>,
+    pub allow_duplicate_column_names: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimpleColumnProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "2")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(bool, optional, tag = "3")]
-    pub is_pseudo_column: ::std::option::Option<bool>,
+    pub is_pseudo_column: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "4", default = "true")]
-    pub is_writable_column: ::std::option::Option<bool>,
+    pub is_writable_column: ::core::option::Option<bool>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct SimpleCatalogProto {
     #[prost(string, optional, tag = "1")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "2")]
-    pub table: ::std::vec::Vec<SimpleTableProto>,
+    pub table: ::prost::alloc::vec::Vec<SimpleTableProto>,
     #[prost(message, repeated, tag = "3")]
-    pub named_type: ::std::vec::Vec<simple_catalog_proto::NamedTypeProto>,
+    pub named_type: ::prost::alloc::vec::Vec<simple_catalog_proto::NamedTypeProto>,
     #[prost(message, repeated, tag = "4")]
-    pub catalog: ::std::vec::Vec<SimpleCatalogProto>,
+    pub catalog: ::prost::alloc::vec::Vec<SimpleCatalogProto>,
     /// Specify built-in functions to load.
     #[prost(message, optional, tag = "5")]
-    pub builtin_function_options: ::std::option::Option<ZetaSqlBuiltinFunctionOptionsProto>,
+    pub builtin_function_options: ::core::option::Option<ZetaSqlBuiltinFunctionOptionsProto>,
     #[prost(message, repeated, tag = "6")]
-    pub custom_function: ::std::vec::Vec<FunctionProto>,
+    pub custom_function: ::prost::alloc::vec::Vec<FunctionProto>,
     #[prost(message, repeated, tag = "9")]
-    pub custom_tvf: ::std::vec::Vec<TableValuedFunctionProto>,
+    pub custom_tvf: ::prost::alloc::vec::Vec<TableValuedFunctionProto>,
     /// The index of the FileDescriptorSet in the top-level request proto.
     /// If set, SimpleCatalog::SetDescriptorPool will be called with the
     /// DescriptorPool deserialized from the referred FileDescriptorSet.
     #[prost(int32, optional, tag = "7", default = "-1")]
-    pub file_descriptor_set_index: ::std::option::Option<i32>,
+    pub file_descriptor_set_index: ::core::option::Option<i32>,
     #[prost(message, repeated, tag = "8")]
-    pub procedure: ::std::vec::Vec<ProcedureProto>,
+    pub procedure: ::prost::alloc::vec::Vec<ProcedureProto>,
     #[prost(message, repeated, tag = "10")]
-    pub constant: ::std::vec::Vec<SimpleConstantProto>,
+    pub constant: ::prost::alloc::vec::Vec<SimpleConstantProto>,
 }
+/// Nested message and enum types in `SimpleCatalogProto`.
 pub mod simple_catalog_proto {
     #[derive(Clone, PartialEq, ::prost::Message)]
     pub struct NamedTypeProto {
         #[prost(string, optional, tag = "1")]
-        pub name: ::std::option::Option<std::string::String>,
+        pub name: ::core::option::Option<::prost::alloc::string::String>,
         #[prost(message, optional, tag = "2")]
-        pub r#type: ::std::option::Option<super::TypeProto>,
+        pub r#type: ::core::option::Option<super::TypeProto>,
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct FieldFormat {}
+/// Nested message and enum types in `FieldFormat`.
 pub mod field_format {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3334,6 +3343,7 @@ pub mod field_format {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct DeprecatedEncoding {}
+/// Nested message and enum types in `DeprecatedEncoding`.
 pub mod deprecated_encoding {
     /// DEPRECATED - Encoding has been folded into the Type enum above.
     /// This should not be used directly.
@@ -3360,18 +3370,20 @@ pub mod deprecated_encoding {
 
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSubqueryExprEnums {}
+/// Nested message and enum types in `ResolvedSubqueryExprEnums`.
 pub mod resolved_subquery_expr_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
     pub enum SubqueryType {
         Scalar = 0,
-        AnyArray = 1,
+        Array = 1,
         Exists = 2,
         In = 3,
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedJoinScanEnums {}
+/// Nested message and enum types in `ResolvedJoinScanEnums`.
 pub mod resolved_join_scan_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3384,6 +3396,7 @@ pub mod resolved_join_scan_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSetOperationScanEnums {}
+/// Nested message and enum types in `ResolvedSetOperationScanEnums`.
 pub mod resolved_set_operation_scan_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3398,6 +3411,7 @@ pub mod resolved_set_operation_scan_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRecursiveScanEnums {}
+/// Nested message and enum types in `ResolvedRecursiveScanEnums`.
 pub mod resolved_recursive_scan_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3408,6 +3422,7 @@ pub mod resolved_recursive_scan_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSampleScanEnums {}
+/// Nested message and enum types in `ResolvedSampleScanEnums`.
 pub mod resolved_sample_scan_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3418,6 +3433,7 @@ pub mod resolved_sample_scan_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedOrderByItemEnums {}
+/// Nested message and enum types in `ResolvedOrderByItemEnums`.
 pub mod resolved_order_by_item_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3429,6 +3445,7 @@ pub mod resolved_order_by_item_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateStatementEnums {}
+/// Nested message and enum types in `ResolvedCreateStatementEnums`.
 pub mod resolved_create_statement_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3465,6 +3482,7 @@ pub mod resolved_create_statement_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDropStmtEnums {}
+/// Nested message and enum types in `ResolvedDropStmtEnums`.
 pub mod resolved_drop_stmt_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3476,6 +3494,7 @@ pub mod resolved_drop_stmt_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedBeginStmtEnums {}
+/// Nested message and enum types in `ResolvedBeginStmtEnums`.
 pub mod resolved_begin_stmt_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3487,6 +3506,7 @@ pub mod resolved_begin_stmt_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWindowFrameEnums {}
+/// Nested message and enum types in `ResolvedWindowFrameEnums`.
 pub mod resolved_window_frame_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3497,6 +3517,7 @@ pub mod resolved_window_frame_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWindowFrameExprEnums {}
+/// Nested message and enum types in `ResolvedWindowFrameExprEnums`.
 pub mod resolved_window_frame_expr_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3510,6 +3531,7 @@ pub mod resolved_window_frame_expr_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedInsertStmtEnums {}
+/// Nested message and enum types in `ResolvedInsertStmtEnums`.
 pub mod resolved_insert_stmt_enums {
     /// This defines the behavior of INSERT when there are duplicate rows.
     /// "Duplicate" generally mean rows with identical primary keys.
@@ -3528,6 +3550,7 @@ pub mod resolved_insert_stmt_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedMergeWhenEnums {}
+/// Nested message and enum types in `ResolvedMergeWhenEnums`.
 pub mod resolved_merge_when_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3551,6 +3574,7 @@ pub mod resolved_merge_when_enums {
 /// hack in gen_resolved_ast.py.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedArgumentDefEnums {}
+/// Nested message and enum types in `ResolvedArgumentDefEnums`.
 pub mod resolved_argument_def_enums {
     /// This describes the type of argument in a CREATE FUNCTION signature.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -3566,6 +3590,7 @@ pub mod resolved_argument_def_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFunctionCallBaseEnums {}
+/// Nested message and enum types in `ResolvedFunctionCallBaseEnums`.
 pub mod resolved_function_call_base_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3578,6 +3603,7 @@ pub mod resolved_function_call_base_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedNonScalarFunctionCallBaseEnums {}
+/// Nested message and enum types in `ResolvedNonScalarFunctionCallBaseEnums`.
 pub mod resolved_non_scalar_function_call_base_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3590,6 +3616,7 @@ pub mod resolved_non_scalar_function_call_base_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAggregateHavingModifierEnums {}
+/// Nested message and enum types in `ResolvedAggregateHavingModifierEnums`.
 pub mod resolved_aggregate_having_modifier_enums {
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
     #[repr(i32)]
@@ -3601,6 +3628,7 @@ pub mod resolved_aggregate_having_modifier_enums {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedStatementEnums {}
+/// Nested message and enum types in `ResolvedStatementEnums`.
 pub mod resolved_statement_enums {
     /// This describes the set of operations performed on objects.
     /// It is currently only used for ResolvedColumns.
@@ -3622,6 +3650,7 @@ pub mod resolved_statement_enums {
 /// LINT: LEGACY_NAMES
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedImportStmtEnums {}
+/// Nested message and enum types in `ResolvedImportStmtEnums`.
 pub mod resolved_import_stmt_enums {
     /// This describes the type of object imported in an IMPORT statement.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -3640,6 +3669,7 @@ pub mod resolved_import_stmt_enums {
 /// attributes.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedForeignKeyEnums {}
+/// Nested message and enum types in `ResolvedForeignKeyEnums`.
 pub mod resolved_foreign_key_enums {
     /// FOREIGN KEY (a) REFERENCES t (r) MATCH <MatchMode>.
     #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
@@ -3664,8 +3694,9 @@ pub mod resolved_foreign_key_enums {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnyResolvedNodeProto {
     #[prost(oneof = "any_resolved_node_proto::Node", tags = "1, 2, 18, 36")]
-    pub node: ::std::option::Option<any_resolved_node_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_node_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedNodeProto`.
 pub mod any_resolved_node_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -3689,8 +3720,9 @@ pub struct AnyResolvedArgumentProto {
         oneof = "any_resolved_argument_proto::Node",
         tags = "14, 23, 32, 33, 34, 52, 53, 54, 55, 56, 57, 58, 59, 61, 62, 65, 67, 77, 79, 82, 84, 85, 91, 92, 93, 94, 96, 100, 102, 104, 105, 109, 110, 113, 116, 126, 128, 141, 143, 144, 151, 153, 158, 159"
     )]
-    pub node: ::std::option::Option<any_resolved_argument_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_argument_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedArgumentProto`.
 pub mod any_resolved_argument_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -3787,7 +3819,7 @@ pub mod any_resolved_argument_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedArgumentProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedNodeProto>,
+    pub parent: ::core::option::Option<ResolvedNodeProto>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnyResolvedExprProto {
@@ -3795,8 +3827,9 @@ pub struct AnyResolvedExprProto {
         oneof = "any_resolved_expr_proto::Node",
         tags = "3, 4, 5, 6, 7, 11, 12, 13, 15, 16, 17, 60, 78, 103, 129, 139, 149, 150"
     )]
-    pub node: ::std::option::Option<any_resolved_expr_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_expr_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedExprProto`.
 pub mod any_resolved_expr_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -3809,19 +3842,21 @@ pub mod any_resolved_expr_proto {
         #[prost(message, tag = "6")]
         ResolvedColumnRefNode(super::ResolvedColumnRefProto),
         #[prost(message, tag = "7")]
-        ResolvedFunctionCallBaseNode(Box<super::AnyResolvedFunctionCallBaseProto>),
+        ResolvedFunctionCallBaseNode(
+            ::prost::alloc::boxed::Box<super::AnyResolvedFunctionCallBaseProto>,
+        ),
         #[prost(message, tag = "11")]
-        ResolvedCastNode(Box<super::ResolvedCastProto>),
+        ResolvedCastNode(::prost::alloc::boxed::Box<super::ResolvedCastProto>),
         #[prost(message, tag = "12")]
         ResolvedMakeStructNode(super::ResolvedMakeStructProto),
         #[prost(message, tag = "13")]
         ResolvedMakeProtoNode(super::ResolvedMakeProtoProto),
         #[prost(message, tag = "15")]
-        ResolvedGetStructFieldNode(Box<super::ResolvedGetStructFieldProto>),
+        ResolvedGetStructFieldNode(::prost::alloc::boxed::Box<super::ResolvedGetStructFieldProto>),
         #[prost(message, tag = "16")]
-        ResolvedGetProtoFieldNode(Box<super::ResolvedGetProtoFieldProto>),
+        ResolvedGetProtoFieldNode(::prost::alloc::boxed::Box<super::ResolvedGetProtoFieldProto>),
         #[prost(message, tag = "17")]
-        ResolvedSubqueryExprNode(Box<super::ResolvedSubqueryExprProto>),
+        ResolvedSubqueryExprNode(::prost::alloc::boxed::Box<super::ResolvedSubqueryExprProto>),
         #[prost(message, tag = "60")]
         ResolvedDmldefaultNode(super::ResolvedDmlDefaultProto),
         #[prost(message, tag = "78")]
@@ -3829,11 +3864,11 @@ pub mod any_resolved_expr_proto {
         #[prost(message, tag = "103")]
         ResolvedConstantNode(super::ResolvedConstantProto),
         #[prost(message, tag = "129")]
-        ResolvedReplaceFieldNode(Box<super::ResolvedReplaceFieldProto>),
+        ResolvedReplaceFieldNode(::prost::alloc::boxed::Box<super::ResolvedReplaceFieldProto>),
         #[prost(message, tag = "139")]
         ResolvedSystemVariableNode(super::ResolvedSystemVariableProto),
         #[prost(message, tag = "149")]
-        ResolvedFlattenNode(Box<super::ResolvedFlattenProto>),
+        ResolvedFlattenNode(::prost::alloc::boxed::Box<super::ResolvedFlattenProto>),
         #[prost(message, tag = "150")]
         ResolvedFlattenedArgNode(super::ResolvedFlattenedArgProto),
     }
@@ -3841,9 +3876,9 @@ pub mod any_resolved_expr_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExprProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedNodeProto>,
+    pub parent: ::core::option::Option<ResolvedNodeProto>,
     #[prost(message, optional, tag = "2")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
 }
 /// Any literal value, including NULL literals.
 /// There is a special-cased constructor here that gets the type from the
@@ -3851,46 +3886,46 @@ pub struct ResolvedExprProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedLiteralProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, optional, tag = "2")]
-    pub value: ::std::option::Option<ValueWithTypeProto>,
+    pub value: ::core::option::Option<ValueWithTypeProto>,
     /// If true, then the literal is explicitly typed and cannot be used
     /// for literal coercions.
     ///
     /// This exists mainly for resolver bookkeeping and should be ignored
     /// by engines.
     #[prost(bool, optional, tag = "3")]
-    pub has_explicit_type: ::std::option::Option<bool>,
+    pub has_explicit_type: ::core::option::Option<bool>,
     /// Distinct ID of the literal, if it is a floating point value,
     /// within the resolved AST. When coercing from floating point
     /// to NUMERIC, the resolver uses the float_literal_id to find the
     /// original image of the literal to avoid precision loss. An ID of 0
     /// represents a literal without a cached image.
     #[prost(int64, optional, tag = "4")]
-    pub float_literal_id: ::std::option::Option<i64>,
+    pub float_literal_id: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedParameterProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     /// If non-empty, the name of the parameter.
     ///
     /// A ResolvedParameter will have either a name or a position but not
     /// both.
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// If non-zero, the 1-based position of the positional parameter.
     ///
     /// A ResolvedParameter will have either a name or a position but not
     /// both.
     #[prost(int64, optional, tag = "5")]
-    pub position: ::std::option::Option<i64>,
+    pub position: ::core::option::Option<i64>,
     /// If true, then the parameter has no specified type.
     ///
     /// This exists mainly for resolver bookkeeping and should be ignored
     /// by engines.
     #[prost(bool, optional, tag = "3")]
-    pub is_untyped: ::std::option::Option<bool>,
+    pub is_untyped: ::core::option::Option<bool>,
 }
 /// This represents a column when analyzing a standalone expression.
 /// This is only used when the analyzer was called using AnalyzeExpression.
@@ -3900,9 +3935,9 @@ pub struct ResolvedParameterProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExpressionColumnProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// An expression referencing the value of some column visible in the
 /// current Scan node.
@@ -3918,29 +3953,29 @@ pub struct ResolvedExpressionColumnProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedColumnRefProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, optional, tag = "2")]
-    pub column: ::std::option::Option<ResolvedColumnProto>,
+    pub column: ::core::option::Option<ResolvedColumnProto>,
     #[prost(bool, optional, tag = "3")]
-    pub is_correlated: ::std::option::Option<bool>,
+    pub is_correlated: ::core::option::Option<bool>,
 }
 /// A reference to a named constant.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedConstantProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     /// The matching Constant from the Catalog.
     #[prost(message, optional, tag = "2")]
-    pub constant: ::std::option::Option<ConstantRefProto>,
+    pub constant: ::core::option::Option<ConstantRefProto>,
 }
 /// A reference to a system variable.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSystemVariableProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     /// Path to system variable.
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// A lambda expression, used inline as a function argument.
 /// This represents both the definition of the lambda and the resolution of
@@ -3968,13 +4003,13 @@ pub struct ResolvedSystemVariableProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedInlineLambdaProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub argument_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub argument_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, repeated, tag = "3")]
-    pub parameter_list: ::std::vec::Vec<ResolvedColumnRefProto>,
+    pub parameter_list: ::prost::alloc::vec::Vec<ResolvedColumnRefProto>,
     #[prost(message, optional, tag = "4")]
-    pub body: ::std::option::Option<AnyResolvedExprProto>,
+    pub body: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// Common base class for scalar and aggregate function calls.
 ///
@@ -3991,8 +4026,9 @@ pub struct ResolvedInlineLambdaProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnyResolvedFunctionCallBaseProto {
     #[prost(oneof = "any_resolved_function_call_base_proto::Node", tags = "8, 86")]
-    pub node: ::std::option::Option<any_resolved_function_call_base_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_function_call_base_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedFunctionCallBaseProto`.
 pub mod any_resolved_function_call_base_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -4000,28 +4036,28 @@ pub mod any_resolved_function_call_base_proto {
         ResolvedFunctionCallNode(super::ResolvedFunctionCallProto),
         #[prost(message, tag = "86")]
         ResolvedNonScalarFunctionCallBaseNode(
-            Box<super::AnyResolvedNonScalarFunctionCallBaseProto>,
+            ::prost::alloc::boxed::Box<super::AnyResolvedNonScalarFunctionCallBaseProto>,
         ),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFunctionCallBaseProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     /// The matching Function from the Catalog.
     #[prost(message, optional, tag = "2")]
-    pub function: ::std::option::Option<FunctionRefProto>,
+    pub function: ::core::option::Option<FunctionRefProto>,
     /// The concrete FunctionSignature reflecting the matching Function
     /// signature and the function's resolved input <argument_list>.
     /// The function has the mode AGGREGATE iff it is an aggregate
     /// function, in which case this node must be either
     /// ResolvedAggregateFunctionCall or ResolvedAnalyticFunctionCall.
     #[prost(message, optional, tag = "3")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
     #[prost(message, repeated, tag = "4")]
-    pub argument_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub argument_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "6")]
-    pub generic_argument_list: ::std::vec::Vec<ResolvedFunctionArgumentProto>,
+    pub generic_argument_list: ::prost::alloc::vec::Vec<ResolvedFunctionArgumentProto>,
     /// If error_mode=SAFE_ERROR_MODE, and if this function call returns a
     /// semantic error (based on input data, not transient server
     /// problems), return NULL instead of an error. This is used for
@@ -4031,17 +4067,17 @@ pub struct ResolvedFunctionCallBaseProto {
         optional,
         tag = "5"
     )]
-    pub error_mode: ::std::option::Option<i32>,
+    pub error_mode: ::core::option::Option<i32>,
     /// Function call hints.
     #[prost(message, repeated, tag = "7")]
-    pub hint_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub hint_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// A regular function call.  The signature will always have mode SCALAR.
 /// Most scalar expressions show up as FunctionCalls using builtin signatures.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFunctionCallProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedFunctionCallBaseProto>,
+    pub parent: ::core::option::Option<ResolvedFunctionCallBaseProto>,
     /// This contains optional custom information about a particular
     /// function call.
     ///
@@ -4055,7 +4091,7 @@ pub struct ResolvedFunctionCallProto {
     /// there is no extra information to consider besides the arguments
     /// and other fields from ResolvedFunctionCallBase.
     #[prost(message, optional, tag = "2")]
-    pub function_call_info: ::std::option::Option<ResolvedFunctionCallInfoProto>,
+    pub function_call_info: ::core::option::Option<ResolvedFunctionCallInfoProto>,
 }
 /// Common base class for scalar and aggregate function calls.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -4064,25 +4100,30 @@ pub struct AnyResolvedNonScalarFunctionCallBaseProto {
         oneof = "any_resolved_non_scalar_function_call_base_proto::Node",
         tags = "9, 10"
     )]
-    pub node: ::std::option::Option<any_resolved_non_scalar_function_call_base_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_non_scalar_function_call_base_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedNonScalarFunctionCallBaseProto`.
 pub mod any_resolved_non_scalar_function_call_base_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
         #[prost(message, tag = "9")]
-        ResolvedAggregateFunctionCallNode(Box<super::ResolvedAggregateFunctionCallProto>),
+        ResolvedAggregateFunctionCallNode(
+            ::prost::alloc::boxed::Box<super::ResolvedAggregateFunctionCallProto>,
+        ),
         #[prost(message, tag = "10")]
-        ResolvedAnalyticFunctionCallNode(Box<super::ResolvedAnalyticFunctionCallProto>),
+        ResolvedAnalyticFunctionCallNode(
+            ::prost::alloc::boxed::Box<super::ResolvedAnalyticFunctionCallProto>,
+        ),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedNonScalarFunctionCallBaseProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedFunctionCallBaseProto>,
+    pub parent: ::core::option::Option<ResolvedFunctionCallBaseProto>,
     /// Apply DISTINCT to the stream of input values before calling
     /// function.
     #[prost(bool, optional, tag = "2")]
-    pub distinct: ::std::option::Option<bool>,
+    pub distinct: ::core::option::Option<bool>,
     /// Apply IGNORE/RESPECT NULLS filtering to the stream of input
     /// values.
     #[prost(
@@ -4090,7 +4131,7 @@ pub struct ResolvedNonScalarFunctionCallBaseProto {
         optional,
         tag = "3"
     )]
-    pub null_handling_modifier: ::std::option::Option<i32>,
+    pub null_handling_modifier: ::core::option::Option<i32>,
 }
 /// An aggregate function call.  The signature always has mode AGGREGATE.
 /// This node only ever shows up as the outer function call in a
@@ -4098,17 +4139,17 @@ pub struct ResolvedNonScalarFunctionCallBaseProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAggregateFunctionCallProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedNonScalarFunctionCallBaseProto>,
+    pub parent: ::core::option::Option<ResolvedNonScalarFunctionCallBaseProto>,
     /// Apply HAVING MAX/MIN filtering to the stream of input values.
     #[prost(message, optional, boxed, tag = "5")]
     pub having_modifier:
-        ::std::option::Option<::std::boxed::Box<ResolvedAggregateHavingModifierProto>>,
+        ::core::option::Option<::prost::alloc::boxed::Box<ResolvedAggregateHavingModifierProto>>,
     /// Apply ordering to the stream of input values before calling
     /// function.
     #[prost(message, repeated, tag = "3")]
-    pub order_by_item_list: ::std::vec::Vec<ResolvedOrderByItemProto>,
+    pub order_by_item_list: ::prost::alloc::vec::Vec<ResolvedOrderByItemProto>,
     #[prost(message, optional, boxed, tag = "4")]
-    pub limit: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub limit: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     /// This contains optional custom information about a particular
     /// function call. Functions may introduce subclasses of this class to
     /// add custom information as needed on a per-function basis.
@@ -4122,7 +4163,7 @@ pub struct ResolvedAggregateFunctionCallProto {
     /// fully-resolved function body in context of the actual concrete
     /// types of the arguments provided to the function call.
     #[prost(message, optional, tag = "6")]
-    pub function_call_info: ::std::option::Option<ResolvedFunctionCallInfoProto>,
+    pub function_call_info: ::core::option::Option<ResolvedFunctionCallInfoProto>,
 }
 /// An analytic function call. The mode of the function is either AGGREGATE
 /// or ANALYTIC. This node only ever shows up as a function call in a
@@ -4133,29 +4174,29 @@ pub struct ResolvedAggregateFunctionCallProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAnalyticFunctionCallProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedNonScalarFunctionCallBaseProto>,
+    pub parent: ::core::option::Option<ResolvedNonScalarFunctionCallBaseProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub window_frame: ::std::option::Option<::std::boxed::Box<ResolvedWindowFrameProto>>,
+    pub window_frame: ::core::option::Option<::prost::alloc::boxed::Box<ResolvedWindowFrameProto>>,
 }
 /// Describes a leaf extended cast of ResolvedExtendedCast. See the comment
 /// for element_list field of ResolvedExtendedCast for more details.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExtendedCastElementProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub from_type: ::std::option::Option<TypeProto>,
+    pub from_type: ::core::option::Option<TypeProto>,
     #[prost(message, optional, tag = "3")]
-    pub to_type: ::std::option::Option<TypeProto>,
+    pub to_type: ::core::option::Option<TypeProto>,
     #[prost(message, optional, tag = "4")]
-    pub function: ::std::option::Option<FunctionRefProto>,
+    pub function: ::core::option::Option<FunctionRefProto>,
 }
 /// Describes overall cast operation between two values where at least one
 /// value's type is or contains an extended type (e.g. on a struct field).
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExtendedCastProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     /// Stores the list of leaf extended casts required as elements of
     /// this cast.  Each element is a cast where at least one of the input
     /// or output is an extended type. For structs or arrays, the elements
@@ -4163,7 +4204,7 @@ pub struct ResolvedExtendedCastProto {
     /// can be multiple cast elements (one for each distinct pair of field
     /// types). For non-struct types, there will be just a single element.
     #[prost(message, repeated, tag = "2")]
-    pub element_list: ::std::vec::Vec<ResolvedExtendedCastElementProto>,
+    pub element_list: ::prost::alloc::vec::Vec<ResolvedExtendedCastElementProto>,
 }
 /// A cast expression, casting the result of an input expression to the
 /// target Type.
@@ -4174,18 +4215,18 @@ pub struct ResolvedExtendedCastProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCastProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     /// Whether to return NULL if the cast fails. This is set to true for
     /// SAFE_CAST.
     #[prost(bool, optional, tag = "3")]
-    pub return_null_on_error: ::std::option::Option<bool>,
+    pub return_null_on_error: ::core::option::Option<bool>,
     /// If at least one of types involved in this cast is or contains an
     /// extended (TYPE_EXTENDED) type, this field contains information
     /// necessary to execute this cast.
     #[prost(message, optional, tag = "4")]
-    pub extended_cast: ::std::option::Option<ResolvedExtendedCastProto>,
+    pub extended_cast: ::core::option::Option<ResolvedExtendedCastProto>,
 }
 /// Construct a struct value.  <type> is always a StructType.
 /// <field_list> matches 1:1 with the fields in <type> position-wise.
@@ -4193,9 +4234,9 @@ pub struct ResolvedCastProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedMakeStructProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, repeated, tag = "2")]
-    pub field_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub field_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// Construct a proto value.  <type> is always a ProtoType.
 /// <field_list> is a vector of (FieldDescriptor, expr) pairs to write.
@@ -4203,9 +4244,9 @@ pub struct ResolvedMakeStructProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedMakeProtoProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, repeated, tag = "2")]
-    pub field_list: ::std::vec::Vec<ResolvedMakeProtoFieldProto>,
+    pub field_list: ::prost::alloc::vec::Vec<ResolvedMakeProtoFieldProto>,
 }
 /// One field assignment in a ResolvedMakeProto expression.
 /// The type of expr will match with the zetasql type of the proto field.
@@ -4218,34 +4259,34 @@ pub struct ResolvedMakeProtoProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedMakeProtoFieldProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub field_descriptor: ::std::option::Option<FieldDescriptorRefProto>,
+    pub field_descriptor: ::core::option::Option<FieldDescriptorRefProto>,
     /// Provides the Format annotation that should be used when building
     /// this field.  The annotation specifies both the ZetaSQL type and
     /// the encoding format for this field.
     #[prost(enumeration = "field_format::Format", optional, tag = "3")]
-    pub format: ::std::option::Option<i32>,
+    pub format: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "4")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// Get the field in position <field_idx> (0-based) from <expr>, which has a
 /// STRUCT type.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGetStructFieldProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(int64, optional, tag = "3")]
-    pub field_idx: ::std::option::Option<i64>,
+    pub field_idx: ::core::option::Option<i64>,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGetProtoFieldProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     /// The proto2 FieldDescriptor to extract.  This provides the tag
     /// number and wire type.  Additional decoding may be necessary if any
     /// of the other modifiers below are set.  Consumers should use those
@@ -4261,7 +4302,7 @@ pub struct ResolvedGetProtoFieldProto {
     /// The field is required if field_descriptor->is_required().  If the
     /// field is required and not present, an error should result.
     #[prost(message, optional, tag = "3")]
-    pub field_descriptor: ::std::option::Option<FieldDescriptorRefProto>,
+    pub field_descriptor: ::core::option::Option<FieldDescriptorRefProto>,
     /// Default value to use when the proto field is not set. The default
     /// may be NULL (e.g. for proto2 fields with a use_defaults=false
     /// annotation).
@@ -4279,20 +4320,20 @@ pub struct ResolvedGetProtoFieldProto {
     /// TODO Make un-ignorable after clients migrate to start
     /// using it.
     #[prost(message, optional, tag = "4")]
-    pub default_value: ::std::option::Option<ValueWithTypeProto>,
+    pub default_value: ::core::option::Option<ValueWithTypeProto>,
     /// Indicates whether to return a bool indicating if a value was
     /// present, rather than return the value (or NULL). Never set for
     /// repeated fields. This field cannot be set if
     /// <return_default_value_when_unset> is true, and vice versa.
     /// Expression type will be BOOL.
     #[prost(bool, optional, tag = "5")]
-    pub get_has_bit: ::std::option::Option<bool>,
+    pub get_has_bit: ::core::option::Option<bool>,
     /// Provides the Format annotation that should be used when reading
     /// this field.  The annotation specifies both the ZetaSQL type and
     /// the encoding format for this field. This cannot be set when
     /// get_has_bit is true.
     #[prost(enumeration = "field_format::Format", optional, tag = "6")]
-    pub format: ::std::option::Option<i32>,
+    pub format: ::core::option::Option<i32>,
     /// Indicates that the default value should be returned if <expr>
     /// (the parent message) is NULL.  Note that this does *not* affect
     /// the return value when the extracted field itself is unset, in
@@ -4304,7 +4345,7 @@ pub struct ResolvedGetProtoFieldProto {
     /// zetasql.use_defaults=true. This cannot be set when <get_has_bit>
     /// is true or the field is required.
     #[prost(bool, optional, tag = "7")]
-    pub return_default_value_when_unset: ::std::option::Option<bool>,
+    pub return_default_value_when_unset: ::core::option::Option<bool>,
 }
 /// Constructs an initial input ARRAY<T> from expr. For each get_field_list
 /// expr, we evaluate the expression once with each array input element and
@@ -4318,16 +4359,16 @@ pub struct ResolvedGetProtoFieldProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFlattenProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     /// List of 'get' fields to evaluate in order (0 or more struct get
     /// fields followed by 0 or more proto get fields) starting from expr.
     /// Each get is evaluated N times where N is the number of array
     /// elements from the previous get (or expr for the first expression)
     /// generated.
     #[prost(message, repeated, tag = "3")]
-    pub get_field_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub get_field_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// Argument for a child of ResolvedFlatten. This is a placeholder to indicate
 /// that it will be invoked once for each array element from ResolvedFlatten's
@@ -4335,7 +4376,7 @@ pub struct ResolvedFlattenProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFlattenedArgProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
 }
 /// An argument to the REPLACE_FIELDS() function which specifies a field path
 /// and a value that this field will be set to. The field path to be modified
@@ -4358,7 +4399,7 @@ pub struct ResolvedFlattenedArgProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedReplaceFieldItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     /// The value that the final field in <proto_field_path> will be set
     /// to.
     ///
@@ -4366,21 +4407,21 @@ pub struct ResolvedReplaceFieldItemProto {
     /// is a required field, the engine must return an error if it is set
     /// to NULL.
     #[prost(message, optional, tag = "2")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
     /// A vector of integers that denotes the path to a struct field that
     /// will be modified. The integer values in this vector correspond to
     /// field positions (0-based) in a STRUCT. If <proto_field_path>
     /// is also non-empty, then the field corresponding to the last index
     /// in this vector should be of proto type.
     #[prost(int64, repeated, packed = "false", tag = "3")]
-    pub struct_index_path: ::std::vec::Vec<i64>,
+    pub struct_index_path: ::prost::alloc::vec::Vec<i64>,
     /// A vector of FieldDescriptors that denotes the path to a proto
     /// field that will be modified. If <struct_index_path> is also
     /// non-empty, then the first element in this vector should be a
     /// subfield of the proto corresponding to the last element in
     /// <struct_index_path>.
     #[prost(message, repeated, tag = "4")]
-    pub proto_field_path: ::std::vec::Vec<FieldDescriptorRefProto>,
+    pub proto_field_path: ::prost::alloc::vec::Vec<FieldDescriptorRefProto>,
 }
 /// Represents a call to the REPLACE_FIELDS() function. This function
 /// can be used to copy a proto or struct, modify a few fields and
@@ -4391,10 +4432,10 @@ pub struct ResolvedReplaceFieldItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedReplaceFieldProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     /// The proto/struct to modify.
     #[prost(message, optional, boxed, tag = "2")]
-    pub expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     /// The list of field paths to be modified along with their new
     /// values.
     ///
@@ -4405,7 +4446,7 @@ pub struct ResolvedReplaceFieldProto {
     ///   error.
     /// - Clearing a required field or subfield is an error.
     #[prost(message, repeated, tag = "3")]
-    pub replace_field_item_list: ::std::vec::Vec<ResolvedReplaceFieldItemProto>,
+    pub replace_field_item_list: ::prost::alloc::vec::Vec<ResolvedReplaceFieldItemProto>,
 }
 /// A subquery in an expression (not a FROM clause).  The subquery runs
 /// in the context of a single input row and produces a single output value.
@@ -4468,24 +4509,24 @@ pub struct ResolvedReplaceFieldProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSubqueryExprProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(
         enumeration = "resolved_subquery_expr_enums::SubqueryType",
         optional,
         tag = "2"
     )]
-    pub subquery_type: ::std::option::Option<i32>,
+    pub subquery_type: ::core::option::Option<i32>,
     #[prost(message, repeated, tag = "3")]
-    pub parameter_list: ::std::vec::Vec<ResolvedColumnRefProto>,
+    pub parameter_list: ::prost::alloc::vec::Vec<ResolvedColumnRefProto>,
     /// Field is only populated for subquery of type IN.
     #[prost(message, optional, boxed, tag = "4")]
-    pub in_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub in_expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(message, optional, boxed, tag = "5")]
-    pub subquery: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub subquery: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     /// Note: Hints currently happen only for EXISTS or IN subquery but
     /// not for ARRAY or SCALAR subquery.
     #[prost(message, repeated, tag = "6")]
-    pub hint_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub hint_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// Common superclass for all Scans, which are nodes that produce rows
 /// (e.g. scans, joins, table subqueries).  A query's FROM clause is
@@ -4508,59 +4549,64 @@ pub struct AnyResolvedScanProto {
         oneof = "any_resolved_scan_proto::Node",
         tags = "19, 20, 21, 22, 24, 26, 27, 28, 29, 30, 31, 35, 51, 81, 89, 111, 147, 148"
     )]
-    pub node: ::std::option::Option<any_resolved_scan_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_scan_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedScanProto`.
 pub mod any_resolved_scan_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
         #[prost(message, tag = "19")]
         ResolvedSingleRowScanNode(super::ResolvedSingleRowScanProto),
         #[prost(message, tag = "20")]
-        ResolvedTableScanNode(Box<super::ResolvedTableScanProto>),
+        ResolvedTableScanNode(::prost::alloc::boxed::Box<super::ResolvedTableScanProto>),
         #[prost(message, tag = "21")]
-        ResolvedJoinScanNode(Box<super::ResolvedJoinScanProto>),
+        ResolvedJoinScanNode(::prost::alloc::boxed::Box<super::ResolvedJoinScanProto>),
         #[prost(message, tag = "22")]
-        ResolvedArrayScanNode(Box<super::ResolvedArrayScanProto>),
+        ResolvedArrayScanNode(::prost::alloc::boxed::Box<super::ResolvedArrayScanProto>),
         #[prost(message, tag = "24")]
-        ResolvedFilterScanNode(Box<super::ResolvedFilterScanProto>),
+        ResolvedFilterScanNode(::prost::alloc::boxed::Box<super::ResolvedFilterScanProto>),
         #[prost(message, tag = "26")]
         ResolvedSetOperationScanNode(super::ResolvedSetOperationScanProto),
         #[prost(message, tag = "27")]
-        ResolvedOrderByScanNode(Box<super::ResolvedOrderByScanProto>),
+        ResolvedOrderByScanNode(::prost::alloc::boxed::Box<super::ResolvedOrderByScanProto>),
         #[prost(message, tag = "28")]
-        ResolvedLimitOffsetScanNode(Box<super::ResolvedLimitOffsetScanProto>),
+        ResolvedLimitOffsetScanNode(
+            ::prost::alloc::boxed::Box<super::ResolvedLimitOffsetScanProto>,
+        ),
         #[prost(message, tag = "29")]
         ResolvedWithRefScanNode(super::ResolvedWithRefScanProto),
         #[prost(message, tag = "30")]
-        ResolvedAnalyticScanNode(Box<super::ResolvedAnalyticScanProto>),
+        ResolvedAnalyticScanNode(::prost::alloc::boxed::Box<super::ResolvedAnalyticScanProto>),
         #[prost(message, tag = "31")]
-        ResolvedSampleScanNode(Box<super::ResolvedSampleScanProto>),
+        ResolvedSampleScanNode(::prost::alloc::boxed::Box<super::ResolvedSampleScanProto>),
         #[prost(message, tag = "35")]
-        ResolvedProjectScanNode(Box<super::ResolvedProjectScanProto>),
+        ResolvedProjectScanNode(::prost::alloc::boxed::Box<super::ResolvedProjectScanProto>),
         #[prost(message, tag = "51")]
-        ResolvedWithScanNode(Box<super::ResolvedWithScanProto>),
+        ResolvedWithScanNode(::prost::alloc::boxed::Box<super::ResolvedWithScanProto>),
         #[prost(message, tag = "81")]
         ResolvedTvfscanNode(super::ResolvedTvfScanProto),
         #[prost(message, tag = "89")]
         ResolvedRelationArgumentScanNode(super::ResolvedRelationArgumentScanProto),
         #[prost(message, tag = "111")]
-        ResolvedAggregateScanBaseNode(Box<super::AnyResolvedAggregateScanBaseProto>),
+        ResolvedAggregateScanBaseNode(
+            ::prost::alloc::boxed::Box<super::AnyResolvedAggregateScanBaseProto>,
+        ),
         #[prost(message, tag = "147")]
         ResolvedRecursiveRefScanNode(super::ResolvedRecursiveRefScanProto),
         #[prost(message, tag = "148")]
-        ResolvedRecursiveScanNode(Box<super::ResolvedRecursiveScanProto>),
+        ResolvedRecursiveScanNode(::prost::alloc::boxed::Box<super::ResolvedRecursiveScanProto>),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedNodeProto>,
+    pub parent: ::core::option::Option<ResolvedNodeProto>,
     #[prost(message, repeated, tag = "2")]
-    pub column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, repeated, tag = "3")]
-    pub hint_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub hint_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(bool, optional, tag = "4")]
-    pub is_ordered: ::std::option::Option<bool>,
+    pub is_ordered: ::core::option::Option<bool>,
 }
 /// Represents a machine learning model as a TVF argument.
 /// <model> is the machine learning model object known to the resolver
@@ -4568,9 +4614,9 @@ pub struct ResolvedScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedModelProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub model: ::std::option::Option<ModelRefProto>,
+    pub model: ::core::option::Option<ModelRefProto>,
 }
 /// Represents a connection object as a TVF argument.
 /// <connection> is the connection object encapsulated metadata to connect to
@@ -4578,9 +4624,9 @@ pub struct ResolvedModelProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedConnectionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub connection: ::std::option::Option<ConnectionRefProto>,
+    pub connection: ::core::option::Option<ConnectionRefProto>,
 }
 /// Represents a descriptor object as a TVF argument.
 /// A descriptor is basically a list of unresolved column names, written
@@ -4595,18 +4641,18 @@ pub struct ResolvedConnectionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDescriptorProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub descriptor_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub descriptor_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(string, repeated, tag = "3")]
-    pub descriptor_column_name_list: ::std::vec::Vec<std::string::String>,
+    pub descriptor_column_name_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Scan that produces a single row with no columns.  Used for queries without
 /// a FROM clause, where all output comes from the select list.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSingleRowScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
 }
 /// Scan a Table.
 /// The <column_list>[i] should be matched to a Table column by
@@ -4633,15 +4679,16 @@ pub struct ResolvedSingleRowScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedTableScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, tag = "2")]
-    pub table: ::std::option::Option<TableRefProto>,
+    pub table: ::core::option::Option<TableRefProto>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub for_system_time_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub for_system_time_expr:
+        ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(int64, repeated, packed = "false", tag = "4")]
-    pub column_index_list: ::std::vec::Vec<i64>,
+    pub column_index_list: ::prost::alloc::vec::Vec<i64>,
     #[prost(string, optional, tag = "5")]
-    pub alias: ::std::option::Option<std::string::String>,
+    pub alias: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// A Scan that joins two input scans.
 /// The <column_list> will contain columns selected from the union
@@ -4651,19 +4698,19 @@ pub struct ResolvedTableScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedJoinScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(
         enumeration = "resolved_join_scan_enums::JoinType",
         optional,
         tag = "2"
     )]
-    pub join_type: ::std::option::Option<i32>,
+    pub join_type: ::core::option::Option<i32>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub left_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub left_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, optional, boxed, tag = "4")]
-    pub right_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub right_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, optional, boxed, tag = "5")]
-    pub join_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub join_expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
 }
 /// Scan an array value, produced from some expression.
 ///
@@ -4695,27 +4742,27 @@ pub struct ResolvedJoinScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedArrayScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub array_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub array_expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(message, optional, tag = "4")]
-    pub element_column: ::std::option::Option<ResolvedColumnProto>,
+    pub element_column: ::core::option::Option<ResolvedColumnProto>,
     #[prost(message, optional, tag = "5")]
-    pub array_offset_column: ::std::option::Option<ResolvedColumnHolderProto>,
+    pub array_offset_column: ::core::option::Option<ResolvedColumnHolderProto>,
     #[prost(message, optional, boxed, tag = "6")]
-    pub join_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub join_expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(bool, optional, tag = "7")]
-    pub is_outer: ::std::option::Option<bool>,
+    pub is_outer: ::core::option::Option<bool>,
 }
 /// This wrapper is used for an optional ResolvedColumn inside another node.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedColumnHolderProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub column: ::std::option::Option<ResolvedColumnProto>,
+    pub column: ::core::option::Option<ResolvedColumnProto>,
 }
 /// Scan rows from input_scan, and emit all rows where filter_expr
 /// evaluates to true.  filter_expr is always of type bool.
@@ -4723,11 +4770,11 @@ pub struct ResolvedColumnHolderProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFilterScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub filter_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub filter_expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
 }
 /// List of group by columns that form a grouping set.
 ///
@@ -4738,9 +4785,9 @@ pub struct ResolvedFilterScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGroupingSetProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub group_by_column_list: ::std::vec::Vec<ResolvedColumnRefProto>,
+    pub group_by_column_list: ::prost::alloc::vec::Vec<ResolvedColumnRefProto>,
 }
 /// Base class for aggregation scans. Apply aggregation to rows produced from
 /// input_scan, and output aggregated rows.
@@ -4758,25 +4805,26 @@ pub struct ResolvedGroupingSetProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnyResolvedAggregateScanBaseProto {
     #[prost(oneof = "any_resolved_aggregate_scan_base_proto::Node", tags = "25")]
-    pub node: ::std::option::Option<any_resolved_aggregate_scan_base_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_aggregate_scan_base_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedAggregateScanBaseProto`.
 pub mod any_resolved_aggregate_scan_base_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
         #[prost(message, tag = "25")]
-        ResolvedAggregateScanNode(Box<super::ResolvedAggregateScanProto>),
+        ResolvedAggregateScanNode(::prost::alloc::boxed::Box<super::ResolvedAggregateScanProto>),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAggregateScanBaseProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, repeated, tag = "3")]
-    pub group_by_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub group_by_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
     #[prost(message, repeated, tag = "4")]
-    pub aggregate_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub aggregate_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
 }
 /// Apply aggregation to rows produced from input_scan, and output aggregated
 /// rows.
@@ -4798,11 +4846,11 @@ pub struct ResolvedAggregateScanBaseProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAggregateScanProto {
     #[prost(message, optional, boxed, tag = "1")]
-    pub parent: ::std::option::Option<::std::boxed::Box<ResolvedAggregateScanBaseProto>>,
+    pub parent: ::core::option::Option<::prost::alloc::boxed::Box<ResolvedAggregateScanBaseProto>>,
     #[prost(message, repeated, tag = "5")]
-    pub grouping_set_list: ::std::vec::Vec<ResolvedGroupingSetProto>,
+    pub grouping_set_list: ::prost::alloc::vec::Vec<ResolvedGroupingSetProto>,
     #[prost(message, repeated, tag = "6")]
-    pub rollup_column_list: ::std::vec::Vec<ResolvedColumnRefProto>,
+    pub rollup_column_list: ::prost::alloc::vec::Vec<ResolvedColumnRefProto>,
 }
 /// This is one input item in a ResolvedSetOperation.
 /// The <output_column_list> matches 1:1 with the ResolvedSetOperation's
@@ -4811,11 +4859,11 @@ pub struct ResolvedAggregateScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSetOperationItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, repeated, tag = "3")]
-    pub output_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
 }
 /// Apply a set operation (specified by <op_type>) on two or more input scans.
 ///
@@ -4843,15 +4891,15 @@ pub struct ResolvedSetOperationItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSetOperationScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(
         enumeration = "resolved_set_operation_scan_enums::SetOperationType",
         optional,
         tag = "2"
     )]
-    pub op_type: ::std::option::Option<i32>,
+    pub op_type: ::core::option::Option<i32>,
     #[prost(message, repeated, tag = "4")]
-    pub input_item_list: ::std::vec::Vec<ResolvedSetOperationItemProto>,
+    pub input_item_list: ::prost::alloc::vec::Vec<ResolvedSetOperationItemProto>,
 }
 /// Apply ordering to rows produced from input_scan, and output ordered
 /// rows.
@@ -4875,11 +4923,11 @@ pub struct ResolvedSetOperationScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedOrderByScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, repeated, tag = "3")]
-    pub order_by_item_list: ::std::vec::Vec<ResolvedOrderByItemProto>,
+    pub order_by_item_list: ::prost::alloc::vec::Vec<ResolvedOrderByItemProto>,
 }
 /// Apply a LIMIT and optional OFFSET to the rows from input_scan. Emit all
 /// rows after OFFSET rows have been scanned and up to LIMIT total rows
@@ -4896,13 +4944,13 @@ pub struct ResolvedOrderByScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedLimitOffsetScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub limit: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub limit: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(message, optional, boxed, tag = "4")]
-    pub offset: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub offset: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
 }
 /// Scan the subquery defined in a WITH statement.
 /// See ResolvedWithScan for more detail.
@@ -4912,9 +4960,9 @@ pub struct ResolvedLimitOffsetScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWithRefScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(string, optional, tag = "2")]
-    pub with_query_name: ::std::option::Option<std::string::String>,
+    pub with_query_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// Apply analytic functions to rows produced from input_scan.
 ///
@@ -4928,11 +4976,11 @@ pub struct ResolvedWithRefScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAnalyticScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(message, repeated, tag = "3")]
-    pub function_group_list: ::std::vec::Vec<ResolvedAnalyticFunctionGroupProto>,
+    pub function_group_list: ::prost::alloc::vec::Vec<ResolvedAnalyticFunctionGroupProto>,
 }
 /// Samples rows from <input_scan>.
 /// Specs: (broken link)
@@ -4961,25 +5009,26 @@ pub struct ResolvedAnalyticScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSampleScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     #[prost(string, optional, tag = "3")]
-    pub method: ::std::option::Option<std::string::String>,
+    pub method: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, boxed, tag = "4")]
-    pub size: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub size: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(
         enumeration = "resolved_sample_scan_enums::SampleUnit",
         optional,
         tag = "5"
     )]
-    pub unit: ::std::option::Option<i32>,
+    pub unit: ::core::option::Option<i32>,
     #[prost(message, optional, boxed, tag = "6")]
-    pub repeatable_argument: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub repeatable_argument:
+        ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
     #[prost(message, optional, tag = "7")]
-    pub weight_column: ::std::option::Option<ResolvedColumnHolderProto>,
+    pub weight_column: ::core::option::Option<ResolvedColumnHolderProto>,
     #[prost(message, repeated, tag = "8")]
-    pub partition_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub partition_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// This is used when an expression is computed and given a name (a new
 /// ResolvedColumn) that can be referenced elsewhere.  The new ResolvedColumn
@@ -4989,11 +5038,11 @@ pub struct ResolvedSampleScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedComputedColumnProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub column: ::std::option::Option<ResolvedColumnProto>,
+    pub column: ::core::option::Option<ResolvedColumnProto>,
     #[prost(message, optional, tag = "3")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// This represents one column of an ORDER BY clause, with the requested
 /// ordering direction.
@@ -5008,19 +5057,19 @@ pub struct ResolvedComputedColumnProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedOrderByItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub column_ref: ::std::option::Option<ResolvedColumnRefProto>,
+    pub column_ref: ::core::option::Option<ResolvedColumnRefProto>,
     #[prost(message, optional, tag = "3")]
-    pub collation_name: ::std::option::Option<AnyResolvedExprProto>,
+    pub collation_name: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(bool, optional, tag = "4")]
-    pub is_descending: ::std::option::Option<bool>,
+    pub is_descending: ::core::option::Option<bool>,
     #[prost(
         enumeration = "resolved_order_by_item_enums::NullOrderMode",
         optional,
         tag = "5"
     )]
-    pub null_order: ::std::option::Option<i32>,
+    pub null_order: ::core::option::Option<i32>,
 }
 /// This is used in CREATE TABLE statements to provide column annotations
 /// such as NOT NULL and OPTIONS().
@@ -5042,13 +5091,13 @@ pub struct ResolvedOrderByItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedColumnAnnotationsProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(bool, optional, tag = "2")]
-    pub not_null: ::std::option::Option<bool>,
+    pub not_null: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "3")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(message, repeated, tag = "4")]
-    pub child_list: ::std::vec::Vec<ResolvedColumnAnnotationsProto>,
+    pub child_list: ::prost::alloc::vec::Vec<ResolvedColumnAnnotationsProto>,
 }
 /// <expression> indicates the expression that defines the column. The type of
 /// the expression will always match the type of the column.
@@ -5071,13 +5120,13 @@ pub struct ResolvedColumnAnnotationsProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGeneratedColumnInfoProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub expression: ::std::option::Option<AnyResolvedExprProto>,
+    pub expression: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(bool, optional, tag = "3")]
-    pub is_stored: ::std::option::Option<bool>,
+    pub is_stored: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "4")]
-    pub is_on_write: ::std::option::Option<bool>,
+    pub is_on_write: ::core::option::Option<bool>,
 }
 /// This is used in CREATE TABLE statements to provide an explicit column
 /// definition.
@@ -5093,19 +5142,19 @@ pub struct ResolvedGeneratedColumnInfoProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedColumnDefinitionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(message, optional, tag = "4")]
-    pub annotations: ::std::option::Option<ResolvedColumnAnnotationsProto>,
+    pub annotations: ::core::option::Option<ResolvedColumnAnnotationsProto>,
     #[prost(bool, optional, tag = "5")]
-    pub is_hidden: ::std::option::Option<bool>,
+    pub is_hidden: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "6")]
-    pub column: ::std::option::Option<ResolvedColumnProto>,
+    pub column: ::core::option::Option<ResolvedColumnProto>,
     #[prost(message, optional, tag = "7")]
-    pub generated_column_info: ::std::option::Option<ResolvedGeneratedColumnInfoProto>,
+    pub generated_column_info: ::core::option::Option<ResolvedGeneratedColumnInfoProto>,
 }
 /// This represents the PRIMARY KEY constraint on a table.
 /// <column_offset_list> provides the offsets of the column definitions that
@@ -5116,13 +5165,13 @@ pub struct ResolvedColumnDefinitionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedPrimaryKeyProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(int64, repeated, packed = "false", tag = "2")]
-    pub column_offset_list: ::std::vec::Vec<i64>,
+    pub column_offset_list: ::prost::alloc::vec::Vec<i64>,
     #[prost(message, repeated, tag = "3")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(bool, optional, tag = "4")]
-    pub unenforced: ::std::option::Option<bool>,
+    pub unenforced: ::core::option::Option<bool>,
 }
 /// This represents the FOREIGN KEY constraint on a table. It is of the form:
 ///
@@ -5160,37 +5209,37 @@ pub struct ResolvedPrimaryKeyProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedForeignKeyProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub constraint_name: ::std::option::Option<std::string::String>,
+    pub constraint_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(int64, repeated, packed = "false", tag = "3")]
-    pub referencing_column_offset_list: ::std::vec::Vec<i64>,
+    pub referencing_column_offset_list: ::prost::alloc::vec::Vec<i64>,
     #[prost(message, optional, tag = "4")]
-    pub referenced_table: ::std::option::Option<TableRefProto>,
+    pub referenced_table: ::core::option::Option<TableRefProto>,
     #[prost(int64, repeated, packed = "false", tag = "5")]
-    pub referenced_column_offset_list: ::std::vec::Vec<i64>,
+    pub referenced_column_offset_list: ::prost::alloc::vec::Vec<i64>,
     #[prost(
         enumeration = "resolved_foreign_key_enums::MatchMode",
         optional,
         tag = "6"
     )]
-    pub match_mode: ::std::option::Option<i32>,
+    pub match_mode: ::core::option::Option<i32>,
     #[prost(
         enumeration = "resolved_foreign_key_enums::ActionOperation",
         optional,
         tag = "7"
     )]
-    pub update_action: ::std::option::Option<i32>,
+    pub update_action: ::core::option::Option<i32>,
     #[prost(
         enumeration = "resolved_foreign_key_enums::ActionOperation",
         optional,
         tag = "8"
     )]
-    pub delete_action: ::std::option::Option<i32>,
+    pub delete_action: ::core::option::Option<i32>,
     #[prost(bool, optional, tag = "9")]
-    pub enforced: ::std::option::Option<bool>,
+    pub enforced: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "10")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This represents the CHECK constraint on a table. It is of the form:
 ///
@@ -5212,26 +5261,26 @@ pub struct ResolvedForeignKeyProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCheckConstraintProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub constraint_name: ::std::option::Option<std::string::String>,
+    pub constraint_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub expression: ::std::option::Option<AnyResolvedExprProto>,
+    pub expression: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(bool, optional, tag = "4")]
-    pub enforced: ::std::option::Option<bool>,
+    pub enforced: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "5")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This is used in ResolvedQueryStmt to provide a user-visible name
 /// for each output column.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedOutputColumnProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub column: ::std::option::Option<ResolvedColumnProto>,
+    pub column: ::core::option::Option<ResolvedColumnProto>,
 }
 /// A Project node computes new expression values, and possibly drops
 /// columns from the input Scan's column_list.
@@ -5246,11 +5295,11 @@ pub struct ResolvedOutputColumnProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedProjectScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, repeated, tag = "2")]
-    pub expr_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub expr_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub input_scan: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub input_scan: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
 }
 /// This scan represents a call to a table-valued function (TVF). Each TVF
 /// returns an entire output relation instead of a single scalar value. The
@@ -5288,15 +5337,15 @@ pub struct ResolvedProjectScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedTvfScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, optional, tag = "2")]
-    pub tvf: ::std::option::Option<TableValuedFunctionRefProto>,
+    pub tvf: ::core::option::Option<TableValuedFunctionRefProto>,
     #[prost(message, optional, tag = "3")]
-    pub signature: ::std::option::Option<TvfSignatureProto>,
+    pub signature: ::core::option::Option<TvfSignatureProto>,
     #[prost(message, repeated, tag = "5")]
-    pub argument_list: ::std::vec::Vec<ResolvedFunctionArgumentProto>,
+    pub argument_list: ::prost::alloc::vec::Vec<ResolvedFunctionArgumentProto>,
     #[prost(string, optional, tag = "6")]
-    pub alias: ::std::option::Option<std::string::String>,
+    pub alias: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// This represents a generic argument to a function. The argument can be
 /// semantically an expression, relation, model, connection or descriptor.
@@ -5321,21 +5370,21 @@ pub struct ResolvedTvfScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFunctionArgumentProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(message, optional, tag = "3")]
-    pub scan: ::std::option::Option<AnyResolvedScanProto>,
+    pub scan: ::core::option::Option<AnyResolvedScanProto>,
     #[prost(message, optional, tag = "5")]
-    pub model: ::std::option::Option<ResolvedModelProto>,
+    pub model: ::core::option::Option<ResolvedModelProto>,
     #[prost(message, optional, tag = "6")]
-    pub connection: ::std::option::Option<ResolvedConnectionProto>,
+    pub connection: ::core::option::Option<ResolvedConnectionProto>,
     #[prost(message, optional, tag = "7")]
-    pub descriptor_arg: ::std::option::Option<ResolvedDescriptorProto>,
+    pub descriptor_arg: ::core::option::Option<ResolvedDescriptorProto>,
     #[prost(message, repeated, tag = "4")]
-    pub argument_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub argument_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, optional, tag = "8")]
-    pub inline_lambda: ::std::option::Option<ResolvedInlineLambdaProto>,
+    pub inline_lambda: ::core::option::Option<ResolvedInlineLambdaProto>,
 }
 /// The superclass of all ZetaSQL statements.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -5344,13 +5393,14 @@ pub struct AnyResolvedStatementProto {
         oneof = "any_resolved_statement_proto::Node",
         tags = "37, 38, 39, 43, 44, 45, 46, 47, 48, 49, 50, 63, 64, 66, 68, 71, 72, 73, 74, 80, 83, 86, 87, 95, 98, 101, 114, 120, 121, 122, 123, 124, 133, 140, 142, 152, 160"
     )]
-    pub node: ::std::option::Option<any_resolved_statement_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_statement_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedStatementProto`.
 pub mod any_resolved_statement_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
         #[prost(message, tag = "37")]
-        ResolvedExplainStmtNode(Box<super::ResolvedExplainStmtProto>),
+        ResolvedExplainStmtNode(::prost::alloc::boxed::Box<super::ResolvedExplainStmtProto>),
         #[prost(message, tag = "38")]
         ResolvedQueryStmtNode(super::ResolvedQueryStmtProto),
         #[prost(message, tag = "39")]
@@ -5428,9 +5478,9 @@ pub mod any_resolved_statement_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedStatementProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedNodeProto>,
+    pub parent: ::core::option::Option<ResolvedNodeProto>,
     #[prost(message, repeated, tag = "2")]
-    pub hint_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub hint_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// An Explain statement. This is always the root of a statement hierarchy.
 /// Its child may be any statement type except another ResolvedExplainStmt.
@@ -5440,9 +5490,9 @@ pub struct ResolvedStatementProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExplainStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, boxed, tag = "2")]
-    pub statement: ::std::option::Option<::std::boxed::Box<AnyResolvedStatementProto>>,
+    pub statement: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedStatementProto>>,
 }
 /// A SQL query statement.  This is the outermost query statement that runs
 /// and produces rows of output, like a SELECT.  (The contained query may be
@@ -5455,17 +5505,17 @@ pub struct ResolvedExplainStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedQueryStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, repeated, tag = "2")]
-    pub output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     /// If true, the result of this query is a value table. Rather than
     /// producing rows with named columns, it produces rows with a single
     /// unnamed value type.  output_column_list will have exactly one
     /// column, with an empty name. See (broken link).
     #[prost(bool, optional, tag = "3")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "4")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
 }
 /// This statement:
 ///   CREATE DATABASE <name> [OPTIONS (...)]
@@ -5474,11 +5524,11 @@ pub struct ResolvedQueryStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateDatabaseStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "3")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// Common superclass for CREATE statements with standard modifiers like
 ///         CREATE [OR REPLACE] [TEMP|TEMPORARY|PUBLIC|PRIVATE] <object type>
@@ -5497,8 +5547,9 @@ pub struct AnyResolvedCreateStatementProto {
         oneof = "any_resolved_create_statement_proto::Node",
         tags = "76, 88, 97, 99, 106, 107, 108, 125, 154, 157"
     )]
-    pub node: ::std::option::Option<any_resolved_create_statement_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_create_statement_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedCreateStatementProto`.
 pub mod any_resolved_create_statement_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -5527,32 +5578,32 @@ pub mod any_resolved_create_statement_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateStatementProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(
         enumeration = "resolved_create_statement_enums::CreateScope",
         optional,
         tag = "5"
     )]
-    pub create_scope: ::std::option::Option<i32>,
+    pub create_scope: ::core::option::Option<i32>,
     #[prost(
         enumeration = "resolved_create_statement_enums::CreateMode",
         optional,
         tag = "4"
     )]
-    pub create_mode: ::std::option::Option<i32>,
+    pub create_mode: ::core::option::Option<i32>,
 }
 /// Represents one of indexed items in CREATE INDEX statement, with the
 /// ordering direction specified.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedIndexItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub column_ref: ::std::option::Option<ResolvedColumnRefProto>,
+    pub column_ref: ::core::option::Option<ResolvedColumnRefProto>,
     #[prost(bool, optional, tag = "3")]
-    pub descending: ::std::option::Option<bool>,
+    pub descending: ::core::option::Option<bool>,
 }
 /// This is used in CREATE INDEX STMT to represent the unnest operation
 /// performed on the base table. The produced element columns or array offset
@@ -5568,13 +5619,13 @@ pub struct ResolvedIndexItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedUnnestItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub array_expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub array_expr: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(message, optional, tag = "3")]
-    pub element_column: ::std::option::Option<ResolvedColumnProto>,
+    pub element_column: ::core::option::Option<ResolvedColumnProto>,
     #[prost(message, optional, tag = "4")]
-    pub array_offset_column: ::std::option::Option<ResolvedColumnHolderProto>,
+    pub array_offset_column: ::core::option::Option<ResolvedColumnHolderProto>,
 }
 /// This statement:
 /// CREATE [OR REPLACE] [UNIQUE] INDEX [IF NOT EXISTS] <index_name_path>
@@ -5601,23 +5652,23 @@ pub struct ResolvedUnnestItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateIndexStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub table_name_path: ::std::vec::Vec<std::string::String>,
+    pub table_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     #[prost(bool, optional, tag = "4")]
-    pub is_unique: ::std::option::Option<bool>,
+    pub is_unique: ::core::option::Option<bool>,
     #[prost(message, repeated, tag = "5")]
-    pub index_item_list: ::std::vec::Vec<ResolvedIndexItemProto>,
+    pub index_item_list: ::prost::alloc::vec::Vec<ResolvedIndexItemProto>,
     #[prost(message, repeated, tag = "9")]
-    pub storing_expression_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub storing_expression_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "6")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(message, repeated, tag = "7")]
-    pub computed_columns_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub computed_columns_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
     #[prost(message, repeated, tag = "8")]
-    pub unnest_expressions_list: ::std::vec::Vec<ResolvedUnnestItemProto>,
+    pub unnest_expressions_list: ::prost::alloc::vec::Vec<ResolvedUnnestItemProto>,
 }
 /// This statement:
 /// CREATE [OR REPLACE] SCHEMA [IF NOT EXISTS] <name>
@@ -5627,9 +5678,9 @@ pub struct ResolvedCreateIndexStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateSchemaStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(message, repeated, tag = "2")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This statement:
 ///   CREATE [TEMP] TABLE <name> (column type, ...)
@@ -5661,8 +5712,9 @@ pub struct AnyResolvedCreateTableStmtBaseProto {
         oneof = "any_resolved_create_table_stmt_base_proto::Node",
         tags = "40, 42, 90"
     )]
-    pub node: ::std::option::Option<any_resolved_create_table_stmt_base_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_create_table_stmt_base_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedCreateTableStmtBaseProto`.
 pub mod any_resolved_create_table_stmt_base_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -5677,21 +5729,21 @@ pub mod any_resolved_create_table_stmt_base_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateTableStmtBaseProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(message, repeated, tag = "2")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(message, repeated, tag = "3")]
-    pub column_definition_list: ::std::vec::Vec<ResolvedColumnDefinitionProto>,
+    pub column_definition_list: ::prost::alloc::vec::Vec<ResolvedColumnDefinitionProto>,
     #[prost(message, repeated, tag = "7")]
-    pub pseudo_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub pseudo_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, optional, tag = "4")]
-    pub primary_key: ::std::option::Option<ResolvedPrimaryKeyProto>,
+    pub primary_key: ::core::option::Option<ResolvedPrimaryKeyProto>,
     #[prost(message, repeated, tag = "9")]
-    pub foreign_key_list: ::std::vec::Vec<ResolvedForeignKeyProto>,
+    pub foreign_key_list: ::prost::alloc::vec::Vec<ResolvedForeignKeyProto>,
     #[prost(message, repeated, tag = "10")]
-    pub check_constraint_list: ::std::vec::Vec<ResolvedCheckConstraintProto>,
+    pub check_constraint_list: ::prost::alloc::vec::Vec<ResolvedCheckConstraintProto>,
     #[prost(bool, optional, tag = "8")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
 }
 /// This statement:
 /// CREATE [TEMP] TABLE <name> (column schema, ...)
@@ -5700,11 +5752,11 @@ pub struct ResolvedCreateTableStmtBaseProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateTableStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateTableStmtBaseProto>,
+    pub parent: ::core::option::Option<ResolvedCreateTableStmtBaseProto>,
     #[prost(message, repeated, tag = "5")]
-    pub partition_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub partition_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "6")]
-    pub cluster_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub cluster_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// This statement:
 ///   CREATE [TEMP] TABLE <name> [(column schema, ...)]
@@ -5728,15 +5780,15 @@ pub struct ResolvedCreateTableStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateTableAsSelectStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateTableStmtBaseProto>,
+    pub parent: ::core::option::Option<ResolvedCreateTableStmtBaseProto>,
     #[prost(message, repeated, tag = "5")]
-    pub partition_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub partition_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "6")]
-    pub cluster_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub cluster_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "2")]
-    pub output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     #[prost(message, optional, tag = "3")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
 }
 /// This statement:
 ///   CREATE [TEMP] MODEL <name> [TRANSFORM(...)] [OPTIONS (...)] AS SELECT ..
@@ -5782,21 +5834,22 @@ pub struct ResolvedCreateTableAsSelectStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateModelStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(message, repeated, tag = "2")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(message, repeated, tag = "3")]
-    pub output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     #[prost(message, optional, tag = "4")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
     #[prost(message, repeated, tag = "8")]
-    pub transform_input_column_list: ::std::vec::Vec<ResolvedColumnDefinitionProto>,
+    pub transform_input_column_list: ::prost::alloc::vec::Vec<ResolvedColumnDefinitionProto>,
     #[prost(message, repeated, tag = "5")]
-    pub transform_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub transform_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
     #[prost(message, repeated, tag = "6")]
-    pub transform_output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub transform_output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     #[prost(message, repeated, tag = "7")]
-    pub transform_analytic_function_group_list: ::std::vec::Vec<ResolvedAnalyticFunctionGroupProto>,
+    pub transform_analytic_function_group_list:
+        ::prost::alloc::vec::Vec<ResolvedAnalyticFunctionGroupProto>,
 }
 /// Common superclass for CREATE view/materialized view:
 ///   CREATE [TEMP|MATERIALIZED] [RECURSIVE] VIEW <name> [OPTIONS (...)]
@@ -5823,8 +5876,9 @@ pub struct ResolvedCreateModelStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnyResolvedCreateViewBaseProto {
     #[prost(oneof = "any_resolved_create_view_base_proto::Node", tags = "41, 119")]
-    pub node: ::std::option::Option<any_resolved_create_view_base_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_create_view_base_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedCreateViewBaseProto`.
 pub mod any_resolved_create_view_base_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -5837,47 +5891,47 @@ pub mod any_resolved_create_view_base_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateViewBaseProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(message, repeated, tag = "2")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(message, repeated, tag = "3")]
-    pub output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     #[prost(message, optional, tag = "5")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
     #[prost(string, optional, tag = "6")]
-    pub sql: ::std::option::Option<std::string::String>,
+    pub sql: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(
         enumeration = "resolved_create_statement_enums::SqlSecurity",
         optional,
         tag = "7"
     )]
-    pub sql_security: ::std::option::Option<i32>,
+    pub sql_security: ::core::option::Option<i32>,
     /// If true, this view produces a value table. Rather than producing
     /// rows with named columns, it produces rows with a single unnamed
     /// value type.  output_column_list will have exactly one column, with
     /// an empty name. See (broken link).
     #[prost(bool, optional, tag = "4")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
     /// True if the view uses the RECURSIVE keyword. <query>
     /// can be a ResolvedRecursiveScan only if this is true.
     #[prost(bool, optional, tag = "8")]
-    pub recursive: ::std::option::Option<bool>,
+    pub recursive: ::core::option::Option<bool>,
 }
 /// This statement:
 /// CREATE [TEMP] VIEW <name> [OPTIONS (...)] AS SELECT ...
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateViewStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateViewBaseProto>,
+    pub parent: ::core::option::Option<ResolvedCreateViewBaseProto>,
 }
 /// This statement:
 /// WITH PARTITION COLUMNS [(column schema, ...)]
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWithPartitionColumnsProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub column_definition_list: ::std::vec::Vec<ResolvedColumnDefinitionProto>,
+    pub column_definition_list: ::prost::alloc::vec::Vec<ResolvedColumnDefinitionProto>,
 }
 /// This statement:
 /// CREATE [TEMP] EXTERNAL TABLE <name> [(column type, ...)]
@@ -5885,9 +5939,9 @@ pub struct ResolvedWithPartitionColumnsProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateExternalTableStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateTableStmtBaseProto>,
+    pub parent: ::core::option::Option<ResolvedCreateTableStmtBaseProto>,
     #[prost(message, optional, tag = "2")]
-    pub with_partition_columns: ::std::option::Option<ResolvedWithPartitionColumnsProto>,
+    pub with_partition_columns: ::core::option::Option<ResolvedWithPartitionColumnsProto>,
 }
 /// This statement:
 ///   EXPORT MODEL <model_name_path> [WITH CONNECTION <connection>]
@@ -5898,13 +5952,13 @@ pub struct ResolvedCreateExternalTableStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExportModelStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub model_name_path: ::std::vec::Vec<std::string::String>,
+    pub model_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub connection: ::std::option::Option<ResolvedConnectionProto>,
+    pub connection: ::core::option::Option<ResolvedConnectionProto>,
     #[prost(message, repeated, tag = "4")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This statement:
 ///   EXPORT DATA [WITH CONNECTION] <connection> (<option_list>) AS SELECT ...
@@ -5923,21 +5977,21 @@ pub struct ResolvedExportModelStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExportDataStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "6")]
-    pub connection: ::std::option::Option<ResolvedConnectionProto>,
+    pub connection: ::core::option::Option<ResolvedConnectionProto>,
     #[prost(message, repeated, tag = "2")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(message, repeated, tag = "3")]
-    pub output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     /// If true, the result of this query is a value table. Rather than
     /// producing rows with named columns, it produces rows with a single
     /// unnamed value type.  output_column_list will have exactly one
     /// column, with an empty name. See (broken link).
     #[prost(bool, optional, tag = "4")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "5")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
 }
 /// This statement: DEFINE TABLE name (...);
 ///
@@ -5948,11 +6002,11 @@ pub struct ResolvedExportDataStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDefineTableStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "3")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This statement: DESCRIBE [<object_type>] <name> [FROM <from_name_path>];
 ///
@@ -5965,13 +6019,13 @@ pub struct ResolvedDefineTableStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDescribeStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, optional, tag = "2")]
-    pub object_type: ::std::option::Option<std::string::String>,
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "3")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "4")]
-    pub from_name_path: ::std::vec::Vec<std::string::String>,
+    pub from_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// This statement: SHOW <identifier> [FROM <name_path>] [LIKE <like_expr>];
 ///
@@ -5986,13 +6040,13 @@ pub struct ResolvedDescribeStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedShowStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, optional, tag = "2")]
-    pub identifier: ::std::option::Option<std::string::String>,
+    pub identifier: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "3")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "4")]
-    pub like_expr: ::std::option::Option<ResolvedLiteralProto>,
+    pub like_expr: ::core::option::Option<ResolvedLiteralProto>,
 }
 /// This statement: BEGIN [TRANSACTION] [ <transaction_mode> [, ...] ]
 ///
@@ -6015,15 +6069,15 @@ pub struct ResolvedShowStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedBeginStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(
         enumeration = "resolved_begin_stmt_enums::ReadWriteMode",
         optional,
         tag = "3"
     )]
-    pub read_write_mode: ::std::option::Option<i32>,
+    pub read_write_mode: ::core::option::Option<i32>,
     #[prost(string, repeated, tag = "2")]
-    pub isolation_level_list: ::std::vec::Vec<std::string::String>,
+    pub isolation_level_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// This statement: SET TRANSACTION <transaction_mode> [, ...]
 ///
@@ -6046,27 +6100,27 @@ pub struct ResolvedBeginStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSetTransactionStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(
         enumeration = "resolved_begin_stmt_enums::ReadWriteMode",
         optional,
         tag = "3"
     )]
-    pub read_write_mode: ::std::option::Option<i32>,
+    pub read_write_mode: ::core::option::Option<i32>,
     #[prost(string, repeated, tag = "2")]
-    pub isolation_level_list: ::std::vec::Vec<std::string::String>,
+    pub isolation_level_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// This statement: COMMIT [TRANSACTION];
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCommitStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
 }
 /// This statement: ROLLBACK [TRANSACTION];
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRollbackStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
 }
 /// This statement: START BATCH [<batch_type>];
 ///
@@ -6075,21 +6129,21 @@ pub struct ResolvedRollbackStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedStartBatchStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, optional, tag = "2")]
-    pub batch_type: ::std::option::Option<std::string::String>,
+    pub batch_type: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// This statement: RUN BATCH;
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRunBatchStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
 }
 /// This statement: ABORT BATCH;
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAbortBatchStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
 }
 /// This statement: DROP <object_type> [IF EXISTS] <name_path> [<drop_mode>];
 ///
@@ -6102,19 +6156,19 @@ pub struct ResolvedAbortBatchStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDropStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, optional, tag = "2")]
-    pub object_type: ::std::option::Option<std::string::String>,
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(bool, optional, tag = "3")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
     #[prost(string, repeated, tag = "4")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(
         enumeration = "resolved_drop_stmt_enums::DropMode",
         optional,
         tag = "5"
     )]
-    pub drop_mode: ::std::option::Option<i32>,
+    pub drop_mode: ::core::option::Option<i32>,
 }
 /// This statement: DROP MATERIALIZED VIEW [IF EXISTS] <name_path>;
 ///
@@ -6124,11 +6178,11 @@ pub struct ResolvedDropStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDropMaterializedViewStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(bool, optional, tag = "3")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
     #[prost(string, repeated, tag = "4")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Scan the previous iteration of the recursive alias currently being
 /// defined, from inside the recursive subquery which defines it. Such nodes
@@ -6139,7 +6193,7 @@ pub struct ResolvedDropMaterializedViewStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRecursiveRefScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
 }
 /// A recursive query inside a WITH RECURSIVE or RECURSIVE VIEW. A
 /// ResolvedRecursiveScan may appear in a resolved tree only as a top-level
@@ -6180,17 +6234,19 @@ pub struct ResolvedRecursiveRefScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRecursiveScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(
         enumeration = "resolved_recursive_scan_enums::RecursiveSetOperationType",
         optional,
         tag = "2"
     )]
-    pub op_type: ::std::option::Option<i32>,
+    pub op_type: ::core::option::Option<i32>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub non_recursive_term: ::std::option::Option<::std::boxed::Box<ResolvedSetOperationItemProto>>,
+    pub non_recursive_term:
+        ::core::option::Option<::prost::alloc::boxed::Box<ResolvedSetOperationItemProto>>,
     #[prost(message, optional, boxed, tag = "4")]
-    pub recursive_term: ::std::option::Option<::std::boxed::Box<ResolvedSetOperationItemProto>>,
+    pub recursive_term:
+        ::core::option::Option<::prost::alloc::boxed::Box<ResolvedSetOperationItemProto>>,
 }
 /// This represents a SQL WITH query (or subquery) like
 ///   WITH [RECURSIVE] <with_query_name1> AS (<with_subquery1>),
@@ -6246,14 +6302,14 @@ pub struct ResolvedRecursiveScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWithScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     #[prost(message, repeated, tag = "2")]
-    pub with_entry_list: ::std::vec::Vec<ResolvedWithEntryProto>,
+    pub with_entry_list: ::prost::alloc::vec::Vec<ResolvedWithEntryProto>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub query: ::std::option::Option<::std::boxed::Box<AnyResolvedScanProto>>,
+    pub query: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedScanProto>>,
     /// True if the WITH clause uses the recursive keyword.
     #[prost(bool, optional, tag = "4")]
-    pub recursive: ::std::option::Option<bool>,
+    pub recursive: ::core::option::Option<bool>,
 }
 /// This represents one aliased subquery introduced in a WITH clause.
 ///
@@ -6265,11 +6321,11 @@ pub struct ResolvedWithScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWithEntryProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub with_query_name: ::std::option::Option<std::string::String>,
+    pub with_query_name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub with_subquery: ::std::option::Option<AnyResolvedScanProto>,
+    pub with_subquery: ::core::option::Option<AnyResolvedScanProto>,
 }
 /// This represents one SQL hint key/value pair.
 /// The SQL syntax @{ key1=value1, key2=value2, some_db.key3=value3 }
@@ -6303,13 +6359,13 @@ pub struct ResolvedWithEntryProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedOptionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub qualifier: ::std::option::Option<std::string::String>,
+    pub qualifier: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "3")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "4")]
-    pub value: ::std::option::Option<AnyResolvedExprProto>,
+    pub value: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// Window partitioning specification for an analytic function call.
 ///
@@ -6317,11 +6373,11 @@ pub struct ResolvedOptionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWindowPartitioningProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub partition_by_list: ::std::vec::Vec<ResolvedColumnRefProto>,
+    pub partition_by_list: ::prost::alloc::vec::Vec<ResolvedColumnRefProto>,
     #[prost(message, repeated, tag = "3")]
-    pub hint_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub hint_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// Window ordering specification for an analytic function call.
 ///
@@ -6330,11 +6386,11 @@ pub struct ResolvedWindowPartitioningProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWindowOrderingProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub order_by_item_list: ::std::vec::Vec<ResolvedOrderByItemProto>,
+    pub order_by_item_list: ::prost::alloc::vec::Vec<ResolvedOrderByItemProto>,
     #[prost(message, repeated, tag = "3")]
-    pub hint_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub hint_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// Window framing specification for an analytic function call.
 ///
@@ -6350,17 +6406,18 @@ pub struct ResolvedWindowOrderingProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWindowFrameProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(
         enumeration = "resolved_window_frame_enums::FrameUnit",
         optional,
         tag = "2"
     )]
-    pub frame_unit: ::std::option::Option<i32>,
+    pub frame_unit: ::core::option::Option<i32>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub start_expr: ::std::option::Option<::std::boxed::Box<ResolvedWindowFrameExprProto>>,
+    pub start_expr:
+        ::core::option::Option<::prost::alloc::boxed::Box<ResolvedWindowFrameExprProto>>,
     #[prost(message, optional, boxed, tag = "4")]
-    pub end_expr: ::std::option::Option<::std::boxed::Box<ResolvedWindowFrameExprProto>>,
+    pub end_expr: ::core::option::Option<::prost::alloc::boxed::Box<ResolvedWindowFrameExprProto>>,
 }
 /// This represents a group of analytic function calls that shares PARTITION
 /// BY and ORDER BY.
@@ -6375,13 +6432,13 @@ pub struct ResolvedWindowFrameProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAnalyticFunctionGroupProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub partition_by: ::std::option::Option<ResolvedWindowPartitioningProto>,
+    pub partition_by: ::core::option::Option<ResolvedWindowPartitioningProto>,
     #[prost(message, optional, tag = "3")]
-    pub order_by: ::std::option::Option<ResolvedWindowOrderingProto>,
+    pub order_by: ::core::option::Option<ResolvedWindowOrderingProto>,
     #[prost(message, repeated, tag = "4")]
-    pub analytic_function_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub analytic_function_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
 }
 /// Window frame boundary expression that determines the first/last row of
 /// the moving window for each tuple.
@@ -6395,15 +6452,15 @@ pub struct ResolvedAnalyticFunctionGroupProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedWindowFrameExprProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(
         enumeration = "resolved_window_frame_expr_enums::BoundaryType",
         optional,
         tag = "2"
     )]
-    pub boundary_type: ::std::option::Option<i32>,
+    pub boundary_type: ::core::option::Option<i32>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub expression: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub expression: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
 }
 /// This represents a value inside an INSERT or UPDATE statement.
 ///
@@ -6413,9 +6470,9 @@ pub struct ResolvedWindowFrameExprProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDmlValueProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub value: ::std::option::Option<AnyResolvedExprProto>,
+    pub value: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// This is used to represent the value DEFAULT that shows up (in place of a
 /// value expression) in INSERT and UPDATE statements.
@@ -6426,7 +6483,7 @@ pub struct ResolvedDmlValueProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDmlDefaultProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
 }
 /// This represents the ASSERT statement:
 ///   ASSERT <expression> [AS <description>];
@@ -6437,11 +6494,11 @@ pub struct ResolvedDmlDefaultProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAssertStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub expression: ::std::option::Option<AnyResolvedExprProto>,
+    pub expression: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(string, optional, tag = "3")]
-    pub description: ::std::option::Option<std::string::String>,
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// This represents the ASSERT ROWS MODIFIED clause on a DML statement.
 /// The value must be a literal or (possibly casted) parameter int64.
@@ -6451,17 +6508,17 @@ pub struct ResolvedAssertStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAssertRowsModifiedProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub rows: ::std::option::Option<AnyResolvedExprProto>,
+    pub rows: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// This represents one row in the VALUES clause of an INSERT.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedInsertRowProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub value_list: ::std::vec::Vec<ResolvedDmlValueProto>,
+    pub value_list: ::prost::alloc::vec::Vec<ResolvedDmlValueProto>,
 }
 /// This represents an INSERT statement, or a nested INSERT inside an
 /// UPDATE statement.
@@ -6496,9 +6553,9 @@ pub struct ResolvedInsertRowProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedInsertStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     /// Behavior on duplicate rows (normally defined to mean duplicate
     /// primary keys).
     #[prost(
@@ -6506,19 +6563,19 @@ pub struct ResolvedInsertStmtProto {
         optional,
         tag = "3"
     )]
-    pub insert_mode: ::std::option::Option<i32>,
+    pub insert_mode: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "4")]
-    pub assert_rows_modified: ::std::option::Option<ResolvedAssertRowsModifiedProto>,
+    pub assert_rows_modified: ::core::option::Option<ResolvedAssertRowsModifiedProto>,
     #[prost(message, repeated, tag = "5")]
-    pub insert_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub insert_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, repeated, tag = "9")]
-    pub query_parameter_list: ::std::vec::Vec<ResolvedColumnRefProto>,
+    pub query_parameter_list: ::prost::alloc::vec::Vec<ResolvedColumnRefProto>,
     #[prost(message, optional, tag = "6")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
     #[prost(message, repeated, tag = "8")]
-    pub query_output_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub query_output_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, repeated, tag = "7")]
-    pub row_list: ::std::vec::Vec<ResolvedInsertRowProto>,
+    pub row_list: ::prost::alloc::vec::Vec<ResolvedInsertRowProto>,
 }
 /// This represents a DELETE statement or a nested DELETE inside an
 /// UPDATE statement.
@@ -6539,15 +6596,15 @@ pub struct ResolvedInsertStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDeleteStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     #[prost(message, optional, tag = "3")]
-    pub assert_rows_modified: ::std::option::Option<ResolvedAssertRowsModifiedProto>,
+    pub assert_rows_modified: ::core::option::Option<ResolvedAssertRowsModifiedProto>,
     #[prost(message, optional, tag = "5")]
-    pub array_offset_column: ::std::option::Option<ResolvedColumnHolderProto>,
+    pub array_offset_column: ::core::option::Option<ResolvedColumnHolderProto>,
     #[prost(message, optional, tag = "4")]
-    pub where_expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub where_expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// This represents one item inside the SET clause of an UPDATE.
 ///
@@ -6618,7 +6675,7 @@ pub struct ResolvedDeleteStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedUpdateItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     /// The target entity to be updated.
     ///
     /// This is an expression evaluated using the ResolvedColumns visible
@@ -6652,7 +6709,7 @@ pub struct ResolvedUpdateItemProto {
     /// they are not treated the same.  Here, they express a path inside
     /// an object that is being mutated, so they have reference semantics.
     #[prost(message, optional, tag = "2")]
-    pub target: ::std::option::Option<AnyResolvedExprProto>,
+    pub target: ::core::option::Option<AnyResolvedExprProto>,
     /// Set the target entity to this value.  The types must match.
     /// This can contain the same columns that can appear in the
     /// <where_expr> of the enclosing ResolvedUpdateStmt.
@@ -6660,7 +6717,7 @@ pub struct ResolvedUpdateItemProto {
     /// This is mutually exclusive with all fields below, which are used
     /// for nested updates only.
     #[prost(message, optional, tag = "3")]
-    pub set_value: ::std::option::Option<ResolvedDmlValueProto>,
+    pub set_value: ::core::option::Option<ResolvedDmlValueProto>,
     /// The ResolvedColumn introduced to represent the elements of the
     /// array being updated.  This works similarly to
     /// ArrayScan::element_column.
@@ -6670,8 +6727,8 @@ pub struct ResolvedUpdateItemProto {
     ///
     /// This column can be referenced inside the nested statements below.
     #[prost(message, optional, tag = "4")]
-    pub element_column: ::std::option::Option<ResolvedColumnHolderProto>,
-    /// AnyArray element modifications to apply. Each item runs on the value
+    pub element_column: ::core::option::Option<ResolvedColumnHolderProto>,
+    /// Array element modifications to apply. Each item runs on the value
     /// of <element_column> specified by ResolvedUpdateArrayItem.offset.
     /// This field is always empty if the analyzer option
     /// FEATURE_V_1_2_ARRAY_ELEMENTS_WITH_SET is disabled.
@@ -6681,7 +6738,7 @@ pub struct ResolvedUpdateItemProto {
     /// TODO: Consider generalizing this to allow
     /// SET a[<expr1>].b = ..., a[<expr2>].c = ...
     #[prost(message, repeated, tag = "8")]
-    pub array_update_list: ::std::vec::Vec<ResolvedUpdateArrayItemProto>,
+    pub array_update_list: ::prost::alloc::vec::Vec<ResolvedUpdateArrayItemProto>,
     /// Nested DELETE statements to apply.  Each delete runs on one value
     /// of <element_column> and may choose to delete that array element.
     ///
@@ -6689,7 +6746,7 @@ pub struct ResolvedUpdateItemProto {
     ///
     /// It is legal for the same input element to match multiple DELETEs.
     #[prost(message, repeated, tag = "5")]
-    pub delete_list: ::std::vec::Vec<ResolvedDeleteStmtProto>,
+    pub delete_list: ::prost::alloc::vec::Vec<ResolvedDeleteStmtProto>,
     /// Nested UPDATE statements to apply.  Each update runs on one value
     /// of <element_column> and may choose to update that array element.
     ///
@@ -6697,7 +6754,7 @@ pub struct ResolvedUpdateItemProto {
     ///
     /// It is an error if any element is matched by multiple UPDATEs.
     #[prost(message, repeated, tag = "6")]
-    pub update_list: ::std::vec::Vec<ResolvedUpdateStmtProto>,
+    pub update_list: ::prost::alloc::vec::Vec<ResolvedUpdateStmtProto>,
     /// Nested INSERT statements to apply.  Each insert will produce zero
     /// or more values for <element_column>.
     ///
@@ -6706,7 +6763,7 @@ pub struct ResolvedUpdateItemProto {
     /// For nested UPDATEs, insert_mode will always be the default, and
     /// has no effect.
     #[prost(message, repeated, tag = "7")]
-    pub insert_list: ::std::vec::Vec<ResolvedInsertStmtProto>,
+    pub insert_list: ::prost::alloc::vec::Vec<ResolvedInsertStmtProto>,
 }
 /// For an array element modification, this node represents the offset
 /// expression and the modification, but not the array. E.g., for
@@ -6715,13 +6772,13 @@ pub struct ResolvedUpdateItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedUpdateArrayItemProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     /// The array offset to be modified.
     #[prost(message, optional, tag = "2")]
-    pub offset: ::std::option::Option<AnyResolvedExprProto>,
+    pub offset: ::core::option::Option<AnyResolvedExprProto>,
     /// The modification to perform to the array element.
     #[prost(message, optional, tag = "3")]
-    pub update_item: ::std::option::Option<ResolvedUpdateItemProto>,
+    pub update_item: ::core::option::Option<ResolvedUpdateItemProto>,
 }
 /// This represents an UPDATE statement, or a nested UPDATE inside an
 /// UPDATE statement.
@@ -6761,26 +6818,26 @@ pub struct ResolvedUpdateArrayItemProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedUpdateStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     #[prost(
         enumeration = "resolved_statement_enums::ObjectAccess",
         repeated,
         packed = "false",
         tag = "8"
     )]
-    pub column_access_list: ::std::vec::Vec<i32>,
+    pub column_access_list: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "3")]
-    pub assert_rows_modified: ::std::option::Option<ResolvedAssertRowsModifiedProto>,
+    pub assert_rows_modified: ::core::option::Option<ResolvedAssertRowsModifiedProto>,
     #[prost(message, optional, tag = "7")]
-    pub array_offset_column: ::std::option::Option<ResolvedColumnHolderProto>,
+    pub array_offset_column: ::core::option::Option<ResolvedColumnHolderProto>,
     #[prost(message, optional, tag = "4")]
-    pub where_expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub where_expr: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "5")]
-    pub update_item_list: ::std::vec::Vec<ResolvedUpdateItemProto>,
+    pub update_item_list: ::prost::alloc::vec::Vec<ResolvedUpdateItemProto>,
     #[prost(message, optional, tag = "6")]
-    pub from_scan: ::std::option::Option<AnyResolvedScanProto>,
+    pub from_scan: ::core::option::Option<AnyResolvedScanProto>,
 }
 /// This is used by ResolvedMergeStmt to represent one WHEN ... THEN clause
 /// within MERGE statement.
@@ -6828,27 +6885,27 @@ pub struct ResolvedUpdateStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedMergeWhenProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(
         enumeration = "resolved_merge_when_enums::MatchType",
         optional,
         tag = "2"
     )]
-    pub match_type: ::std::option::Option<i32>,
+    pub match_type: ::core::option::Option<i32>,
     #[prost(message, optional, tag = "3")]
-    pub match_expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub match_expr: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(
         enumeration = "resolved_merge_when_enums::ActionType",
         optional,
         tag = "4"
     )]
-    pub action_type: ::std::option::Option<i32>,
+    pub action_type: ::core::option::Option<i32>,
     #[prost(message, repeated, tag = "5")]
-    pub insert_column_list: ::std::vec::Vec<ResolvedColumnProto>,
+    pub insert_column_list: ::prost::alloc::vec::Vec<ResolvedColumnProto>,
     #[prost(message, optional, tag = "6")]
-    pub insert_row: ::std::option::Option<ResolvedInsertRowProto>,
+    pub insert_row: ::core::option::Option<ResolvedInsertRowProto>,
     #[prost(message, repeated, tag = "7")]
-    pub update_item_list: ::std::vec::Vec<ResolvedUpdateItemProto>,
+    pub update_item_list: ::prost::alloc::vec::Vec<ResolvedUpdateItemProto>,
 }
 /// This represents a MERGE statement.
 ///
@@ -6875,22 +6932,22 @@ pub struct ResolvedMergeWhenProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedMergeStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     #[prost(
         enumeration = "resolved_statement_enums::ObjectAccess",
         repeated,
         packed = "false",
         tag = "6"
     )]
-    pub column_access_list: ::std::vec::Vec<i32>,
+    pub column_access_list: ::prost::alloc::vec::Vec<i32>,
     #[prost(message, optional, tag = "3")]
-    pub from_scan: ::std::option::Option<AnyResolvedScanProto>,
+    pub from_scan: ::core::option::Option<AnyResolvedScanProto>,
     #[prost(message, optional, tag = "4")]
-    pub merge_expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub merge_expr: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "5")]
-    pub when_clause_list: ::std::vec::Vec<ResolvedMergeWhenProto>,
+    pub when_clause_list: ::prost::alloc::vec::Vec<ResolvedMergeWhenProto>,
 }
 /// This represents a TRUNCATE TABLE statement.
 ///
@@ -6907,11 +6964,11 @@ pub struct ResolvedMergeStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedTruncateStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "3")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     #[prost(message, optional, tag = "4")]
-    pub where_expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub where_expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// A grantable privilege.
 ///
@@ -6923,11 +6980,11 @@ pub struct ResolvedTruncateStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedPrivilegeProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub action_type: ::std::option::Option<std::string::String>,
+    pub action_type: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "3")]
-    pub unit_list: ::std::vec::Vec<std::string::String>,
+    pub unit_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// Common superclass of GRANT/REVOKE statements.
 ///
@@ -6950,8 +7007,9 @@ pub struct AnyResolvedGrantOrRevokeStmtProto {
         oneof = "any_resolved_grant_or_revoke_stmt_proto::Node",
         tags = "69, 70"
     )]
-    pub node: ::std::option::Option<any_resolved_grant_or_revoke_stmt_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_grant_or_revoke_stmt_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedGrantOrRevokeStmtProto`.
 pub mod any_resolved_grant_or_revoke_stmt_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -6964,31 +7022,31 @@ pub mod any_resolved_grant_or_revoke_stmt_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGrantOrRevokeStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, repeated, tag = "2")]
-    pub privilege_list: ::std::vec::Vec<ResolvedPrivilegeProto>,
+    pub privilege_list: ::prost::alloc::vec::Vec<ResolvedPrivilegeProto>,
     #[prost(string, optional, tag = "3")]
-    pub object_type: ::std::option::Option<std::string::String>,
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "4")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "5")]
-    pub grantee_list: ::std::vec::Vec<std::string::String>,
+    pub grantee_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "6")]
-    pub grantee_expr_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub grantee_expr_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// A GRANT statement. It represents the action to grant a list of privileges
 /// on a specific object to/from list of grantees.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGrantStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedGrantOrRevokeStmtProto>,
+    pub parent: ::core::option::Option<ResolvedGrantOrRevokeStmtProto>,
 }
 /// A REVOKE statement. It represents the action to revoke a list of
 /// privileges on a specific object to/from list of grantees.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRevokeStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedGrantOrRevokeStmtProto>,
+    pub parent: ::core::option::Option<ResolvedGrantOrRevokeStmtProto>,
 }
 /// Common super class for statements:
 ///   ALTER <object> [IF EXISTS] <name_path> <alter_action_list>
@@ -7002,8 +7060,9 @@ pub struct AnyResolvedAlterObjectStmtProto {
         oneof = "any_resolved_alter_object_stmt_proto::Node",
         tags = "75, 115, 118, 127, 134, 145, 155"
     )]
-    pub node: ::std::option::Option<any_resolved_alter_object_stmt_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_alter_object_stmt_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedAlterObjectStmtProto`.
 pub mod any_resolved_alter_object_stmt_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -7028,13 +7087,13 @@ pub mod any_resolved_alter_object_stmt_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterObjectStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "3")]
-    pub alter_action_list: ::std::vec::Vec<AnyResolvedAlterActionProto>,
+    pub alter_action_list: ::prost::alloc::vec::Vec<AnyResolvedAlterActionProto>,
     #[prost(bool, optional, tag = "4")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
 }
 /// This statement:
 ///   ALTER DATABASE [IF EXISTS] <name_path> <alter_action_list>
@@ -7043,28 +7102,28 @@ pub struct ResolvedAlterObjectStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterDatabaseStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
 }
 /// This statement:
 /// ALTER MATERIALIZED VIEW [IF EXISTS] <name_path> <alter_action_list>
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterMaterializedViewStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
 }
 /// This statement:
 /// ALTER TABLE [IF EXISTS] <name_path> <alter_action_list>
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterTableStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
 }
 /// This statement:
 /// ALTER VIEW [IF EXISTS] <name_path> <alter_action_list>
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterViewStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
 }
 /// A common super class for all actions in statement ALTER <object>
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -7073,8 +7132,9 @@ pub struct AnyResolvedAlterActionProto {
         oneof = "any_resolved_alter_action_proto::Node",
         tags = "117, 131, 132, 135, 136, 137, 138, 156"
     )]
-    pub node: ::std::option::Option<any_resolved_alter_action_proto::Node>,
+    pub node: ::core::option::Option<any_resolved_alter_action_proto::Node>,
 }
+/// Nested message and enum types in `AnyResolvedAlterActionProto`.
 pub mod any_resolved_alter_action_proto {
     #[derive(Clone, PartialEq, ::prost::Oneof)]
     pub enum Node {
@@ -7099,7 +7159,7 @@ pub mod any_resolved_alter_action_proto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
 }
 /// SET OPTIONS action for ALTER <object> statement
 ///
@@ -7108,19 +7168,19 @@ pub struct ResolvedAlterActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSetOptionsActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(message, repeated, tag = "2")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// ADD COLUMN action for ALTER TABLE statement
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAddColumnActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(bool, optional, tag = "2")]
-    pub is_if_not_exists: ::std::option::Option<bool>,
+    pub is_if_not_exists: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "3")]
-    pub column_definition: ::std::option::Option<ResolvedColumnDefinitionProto>,
+    pub column_definition: ::core::option::Option<ResolvedColumnDefinitionProto>,
 }
 /// DROP COLUMN action for ALTER TABLE statement
 ///
@@ -7130,13 +7190,13 @@ pub struct ResolvedAddColumnActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDropColumnActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(bool, optional, tag = "2")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
     #[prost(string, optional, tag = "3")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "4")]
-    pub column_reference: ::std::option::Option<ResolvedColumnRefProto>,
+    pub column_reference: ::core::option::Option<ResolvedColumnRefProto>,
 }
 /// SET AS action for generic ALTER <entity_type> statement.
 ///
@@ -7144,9 +7204,9 @@ pub struct ResolvedDropColumnActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSetAsActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(string, optional, tag = "2")]
-    pub entity_body_json: ::std::option::Option<std::string::String>,
+    pub entity_body_json: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// This statement:
 ///   ALTER TABLE [IF EXISTS] <name> SET OPTIONS (...)
@@ -7160,13 +7220,13 @@ pub struct ResolvedSetAsActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterTableSetOptionsStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "3")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(bool, optional, tag = "4")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
 }
 /// This statement: RENAME <object_type> <old_name_path> TO <new_name_path>;
 ///
@@ -7179,13 +7239,13 @@ pub struct ResolvedAlterTableSetOptionsStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRenameStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, optional, tag = "2")]
-    pub object_type: ::std::option::Option<std::string::String>,
+    pub object_type: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "3")]
-    pub old_name_path: ::std::vec::Vec<std::string::String>,
+    pub old_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "4")]
-    pub new_name_path: ::std::vec::Vec<std::string::String>,
+    pub new_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// This statement: CREATE [OR REPLACE] ROW ACCESS POLICY [IF NOT EXISTS]
 ///                 [<name>] ON <target_name_path>
@@ -7218,27 +7278,27 @@ pub struct ResolvedRenameStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateRowAccessPolicyStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(
         enumeration = "resolved_create_statement_enums::CreateMode",
         optional,
         tag = "2"
     )]
-    pub create_mode: ::std::option::Option<i32>,
+    pub create_mode: ::core::option::Option<i32>,
     #[prost(string, optional, tag = "3")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "4")]
-    pub target_name_path: ::std::vec::Vec<std::string::String>,
+    pub target_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "5")]
-    pub grantee_list: ::std::vec::Vec<std::string::String>,
+    pub grantee_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "9")]
-    pub grantee_expr_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub grantee_expr_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, optional, tag = "6")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
     #[prost(message, optional, tag = "7")]
-    pub predicate: ::std::option::Option<AnyResolvedExprProto>,
+    pub predicate: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(string, optional, tag = "8")]
-    pub predicate_str: ::std::option::Option<std::string::String>,
+    pub predicate_str: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// This statement:
 ///     DROP ROW ACCESS POLICY <name> ON <target_name_path>; or
@@ -7253,15 +7313,15 @@ pub struct ResolvedCreateRowAccessPolicyStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDropRowAccessPolicyStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(bool, optional, tag = "2")]
-    pub is_drop_all: ::std::option::Option<bool>,
+    pub is_drop_all: ::core::option::Option<bool>,
     #[prost(bool, optional, tag = "3")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
     #[prost(string, optional, tag = "4")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "5")]
-    pub target_name_path: ::std::vec::Vec<std::string::String>,
+    pub target_name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// GRANT TO action for ALTER ROW ACCESS POLICY statement
 ///
@@ -7269,9 +7329,9 @@ pub struct ResolvedDropRowAccessPolicyStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedGrantToActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(message, repeated, tag = "2")]
-    pub grantee_expr_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub grantee_expr_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// FILTER USING action for ALTER ROW ACCESS POLICY statement
 ///
@@ -7281,11 +7341,11 @@ pub struct ResolvedGrantToActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFilterUsingActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(message, optional, tag = "2")]
-    pub predicate: ::std::option::Option<AnyResolvedExprProto>,
+    pub predicate: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(string, optional, tag = "3")]
-    pub predicate_str: ::std::option::Option<std::string::String>,
+    pub predicate_str: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// REVOKE FROM action for ALTER ROW ACCESS POLICY statement
 ///
@@ -7295,11 +7355,11 @@ pub struct ResolvedFilterUsingActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRevokeFromActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(message, repeated, tag = "2")]
-    pub revokee_expr_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub revokee_expr_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(bool, optional, tag = "3")]
-    pub is_revoke_from_all: ::std::option::Option<bool>,
+    pub is_revoke_from_all: ::core::option::Option<bool>,
 }
 /// RENAME TO action for ALTER ROW ACCESS POLICY statement
 ///         and ALTER TABLE statement
@@ -7309,9 +7369,9 @@ pub struct ResolvedRevokeFromActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRenameToActionProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterActionProto>,
+    pub parent: ::core::option::Option<ResolvedAlterActionProto>,
     #[prost(string, repeated, tag = "2")]
-    pub new_path: ::std::vec::Vec<std::string::String>,
+    pub new_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
 }
 /// This statement:
 ///     ALTER ROW ACCESS POLICY [IF EXISTS]
@@ -7326,11 +7386,11 @@ pub struct ResolvedRenameToActionProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterRowAccessPolicyStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "6")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
 }
 /// This statement:
 ///     ALTER ALL ROW ACCESS POLICIES ON <name_path> <alter_action_list>
@@ -7345,9 +7405,9 @@ pub struct ResolvedAlterRowAccessPolicyStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterAllRowAccessPoliciesStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
     #[prost(message, optional, tag = "6")]
-    pub table_scan: ::std::option::Option<ResolvedTableScanProto>,
+    pub table_scan: ::core::option::Option<ResolvedTableScanProto>,
 }
 /// This statement creates a user-defined named constant:
 /// CREATE [OR REPLACE] [TEMP | TEMPORARY | PUBLIC | PRIVATE] CONSTANT
@@ -7362,9 +7422,9 @@ pub struct ResolvedAlterAllRowAccessPoliciesStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateConstantStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// This statement creates a user-defined function:
 ///   CREATE [TEMP] FUNCTION [IF NOT EXISTS] <name_path> (<arg_list>)
@@ -7458,39 +7518,39 @@ pub struct ResolvedCreateConstantStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateFunctionStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(bool, optional, tag = "13")]
-    pub has_explicit_return_type: ::std::option::Option<bool>,
+    pub has_explicit_return_type: ::core::option::Option<bool>,
     #[prost(message, optional, tag = "3")]
-    pub return_type: ::std::option::Option<TypeProto>,
+    pub return_type: ::core::option::Option<TypeProto>,
     #[prost(string, repeated, tag = "11")]
-    pub argument_name_list: ::std::vec::Vec<std::string::String>,
+    pub argument_name_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "10")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
     #[prost(bool, optional, tag = "8")]
-    pub is_aggregate: ::std::option::Option<bool>,
+    pub is_aggregate: ::core::option::Option<bool>,
     #[prost(string, optional, tag = "4")]
-    pub language: ::std::option::Option<std::string::String>,
+    pub language: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "5")]
-    pub code: ::std::option::Option<std::string::String>,
+    pub code: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "9")]
-    pub aggregate_expression_list: ::std::vec::Vec<ResolvedComputedColumnProto>,
+    pub aggregate_expression_list: ::prost::alloc::vec::Vec<ResolvedComputedColumnProto>,
     #[prost(message, optional, tag = "6")]
-    pub function_expression: ::std::option::Option<AnyResolvedExprProto>,
+    pub function_expression: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "7")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(
         enumeration = "resolved_create_statement_enums::SqlSecurity",
         optional,
         tag = "12"
     )]
-    pub sql_security: ::std::option::Option<i32>,
+    pub sql_security: ::core::option::Option<i32>,
     #[prost(
         enumeration = "resolved_create_statement_enums::DeterminismLevel",
         optional,
         tag = "14"
     )]
-    pub determinism_level: ::std::option::Option<i32>,
+    pub determinism_level: ::core::option::Option<i32>,
 }
 /// This represents an argument definition, e.g. in a function's argument
 /// list.
@@ -7510,17 +7570,17 @@ pub struct ResolvedCreateFunctionStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedArgumentDefProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub r#type: ::std::option::Option<TypeProto>,
+    pub r#type: ::core::option::Option<TypeProto>,
     #[prost(
         enumeration = "resolved_argument_def_enums::ArgumentKind",
         optional,
         tag = "4"
     )]
-    pub argument_kind: ::std::option::Option<i32>,
+    pub argument_kind: ::core::option::Option<i32>,
 }
 /// This represents an argument reference, e.g. in a function's body.
 /// <name> is the name of the argument.
@@ -7534,15 +7594,15 @@ pub struct ResolvedArgumentDefProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedArgumentRefProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedExprProto>,
+    pub parent: ::core::option::Option<ResolvedExprProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(
         enumeration = "resolved_argument_def_enums::ArgumentKind",
         optional,
         tag = "3"
     )]
-    pub argument_kind: ::std::option::Option<i32>,
+    pub argument_kind: ::core::option::Option<i32>,
 }
 /// This statement creates a user-defined table-valued function:
 ///   CREATE [TEMP] TABLE FUNCTION [IF NOT EXISTS]
@@ -7637,29 +7697,29 @@ pub struct ResolvedArgumentRefProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateTableFunctionStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub argument_name_list: ::std::vec::Vec<std::string::String>,
+    pub argument_name_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
     #[prost(message, repeated, tag = "4")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(string, optional, tag = "5")]
-    pub language: ::std::option::Option<std::string::String>,
+    pub language: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "6")]
-    pub code: ::std::option::Option<std::string::String>,
+    pub code: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "7")]
-    pub query: ::std::option::Option<AnyResolvedScanProto>,
+    pub query: ::core::option::Option<AnyResolvedScanProto>,
     #[prost(message, repeated, tag = "8")]
-    pub output_column_list: ::std::vec::Vec<ResolvedOutputColumnProto>,
+    pub output_column_list: ::prost::alloc::vec::Vec<ResolvedOutputColumnProto>,
     #[prost(bool, optional, tag = "9")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
     #[prost(
         enumeration = "resolved_create_statement_enums::SqlSecurity",
         optional,
         tag = "10"
     )]
-    pub sql_security: ::std::option::Option<i32>,
+    pub sql_security: ::core::option::Option<i32>,
 }
 /// This represents a relation argument reference in a table-valued function's
 /// body. The 'column_list' of this ResolvedScan includes column names from
@@ -7667,18 +7727,18 @@ pub struct ResolvedCreateTableFunctionStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedRelationArgumentScanProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedScanProto>,
+    pub parent: ::core::option::Option<ResolvedScanProto>,
     /// This is the name of the relation argument for the table-valued
     /// function.  It is used to match this relation argument reference in
     /// a TVF SQL function body with one of possibly several relation
     /// arguments in the TVF call.
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     /// If true, the result of this query is a value table. Rather than
     /// producing rows with named columns, it produces rows with a single
     /// unnamed value type. See (broken link).
     #[prost(bool, optional, tag = "3")]
-    pub is_value_table: ::std::option::Option<bool>,
+    pub is_value_table: ::core::option::Option<bool>,
 }
 /// This statement: [ (<arg_list>) ];
 ///
@@ -7693,17 +7753,17 @@ pub struct ResolvedRelationArgumentScanProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedArgumentListProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, repeated, tag = "2")]
-    pub arg_list: ::std::vec::Vec<ResolvedArgumentDefProto>,
+    pub arg_list: ::prost::alloc::vec::Vec<ResolvedArgumentDefProto>,
 }
 /// This wrapper is used for an optional FunctionSignature.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedFunctionSignatureHolderProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(message, optional, tag = "2")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
 }
 /// This statement: DROP FUNCTION [IF EXISTS] <name_path>
 ///   [ (<arguments>) ];
@@ -7723,23 +7783,23 @@ pub struct ResolvedFunctionSignatureHolderProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedDropFunctionStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(bool, optional, tag = "2")]
-    pub is_if_exists: ::std::option::Option<bool>,
+    pub is_if_exists: ::core::option::Option<bool>,
     #[prost(string, repeated, tag = "3")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     /// NOTE: arguments for DROP FUNCTION statements are matched only on
     /// type; names for any arguments in ResolvedArgumentList will be set
     /// to the empty string irrespective of whether or not argument names
     /// were given in the DROP FUNCTION statement.
     #[prost(message, optional, tag = "4")]
-    pub arguments: ::std::option::Option<ResolvedArgumentListProto>,
+    pub arguments: ::core::option::Option<ResolvedArgumentListProto>,
     /// NOTE: arguments for DROP FUNCTION statements are matched only on
     /// type; names are irrelevant, so no argument names are saved to use
     /// with this signature.  Additionally, the return type will always be
     /// <void>, since return types are ignored for DROP FUNCTION.
     #[prost(message, optional, tag = "5")]
-    pub signature: ::std::option::Option<ResolvedFunctionSignatureHolderProto>,
+    pub signature: ::core::option::Option<ResolvedFunctionSignatureHolderProto>,
 }
 /// This statement: CALL <procedure>;
 ///
@@ -7749,13 +7809,13 @@ pub struct ResolvedDropFunctionStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCallStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub procedure: ::std::option::Option<ProcedureRefProto>,
+    pub procedure: ::core::option::Option<ProcedureRefProto>,
     #[prost(message, optional, tag = "3")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
     #[prost(message, repeated, tag = "4")]
-    pub argument_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub argument_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// This statement: IMPORT <import_kind>
 ///                              [<name_path> [AS|INTO <alias_path>]
@@ -7786,23 +7846,23 @@ pub struct ResolvedCallStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedImportStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(
         enumeration = "resolved_import_stmt_enums::ImportKind",
         optional,
         tag = "2"
     )]
-    pub import_kind: ::std::option::Option<i32>,
+    pub import_kind: ::core::option::Option<i32>,
     #[prost(string, repeated, tag = "3")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "4")]
-    pub file_path: ::std::option::Option<std::string::String>,
+    pub file_path: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "5")]
-    pub alias_path: ::std::vec::Vec<std::string::String>,
+    pub alias_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(string, repeated, tag = "7")]
-    pub into_alias_path: ::std::vec::Vec<std::string::String>,
+    pub into_alias_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "6")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This statement: MODULE <name_path> [<option_list>];
 ///
@@ -7813,11 +7873,11 @@ pub struct ResolvedImportStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedModuleStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub name_path: ::std::vec::Vec<std::string::String>,
+    pub name_path: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "3")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// This represents a HAVING MAX or HAVING MIN modifier in an aggregate
 /// expression. If an aggregate has arguments (x HAVING {MAX/MIN} y),
@@ -7829,15 +7889,15 @@ pub struct ResolvedModuleStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAggregateHavingModifierProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(
         enumeration = "resolved_aggregate_having_modifier_enums::HavingModifierKind",
         optional,
         tag = "2"
     )]
-    pub kind: ::std::option::Option<i32>,
+    pub kind: ::core::option::Option<i32>,
     #[prost(message, optional, boxed, tag = "3")]
-    pub having_expr: ::std::option::Option<::std::boxed::Box<AnyResolvedExprProto>>,
+    pub having_expr: ::core::option::Option<::prost::alloc::boxed::Box<AnyResolvedExprProto>>,
 }
 /// This statement:
 ///   CREATE MATERIALIZED VIEW <name> [PARTITION BY expr, ...]
@@ -7864,13 +7924,13 @@ pub struct ResolvedAggregateHavingModifierProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateMaterializedViewStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateViewBaseProto>,
+    pub parent: ::core::option::Option<ResolvedCreateViewBaseProto>,
     #[prost(message, repeated, tag = "2")]
-    pub column_definition_list: ::std::vec::Vec<ResolvedColumnDefinitionProto>,
+    pub column_definition_list: ::prost::alloc::vec::Vec<ResolvedColumnDefinitionProto>,
     #[prost(message, repeated, tag = "3")]
-    pub partition_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub partition_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
     #[prost(message, repeated, tag = "4")]
-    pub cluster_by_list: ::std::vec::Vec<AnyResolvedExprProto>,
+    pub cluster_by_list: ::prost::alloc::vec::Vec<AnyResolvedExprProto>,
 }
 /// This statement creates a user-defined procedure:
 /// CREATE [OR REPLACE] [TEMP] PROCEDURE [IF NOT EXISTS] <name_path>
@@ -7901,15 +7961,15 @@ pub struct ResolvedCreateMaterializedViewStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateProcedureStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(string, repeated, tag = "2")]
-    pub argument_name_list: ::std::vec::Vec<std::string::String>,
+    pub argument_name_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub signature: ::std::option::Option<FunctionSignatureProto>,
+    pub signature: ::core::option::Option<FunctionSignatureProto>,
     #[prost(message, repeated, tag = "4")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
     #[prost(string, optional, tag = "5")]
-    pub procedure_body: ::std::option::Option<std::string::String>,
+    pub procedure_body: ::core::option::Option<::prost::alloc::string::String>,
 }
 /// An argument for an EXECUTE IMMEDIATE's USING clause.
 ///
@@ -7918,11 +7978,11 @@ pub struct ResolvedCreateProcedureStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExecuteImmediateArgumentProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedArgumentProto>,
+    pub parent: ::core::option::Option<ResolvedArgumentProto>,
     #[prost(string, optional, tag = "2")]
-    pub name: ::std::option::Option<std::string::String>,
+    pub name: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, optional, tag = "3")]
-    pub expression: ::std::option::Option<AnyResolvedExprProto>,
+    pub expression: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// An EXECUTE IMMEDIATE statement
 /// EXECUTE IMMEDIATE <sql> [<into_clause>] [<using_clause>]
@@ -7937,37 +7997,37 @@ pub struct ResolvedExecuteImmediateArgumentProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedExecuteImmediateStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     #[prost(message, optional, tag = "2")]
-    pub sql: ::std::option::Option<AnyResolvedExprProto>,
+    pub sql: ::core::option::Option<AnyResolvedExprProto>,
     #[prost(string, repeated, tag = "3")]
-    pub into_identifier_list: ::std::vec::Vec<std::string::String>,
+    pub into_identifier_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "4")]
-    pub using_argument_list: ::std::vec::Vec<ResolvedExecuteImmediateArgumentProto>,
+    pub using_argument_list: ::prost::alloc::vec::Vec<ResolvedExecuteImmediateArgumentProto>,
 }
 /// An assignment of a value to another value.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAssignmentStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     /// Target of the assignment.  Currently, this will be either ResolvedSystemVariable, or a chain of ResolveGetField operations around it.
     #[prost(message, optional, tag = "2")]
-    pub target: ::std::option::Option<AnyResolvedExprProto>,
+    pub target: ::core::option::Option<AnyResolvedExprProto>,
     /// Value to assign into the target.  This will always be the same type as the target.
     #[prost(message, optional, tag = "3")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// An assignment of a value to another value.
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedSingleAssignmentStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedStatementProto>,
+    pub parent: ::core::option::Option<ResolvedStatementProto>,
     /// Target of the assignment.
     #[prost(string, optional, tag = "2")]
-    pub variable: ::std::option::Option<std::string::String>,
+    pub variable: ::core::option::Option<::prost::alloc::string::String>,
     /// Value to assign into the target.
     #[prost(message, optional, tag = "3")]
-    pub expr: ::std::option::Option<AnyResolvedExprProto>,
+    pub expr: ::core::option::Option<AnyResolvedExprProto>,
 }
 /// (broken link)
 /// This statement:
@@ -7982,13 +8042,13 @@ pub struct ResolvedSingleAssignmentStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedCreateEntityStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedCreateStatementProto>,
+    pub parent: ::core::option::Option<ResolvedCreateStatementProto>,
     #[prost(string, optional, tag = "2")]
-    pub entity_type: ::std::option::Option<std::string::String>,
+    pub entity_type: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(string, optional, tag = "3")]
-    pub entity_body_json: ::std::option::Option<std::string::String>,
+    pub entity_body_json: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(message, repeated, tag = "4")]
-    pub option_list: ::std::vec::Vec<ResolvedOptionProto>,
+    pub option_list: ::prost::alloc::vec::Vec<ResolvedOptionProto>,
 }
 /// (broken link)
 /// This statement:
@@ -7999,7 +8059,7 @@ pub struct ResolvedCreateEntityStmtProto {
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct ResolvedAlterEntityStmtProto {
     #[prost(message, optional, tag = "1")]
-    pub parent: ::std::option::Option<ResolvedAlterObjectStmtProto>,
+    pub parent: ::core::option::Option<ResolvedAlterObjectStmtProto>,
     #[prost(string, optional, tag = "2")]
-    pub entity_type: ::std::option::Option<std::string::String>,
+    pub entity_type: ::core::option::Option<::prost::alloc::string::String>,
 }
