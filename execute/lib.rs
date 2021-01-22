@@ -20,6 +20,10 @@ mod optimize_tests;
 mod scalar_tests;
 #[cfg(test)]
 mod test_suite;
+mod topic;
+#[cfg(test)]
+mod topic_tests;
+mod uuid;
 
 pub use crate::{
     adventure_works::adventure_works,
