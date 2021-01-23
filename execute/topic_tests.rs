@@ -2,22 +2,28 @@ use crate::{topic::*, uuid::Uuid};
 use kernel::{AnyArray, Array, I64Array, RecordBatch};
 
 #[tokio::test]
-async fn test_send_with_task() {
+async fn test_send_receive() {
     let uuid = Uuid::random();
-    let send = tokio::spawn(async move {
-        publish(uuid, Some(sample())).await;
+    // Spawn an async task that sends a message on topic `uuid`.
+    let send_task = tokio::spawn(async move {
+        println!("send task started");
+        publish(uuid, sample()).await;
+        println!("sent message");
+        close(uuid).await;
+        println!("send task complete");
     });
-    let found = subscribe(uuid).recv().await.unwrap().unwrap();
-    send.await.unwrap();
-    assert_eq!(format!("{:?}", sample()), format!("{:?}", found))
-}
-
-#[tokio::test]
-async fn test_receive_with_task() {
-    let uuid = Uuid::random();
-    let receive = tokio::spawn(async move { subscribe(uuid).recv().await });
-    publish(uuid, Some(sample())).await;
-    let found = receive.await.unwrap().unwrap().unwrap();
+    // Spawn an async task that receives a message on topic `uuid`.
+    let receive_task = tokio::spawn(async move {
+        println!("receive task started");
+        let mut stream = subscribe(uuid);
+        let message = stream.next().await.unwrap();
+        println!("received message");
+        assert!(stream.next().await.is_none());
+        println!("receive task complete");
+        message
+    });
+    send_task.await.unwrap();
+    let found = receive_task.await.unwrap();
     assert_eq!(format!("{:?}", sample()), format!("{:?}", found))
 }
 
