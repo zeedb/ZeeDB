@@ -38,7 +38,7 @@ pub static ZETASQL_SERVER: Lazy<Mutex<(Runtime, ZetaSqlLocalServiceClient<Channe
             .arg(SCRIPT)
             .output()
             .expect("failed to start docker");
-        let mut runtime = Runtime::new().expect("runtime failed to start");
+        let runtime = Runtime::new().expect("runtime failed to start");
         let client = runtime
             .block_on(ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051"))
             .expect("client failed to connect");
