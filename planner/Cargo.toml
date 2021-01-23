@@ -9,10 +9,10 @@ path = "lib.rs"
 
 [dependencies]
 regex = "1.4.2"
+chrono = "0.4.11"
+rand = "0.7.3"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
-chrono = { version = "0.4.11" }
-rand = "0.7.3"
 encoding = { path = "../encoding" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }
