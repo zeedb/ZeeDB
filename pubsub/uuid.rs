@@ -12,4 +12,8 @@ impl Uuid {
     pub fn serialize(&self) -> Vec<u8> {
         self.0.to_vec()
     }
+
+    pub fn deserialize(buffer: &Vec<u8>) -> Self {
+        todo!()
+    }
 }

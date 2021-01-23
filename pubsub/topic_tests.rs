@@ -7,18 +7,20 @@ async fn test_send_receive() {
     // Spawn an async task that sends a message on topic `uuid`.
     let send_task = tokio::spawn(async move {
         println!("send task started");
-        publish(uuid, sample()).await;
+        publish(uuid, Some(sample())).await;
         println!("sent message");
-        close(uuid).await;
+        publish(uuid, None).await;
         println!("send task complete");
     });
     // Spawn an async task that receives a message on topic `uuid`.
     let receive_task = tokio::spawn(async move {
         println!("receive task started");
         let mut stream = subscribe(uuid);
-        let message = stream.next().await.unwrap();
+        let message = stream.recv().await.unwrap().unwrap();
         println!("received message");
-        assert!(stream.next().await.is_none());
+        assert!(stream.recv().await.unwrap().is_none());
+        println!("received end");
+        close(uuid);
         println!("receive task complete");
         message
     });
