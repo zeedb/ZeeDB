@@ -6,7 +6,7 @@ fn test_analyze() {
     let expr = analyze(
         catalog::ROOT_CATALOG_ID,
         &catalog::default_catalog(),
-        &"select 1".to_string(),
+        "select 1",
     )
     .unwrap();
     if let LogicalOut { input, .. } = &expr {
@@ -19,7 +19,7 @@ fn test_analyze() {
 
 #[test]
 fn test_split() {
-    let sql = "select 1; select 2".to_string();
+    let sql = "select 1; select 2";
     analyze(catalog::ROOT_CATALOG_ID, &catalog::default_catalog(), &sql).unwrap();
 }
 
@@ -28,7 +28,7 @@ fn test_not_available_fn() {
     match analyze(
         catalog::ROOT_CATALOG_ID,
         &catalog::default_catalog(),
-        &"select to_proto(true)".to_string(),
+        "select to_proto(true)",
     ) {
         Ok(_) => panic!("expected error"),
         Err(_) => (),
@@ -59,18 +59,18 @@ fn test_format() {
 
 #[test]
 fn test_script() {
-    let sql = "set x = 1;".to_string();
+    let sql = "set x = 1;";
     analyze(catalog::ROOT_CATALOG_ID, &catalog::default_catalog(), &sql).unwrap();
 }
 
 #[test]
 fn test_custom_function() {
-    let sql = "select metadata.next_val(1);".to_string();
+    let sql = "select metadata.next_val(1);";
     analyze(catalog::ROOT_CATALOG_ID, &catalog::default_catalog(), &sql).unwrap();
 }
 
 #[test]
 fn test_call() {
-    let sql = "call metadata.create_table(1);".to_string();
+    let sql = "call metadata.create_table(1);";
     analyze(catalog::ROOT_CATALOG_ID, &catalog::default_catalog(), &sql).unwrap();
 }

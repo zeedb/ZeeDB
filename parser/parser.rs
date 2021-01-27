@@ -1,21 +1,16 @@
-use crate::{convert::convert, server::ZETASQL_SERVER};
+use crate::{convert::convert, server::ParseClient};
 use ast::Expr;
 use kernel::*;
-use std::ops::DerefMut;
 use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
 
 pub const MAX_QUERY: usize = 4_194_304;
 
 pub fn format(sql: &String) -> Result<String, String> {
-    let mut lock = match ZETASQL_SERVER.lock() {
-        Ok(lock) => lock,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    let (runtime, client) = lock.deref_mut();
+    let mut client = ParseClient::new();
     let request = tonic::Request::new(FormatSqlRequest {
         sql: Some(sql.clone()),
     });
-    match runtime.block_on(client.format_sql(request)) {
+    match client.format_sql(request) {
         Ok(response) => Ok(response.into_inner().sql.unwrap()),
         Err(status) => Err(String::from(status.message())),
     }
@@ -58,11 +53,7 @@ fn analyze_next(
     sql: &str,
     offset: i32,
 ) -> Result<(i32, Expr), String> {
-    let mut lock = match ZETASQL_SERVER.lock() {
-        Ok(lock) => lock,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    let (runtime, client) = lock.deref_mut();
+    let mut client = ParseClient::new();
     let request = tonic::Request::new(AnalyzeRequest {
         simple_catalog: Some(catalog.clone()),
         options: Some(AnalyzerOptionsProto {
@@ -91,7 +82,7 @@ fn analyze_next(
         )),
         ..Default::default()
     });
-    match runtime.block_on(client.analyze(request)) {
+    match client.analyze(request) {
         Ok(response) => {
             let response = response.into_inner();
             let offset = response.resume_byte_position.unwrap();
