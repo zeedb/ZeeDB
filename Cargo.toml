@@ -2,7 +2,6 @@
 members = [
     "ast",
     "benchmarks",
-    "client",
     "catalog",
     "encoding",
     "execute",
@@ -10,7 +9,6 @@ members = [
     "parser",
     "planner",
     "protos",
-    "pubsub",
     "statistics",
     "storage",
     "worker",

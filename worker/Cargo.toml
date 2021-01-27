@@ -8,9 +8,18 @@ name = "worker"
 path = "main.rs"
 
 [dependencies]
+bincode = "1.3.1"
+once_cell = "1.5.2"
 prost = "0.7"
 prost-types = "0.7"
+rand = { version = "0.8.2", features = ["small_rng"]}
 tokio = { version = "1.0.2", features = ["macros", "rt-multi-thread"] }
 tonic = "0.4.0"
+ast = { path = "../ast" }
+catalog = { path = "../catalog" }
 execute = { path = "../execute" }
+parser = { path = "../parser" }
+planner = { path = "../planner" }
 protos = { path = "../protos" }
+storage = { path = "../storage" }
+kernel = { path = "../kernel" }

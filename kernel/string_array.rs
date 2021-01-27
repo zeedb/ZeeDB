@@ -1,11 +1,11 @@
 use crate::{
     AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, DateArray, F64Array, I32Array,
-    I64Array, TimestampArray, U64Array,
+    I64Array, TimestampArray,
 };
-use std::{cmp::Ordering, ops::Range};
-use twox_hash::xxh3;
+use serde::{Deserialize, Serialize};
+use std::ops::Range;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StringArray {
     buffer: String,
     offsets: Vec<i32>,

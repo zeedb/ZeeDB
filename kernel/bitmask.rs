@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, ops::Range};
 
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Bitmask {
     values: Vec<u8>,
     len: usize,

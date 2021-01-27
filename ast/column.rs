@@ -5,13 +5,12 @@ use std::{
     fmt,
     fmt::{Debug, Display},
     hash::Hash,
-    sync::Arc,
+    sync::atomic::AtomicU64,
 };
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Column {
-    #[serde(skip)]
-    pub id: Arc<()>,
+    pub id: u64,
     pub name: String,
     pub table_id: Option<i64>,
     pub table_name: Option<String>,
@@ -22,7 +21,7 @@ pub struct Column {
 impl Column {
     pub fn computed(name: &str, table_name: &Option<String>, data_type: DataType) -> Self {
         Self {
-            id: Arc::new(()),
+            id: next_column_id(),
             name: name.to_string(),
             table_id: None,
             table_name: table_name.clone(),
@@ -33,7 +32,7 @@ impl Column {
 
     pub fn table(name: &str, table_id: i64, table_name: &str, data_type: DataType) -> Self {
         Self {
-            id: Arc::new(()),
+            id: next_column_id(),
             name: name.to_string(),
             table_id: Some(table_id),
             table_name: Some(table_name.to_string()),
@@ -44,7 +43,7 @@ impl Column {
 
     pub fn fresh(copy: &Column) -> Self {
         Self {
-            id: Arc::new(()),
+            id: next_column_id(),
             name: copy.name.clone(),
             table_id: copy.table_id.clone(),
             table_name: copy.table_name.clone(),
@@ -55,23 +54,23 @@ impl Column {
 
     pub fn canonical_name(&self) -> String {
         if let Some(table) = &self.table_name {
-            format!("{}.{}#{:?}", table, self.name, Arc::as_ptr(&self.id))
+            format!("{}.{}#{:#x}", table, self.name, self.id)
         } else {
-            format!("{}#{:?}", self.name, Arc::as_ptr(&self.id))
+            format!("{}#{:#x}", self.name, self.id)
         }
     }
 }
 
 impl PartialEq for Column {
     fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.id, &other.id)
+        self.id == other.id
     }
 }
 impl Eq for Column {}
 
 impl Hash for Column {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        std::ptr::hash(Arc::as_ptr(&self.id), state)
+        state.write_u64(self.id)
     }
 }
 
@@ -83,11 +82,7 @@ impl PartialOrd for Column {
 
 impl Ord for Column {
     fn cmp(&self, other: &Self) -> Ordering {
-        let name = self.name.cmp(&other.name);
-        let self_ptr = Arc::as_ptr(&self.id);
-        let other_ptr = Arc::as_ptr(&other.id);
-        let id = self_ptr.cmp(&other_ptr);
-        name.then(id)
+        self.name.cmp(&other.name).then(self.id.cmp(&other.id))
     }
 }
 
@@ -118,4 +113,9 @@ impl Display for Column {
         }
         Ok(())
     }
+}
+
+fn next_column_id() -> u64 {
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }

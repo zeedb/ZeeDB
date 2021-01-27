@@ -2,9 +2,10 @@ use crate::{
     Array, BoolArray, DataType, DateArray, F64Array, I32Array, I64Array, StringArray,
     TimestampArray, U64Array,
 };
+use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, ops::Range};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AnyArray {
     Bool(BoolArray),
     I64(I64Array),

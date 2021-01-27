@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+package worker;
+
+service Worker {
+  rpc Submit (SubmitRequest) returns (stream Page) {}
+  rpc Broadcast (BroadcastRequest) returns (stream Page) {}
+  rpc Exchange (ExchangeRequest) returns (stream Page) {}
+}
+
+message SubmitRequest {
+  string sql = 1;
+}
+
+message BroadcastRequest {
+  bytes expr = 1;
+  int64 txn = 2;
+  int32 listeners = 3;
+}
+
+message ExchangeRequest {
+  bytes expr = 1;
+  int64 txn = 2;
+  int32 listeners = 3;
+  string hash_column = 4;
+  int32 hash_bucket = 5;
+}
+
+message Page {
+  bytes record_batch = 1;
+}

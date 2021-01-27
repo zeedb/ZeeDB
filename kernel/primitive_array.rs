@@ -1,24 +1,25 @@
 use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, StringArray};
+use serde::{Deserialize, Serialize};
 use std::ops::Range;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct I64Array {
     values: Vec<i64>,
     is_valid: Bitmask,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct F64Array {
     values: Vec<f64>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DateArray {
     values: Vec<i32>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TimestampArray {
     values: Vec<i64>,
     is_valid: Bitmask,
