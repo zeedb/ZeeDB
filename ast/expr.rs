@@ -1,6 +1,7 @@
 use crate::{column::Column, index::Index, values::*};
 use chrono::Weekday;
 use kernel::*;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     collections::{HashMap, HashSet},
@@ -9,7 +10,7 @@ use std::{
 };
 
 // Expr plan nodes combine inputs in a Plan tree.
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Expr {
     Leaf {
         gid: usize,
@@ -1480,7 +1481,7 @@ impl std::ops::IndexMut<usize> for Expr {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Join {
     // Inner implements the default SQL join.
     Inner(Vec<Scalar>),
@@ -1530,7 +1531,7 @@ impl Join {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Table {
     pub id: i64,
     pub name: String,
@@ -1574,7 +1575,7 @@ impl fmt::Display for Table {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Name {
     pub catalog_id: i64,
     pub path: Vec<String>,
@@ -1586,7 +1587,7 @@ impl fmt::Display for Name {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum ObjectType {
     Database,
     Table,
@@ -1606,7 +1607,7 @@ impl ObjectType {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct OrderBy {
     pub column: Column,
     pub descending: bool,
@@ -1622,7 +1623,7 @@ impl fmt::Display for OrderBy {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Scalar {
     Literal(Value),
     Column(Column),
@@ -1705,7 +1706,7 @@ impl Scalar {
 }
 
 // Functions appear in scalar expressions.
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum F {
     CurrentDate,
     CurrentTimestamp,
@@ -1828,7 +1829,8 @@ pub enum F {
     CaseWithValue(Scalar, Vec<(Scalar, Scalar)>, Scalar),
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[serde(from = "i32", into = "i32")]
 pub enum DatePart {
     Microsecond,
     Millisecond,
@@ -1878,6 +1880,60 @@ impl DatePart {
             }
         } else {
             panic!("{:?} is not an enum value", scalar)
+        }
+    }
+}
+
+impl From<i32> for DatePart {
+    fn from(i: i32) -> Self {
+        match i {
+            1 => DatePart::Microsecond,
+            2 => DatePart::Millisecond,
+            3 => DatePart::Second,
+            4 => DatePart::Minute,
+            5 => DatePart::Hour,
+            6 => DatePart::DayOfWeek,
+            7 => DatePart::Day,
+            8 => DatePart::DayOfYear,
+            9 => DatePart::Week(Weekday::Mon),
+            10 => DatePart::Week(Weekday::Tue),
+            11 => DatePart::Week(Weekday::Wed),
+            12 => DatePart::Week(Weekday::Thu),
+            13 => DatePart::Week(Weekday::Fri),
+            14 => DatePart::Week(Weekday::Sat),
+            15 => DatePart::Week(Weekday::Sun),
+            16 => DatePart::IsoWeek,
+            17 => DatePart::Month,
+            18 => DatePart::Quarter,
+            19 => DatePart::Year,
+            20 => DatePart::IsoYear,
+            other => panic!("{}", other),
+        }
+    }
+}
+impl Into<i32> for DatePart {
+    fn into(self) -> i32 {
+        match self {
+            DatePart::Microsecond => 1,
+            DatePart::Millisecond => 2,
+            DatePart::Second => 3,
+            DatePart::Minute => 4,
+            DatePart::Hour => 5,
+            DatePart::DayOfWeek => 6,
+            DatePart::Day => 7,
+            DatePart::DayOfYear => 8,
+            DatePart::Week(Weekday::Mon) => 9,
+            DatePart::Week(Weekday::Tue) => 10,
+            DatePart::Week(Weekday::Wed) => 11,
+            DatePart::Week(Weekday::Thu) => 12,
+            DatePart::Week(Weekday::Fri) => 13,
+            DatePart::Week(Weekday::Sat) => 14,
+            DatePart::Week(Weekday::Sun) => 15,
+            DatePart::IsoWeek => 16,
+            DatePart::Month => 17,
+            DatePart::Quarter => 18,
+            DatePart::Year => 19,
+            DatePart::IsoYear => 20,
         }
     }
 }
@@ -2695,7 +2751,7 @@ impl F {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct AggregateExpr {
     pub function: AggregateFunction,
     pub distinct: bool,
@@ -2703,7 +2759,7 @@ pub struct AggregateExpr {
     pub output: Column,
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum AggregateFunction {
     AnyValue,
     Count,
@@ -2741,7 +2797,7 @@ impl AggregateFunction {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Procedure {
     CreateTable(Scalar),
     DropTable(Scalar),

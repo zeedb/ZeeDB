@@ -1,8 +1,9 @@
 use chrono::*;
 use kernel::*;
+use serde::{Deserialize, Serialize};
 use std::{fmt, hash};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Value {
     Bool(Option<bool>),
     I64(Option<i64>),

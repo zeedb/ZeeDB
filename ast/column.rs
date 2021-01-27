@@ -1,4 +1,5 @@
 use kernel::DataType;
+use serde::{Deserialize, Serialize};
 use std::{
     cmp::Ordering,
     fmt,
@@ -7,8 +8,9 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Column {
+    #[serde(skip)]
     pub id: Arc<()>,
     pub name: String,
     pub table_id: Option<i64>,

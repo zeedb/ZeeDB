@@ -1,6 +1,7 @@
 use crate::{Scalar, F};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 pub struct Index {
     pub index_id: i64,
     pub table_id: i64,
