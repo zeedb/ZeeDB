@@ -14,34 +14,6 @@ pub struct Storage {
 }
 
 impl Storage {
-    pub fn new() -> Self {
-        // First 100 tables are reserved for system use.
-        let mut tables = Vec::with_capacity(0);
-        let mut statistics = Vec::with_capacity(0);
-        tables.resize_with(100, Heap::empty);
-        statistics.resize_with(100, TableStatistics::empty);
-        // First 100 sequences are reserved for system use.
-        let mut sequences = Vec::with_capacity(0);
-        sequences.resize_with(100, || AtomicI64::new(0));
-        // Bootstrap tables.
-        for (table_id, values) in catalog::bootstrap_tables() {
-            tables[table_id as usize].insert(&values, 0);
-            statistics[table_id as usize].insert(&values);
-        }
-        // Bootstrap sequences.
-        for (sequence_id, value) in catalog::bootstrap_sequences() {
-            sequences[sequence_id as usize].store(value, Ordering::Relaxed);
-        }
-        // Initially there are no indexes. TODO index system tables.
-        let indexes = vec![];
-        Self {
-            tables,
-            statistics,
-            indexes,
-            sequences,
-        }
-    }
-
     pub fn table(&self, id: i64) -> &Heap {
         &self.tables[id as usize]
     }
@@ -86,6 +58,36 @@ impl Storage {
 
     pub fn statistics_mut(&mut self, id: i64) -> &mut TableStatistics {
         &mut self.statistics[id as usize]
+    }
+}
+
+impl Default for Storage {
+    fn default() -> Self {
+        // First 100 tables are reserved for system use.
+        let mut tables = Vec::with_capacity(0);
+        let mut statistics = Vec::with_capacity(0);
+        tables.resize_with(100, Heap::empty);
+        statistics.resize_with(100, TableStatistics::empty);
+        // First 100 sequences are reserved for system use.
+        let mut sequences = Vec::with_capacity(0);
+        sequences.resize_with(100, || AtomicI64::new(0));
+        // Bootstrap tables.
+        for (table_id, values) in catalog::bootstrap_tables() {
+            tables[table_id as usize].insert(&values, 0);
+            statistics[table_id as usize].insert(&values);
+        }
+        // Bootstrap sequences.
+        for (sequence_id, value) in catalog::bootstrap_sequences() {
+            sequences[sequence_id as usize].store(value, Ordering::Relaxed);
+        }
+        // Initially there are no indexes. TODO index system tables.
+        let indexes = vec![];
+        Self {
+            tables,
+            statistics,
+            indexes,
+            sequences,
+        }
     }
 }
 

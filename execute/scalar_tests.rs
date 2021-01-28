@@ -624,7 +624,7 @@ fn test_casts() {
 
 fn eval(sql: &str) -> Value {
     let sql = format!("select {}", sql);
-    let mut storage = Storage::new();
+    let mut storage = Storage::default();
     let catalog = crate::catalog::catalog(&mut storage, 100);
     let indexes = crate::catalog::indexes(&mut storage, 100);
     let parse = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).expect(&sql);

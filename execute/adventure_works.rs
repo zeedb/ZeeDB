@@ -19,7 +19,7 @@ fn generate_adventure_works(n_store: usize) -> Storage {
         DateTime::from_utc(NaiveDateTime::from_timestamp(secs, 0), Utc)
     }
     println!("Initialize adventure_works database...");
-    let mut storage = Storage::new();
+    let mut storage = Storage::default();
     let mut txn = 0;
     // Create tables.
     execute(&mut storage, vec![

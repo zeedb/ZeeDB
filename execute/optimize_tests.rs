@@ -317,7 +317,7 @@ fn test_with() {
 
 #[test]
 fn test_distinct() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table integers (x int64)");
     t.setup("insert into integers values (1), (1), (2), (3), (null)");
     t.ok("explain select count(distinct x) from integers");
@@ -329,7 +329,7 @@ fn test_distinct() {
 
 #[test]
 fn test_enforcers() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table integers (x int64)");
     t.setup("insert into integers values (1), (1), (2), (3), (null)");
     t.ok("explain select x, count(x) from integers group by 1");

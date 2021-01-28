@@ -4,14 +4,14 @@ use crate::test_suite::*;
 
 #[test]
 fn test_literals() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.ok("select true, 1, 1.0, date '2020-01-01', timestamp '2020-01-01', 'foo'");
     t.finish("examples/execute_literals.testlog");
 }
 
 #[test]
 fn test_aggregate_functions() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table booleans (x boolean);");
     t.setup("create table integers (x int64);");
     t.setup("create table floats (x float64);");
@@ -47,14 +47,14 @@ fn test_aggregate_functions() {
 
 #[test]
 fn test_parameters() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.ok("set parameter = 1; select @parameter");
     t.finish("examples/execute_parameters.testlog");
 }
 
 #[test]
 fn test_metadata() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.comment("Catalog queries");
     t.ok("select parent_catalog_id, catalog_id, catalog_name from metadata.catalog");
     t.ok("select catalog_id, table_id, table_name, column_id, column_name, column_type from metadata.table join metadata.column using (table_id) order by catalog_id, table_id, column_id");
@@ -74,7 +74,7 @@ fn test_aggregate_large() {
 
 #[test]
 fn test_ddl() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.comment("create table");
     t.setup("create table foo (id int64);");
     t.setup("insert into foo values (1)");
@@ -103,7 +103,7 @@ fn test_ddl() {
 
 #[test]
 fn test_dml() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table foo (id int64);");
     t.setup("insert into foo values (1);");
     t.ok("select * from foo;");
@@ -127,7 +127,7 @@ fn test_dml() {
 
 #[test]
 fn test_update_index() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table foo (id int64);");
     t.setup("create index foo_id on foo (id);");
     let values: Vec<_> = (0..1000).map(|i| format!("({})", i)).collect();
@@ -149,7 +149,7 @@ fn test_index() {
 
 #[test]
 fn test_join_nested_loop() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table foo (id int64); create table bar (id int64);");
     t.setup("insert into foo values (1), (2); insert into bar values (2), (3), (4);");
     t.ok("select foo.id as foo_id, bar.id as bar_id from foo left join bar using (id)");
@@ -193,7 +193,7 @@ fn test_join_hash() {
 
 #[test]
 fn test_limit() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table foo (b bool, i int64, s string);");
     t.setup("insert into foo values (false, 1, 'one'), (true, 2, 'two'), (false, 3, 'three');");
     t.ok("select * from foo limit 1");
@@ -203,21 +203,21 @@ fn test_limit() {
 
 #[test]
 fn test_set() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.ok("select 1 as x union all select 2 as x");
     t.finish("examples/execute_set.testlog");
 }
 
 #[test]
 fn test_with() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.ok("with foo as (select 1 as bar) select * from foo union all select * from foo");
     t.finish("examples/execute_with.testlog");
 }
 
 #[test]
 fn test_correlated_exists() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.comment("correlated EXISTS");
@@ -241,7 +241,7 @@ fn test_correlated_exists() {
 
 #[test]
 fn test_complex_correlated_subquery() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.comment("correlated expression in subquery");
@@ -286,7 +286,7 @@ fn test_complex_correlated_subquery() {
 
 #[test]
 fn test_correlated_subquery() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.comment("scalar select with correlation");
@@ -336,7 +336,7 @@ fn test_correlated_subquery() {
 
 #[test]
 fn test_subquery_join() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 join integers i2 using (i)) from integers i3 order by i");
@@ -349,7 +349,7 @@ fn test_subquery_join() {
 
 #[test]
 fn test_explain() {
-    let mut t = TestSuite::new(Storage::new());
+    let mut t = TestSuite::new(Storage::default());
     t.ok("explain select 1");
     t.finish("examples/execute_explain.testlog");
 }

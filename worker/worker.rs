@@ -30,7 +30,7 @@ impl WorkerNode {
     fn execute(&self, expr: Expr, txn: i64) -> Receiver<RecordBatch> {
         let (sender, receiver) = channel(1);
         tokio::spawn(async move {
-            let mut storage = Storage::new(); // TODO
+            let mut storage = Storage::default(); // TODO
             let program = execute::compile(expr);
             let execute = program.execute(&mut storage, txn);
             for batch in execute {
@@ -52,7 +52,7 @@ impl Worker for WorkerNode {
         let request = request.into_inner();
         let sql = request.sql;
         let txn = 100; // TODO
-        let mut storage = Storage::new(); // TODO
+        let mut storage = Storage::default(); // TODO
         let catalog = execute::catalog(&mut storage, txn);
         let indexes = execute::indexes(&mut storage, txn);
         let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).expect(&sql);

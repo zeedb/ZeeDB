@@ -19,7 +19,7 @@ impl Program {
             state: Session {
                 txn,
                 storage,
-                temp_tables: Storage::new(),
+                temp_tables: Storage::default(),
                 temp_table_ids: HashMap::new(),
                 variables: HashMap::new(),
             },

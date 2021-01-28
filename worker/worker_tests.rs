@@ -34,7 +34,7 @@ async fn test_submit() {
 async fn test_broadcast() {
     tokio::spawn(server());
     let mut client = client().await.unwrap();
-    let mut storage = Storage::new(); // TODO
+    let mut storage = Storage::default(); // TODO
     let catalog = execute::catalog(&mut storage, 100);
     let indexes = execute::indexes(&mut storage, 100);
     let sql = "select 1";
