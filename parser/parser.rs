@@ -1,97 +1,128 @@
 use crate::{convert::convert, server::ParseClient};
 use ast::Expr;
+use catalog::CatalogProvider;
 use kernel::*;
 use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
 
 pub const MAX_QUERY: usize = 4_194_304;
 
-pub fn format(sql: &String) -> Result<String, String> {
-    let mut client = ParseClient::new();
-    let request = tonic::Request::new(FormatSqlRequest {
-        sql: Some(sql.clone()),
-    });
-    match client.format_sql(request) {
-        Ok(response) => Ok(response.into_inner().sql.unwrap()),
-        Err(status) => Err(String::from(status.message())),
-    }
+pub struct Parser {
+    catalog: Box<dyn CatalogProvider>,
+    client: ParseClient,
 }
 
-pub fn analyze(catalog_id: i64, catalog: &SimpleCatalogProto, sql: &str) -> Result<Expr, String> {
-    let mut offset = 0;
-    let mut exprs = vec![];
-    let mut variables = vec![];
-    loop {
-        let (next_offset, next_expr) = analyze_next(catalog_id, catalog, &variables, sql, offset)?;
-        // If we detected a SET _ = _ statement, add it to the query scope.
-        if let Expr::LogicalAssign {
-            variable, value, ..
-        } = &next_expr
-        {
-            if let Some(i) = variables.iter().position(|(name, _)| name == variable) {
-                variables.remove(i);
-            }
-            variables.push((variable.clone(), value.data_type()))
+impl Parser {
+    pub fn new(catalog: impl CatalogProvider + 'static) -> Self {
+        Parser {
+            catalog: Box::new(catalog),
+            client: ParseClient::new(),
         }
-        // Add next_expr to list and prepare to continue parsing.
-        offset = next_offset;
-        exprs.push(next_expr);
-        // If we've parsed the entire expression, return.
-        if offset as usize == sql.as_bytes().len() {
-            if exprs.len() == 1 {
-                return Ok(exprs.pop().unwrap());
-            } else {
-                return Ok(Expr::LogicalScript { statements: exprs });
+    }
+
+    pub fn format(&mut self, sql: &str) -> String {
+        let request = tonic::Request::new(FormatSqlRequest {
+            sql: Some(sql.to_string()),
+        });
+        self.client
+            .format_sql(request)
+            .unwrap()
+            .into_inner()
+            .sql
+            .unwrap()
+    }
+
+    pub fn analyze(&mut self, sql: &str, catalog_id: i64) -> Expr {
+        let request = tonic::Request::new(ExtractTableNamesFromStatementRequest {
+            sql_statement: Some(sql.to_string()),
+            allow_script: Some(true),
+            options: Some(language_options()),
+        });
+        let table_names = self
+            .client
+            .extract_table_names_from_statement(request)
+            .unwrap()
+            .into_inner()
+            .table_name
+            .drain(..)
+            .map(|name| name.table_name_segment)
+            .collect();
+        let catalog = self.catalog.catalog(catalog_id, table_names);
+        let mut offset = 0;
+        let mut exprs = vec![];
+        let mut variables = vec![];
+        loop {
+            let (next_offset, next_expr) =
+                self.analyze_next(catalog_id, &catalog, &variables, sql, offset);
+            // If we detected a SET _ = _ statement, add it to the query scope.
+            if let Expr::LogicalAssign {
+                variable, value, ..
+            } = &next_expr
+            {
+                if let Some(i) = variables.iter().position(|(name, _)| name == variable) {
+                    variables.remove(i);
+                }
+                variables.push((variable.clone(), value.data_type()))
+            }
+            // Add next_expr to list and prepare to continue parsing.
+            offset = next_offset;
+            exprs.push(next_expr);
+            // If we've parsed the entire expression, return.
+            if offset as usize == sql.as_bytes().len() {
+                if exprs.len() == 1 {
+                    return exprs.pop().unwrap();
+                } else {
+                    return Expr::LogicalScript { statements: exprs };
+                }
             }
         }
     }
-}
 
-fn analyze_next(
-    catalog_id: i64,
-    catalog: &SimpleCatalogProto,
-    variables: &Vec<(String, DataType)>,
-    sql: &str,
-    offset: i32,
-) -> Result<(i32, Expr), String> {
-    let mut client = ParseClient::new();
-    let request = tonic::Request::new(AnalyzeRequest {
-        simple_catalog: Some(catalog.clone()),
-        options: Some(AnalyzerOptionsProto {
-            default_timezone: Some("UTC".to_string()),
-            language_options: Some(LanguageOptionsProto {
-                enabled_language_features: catalog::enabled_language_features(),
-                supported_statement_kinds: catalog::supported_statement_kinds(),
+    fn analyze_next(
+        &mut self,
+        catalog_id: i64,
+        catalog: &SimpleCatalogProto,
+        variables: &Vec<(String, DataType)>,
+        sql: &str,
+        offset: i32,
+    ) -> (i32, Expr) {
+        let request = tonic::Request::new(AnalyzeRequest {
+            simple_catalog: Some(catalog.clone()),
+            options: Some(AnalyzerOptionsProto {
+                default_timezone: Some("UTC".to_string()),
+                language_options: Some(language_options()),
+                prune_unused_columns: Some(true),
+                query_parameters: variables
+                    .iter()
+                    .map(|(name, data_type)| QueryParameterProto {
+                        name: Some(name.clone()),
+                        r#type: Some(data_type.to_proto()),
+                    })
+                    .collect(),
                 ..Default::default()
             }),
-            prune_unused_columns: Some(true),
-            query_parameters: variables
-                .iter()
-                .map(|(name, data_type)| QueryParameterProto {
-                    name: Some(name.clone()),
-                    r#type: Some(data_type.to_proto()),
-                })
-                .collect(),
+            target: Some(analyze_request::Target::ParseResumeLocation(
+                ParseResumeLocationProto {
+                    input: Some(sql.to_string()),
+                    byte_position: Some(offset),
+                    ..Default::default()
+                },
+            )),
             ..Default::default()
-        }),
-        target: Some(analyze_request::Target::ParseResumeLocation(
-            ParseResumeLocationProto {
-                input: Some(sql.to_string()),
-                byte_position: Some(offset),
-                ..Default::default()
-            },
-        )),
+        });
+        let response = self.client.analyze(request).unwrap().into_inner();
+        let offset = response.resume_byte_position.unwrap();
+        let expr = match response.result.unwrap() {
+            ResolvedStatement(stmt) => convert(catalog_id, &stmt),
+            ResolvedExpression(_) => panic!("expected statement but found expression"),
+        };
+        (offset, expr)
+    }
+}
+
+fn language_options() -> LanguageOptionsProto {
+    LanguageOptionsProto {
+        enabled_language_features: catalog::enabled_language_features(),
+        supported_statement_kinds: catalog::supported_statement_kinds(),
         ..Default::default()
-    });
-    match client.analyze(request) {
-        Ok(response) => {
-            let response = response.into_inner();
-            let offset = response.resume_byte_position.unwrap();
-            let expr = match response.result.unwrap() {
-                ResolvedStatement(stmt) => convert(catalog_id, &stmt),
-                ResolvedExpression(_) => panic!("expected statement but found expression"),
-            };
-            Ok((offset, expr))
-        }
-        Err(status) => Err(String::from(status.message())),
     }
 }

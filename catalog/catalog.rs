@@ -2,6 +2,10 @@ use zetasql::*;
 
 pub const ROOT_CATALOG_ID: i64 = 0;
 
+pub trait CatalogProvider {
+    fn catalog(&self, catalog_id: i64, table_names: Vec<Vec<String>>) -> SimpleCatalogProto;
+}
+
 pub fn default_catalog() -> SimpleCatalogProto {
     let mut cat = empty_catalog();
     cat.catalog.push(crate::bootstrap_metadata_catalog());

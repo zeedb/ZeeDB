@@ -8,6 +8,7 @@ use tokio::runtime::Runtime;
 use tonic::{Request, Response, Status};
 use zetasql::{
     zeta_sql_local_service_client::ZetaSqlLocalServiceClient, AnalyzeRequest, AnalyzeResponse,
+    ExtractTableNamesFromStatementRequest, ExtractTableNamesFromStatementResponse,
     FormatSqlRequest, FormatSqlResponse,
 };
 
@@ -51,6 +52,10 @@ enum ParseRequest {
         request: Request<AnalyzeRequest>,
         response: SyncSender<Result<Response<AnalyzeResponse>, Status>>,
     },
+    ExtractTableNamesFromStatement {
+        request: Request<ExtractTableNamesFromStatementRequest>,
+        response: SyncSender<Result<Response<ExtractTableNamesFromStatementResponse>, Status>>,
+    },
 }
 
 impl ParseClient {
@@ -81,6 +86,20 @@ impl ParseClient {
         let (sender, receiver) = sync_channel(0);
         self.sender
             .send(ParseRequest::Analyze {
+                request,
+                response: sender,
+            })
+            .unwrap();
+        receiver.recv().unwrap()
+    }
+
+    pub(crate) fn extract_table_names_from_statement(
+        &mut self,
+        request: Request<ExtractTableNamesFromStatementRequest>,
+    ) -> Result<Response<ExtractTableNamesFromStatementResponse>, Status> {
+        let (sender, receiver) = sync_channel(0);
+        self.sender
+            .send(ParseRequest::ExtractTableNamesFromStatement {
                 request,
                 response: sender,
             })
@@ -127,6 +146,9 @@ fn process_requests(receiver: Receiver<ParseRequest>) {
                 .unwrap(),
             ParseRequest::Analyze { request, response } => response
                 .send(runtime.block_on(client.analyze(request)))
+                .unwrap(),
+            ParseRequest::ExtractTableNamesFromStatement { request, response } => response
+                .send(runtime.block_on(client.extract_table_names_from_statement(request)))
                 .unwrap(),
         }
     }

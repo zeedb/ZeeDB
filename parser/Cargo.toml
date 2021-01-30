@@ -8,7 +8,6 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-ast = { path = "../ast" }
 chrono = "0.4.11"
 futures = "0.3.12"
 once_cell = "1.5.2"
@@ -18,6 +17,7 @@ time = "0.1.39"
 tokio = { version = "1.0.2", features = ["macros", "rt-multi-thread"] }
 tonic = "0.4.0"
 regex = "1.4.2"
+ast = { path = "../ast" }
 catalog = { path = "../catalog" }
 encoding = { path = "../encoding" }
 kernel = { path = "../kernel" }

@@ -1,4 +1,6 @@
 use crate::parser::*;
+use ast::Expr;
+use catalog::CatalogProvider;
 use regex::Regex;
 use zetasql::*;
 
@@ -6,8 +8,7 @@ macro_rules! ok {
     ($path:expr, $sql:expr, $errors:expr) => {
         let trim = Regex::new(r"(?m)^\s+").unwrap();
         let sql = trim.replace_all($sql, "").trim().to_string();
-        let catalog = adventure_works();
-        let found = analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).unwrap();
+        let found = analyze(&sql);
         let found = format!("{}\n\n{}", &sql, found);
         if !test_fixtures::matches_expected(&$path.to_string(), found) {
             $errors.push($path.to_string());
@@ -631,6 +632,23 @@ fn test_set() {
 //         panic!("{:#?}", errors);
 //     }
 // }
+
+fn analyze(sql: &str) -> Expr {
+    Parser::new(DefaultCatalogProvider).analyze(sql, catalog::ROOT_CATALOG_ID)
+}
+
+struct DefaultCatalogProvider;
+
+impl CatalogProvider for DefaultCatalogProvider {
+    fn catalog(
+        &self,
+        catalog_id: i64,
+        table_names: Vec<Vec<String>>,
+    ) -> zetasql::SimpleCatalogProto {
+        assert_eq!(catalog::ROOT_CATALOG_ID, catalog_id);
+        adventure_works()
+    }
+}
 
 pub fn adventure_works() -> SimpleCatalogProto {
     let mut table_count = 100;
