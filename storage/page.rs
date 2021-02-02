@@ -1,5 +1,4 @@
 use kernel::*;
-use regex::Regex;
 use std::{
     fmt,
     sync::{atomic::*, Arc},

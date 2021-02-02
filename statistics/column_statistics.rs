@@ -6,7 +6,7 @@ use std::{
     hash::{BuildHasherDefault, Hash, Hasher},
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ColumnStatistics {
     Bool(TypedColumnStatistics<bool>),
     I64(TypedColumnStatistics<i64>),
@@ -16,13 +16,13 @@ pub enum ColumnStatistics {
     String(TypedColumnStatistics<String>),
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct TypedColumnStatistics<T: Hash + Ord + Default + Clone> {
     count_distinct: CountDistinct<T>,
     histogram: Histogram<T>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CountDistinct<T: Hash> {
     hll: HyperLogLogPlus<T, BuildHasherDefault<twox_hash::Xxh3Hash64>>,
     cache: f64,
