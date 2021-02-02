@@ -1,6 +1,7 @@
 use crate::parser::*;
 use ast::Expr;
-use catalog::CatalogProvider;
+use catalog::{Catalog, CATALOG_KEY};
+use context::Context;
 use regex::Regex;
 use zetasql::*;
 
@@ -634,19 +635,26 @@ fn test_set() {
 // }
 
 fn analyze(sql: &str) -> Expr {
-    Parser::new(DefaultCatalogProvider).analyze(sql, catalog::ROOT_CATALOG_ID)
+    let mut context = Context::default();
+    context.insert(CATALOG_KEY, Box::new(AdventureWorksCatalog));
+    Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 100, &mut context)
 }
 
-struct DefaultCatalogProvider;
+struct AdventureWorksCatalog;
 
-impl CatalogProvider for DefaultCatalogProvider {
+impl Catalog for AdventureWorksCatalog {
     fn catalog(
         &self,
         catalog_id: i64,
         table_names: Vec<Vec<String>>,
-    ) -> zetasql::SimpleCatalogProto {
-        assert_eq!(catalog::ROOT_CATALOG_ID, catalog_id);
+        txn: i64,
+        context: &Context,
+    ) -> SimpleCatalogProto {
         adventure_works()
+    }
+
+    fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<ast::Index> {
+        vec![]
     }
 }
 

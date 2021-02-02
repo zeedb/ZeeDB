@@ -1,29 +1,28 @@
+use std::sync::Mutex;
+
 use crate::{convert::convert, server::ParseClient};
 use ast::Expr;
-use catalog::CatalogProvider;
+use catalog::{Catalog, CATALOG_KEY};
+use context::{Context, ContextKey};
 use kernel::*;
 use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
 
 pub const MAX_QUERY: usize = 4_194_304;
+pub const PARSER_KEY: ContextKey<Parser> = ContextKey::new("PARSER");
 
+#[derive(Default)]
 pub struct Parser {
-    catalog: Box<dyn CatalogProvider>,
-    client: ParseClient,
+    client: Mutex<ParseClient>,
 }
 
 impl Parser {
-    pub fn new(catalog: impl CatalogProvider + 'static) -> Self {
-        Parser {
-            catalog: Box::new(catalog),
-            client: ParseClient::new(),
-        }
-    }
-
-    pub fn format(&mut self, sql: &str) -> String {
+    pub fn format(&self, sql: &str) -> String {
         let request = tonic::Request::new(FormatSqlRequest {
             sql: Some(sql.to_string()),
         });
         self.client
+            .lock()
+            .unwrap()
             .format_sql(request)
             .unwrap()
             .into_inner()
@@ -31,7 +30,7 @@ impl Parser {
             .unwrap()
     }
 
-    pub fn analyze(&mut self, sql: &str, catalog_id: i64) -> Expr {
+    pub fn analyze(&self, sql: &str, catalog_id: i64, txn: i64, context: &Context) -> Expr {
         let request = tonic::Request::new(ExtractTableNamesFromStatementRequest {
             sql_statement: Some(sql.to_string()),
             allow_script: Some(true),
@@ -39,6 +38,8 @@ impl Parser {
         });
         let table_names = self
             .client
+            .lock()
+            .unwrap()
             .extract_table_names_from_statement(request)
             .unwrap()
             .into_inner()
@@ -46,7 +47,9 @@ impl Parser {
             .drain(..)
             .map(|name| name.table_name_segment)
             .collect();
-        let catalog = self.catalog.catalog(catalog_id, table_names);
+        let catalog = context
+            .get(CATALOG_KEY)
+            .catalog(catalog_id, table_names, txn, context);
         let mut offset = 0;
         let mut exprs = vec![];
         let mut variables = vec![];
@@ -78,7 +81,7 @@ impl Parser {
     }
 
     fn analyze_next(
-        &mut self,
+        &self,
         catalog_id: i64,
         catalog: &SimpleCatalogProto,
         variables: &Vec<(String, DataType)>,
@@ -109,7 +112,13 @@ impl Parser {
             )),
             ..Default::default()
         });
-        let response = self.client.analyze(request).unwrap().into_inner();
+        let response = self
+            .client
+            .lock()
+            .unwrap()
+            .analyze(request)
+            .unwrap()
+            .into_inner();
         let offset = response.resume_byte_position.unwrap();
         let expr = match response.result.unwrap() {
             ResolvedStatement(stmt) => convert(catalog_id, &stmt),

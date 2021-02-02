@@ -1,6 +1,7 @@
 use crate::parser::*;
 use ast::*;
-use catalog::CatalogProvider;
+use catalog::{Catalog, EmptyCatalog, CATALOG_KEY};
+use context::Context;
 
 #[test]
 fn test_analyze() {
@@ -67,21 +68,13 @@ fn test_call() {
 }
 
 fn analyze(sql: &str) -> Expr {
-    Parser::new(DefaultCatalogProvider).analyze(sql, catalog::ROOT_CATALOG_ID)
+    let mut context = Context::default();
+    context.insert(CATALOG_KEY, Box::new(EmptyCatalog));
+    Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 0, &mut context)
 }
 
 fn format(sql: &str) -> String {
-    Parser::new(DefaultCatalogProvider).format(sql)
-}
-
-struct DefaultCatalogProvider;
-
-impl CatalogProvider for DefaultCatalogProvider {
-    fn catalog(
-        &self,
-        catalog_id: i64,
-        table_names: Vec<Vec<String>>,
-    ) -> zetasql::SimpleCatalogProto {
-        catalog::default_catalog()
-    }
+    let mut context = Context::default();
+    context.insert(CATALOG_KEY, Box::new(EmptyCatalog));
+    Parser::default().format(sql)
 }

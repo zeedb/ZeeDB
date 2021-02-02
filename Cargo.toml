@@ -3,6 +3,8 @@ members = [
     "ast",
     "benchmarks",
     "catalog",
+    "context",
+    "coordinator",
     "encoding",
     "execute",
     "kernel",

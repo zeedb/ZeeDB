@@ -59,12 +59,6 @@ enum ParseRequest {
 }
 
 impl ParseClient {
-    pub(crate) fn new() -> Self {
-        static SERVER: OnceCell<SyncSender<ParseRequest>> = OnceCell::new();
-        let sender = SERVER.get_or_init(start_server_thread).clone();
-        Self { sender }
-    }
-
     pub(crate) fn format_sql(
         &mut self,
         request: Request<FormatSqlRequest>,
@@ -105,6 +99,14 @@ impl ParseClient {
             })
             .unwrap();
         receiver.recv().unwrap()
+    }
+}
+
+impl Default for ParseClient {
+    fn default() -> Self {
+        static SERVER: OnceCell<SyncSender<ParseRequest>> = OnceCell::new();
+        let sender = SERVER.get_or_init(start_server_thread).clone();
+        Self { sender }
     }
 }
 

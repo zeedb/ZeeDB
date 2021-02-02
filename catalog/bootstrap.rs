@@ -1,6 +1,27 @@
 use crate::catalog::*;
+use ast::Index;
+use context::Context;
 use kernel::*;
 use zetasql::{function_enums::*, *};
+
+#[derive(Clone)]
+pub struct BootstrapCatalog;
+
+impl Catalog for BootstrapCatalog {
+    fn catalog(
+        &self,
+        catalog_id: i64,
+        table_names: Vec<Vec<String>>,
+        txn: i64,
+        context: &Context,
+    ) -> SimpleCatalogProto {
+        todo!()
+    }
+
+    fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
+        todo!()
+    }
+}
 
 pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
     vec![(

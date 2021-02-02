@@ -9,5 +9,6 @@ path = "lib.rs"
 
 [dependencies]
 ast = { path = "../ast" }
+context = { path = "../context" }
 kernel = { path = "../kernel" }
 zetasql = { path = "../zetasql" }
