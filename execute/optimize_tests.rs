@@ -1,10 +1,12 @@
+use statistics::Statistics;
 use storage::Storage;
 
 use crate::test_suite::*;
 
 #[test]
 fn test_aggregate() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("combine_consecutive_projects");
     t.ok("explain select a + 1 as b from (select 1 as a)");
     t.comment("combine_consecutive_projects_star");
@@ -22,7 +24,8 @@ fn test_aggregate() {
 
 #[test]
 fn test_correlated() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("redundant_table_free_single_join");
     t.ok("explain select (select 1)");
     t.comment("semi_join");
@@ -126,7 +129,8 @@ fn test_correlated() {
 
 #[test]
 fn test_ddl() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("create_database");
     t.ok("explain create database foo");
     t.comment("drop_database");
@@ -157,7 +161,8 @@ fn test_ddl() {
 
 #[test]
 fn test_dml() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("delete");
     t.ok("explain delete customer where person_id = 1");
     t.comment("insert_values");
@@ -177,7 +182,8 @@ fn test_dml() {
 
 #[test]
 fn test_filter() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("combine_consecutive_filters");
     t.ok(
         "explain select 1 from (select * from person where first_name like 'A%') where last_name like 'A%'",
@@ -203,7 +209,8 @@ fn test_filter() {
 
 #[test]
 fn test_join() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("semi_join");
     t.ok(
         "explain select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)",
@@ -265,7 +272,8 @@ fn test_join() {
 
 #[test]
 fn test_limit() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("limit_offset");
     t.ok("explain select customer_id from customer limit 100 offset 10");
     t.finish("examples/optimize_limit.testlog");
@@ -273,7 +281,8 @@ fn test_limit() {
 
 #[test]
 fn test_set() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("union_all");
     t.ok("explain select 1 as a union all select 2 as a");
     t.finish("examples/optimize_set.testlog");
@@ -281,7 +290,8 @@ fn test_set() {
 
 #[test]
 fn test_sort() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("order_by");
     t.ok("explain select customer_id from customer order by modified_date");
     t.finish("examples/optimize_sort.testlog");
@@ -289,7 +299,8 @@ fn test_sort() {
 
 #[test]
 fn test_with() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("redundant_with_clause_with_projection");
     t.ok(
         "explain with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo",
@@ -317,7 +328,7 @@ fn test_with() {
 
 #[test]
 fn test_distinct() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table integers (x int64)");
     t.setup("insert into integers values (1), (1), (2), (3), (null)");
     t.ok("explain select count(distinct x) from integers");
@@ -329,7 +340,7 @@ fn test_distinct() {
 
 #[test]
 fn test_enforcers() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table integers (x int64)");
     t.setup("insert into integers values (1), (1), (2), (3), (null)");
     t.ok("explain select x, count(x) from integers group by 1");

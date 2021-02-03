@@ -1,0 +1,4 @@
+ok: with t1 as (select 1 as a), t2 as (select 1 as a) select * from t1 join t2 using (a)
+a
+1
+

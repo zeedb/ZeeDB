@@ -1,208 +1,276 @@
 use ast::{Index, *};
+use catalog::{builtin_function_options, BootstrapCatalog, Catalog, CATALOG_KEY};
+use context::Context;
 use kernel::*;
 use once_cell::sync::OnceCell;
-use planner::optimize;
-use std::collections::HashMap;
-use storage::Storage;
+use parser::{Parser, PARSER_KEY};
+use statistics::{Statistics, STATISTICS_KEY};
+use std::collections::{hash_map::Entry, HashMap};
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
-pub fn indexes(storage: &mut Storage, txn: i64) -> HashMap<i64, Vec<Index>> {
-    let mut indexes = HashMap::new();
-    for index in read_all_indexes(storage, txn) {
-        if !indexes.contains_key(&index.table_id) {
-            indexes.insert(index.table_id, vec![]);
+pub struct MetadataCatalog;
+
+impl Catalog for MetadataCatalog {
+    fn catalog(
+        &self,
+        catalog_id: i64,
+        table_names: Vec<Vec<String>>,
+        txn: i64,
+        context: &Context,
+    ) -> SimpleCatalogProto {
+        let mut root = CatalogWithId {
+            catalog_id,
+            simple_catalog: SimpleCatalogProto {
+                builtin_function_options: Some(builtin_function_options()),
+                ..Default::default()
+            },
+            children: HashMap::new(),
+        };
+        for qualified_name in table_names {
+            add_table_to_catalog(&mut root, qualified_name, txn, context);
         }
-        indexes.get_mut(&index.table_id).unwrap().push(index);
+        root.simplify()
     }
-    indexes
+
+    fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
+        select_indexes(table_id, txn, context)
+    }
 }
 
-pub fn catalog(storage: &mut Storage, txn: i64) -> SimpleCatalogProto {
-    let mut root = catalog::default_catalog();
-    // Find all tables and organize by catalog.
-    let mut tables = HashMap::new();
-    for (catalog_id, table) in read_all_tables(storage, txn) {
-        if !tables.contains_key(&catalog_id) {
-            tables.insert(catalog_id, vec![]);
-        }
-        tables.get_mut(&catalog_id).unwrap().push(table);
-    }
-    // Find all catalogs and organize by parent catalog.
-    let mut catalogs = HashMap::new();
-    for (parent_id, catalog_id, mut catalog) in read_all_catalogs(storage, txn) {
-        if !catalogs.contains_key(&parent_id) {
-            catalogs.insert(parent_id, vec![]);
-        }
-        // Add tables to catalog.
-        catalog.table = tables.remove(&catalog_id).unwrap_or(vec![]);
-        catalogs
-            .get_mut(&parent_id)
-            .unwrap()
-            .push((catalog_id, catalog));
-    }
-    // Organize catalogs into a hierarchy.
-    catalog_tree(catalog::ROOT_CATALOG_ID, &mut root, &mut catalogs);
-    // Add tables to the root catalog.
-    root.table = tables.remove(&catalog::ROOT_CATALOG_ID).unwrap_or(vec![]);
-
-    root
-}
-
-fn catalog_tree(
-    parent_catalog_id: i64,
-    parent_catalog: &mut SimpleCatalogProto,
-    descendents: &mut HashMap<i64, Vec<(i64, SimpleCatalogProto)>>,
+fn add_table_to_catalog(
+    parent: &mut CatalogWithId,
+    mut qualified_name: Vec<String>,
+    txn: i64,
+    context: &Context,
 ) {
-    for (catalog_id, mut catalog) in descendents.remove(&parent_catalog_id).unwrap_or(vec![]) {
-        catalog_tree(catalog_id, &mut catalog, descendents);
-        parent_catalog.catalog.push(catalog);
-    }
-}
-
-fn read_all_catalogs(storage: &mut Storage, txn: i64) -> Vec<(i64, i64, SimpleCatalogProto)> {
-    let expr = read_all_catalogs_query(storage);
-    let program = crate::compile(expr);
-    let mut catalogs = vec![];
-    for batch in program.execute(storage, txn) {
-        let mut offset = 0;
-        while offset < batch.len() {
-            catalogs.push(read_catalog(&batch, &mut offset));
+    match qualified_name.len() {
+        0 => panic!(),
+        1 => {
+            let table_name = qualified_name.pop().unwrap();
+            if !parent
+                .simple_catalog
+                .table
+                .iter()
+                .find(|t| t.name.as_ref() == Some(&table_name))
+                .is_some()
+            {
+                parent.simple_catalog.table.push(select_table(
+                    parent.catalog_id,
+                    &table_name,
+                    txn,
+                    context,
+                ))
+            }
+        }
+        _ => {
+            let catalog_name = qualified_name.remove(0);
+            match parent.children.entry(catalog_name) {
+                Entry::Occupied(mut occupied) => {
+                    let parent = occupied.get_mut();
+                    add_table_to_catalog(parent, qualified_name, txn, context)
+                }
+                Entry::Vacant(vacant) => {
+                    let value =
+                        select_catalog(parent.catalog_id, vacant.key().as_str(), txn, context);
+                    let parent = vacant.insert(value);
+                    add_table_to_catalog(parent, qualified_name, txn, context);
+                }
+            };
         }
     }
-
-    catalogs
 }
 
-fn read_all_catalogs_query(storage: &mut Storage) -> Expr {
-    let q = "
-        select parent_catalog_id, catalog_id, catalog_name 
-        from metadata.catalog";
-    static CACHE: OnceCell<Expr> = OnceCell::new();
-    CACHE.get_or_init(|| plan_query(storage, q)).clone()
-}
-
-fn read_catalog(batch: &RecordBatch, offset: &mut usize) -> (i64, i64, SimpleCatalogProto) {
-    let parent_catalog_id = as_i64(batch, 0).get(*offset).unwrap();
-    let catalog_id_column = as_i64(batch, 1);
-    let catalog_id = catalog_id_column.get(*offset).unwrap();
-    let catalog_name = as_string(batch, 2).get(*offset).unwrap();
-
-    let mut catalog = catalog::empty_catalog();
-    catalog.name = Some(catalog_name.to_string());
-    *offset += 1;
-
-    (parent_catalog_id, catalog_id, catalog)
-}
-
-fn read_all_tables(storage: &mut Storage, txn: i64) -> Vec<(i64, SimpleTableProto)> {
-    let expr = read_all_tables_query(storage);
-    let program = crate::compile(expr);
-    let mut tables = vec![];
-    for batch in program.execute(storage, txn) {
-        let mut offset = 0;
-        while offset < batch.len() {
-            tables.push(read_table(&batch, &mut offset));
-        }
+fn select_catalog(
+    parent_catalog_id: i64,
+    catalog_name: &str,
+    txn: i64,
+    context: &Context,
+) -> CatalogWithId {
+    if parent_catalog_id == catalog::ROOT_CATALOG_ID && catalog_name == "metadata" {
+        return CatalogWithId {
+            catalog_id: catalog::METADATA_CATALOG_ID,
+            simple_catalog: catalog::bootstrap_metadata_catalog(),
+            children: HashMap::new(),
+        };
     }
-
-    tables
+    const Q: PlanCache = PlanCache::new(
+        "
+        select catalog_id 
+        from metadata.catalog
+        where parent_catalog_id = @parent_catalog_id
+        and catalog_name = @catalog_name",
+    );
+    let mut variables = HashMap::new();
+    variables.insert(
+        "parent_catalog_id".to_string(),
+        AnyArray::I64(I64Array::from_values(vec![parent_catalog_id])),
+    );
+    variables.insert(
+        "catalog_name".to_string(),
+        AnyArray::String(StringArray::from_values(vec![catalog_name])),
+    );
+    let batches = execute(Q.get(variable_types(&variables)), txn, variables, context);
+    let batch = match batches.first() {
+        Some(first) => first,
+        None => panic!(
+            "No catalog {} in parent {}",
+            catalog_name, parent_catalog_id
+        ),
+    };
+    let catalog_id = as_i64(&batch, 0).get(0).unwrap();
+    CatalogWithId {
+        catalog_id,
+        simple_catalog: SimpleCatalogProto {
+            name: Some(catalog_name.to_string()),
+            // builtin_function_options: Some(builtin_function_options()),
+            ..Default::default()
+        },
+        children: HashMap::new(),
+    }
 }
 
-fn read_all_tables_query(storage: &mut Storage) -> Expr {
-    let q = "
-        select catalog_id, table_id, table_name, column_id, column_name, column_type
+fn select_table(
+    catalog_id: i64,
+    table_name: &str,
+    txn: i64,
+    context: &Context,
+) -> SimpleTableProto {
+    const Q: PlanCache = PlanCache::new(
+        "
+        select table_id, column_name, column_type
         from metadata.table
         join metadata.column using (table_id) 
-        order by catalog_id, table_id, column_id";
-    static CACHE: OnceCell<Expr> = OnceCell::new();
-    CACHE.get_or_init(|| plan_query(storage, q)).clone()
-}
-
-fn read_table(batch: &RecordBatch, offset: &mut usize) -> (i64, SimpleTableProto) {
-    let catalog_id = as_i64(batch, 0).get(*offset).unwrap();
-    let table_id_column = as_i64(batch, 1);
-    let table_id = table_id_column.get(*offset).unwrap();
-    let table_name = as_string(batch, 2).get(*offset).unwrap();
-
+        where catalog_id = @catalog_id and table_name = @table_name
+        order by column_id",
+    );
+    let mut variables = HashMap::new();
+    variables.insert(
+        "catalog_id".to_string(),
+        AnyArray::I64(I64Array::from_values(vec![catalog_id])),
+    );
+    variables.insert(
+        "table_name".to_string(),
+        AnyArray::String(StringArray::from_values(vec![table_name])),
+    );
     let mut table = SimpleTableProto {
         name: Some(table_name.to_string()),
-        serialization_id: Some(table_id),
         ..Default::default()
     };
-
-    while *offset < batch.len() && table_id == table_id_column.get(*offset).unwrap() {
-        table.column.push(read_column(batch, offset));
-    }
-
-    (catalog_id, table)
-}
-
-fn read_column(batch: &RecordBatch, offset: &mut usize) -> SimpleColumnProto {
-    let _column_id = as_i64(batch, 3).get(*offset).unwrap();
-    let column_name = as_string(batch, 4).get(*offset).unwrap();
-    let column_type = as_string(batch, 5).get(*offset).unwrap();
-
-    *offset += 1;
-
-    SimpleColumnProto {
-        name: Some(column_name.to_string()),
-        r#type: Some(DataType::from(column_type).to_proto()),
-        ..Default::default()
-    }
-}
-
-fn read_all_indexes(storage: &mut Storage, txn: i64) -> Vec<Index> {
-    let expr = read_all_indexes_query(storage);
-    let program = crate::compile(expr);
-    let program: Vec<_> = program.execute(storage, txn).collect();
-    let mut indexes = vec![];
-    for batch in program {
-        let mut offset = 0;
-        while offset < batch.len() {
-            indexes.push(read_index(&batch, &mut offset));
+    for batch in execute(Q.get(variable_types(&variables)), txn, variables, context) {
+        for offset in 0..batch.len() {
+            let table_id = as_i64(&batch, 0).get(offset).unwrap();
+            let column_name = as_string(&batch, 1).get(offset).unwrap();
+            let column_type = as_string(&batch, 2).get(offset).unwrap();
+            table.serialization_id = Some(table_id);
+            table.column.push(SimpleColumnProto {
+                name: Some(column_name.to_string()),
+                r#type: Some(DataType::from(column_type).to_proto()),
+                ..Default::default()
+            })
         }
     }
-
-    indexes
+    assert!(
+        table.serialization_id.is_some(),
+        "Table {}.{} not found in metadata.table",
+        catalog_id,
+        table_name
+    );
+    table
 }
 
-fn read_all_indexes_query(storage: &mut Storage) -> Expr {
-    let q = "
-        select index_id, table_id, column_name
+fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
+    const Q: PlanCache = PlanCache::new(
+        "
+        select index_id, column_name
         from metadata.index
         join metadata.index_column using (index_id)
         join metadata.column using (table_id, column_id)
-        order by index_id, index_order";
-    static CACHE: OnceCell<Expr> = OnceCell::new();
-    CACHE.get_or_init(|| plan_query(storage, q)).clone()
+        where table_id = @table_id
+        order by index_id, index_order",
+    );
+    let mut variables = HashMap::new();
+    variables.insert(
+        "table_id".to_string(),
+        AnyArray::I64(I64Array::from_values(vec![table_id])),
+    );
+    let mut indexes: Vec<Index> = vec![];
+    for batch in execute(Q.get(variable_types(&variables)), txn, variables, context) {
+        for offset in 0..batch.len() {
+            let index_id = as_i64(&batch, 0).get(offset).unwrap();
+            let column_name = as_string(&batch, 1).get(offset).unwrap();
+            match indexes.last_mut() {
+                Some(index) if index.index_id == index_id => {
+                    index.columns.push(column_name.to_string())
+                }
+                _ => indexes.push(Index {
+                    table_id,
+                    index_id,
+                    columns: vec![column_name.to_string()],
+                }),
+            }
+        }
+    }
+    indexes
 }
 
-fn read_index(batch: &RecordBatch, offset: &mut usize) -> Index {
-    let index_id_column = as_i64(batch, 0);
-    let index_id = index_id_column.get(*offset).unwrap();
-    let table_id = as_i64(batch, 1).get(*offset).unwrap();
-    let column_name_column = as_string(batch, 2);
+fn execute(
+    expr: Expr,
+    txn: i64,
+    variables: HashMap<String, AnyArray>,
+    context: &Context,
+) -> Vec<RecordBatch> {
+    crate::execute::execute(expr, txn, variables, context).collect()
+}
 
-    let mut index = Index {
-        index_id,
-        table_id,
-        columns: vec![],
-    };
+struct PlanCache {
+    query: &'static str,
+    plan: OnceCell<Expr>,
+}
 
-    while *offset < batch.len() && index_id == index_id_column.get(*offset).unwrap() {
-        let column_name = column_name_column.get(*offset).unwrap().to_string();
-        index.columns.push(column_name);
-        *offset += 1;
+impl PlanCache {
+    const fn new(query: &'static str) -> Self {
+        Self {
+            query,
+            plan: OnceCell::new(),
+        }
     }
 
-    index
+    fn get(&self, variables: Vec<(String, DataType)>) -> Expr {
+        self.plan
+            .get_or_init(|| {
+                let mut context = Context::default();
+                context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
+                context.insert(PARSER_KEY, Parser::default());
+                context.insert(STATISTICS_KEY, Statistics::default());
+                let parser = context.get(PARSER_KEY);
+                let expr =
+                    parser.analyze(self.query, catalog::ROOT_CATALOG_ID, 0, variables, &context);
+                planner::optimize(expr, 0, &context)
+            })
+            .clone()
+    }
 }
 
-fn plan_query(storage: &mut Storage, q: &str) -> Expr {
-    let catalog = catalog::default_catalog();
-    let indexes = HashMap::new();
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, q).unwrap();
-    optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr)
+struct CatalogWithId {
+    catalog_id: i64,
+    simple_catalog: SimpleCatalogProto,
+    children: HashMap<String, CatalogWithId>,
+}
+
+impl CatalogWithId {
+    fn simplify(mut self) -> SimpleCatalogProto {
+        for (_, child) in self.children {
+            self.simple_catalog.catalog.push(child.simplify())
+        }
+        self.simple_catalog
+    }
+}
+
+fn variable_types(variables: &HashMap<String, AnyArray>) -> Vec<(String, DataType)> {
+    variables
+        .iter()
+        .map(|(name, value)| (name.clone(), value.data_type()))
+        .collect()
 }
 
 fn as_string(batch: &RecordBatch, column: usize) -> &StringArray {
@@ -215,6 +283,6 @@ fn as_string(batch: &RecordBatch, column: usize) -> &StringArray {
 fn as_i64(batch: &RecordBatch, column: usize) -> &I64Array {
     match &batch.columns[column] {
         (_, AnyArray::I64(array)) => array,
-        _ => panic!(),
+        (_, other) => panic!("Expected I64 but found {}", other.data_type()),
     }
 }

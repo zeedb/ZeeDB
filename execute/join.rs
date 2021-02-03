@@ -6,7 +6,7 @@ pub fn hash_join(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &Vec<AnyArray>,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
 ) -> RecordBatch {
@@ -37,7 +37,7 @@ pub fn hash_join_semi(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &Vec<AnyArray>,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
@@ -52,7 +52,7 @@ pub fn hash_join_anti(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &Vec<AnyArray>,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
@@ -69,7 +69,7 @@ pub fn hash_join_single(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &Vec<AnyArray>,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
@@ -95,7 +95,7 @@ pub fn hash_join_mark(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &Vec<AnyArray>,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
@@ -123,7 +123,7 @@ pub fn unmatched_tuples(
 pub fn nested_loop(
     left: &RecordBatch,
     right: &RecordBatch,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
 ) -> RecordBatch {
@@ -147,7 +147,7 @@ pub fn nested_loop(
 pub fn nested_loop_semi(
     left: &RecordBatch,
     right: &RecordBatch,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let input = cross_product(left, right);
     let mask = filter(&input);
@@ -158,7 +158,7 @@ pub fn nested_loop_semi(
 pub fn nested_loop_anti(
     left: &RecordBatch,
     right: &RecordBatch,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let input = cross_product(left, right);
     let mask = filter(&input);
@@ -169,7 +169,7 @@ pub fn nested_loop_anti(
 pub fn nested_loop_single(
     left: &RecordBatch,
     right: &RecordBatch,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let head = cross_product(left, &right);
     let mask = filter(&head);
@@ -190,7 +190,7 @@ pub fn nested_loop_mark(
     mark: &Column,
     left: &RecordBatch,
     right: &RecordBatch,
-    mut filter: impl FnMut(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let input = cross_product(left, right);
     let mask = filter(&input);

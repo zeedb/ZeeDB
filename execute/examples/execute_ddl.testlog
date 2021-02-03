@@ -12,7 +12,7 @@ ok: select * from foo;
 EMPTY
 
 # create index
-ok: create index foo_id on foo (id);
+ok: create index foo_id_index on foo (id);
 EMPTY
 
 # drop index

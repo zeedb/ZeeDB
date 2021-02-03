@@ -1,17 +1,31 @@
+use crate::test_suite::*;
+use statistics::Statistics;
 use storage::Storage;
 
-use crate::test_suite::*;
+#[test]
+fn test_join_using() {
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
+    t.ok("with t1 as (select 1 as a), t2 as (select 1 as a) select * from t1 join t2 using (a)");
+    t.finish("examples/execute_join_using.testlog");
+}
+
+#[test]
+fn test_builtin_function() {
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
+    t.ok("with t as (select 1 as a, 1 as b) select a = b from t");
+    t.finish("examples/execute_builtin_function.testlog");
+}
 
 #[test]
 fn test_literals() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.ok("select true, 1, 1.0, date '2020-01-01', timestamp '2020-01-01', 'foo'");
     t.finish("examples/execute_literals.testlog");
 }
 
 #[test]
 fn test_aggregate_functions() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table booleans (x boolean);");
     t.setup("create table integers (x int64);");
     t.setup("create table floats (x float64);");
@@ -47,14 +61,14 @@ fn test_aggregate_functions() {
 
 #[test]
 fn test_parameters() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.ok("set parameter = 1; select @parameter");
     t.finish("examples/execute_parameters.testlog");
 }
 
 #[test]
 fn test_metadata() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.comment("Catalog queries");
     t.ok("select parent_catalog_id, catalog_id, catalog_name from metadata.catalog");
     t.ok("select catalog_id, table_id, table_name, column_id, column_name, column_type from metadata.table join metadata.column using (table_id) order by catalog_id, table_id, column_id");
@@ -66,7 +80,8 @@ fn test_metadata() {
 
 #[test]
 fn test_aggregate_large() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.ok("select count(*) from person");
     t.ok("select count(*) from customer");
     t.finish("examples/execute_aggregate_large.testlog");
@@ -74,7 +89,7 @@ fn test_aggregate_large() {
 
 #[test]
 fn test_ddl() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.comment("create table");
     t.setup("create table foo (id int64);");
     t.setup("insert into foo values (1)");
@@ -84,7 +99,7 @@ fn test_ddl() {
     t.setup("create table foo (id int64);");
     t.ok("select * from foo;");
     t.comment("create index");
-    t.ok("create index foo_id on foo (id);");
+    t.ok("create index foo_id_index on foo (id);");
     t.comment("drop index");
     t.ok("drop index foo_id;");
     t.comment("create database");
@@ -103,7 +118,7 @@ fn test_ddl() {
 
 #[test]
 fn test_dml() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table foo (id int64);");
     t.setup("insert into foo values (1);");
     t.ok("select * from foo;");
@@ -127,9 +142,9 @@ fn test_dml() {
 
 #[test]
 fn test_update_index() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table foo (id int64);");
-    t.setup("create index foo_id on foo (id);");
+    t.setup("create index foo_id_index on foo (id);");
     let values: Vec<_> = (0..1000).map(|i| format!("({})", i)).collect();
     t.setup(format!("insert into foo values {};", values.join(", ")).as_str());
     t.ok("update foo set id = -1 where id = 500");
@@ -141,7 +156,8 @@ fn test_update_index() {
 
 #[test]
 fn test_index() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.ok("select * from customer where customer_id = 1");
     t.ok("select * from customer join store using (store_id) where customer_id = 1");
     t.finish("examples/execute_index.testlog");
@@ -149,7 +165,7 @@ fn test_index() {
 
 #[test]
 fn test_join_nested_loop() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table foo (id int64); create table bar (id int64);");
     t.setup("insert into foo values (1), (2); insert into bar values (2), (3), (4);");
     t.ok("select foo.id as foo_id, bar.id as bar_id from foo left join bar using (id)");
@@ -163,7 +179,8 @@ fn test_join_nested_loop() {
 
 #[test]
 fn test_join_hash() {
-    let mut t = TestSuite::new(crate::adventure_works());
+    let (storage, statistics) = crate::adventure_works();
+    let mut t = TestSuite::new(storage, statistics);
     t.comment("hash inner join");
     t.ok(
         "select count(person.person_id), count(customer.person_id) from person join customer using (person_id)"
@@ -193,7 +210,7 @@ fn test_join_hash() {
 
 #[test]
 fn test_limit() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table foo (b bool, i int64, s string);");
     t.setup("insert into foo values (false, 1, 'one'), (true, 2, 'two'), (false, 3, 'three');");
     t.ok("select * from foo limit 1");
@@ -203,21 +220,21 @@ fn test_limit() {
 
 #[test]
 fn test_set() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.ok("select 1 as x union all select 2 as x");
     t.finish("examples/execute_set.testlog");
 }
 
 #[test]
 fn test_with() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.ok("with foo as (select 1 as bar) select * from foo union all select * from foo");
     t.finish("examples/execute_with.testlog");
 }
 
 #[test]
 fn test_correlated_exists() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.comment("correlated EXISTS");
@@ -241,7 +258,7 @@ fn test_correlated_exists() {
 
 #[test]
 fn test_complex_correlated_subquery() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.comment("correlated expression in subquery");
@@ -286,7 +303,7 @@ fn test_complex_correlated_subquery() {
 
 #[test]
 fn test_correlated_subquery() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.comment("scalar select with correlation");
@@ -336,7 +353,7 @@ fn test_correlated_subquery() {
 
 #[test]
 fn test_subquery_join() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.setup("create table integers (i int64);");
     t.setup("insert into integers values (1), (2), (3), (null);");
     t.ok("select i, exists (select * from (select * from integers where i = i3.i + 1) i1 join integers i2 using (i)) from integers i3 order by i");
@@ -349,7 +366,7 @@ fn test_subquery_join() {
 
 #[test]
 fn test_explain() {
-    let mut t = TestSuite::new(Storage::default());
+    let mut t = TestSuite::new(Storage::default(), Statistics::default());
     t.ok("explain select 1");
     t.finish("examples/execute_explain.testlog");
 }

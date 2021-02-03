@@ -1,6 +1,6 @@
 use crate::parser::*;
 use ast::Expr;
-use catalog::{Catalog, CATALOG_KEY};
+use catalog::{builtin_function_options, Catalog, CATALOG_KEY};
 use context::Context;
 use regex::Regex;
 use zetasql::*;
@@ -637,7 +637,7 @@ fn test_set() {
 fn analyze(sql: &str) -> Expr {
     let mut context = Context::default();
     context.insert(CATALOG_KEY, Box::new(AdventureWorksCatalog));
-    Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 100, &mut context)
+    Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 100, vec![], &mut context)
 }
 
 struct AdventureWorksCatalog;
@@ -710,7 +710,9 @@ pub fn adventure_works() -> SimpleCatalogProto {
     let modified_date = column("modified_date", TypeKind::TypeTimestamp);
     let store = table("store", vec![store_id, name, modified_date]);
 
-    let mut cat = catalog::default_catalog();
-    cat.table = vec![customer, person, store];
-    cat
+    SimpleCatalogProto {
+        table: vec![customer, person, store],
+        builtin_function_options: Some(builtin_function_options()),
+        ..Default::default()
+    }
 }

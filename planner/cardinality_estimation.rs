@@ -1,11 +1,10 @@
 use crate::search_space::*;
 use ast::*;
-use statistics::{ColumnStatistics, NotNan, TypedColumnStatistics};
+use statistics::{ColumnStatistics, NotNan, Statistics};
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter},
 };
-use storage::Storage;
 
 #[derive(Clone)]
 pub struct LogicalProps {
@@ -16,9 +15,9 @@ pub struct LogicalProps {
 }
 
 pub(crate) fn compute_logical_props(
-    ss: &SearchSpace,
-    storage: &Storage,
     mid: MultiExprID,
+    statistics: &Statistics,
+    ss: &SearchSpace,
 ) -> LogicalProps {
     let mexpr = &ss[mid];
     match &mexpr.expr {
@@ -30,7 +29,7 @@ pub(crate) fn compute_logical_props(
             predicates,
             projects,
             table,
-        } => filter(predicates, &scan(projects, table, storage)),
+        } => filter(predicates, &scan(projects, table, statistics)),
         LogicalFilter { predicates, input } => filter(predicates, &ss[leaf(input)].props),
         LogicalOut { projects, input } => project(projects, &ss[leaf(input)].props),
         LogicalMap {
@@ -112,17 +111,17 @@ pub(crate) fn compute_logical_props(
     }
 }
 
-fn scan(projects: &Vec<Column>, table: &Table, storage: &Storage) -> LogicalProps {
-    let statistics = storage.statistics(table.id);
+fn scan(projects: &Vec<Column>, table: &Table, statistics: &Statistics) -> LogicalProps {
+    let table_statistics = statistics.get(table.id).expect(&table.name);
     LogicalProps {
-        cardinality: statistics.approx_cardinality() as f64,
+        cardinality: table_statistics.approx_cardinality() as f64,
         columns: projects
             .iter()
             .map(|c| {
                 (
                     c.clone(),
                     Some(
-                        statistics
+                        table_statistics
                             .column(&c.name)
                             .cloned()
                             .unwrap_or_else(|| ColumnStatistics::new(c.data_type)),

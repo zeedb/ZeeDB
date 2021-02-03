@@ -1,9 +1,10 @@
-use crate::search_space::*;
-use ast::{Index, *};
-use std::collections::{HashMap, HashSet};
+use crate::{optimize::Optimizer, search_space::*};
+use ast::*;
+use catalog::{Catalog, CATALOG_KEY};
+use std::collections::HashSet;
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
-pub enum Rule {
+pub(crate) enum Rule {
     // Rewrite rules
     InnerJoinCommutivity,
     InnerJoinAssociativity,
@@ -228,12 +229,7 @@ impl Rule {
         binds
     }
 
-    pub fn apply(
-        &self,
-        ss: &SearchSpace,
-        indexes: &HashMap<i64, Vec<Index>>,
-        bind: Expr,
-    ) -> Option<Expr> {
+    pub fn apply(&self, bind: Expr, parent: &Optimizer) -> Option<Expr> {
         match self {
             Rule::InnerJoinCommutivity => {
                 if let LogicalJoin {
@@ -287,8 +283,8 @@ impl Rule {
                             {
                                 let mut new_parent_predicates = vec![];
                                 let mut new_right_predicates = vec![];
-                                let middle_scope = &ss[GroupID(*left_middle)].props.columns;
-                                let right_scope = &ss[GroupID(*right)].props.columns;
+                                let middle_scope = &parent.ss[GroupID(*left_middle)].props.columns;
+                                let right_scope = &parent.ss[GroupID(*right)].props.columns;
                                 let mut redistribute_predicate = |p: Scalar| {
                                     if p.references().iter().all(|c| {
                                         middle_scope.contains_key(c) || right_scope.contains_key(c)
@@ -355,7 +351,8 @@ impl Rule {
                 } = bind
                 {
                     // TODO return multiple indexes!
-                    for index in indexes.get(&table.id)?.iter() {
+                    let catalog: &Box<dyn Catalog> = parent.context.get(CATALOG_KEY);
+                    for index in catalog.indexes(table.id, parent.txn, &parent.context) {
                         if let Some((lookup, predicates)) = index.matches(&predicates) {
                             return Some(IndexScan {
                                 include_existing: true,
@@ -403,10 +400,10 @@ impl Rule {
                 }
             }
             Rule::LogicalJoinToBroadcastHashJoin => {
-                return to_hash_join(ss, bind, true);
+                return to_hash_join(&parent.ss, bind, true);
             }
             Rule::LogicalJoinToExchangeHashJoin => {
-                return to_hash_join(ss, bind, false);
+                return to_hash_join(&parent.ss, bind, false);
             }
             Rule::LogicalJoinToIndexScan => {
                 if let LogicalJoin { join, left, right } = bind {
@@ -417,7 +414,8 @@ impl Rule {
                     } = *left
                     {
                         // TODO return multiple indexes!
-                        for index in indexes.get(&table.id)?.iter() {
+                        let catalog: &Box<dyn Catalog> = parent.context.get(CATALOG_KEY);
+                        for index in catalog.indexes(table.id, parent.txn, &parent.context) {
                             if let Some((lookup, mut predicates)) = index.matches(join.predicates())
                             {
                                 predicates.extend(table_predicates);
@@ -499,7 +497,8 @@ impl Rule {
                     columns,
                 } = bind
                 {
-                    let indexes = indexes.get(&table.id).cloned().unwrap_or(vec![]);
+                    let catalog: &Box<dyn Catalog> = parent.context.get(CATALOG_KEY);
+                    let indexes = catalog.indexes(table.id, parent.txn, &parent.context);
                     return Some(Insert {
                         table,
                         indexes,

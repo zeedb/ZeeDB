@@ -11,5 +11,6 @@ path = "lib.rs"
 hyperloglogplus = "0.2.2"
 rand = "0.7.3"
 twox-hash = "1.6.0"
+catalog = { path = "../catalog" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }

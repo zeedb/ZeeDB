@@ -1,10 +1,11 @@
-use crate::execute::Session;
+use crate::execute::QueryState;
 use ast::*;
 use chrono::*;
 use kernel::*;
 use regex::{Captures, Regex};
+use storage::STORAGE_KEY;
 
-pub fn all(predicates: &Vec<Scalar>, input: &RecordBatch, state: &mut Session) -> BoolArray {
+pub(crate) fn all(predicates: &Vec<Scalar>, input: &RecordBatch, state: &QueryState) -> BoolArray {
     let mut mask = BoolArray::trues(input.len());
     for p in predicates {
         mask = eval(p, &input, state).as_bool().and(&mask);
@@ -12,7 +13,7 @@ pub fn all(predicates: &Vec<Scalar>, input: &RecordBatch, state: &mut Session) -
     mask
 }
 
-pub fn eval(scalar: &Scalar, input: &RecordBatch, state: &mut Session) -> AnyArray {
+pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, state: &QueryState) -> AnyArray {
     match scalar {
         Scalar::Literal(value) => value.repeat(input.len()),
         Scalar::Column(column) => {
@@ -29,7 +30,7 @@ pub fn eval(scalar: &Scalar, input: &RecordBatch, state: &mut Session) -> AnyArr
     }
 }
 
-fn eval_function(function: &F, input: &RecordBatch, state: &mut Session) -> AnyArray {
+fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyArray {
     let mut e = |a| eval(a, input, state);
     match function {
         F::CurrentDate | F::CurrentTimestamp => panic!(
@@ -79,7 +80,7 @@ fn eval_function(function: &F, input: &RecordBatch, state: &mut Session) -> AnyA
         F::LengthString(a) => unary(&e(a).as_string(), |a| a.chars().count() as i64),
         F::LowerString(a) => unary(&e(a).as_string(), |a| a.to_lowercase()),
         F::NaturalLogarithmDouble(a) => unary(&e(a).as_f64(), f64::ln),
-        F::NextVal(a) => unary(&e(a).as_i64(), |a| state.storage.next_val(a)),
+        F::NextVal(a) => unary(&e(a).as_i64(), |a| state[STORAGE_KEY].next_val(a)),
         F::Not(a) => unary(&e(a).as_bool(), |a| !a),
         F::ReverseString(a) => unary(&e(a).as_string(), |a| a.chars().rev().collect::<String>()),
         F::RoundDouble(a) => unary(&e(a).as_f64(), f64::round),

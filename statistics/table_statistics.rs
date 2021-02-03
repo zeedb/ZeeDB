@@ -1,6 +1,6 @@
 use crate::ColumnStatistics;
-use kernel::RecordBatch;
-use std::collections::HashMap;
+use kernel::{DataType, RecordBatch};
+use std::collections::{hash_map::Entry, HashMap};
 
 #[derive(Clone, Debug)]
 pub struct TableStatistics {
@@ -17,6 +17,24 @@ impl TableStatistics {
                 .or_insert_with(|| ColumnStatistics::new(array.data_type()))
                 .insert(array)
         }
+    }
+
+    pub fn merge(&mut self, other: TableStatistics) {
+        self.cardinality += other.cardinality;
+        for (column, statistics) in other.columns {
+            match self.columns.entry(column) {
+                Entry::Occupied(mut entry) => entry.get_mut().merge(&statistics),
+                Entry::Vacant(entry) => {
+                    entry.insert(statistics);
+                }
+            }
+        }
+    }
+
+    pub fn create_column(&mut self, column: String, data_type: DataType) {
+        self.columns
+            .entry(column)
+            .or_insert_with(|| ColumnStatistics::new(data_type));
     }
 
     pub fn approx_cardinality(&self) -> usize {

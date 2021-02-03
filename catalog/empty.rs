@@ -1,4 +1,4 @@
-use crate::Catalog;
+use crate::{builtin_function_options, Catalog};
 use ast::Index;
 use context::Context;
 use zetasql::SimpleCatalogProto;
@@ -13,7 +13,10 @@ impl Catalog for EmptyCatalog {
         txn: i64,
         context: &Context,
     ) -> SimpleCatalogProto {
-        crate::default_catalog()
+        SimpleCatalogProto {
+            builtin_function_options: Some(builtin_function_options()),
+            ..Default::default()
+        }
     }
 
     fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index> {

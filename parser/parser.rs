@@ -30,7 +30,14 @@ impl Parser {
             .unwrap()
     }
 
-    pub fn analyze(&self, sql: &str, catalog_id: i64, txn: i64, context: &Context) -> Expr {
+    pub fn analyze(
+        &self,
+        sql: &str,
+        catalog_id: i64,
+        txn: i64,
+        mut variables: Vec<(String, DataType)>,
+        context: &Context,
+    ) -> Expr {
         let request = tonic::Request::new(ExtractTableNamesFromStatementRequest {
             sql_statement: Some(sql.to_string()),
             allow_script: Some(true),
@@ -52,7 +59,6 @@ impl Parser {
             .catalog(catalog_id, table_names, txn, context);
         let mut offset = 0;
         let mut exprs = vec![];
-        let mut variables = vec![];
         loop {
             let (next_offset, next_expr) =
                 self.analyze_next(catalog_id, &catalog, &variables, sql, offset);
@@ -117,7 +123,7 @@ impl Parser {
             .lock()
             .unwrap()
             .analyze(request)
-            .unwrap()
+            .expect(sql)
             .into_inner();
         let offset = response.resume_byte_position.unwrap();
         let expr = match response.result.unwrap() {

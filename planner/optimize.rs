@@ -1,28 +1,18 @@
-use crate::{cost::*, rewrite::rewrite, rule::*, search_space::*};
-use ast::{Index, *};
-use std::collections::HashMap;
-use storage::Storage;
-use zetasql::SimpleCatalogProto;
+use crate::{cost::*, rule::*, search_space::*};
+use ast::{Expr, *};
+use catalog::Catalog;
+use context::Context;
+use statistics::{Statistics, STATISTICS_KEY};
 
 const TRACE: bool = false;
 
-// Our implementation of tasks differs from Columbia/Cascades:
-// we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
-// However, the logic and the order of invocation should be exactly the same.
-
-pub fn optimize(
-    catalog_id: i64,
-    catalog: &SimpleCatalogProto,
-    indexes: &HashMap<i64, Vec<Index>>,
-    storage: &Storage,
-    expr: Expr,
-) -> Expr {
+pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
     let mut optimizer = Optimizer {
-        indexes,
-        storage,
+        txn,
         ss: SearchSpace::new(),
+        context,
     };
-    let mut expr = rewrite(catalog_id, catalog, expr);
+    let mut expr = crate::rewrite::rewrite(expr, txn, context);
     optimizer.copy_in_new(&mut expr);
     let gid = match expr {
         Leaf { gid } => GroupID(gid),
@@ -32,10 +22,14 @@ pub fn optimize(
     optimizer.winner(gid, PhysicalProp::None)
 }
 
-struct Optimizer<'a> {
-    indexes: &'a HashMap<i64, Vec<Index>>,
-    storage: &'a Storage,
-    ss: SearchSpace,
+// Our implementation of tasks differs from Columbia/Cascades:
+// we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
+// However, the logic and the order of invocation should be exactly the same.
+
+pub(crate) struct Optimizer<'a> {
+    pub txn: i64,
+    pub ss: SearchSpace,
+    pub context: &'a Context,
 }
 
 impl<'a> Optimizer<'a> {
@@ -111,7 +105,7 @@ impl<'a> Optimizer<'a> {
             )
         }
         for expr in rule.bind(&self.ss, mid) {
-            if let Some(expr) = rule.apply(&self.ss, &self.indexes, expr) {
+            if let Some(expr) = rule.apply(expr, &self) {
                 // Add mexpr if it isn't already present in the group.
                 if let Some(mid) = self.copy_in(expr, self.ss[mid].parent) {
                     if TRACE {
@@ -159,7 +153,8 @@ impl<'a> Optimizer<'a> {
         // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
         let parent = self.ss[mid].parent;
         let upper_bound = self.ss[parent].upper_bound[require].unwrap_or(f64::MAX);
-        let physical_cost = physical_cost(&self.ss, &self.storage, mid);
+        let statistics = self.context.get(STATISTICS_KEY);
+        let physical_cost = physical_cost(mid, statistics, &self.ss);
         // If we can find a winning strategy for each input and an associated cost,
         // try to declare the current MultiExpr as the winner of its group.
         if self.optimize_inputs(mid, physical_cost, upper_bound) {
@@ -279,19 +274,17 @@ impl<'a> Optimizer<'a> {
             let mexpr = MultiExpr::new(gid, removed);
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
-            let props = crate::cardinality_estimation::compute_logical_props(
-                &self.ss,
-                &mut self.storage,
-                mid,
-            );
-            let lower_bound = compute_lower_bound(&self.ss, &self.ss[mid], &props);
+            let statistics = self.context.get(STATISTICS_KEY);
+            let props =
+                crate::cardinality_estimation::compute_logical_props(mid, statistics, &self.ss);
+            let lower_bound = compute_lower_bound(&self.ss[mid], &props, &self.ss);
             let group = Group {
                 logical: vec![mid],
                 physical: vec![],
                 props,
                 lower_bound,
-                upper_bound: Context::empty(),
-                winners: Context::empty(),
+                upper_bound: PerPhysicalProp::default(),
+                winners: PerPhysicalProp::default(),
                 explored: false,
             };
             self.ss.add_group(gid, group);

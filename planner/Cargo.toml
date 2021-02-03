@@ -13,6 +13,7 @@ chrono = "0.4.11"
 rand = "0.7.3"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
+context = { path = "../context" }
 encoding = { path = "../encoding" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }

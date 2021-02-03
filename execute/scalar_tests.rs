@@ -1,7 +1,14 @@
+use std::collections::HashMap;
+
+use crate::MetadataCatalog;
 use ast::Value;
+use catalog::CATALOG_KEY;
 use chrono::{NaiveDate, TimeZone, Utc};
+use context::Context;
 use kernel::{AnyArray, Array};
-use storage::Storage;
+use parser::{Parser, PARSER_KEY};
+use statistics::{Statistics, STATISTICS_KEY};
+use storage::{Storage, STORAGE_KEY};
 
 #[test]
 fn test_math_i64() {
@@ -623,20 +630,19 @@ fn test_casts() {
 }
 
 fn eval(sql: &str) -> Value {
+    let mut context = Context::default();
+    context.insert(STORAGE_KEY, Storage::default());
+    context.insert(STATISTICS_KEY, Statistics::default());
+    context.insert(PARSER_KEY, Parser::default());
+    context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     let sql = format!("select {}", sql);
-    let mut storage = Storage::default();
-    let catalog = crate::catalog::catalog(&mut storage, 100);
-    let indexes = crate::catalog::indexes(&mut storage, 100);
-    let parse = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).expect(&sql);
-    let plan = planner::optimize(
-        catalog::ROOT_CATALOG_ID,
-        &catalog,
-        &indexes,
-        &mut storage,
-        parse,
-    );
-    let program = crate::execute::compile(plan);
-    let mut batch = program.execute(&mut storage, 100).last().unwrap();
+    let txn = 100;
+    let parser = context.get(PARSER_KEY);
+    let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, txn, vec![], &context);
+    let expr = planner::optimize(expr, txn, &context);
+    let mut batch = crate::execute::execute(expr, txn, HashMap::new(), &context)
+        .last()
+        .unwrap();
     assert_eq!(1, batch.len(), "{}", &sql);
     match batch.columns.remove(0).1 {
         AnyArray::Bool(array) => Value::Bool(array.get(0)),

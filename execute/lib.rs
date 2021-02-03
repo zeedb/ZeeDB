@@ -23,6 +23,6 @@ mod test_suite;
 
 pub use crate::{
     adventure_works::adventure_works,
-    catalog::{catalog, indexes},
-    execute::{compile, Execute, Program},
+    catalog::MetadataCatalog,
+    execute::{RemoteExecution, SingleNodeRemoteExecution},
 };

@@ -102,6 +102,10 @@ impl ColumnStatistics {
         }
     }
 
+    pub fn merge(&mut self, other: &Self) {
+        *self = Self::union(&self, other)
+    }
+
     pub fn insert(&mut self, column: &AnyArray) {
         match (self, column) {
             (ColumnStatistics::Bool(typed), AnyArray::Bool(array)) => {

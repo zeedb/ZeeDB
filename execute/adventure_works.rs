@@ -1,43 +1,56 @@
-use chrono::*;
-use once_cell::sync::OnceCell;
-use planner::*;
-use rand::{rngs::SmallRng, Rng, SeedableRng};
-use storage::Storage;
+use std::{collections::HashMap, sync::Arc};
 
-pub fn adventure_works() -> Storage {
-    static ADVENTURE_WORKS: OnceCell<Storage> = OnceCell::new();
+use crate::{MetadataCatalog, SingleNodeRemoteExecution};
+use catalog::CATALOG_KEY;
+use chrono::*;
+use context::Context;
+use once_cell::sync::OnceCell;
+use parser::{Parser, PARSER_KEY};
+use rand::{rngs::SmallRng, Rng, SeedableRng};
+use statistics::{Statistics, STATISTICS_KEY};
+use storage::{Storage, STORAGE_KEY};
+
+pub fn adventure_works() -> (Storage, Statistics) {
+    static ADVENTURE_WORKS: OnceCell<(Storage, Statistics)> = OnceCell::new();
 
     ADVENTURE_WORKS
         .get_or_init(|| generate_adventure_works(1_000))
         .clone()
 }
 
-fn generate_adventure_works(n_store: usize) -> Storage {
+fn generate_adventure_works(n_store: usize) -> (Storage, Statistics) {
+    let mut context = Context::default();
+    context.insert(STORAGE_KEY, Storage::default());
+    context.insert(STATISTICS_KEY, Statistics::default());
+    context.insert(PARSER_KEY, Parser::default());
+    context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
+    populate_adventure_works(n_store, &mut context);
+    (context.remove(STORAGE_KEY), context.remove(STATISTICS_KEY))
+}
+
+fn populate_adventure_works(n_store: usize, context: &mut Context) {
     let n_customer = n_store * 10;
     let n_person = n_customer * 2;
     fn timestamp(secs: i64) -> DateTime<Utc> {
         DateTime::from_utc(NaiveDateTime::from_timestamp(secs, 0), Utc)
     }
     println!("Initialize adventure_works database...");
-    let mut storage = Storage::default();
     let mut txn = 0;
     // Create tables.
-    execute(&mut storage, vec![
+    execute(vec![
         "create table store (store_id int64, name string, modified_date timestamp);",
         "create table customer (customer_id int64, person_id int64, store_id int64, account_number int64, modified_date timestamp);",
         "create table person (person_id int64, first_name string, last_name string, modified_date timestamp);",
-    ].join("\n").as_str(), &mut txn,);
+    ], &mut txn, context);
     // Create indexes.
     execute(
-        &mut storage,
         vec![
-            "create index store_id on store (store_id);",
-            "create index customer_id on customer (customer_id);",
-            "create index person_id on person (person_id);",
-        ]
-        .join("\n")
-        .as_str(),
+            "create index store_id_index on store (store_id);",
+            "create index customer_id_index on customer (customer_id);",
+            "create index person_id_index on person (person_id);",
+        ],
         &mut txn,
+        context,
     );
     // Populate tables.
     const LOW_TIME: i64 = 946688400;
@@ -54,11 +67,8 @@ fn generate_adventure_works(n_store: usize) -> Storage {
             )
         })
         .collect();
-    execute(
-        &mut storage,
-        format!("insert into store values\n{};", lines.join(",\n")).as_str(),
-        &mut txn,
-    );
+    let insert = format!("insert into store values\n{};", lines.join(",\n"));
+    execute(vec![&insert], &mut txn, context);
     println!("...wrote {} rows into store", n_store);
     // Customer.
     let customers = sample(n_person, n_customer);
@@ -76,11 +86,8 @@ fn generate_adventure_works(n_store: usize) -> Storage {
                 )
             })
             .collect();
-        execute(
-            &mut storage,
-            format!("insert into customer values\n{};", lines.join(",\n")).as_str(),
-            &mut txn,
-        );
+        let insert = format!("insert into customer values\n{};", lines.join(",\n"));
+        execute(vec![&insert], &mut txn, context);
         println!("...wrote 10_000 rows into customer");
     }
     // Person.
@@ -96,15 +103,20 @@ fn generate_adventure_works(n_store: usize) -> Storage {
                 )
             })
             .collect();
-        execute(
-            &mut storage,
-            format!("insert into person values\n{};", lines.join(",\n")).as_str(),
-            &mut txn,
-        );
+        let insert = format!("insert into person values\n{};", lines.join(",\n"));
+        execute(vec![&insert], &mut txn, context);
         println!("...wrote 10_000 rows into person");
     }
+}
 
-    storage
+fn execute(script: Vec<&str>, txn: &mut i64, context: &mut Context) {
+    let sql = script.join("\n");
+    let parser = context.get(PARSER_KEY);
+    let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, *txn, vec![], context);
+    let expr = planner::optimize(expr, *txn, context);
+    dbg!(&sql, &expr);
+    crate::execute::execute_mut(expr, *txn, HashMap::new(), context).last();
+    *txn += 1;
 }
 
 fn sample(universe: usize, n: usize) -> Vec<usize> {
@@ -115,13 +127,4 @@ fn sample(universe: usize, n: usize) -> Vec<usize> {
         array.swap(i, j);
     }
     array.drain(0..n).collect()
-}
-
-fn execute(storage: &mut Storage, sql: &str, txn: &mut i64) {
-    let catalog = crate::catalog::catalog(storage, *txn);
-    let indexes = crate::catalog::indexes(storage, *txn);
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, sql).unwrap();
-    let expr = optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
-    let _result: Vec<_> = crate::compile(expr).execute(storage, *txn).collect();
-    *txn += 1;
 }

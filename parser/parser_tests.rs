@@ -70,7 +70,7 @@ fn test_call() {
 fn analyze(sql: &str) -> Expr {
     let mut context = Context::default();
     context.insert(CATALOG_KEY, Box::new(EmptyCatalog));
-    Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 0, &mut context)
+    Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 0, vec![], &mut context)
 }
 
 fn format(sql: &str) -> String {

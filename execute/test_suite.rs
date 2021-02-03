@@ -1,25 +1,35 @@
+use crate::MetadataCatalog;
 use ast::Expr;
+use catalog::CATALOG_KEY;
+use context::Context;
+use parser::{Parser, PARSER_KEY};
 use regex::Regex;
-use std::fmt::Write;
-use storage::Storage;
+use statistics::{Statistics, STATISTICS_KEY};
+use std::{collections::HashMap, fmt::Write};
+use storage::{Storage, STORAGE_KEY};
 
 pub struct TestSuite {
-    storage: Storage,
     txn: i64,
+    context: Context,
     log: String,
 }
 
 impl TestSuite {
-    pub fn new(storage: Storage) -> Self {
+    pub fn new(storage: Storage, statistics: Statistics) -> Self {
+        let mut context = Context::default();
+        context.insert(STORAGE_KEY, storage);
+        context.insert(STATISTICS_KEY, statistics);
+        context.insert(PARSER_KEY, Parser::default());
+        context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
         Self {
-            storage,
             txn: 100,
+            context,
             log: "".to_string(),
         }
     }
 
     pub fn setup(&mut self, sql: &str) {
-        run(&mut self.storage, &sql, self.txn);
+        run(&sql, self.txn, &mut self.context);
         writeln!(&mut self.log, "setup: {}", trim(&sql)).unwrap();
         self.txn += 1;
     }
@@ -33,7 +43,7 @@ impl TestSuite {
             &mut self.log,
             "ok: {}\n{}\n",
             trim(&sql),
-            run(&mut self.storage, &sql, self.txn)
+            run(&sql, self.txn, &mut self.context)
         )
         .unwrap();
         self.txn += 1;
@@ -44,7 +54,7 @@ impl TestSuite {
             &mut self.log,
             "error: {}\n{}\n",
             trim(&sql),
-            run(&mut self.storage, &sql, self.txn)
+            run(&sql, self.txn, &mut self.context)
         )
         .unwrap_err();
         self.txn += 1;
@@ -67,17 +77,11 @@ fn trim(sql: &str) -> String {
     trimmed
 }
 
-fn plan(storage: &mut Storage, sql: &str, txn: i64) -> Expr {
-    let catalog = crate::catalog::catalog(storage, txn);
-    let indexes = crate::catalog::indexes(storage, txn);
-    let parse = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, &sql).expect(&sql);
-    planner::optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, storage, parse)
-}
-
-fn run(storage: &mut Storage, sql: &str, txn: i64) -> String {
-    let plan = plan(storage, sql, txn);
-    let program = crate::execute::compile(plan);
-    let batches: Vec<_> = program.execute(storage, txn).collect();
+fn run(sql: &str, txn: i64, context: &mut Context) -> String {
+    let parser = context.get(PARSER_KEY);
+    let expr = parser.analyze(sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
+    let expr = planner::optimize(expr, txn, context);
+    let batches: Vec<_> = crate::execute::execute_mut(expr, txn, HashMap::new(), context).collect();
     if batches.is_empty() {
         "EMPTY".to_string()
     } else {

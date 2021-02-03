@@ -3,6 +3,7 @@ use context::{Context, ContextKey};
 use zetasql::*;
 
 pub const ROOT_CATALOG_ID: i64 = 0;
+pub const METADATA_CATALOG_ID: i64 = 1;
 pub const CATALOG_KEY: ContextKey<Box<dyn Catalog>> = ContextKey::new("CATALOG");
 
 pub trait Catalog {
@@ -17,23 +18,14 @@ pub trait Catalog {
     fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index>;
 }
 
-pub fn default_catalog() -> SimpleCatalogProto {
-    let mut cat = empty_catalog();
-    cat.catalog.push(crate::bootstrap_metadata_catalog());
-    cat
-}
-
-pub fn empty_catalog() -> SimpleCatalogProto {
-    SimpleCatalogProto {
-        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
-            language_options: Some(LanguageOptionsProto {
-                enabled_language_features: enabled_language_features(),
-                supported_statement_kinds: supported_statement_kinds(),
-                ..Default::default()
-            }),
-            include_function_ids: enabled_functions(),
+pub fn builtin_function_options() -> ZetaSqlBuiltinFunctionOptionsProto {
+    ZetaSqlBuiltinFunctionOptionsProto {
+        language_options: Some(LanguageOptionsProto {
+            enabled_language_features: enabled_language_features(),
+            supported_statement_kinds: supported_statement_kinds(),
             ..Default::default()
         }),
+        include_function_ids: enabled_functions(),
         ..Default::default()
     }
 }

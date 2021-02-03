@@ -7,7 +7,7 @@ use std::{
 };
 
 // SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
-pub struct SearchSpace {
+pub(crate) struct SearchSpace {
     pub groups: Vec<Option<Group>>,
     pub mexprs: Vec<MultiExpr>,
     pub memo_first: HashMap<Expr, MultiExprID>,
@@ -22,7 +22,7 @@ pub struct MultiExprID(pub usize);
 
 // Group represents a single logical query, which can be realized by many
 // specific logical and physical query plans.
-pub struct Group {
+pub(crate) struct Group {
     // logical holds a set of equivalent logical query plans.
     pub logical: Vec<MultiExprID>,
     // physical holds a set of physical implementations of the query plans in logical.
@@ -40,9 +40,9 @@ pub struct Group {
     // upper_bound is calculated by taking a winning plan and propagating a goal downwards.
     // We need to find a plan that is better than upper_bound, or it will be ignored
     // because it's worse than a plan we already know about.
-    pub upper_bound: Context<Cost>,
+    pub upper_bound: PerPhysicalProp<Cost>,
     // winner holds the best physical plan discovered so far for each possible physical property.
-    pub winners: Context<Winner>,
+    pub winners: PerPhysicalProp<Winner>,
     // explored is marked true on the first invocation of optimizeGroup,
     // whose job is to make sure optimizeExpr is called on every group at least once.
     pub explored: bool,
@@ -51,7 +51,7 @@ pub struct Group {
 // MultiExpr represents a part of a Group.
 // Unlike Group, which represents *all* equivalent query plans,
 // MultiExpr specifies operator at the top of a the query.
-pub struct MultiExpr {
+pub(crate) struct MultiExpr {
     // Parent group of this expression.
     pub parent: GroupID,
     // The top operator in this query.
@@ -72,7 +72,7 @@ pub struct Winner {
     pub cost: Cost,
 }
 
-pub struct Context<T> {
+pub struct PerPhysicalProp<T> {
     by_required_prop: [Option<T>; 3],
 }
 
@@ -244,15 +244,15 @@ pub fn leaf(expr: &Expr) -> GroupID {
     }
 }
 
-impl<T> Context<T> {
-    pub fn empty() -> Self {
+impl<T> Default for PerPhysicalProp<T> {
+    fn default() -> Self {
         Self {
             by_required_prop: Default::default(),
         }
     }
 }
 
-impl<T> Index<PhysicalProp> for Context<T> {
+impl<T> Index<PhysicalProp> for PerPhysicalProp<T> {
     type Output = Option<T>;
 
     fn index(&self, index: PhysicalProp) -> &Self::Output {
@@ -260,7 +260,7 @@ impl<T> Index<PhysicalProp> for Context<T> {
     }
 }
 
-impl<T> IndexMut<PhysicalProp> for Context<T> {
+impl<T> IndexMut<PhysicalProp> for PerPhysicalProp<T> {
     fn index_mut(&mut self, index: PhysicalProp) -> &mut Self::Output {
         &mut self.by_required_prop[index as usize]
     }

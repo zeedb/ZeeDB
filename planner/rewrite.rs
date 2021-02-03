@@ -1,10 +1,11 @@
 use crate::unnest::unnest_dependent_joins;
 use ast::*;
 use chrono::{NaiveDate, TimeZone, Utc};
+use context::Context;
+use parser::{Parser, PARSER_KEY};
 use std::collections::HashMap;
-use zetasql::SimpleCatalogProto;
 
-pub(crate) fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
+pub fn rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
     let expr = expr.top_down_rewrite(&|e| apply_repeatedly(rewrite_ddl, e));
     let expr = rewrite_scalars(expr);
     let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(unnest_dependent_joins, e));
@@ -12,7 +13,7 @@ pub(crate) fn rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr)
     let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(remove_dependent_join, e));
     let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(optimize_join_type, e));
     let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_projections, e));
-    let expr = rewrite_logical_rewrite(catalog_id, catalog, expr);
+    let expr = rewrite_logical_rewrite(expr, txn, context);
     expr
 }
 
@@ -600,11 +601,12 @@ fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
     }
 }
 
-fn rewrite_logical_rewrite(catalog_id: i64, catalog: &SimpleCatalogProto, expr: Expr) -> Expr {
+fn rewrite_logical_rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
     expr.bottom_up_rewrite(&|expr| match expr {
         LogicalRewrite { sql } => {
-            let expr = parser::analyze(catalog_id, &catalog, &sql).expect(&sql);
-            rewrite(catalog_id, catalog, expr)
+            let parser = context.get(PARSER_KEY);
+            let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
+            rewrite(expr, txn, context)
         }
         other => other,
     })

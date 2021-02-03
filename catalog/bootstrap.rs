@@ -15,11 +15,15 @@ impl Catalog for BootstrapCatalog {
         txn: i64,
         context: &Context,
     ) -> SimpleCatalogProto {
-        todo!()
+        SimpleCatalogProto {
+            catalog: vec![bootstrap_metadata_catalog()],
+            builtin_function_options: Some(builtin_function_options()),
+            ..Default::default()
+        }
     }
 
     fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
-        todo!()
+        vec![]
     }
 }
 
@@ -41,6 +45,60 @@ pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
 
 pub fn bootstrap_sequences() -> Vec<(i64, i64)> {
     vec![(0, 100), (1, 100), (2, 100)]
+}
+
+pub fn bootstrap_statistics() -> Vec<(i64, Vec<(&'static str, DataType)>)> {
+    vec![
+        (
+            0, // catalog
+            vec![
+                ("parent_catalog_id", DataType::I64),
+                ("catalog_id", DataType::I64),
+                ("catalog_name", DataType::String),
+            ],
+        ),
+        (
+            1, // table
+            vec![
+                ("catalog_id", DataType::I64),
+                ("table_id", DataType::I64),
+                ("table_name", DataType::String),
+            ],
+        ),
+        (
+            2, // column
+            vec![
+                ("table_id", DataType::I64),
+                ("column_id", DataType::I64),
+                ("column_name", DataType::String),
+                ("column_type", DataType::String),
+            ],
+        ),
+        (
+            3, // index
+            vec![
+                ("catalog_id", DataType::I64),
+                ("index_id", DataType::I64),
+                ("table_id", DataType::I64),
+                ("index_name", DataType::String),
+            ],
+        ),
+        (
+            4, // index_column
+            vec![
+                ("index_id", DataType::I64),
+                ("column_id", DataType::I64),
+                ("index_order", DataType::I64),
+            ],
+        ),
+        (
+            5, // sequence
+            vec![
+                ("sequence_id", DataType::I64),
+                ("sequence_name", DataType::String),
+            ],
+        ),
+    ]
 }
 
 pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
@@ -66,15 +124,6 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
         }
     };
     SimpleCatalogProto {
-        builtin_function_options: Some(ZetaSqlBuiltinFunctionOptionsProto {
-            language_options: Some(LanguageOptionsProto {
-                enabled_language_features: enabled_language_features(),
-                supported_statement_kinds: supported_statement_kinds(),
-                ..Default::default()
-            }),
-            include_function_ids: enabled_functions(),
-            ..Default::default()
-        }),
         name: Some("metadata".to_string()),
         table: vec![
             table(
@@ -129,6 +178,7 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
         ],
         custom_function: metadata_custom_functions(),
         procedure: metadata_procedures(),
+        // builtin_function_options: Some(builtin_function_options()),
         ..Default::default()
     }
 }

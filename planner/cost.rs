@@ -1,6 +1,6 @@
 use crate::{cardinality_estimation::LogicalProps, search_space::*};
 use ast::*;
-use storage::Storage;
+use statistics::Statistics;
 
 pub type Cost = f64;
 
@@ -20,7 +20,7 @@ const NODES: Cost = 10.0; // TODO use the actual # of nodes at runtime.
 // physicalCost computes the local cost of the physical operator at the head of a multi-expression tree.
 // To compute the total physical cost of an expression, you need to choose a single physical expression
 // at every node of the tree and add up the local costs.
-pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> Cost {
+pub(crate) fn physical_cost(mid: MultiExprID, statistics: &Statistics, ss: &SearchSpace) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].expr {
         TableFreeScan { .. }
@@ -33,7 +33,7 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
         | Call { .. }
         | Explain { .. } => 0.0,
         SeqScan { table, .. } => {
-            let n = storage.statistics(table.id).approx_cardinality();
+            let n = statistics[table.id].approx_cardinality();
             n as f64 * SEQ_SCAN
         }
         IndexScan { .. } => {
@@ -127,9 +127,9 @@ pub fn physical_cost(ss: &SearchSpace, storage: &Storage, mid: MultiExprID) -> C
 }
 
 pub(crate) fn compute_lower_bound(
-    ss: &SearchSpace,
     mexpr: &MultiExpr,
     props: &LogicalProps,
+    ss: &SearchSpace,
 ) -> Cost {
     match &mexpr.expr {
         LogicalGet { .. } => props.cardinality as Cost * SEQ_SCAN,

@@ -14,7 +14,7 @@ impl Context {
     pub fn get<T: 'static>(&self, key: ContextKey<T>) -> &T {
         self.store
             .get(key.key)
-            .unwrap()
+            .expect(key.key)
             .downcast_ref::<T>()
             .expect(key.key)
     }
@@ -22,7 +22,7 @@ impl Context {
     pub fn get_mut<T: 'static>(&mut self, key: ContextKey<T>) -> &mut T {
         self.store
             .get_mut(key.key)
-            .unwrap()
+            .expect(key.key)
             .downcast_mut::<T>()
             .unwrap()
     }
