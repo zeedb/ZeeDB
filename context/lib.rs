@@ -1,4 +1,9 @@
-use std::{any::Any, collections::HashMap, marker::PhantomData};
+use std::{
+    any::Any,
+    collections::HashMap,
+    marker::PhantomData,
+    ops::{Index, IndexMut},
+};
 
 #[derive(Default)]
 pub struct Context {
@@ -11,20 +16,14 @@ pub struct ContextKey<T> {
 }
 
 impl Context {
+    // TODO inline
     pub fn get<T: 'static>(&self, key: ContextKey<T>) -> &T {
-        self.store
-            .get(key.key)
-            .expect(key.key)
-            .downcast_ref::<T>()
-            .expect(key.key)
+        &self[key]
     }
 
+    // TODO inline
     pub fn get_mut<T: 'static>(&mut self, key: ContextKey<T>) -> &mut T {
-        self.store
-            .get_mut(key.key)
-            .expect(key.key)
-            .downcast_mut::<T>()
-            .unwrap()
+        &mut self[key]
     }
 
     pub fn insert<T: 'static>(&mut self, key: ContextKey<T>, any: T) {
@@ -44,5 +43,27 @@ impl<T> ContextKey<T> {
             key,
             phantom: PhantomData,
         }
+    }
+}
+
+impl<T: 'static> Index<ContextKey<T>> for Context {
+    type Output = T;
+
+    fn index(&self, key: ContextKey<T>) -> &Self::Output {
+        self.store
+            .get(key.key)
+            .expect(key.key)
+            .downcast_ref::<T>()
+            .expect(key.key)
+    }
+}
+
+impl<T: 'static> IndexMut<ContextKey<T>> for Context {
+    fn index_mut(&mut self, key: ContextKey<T>) -> &mut Self::Output {
+        self.store
+            .get_mut(key.key)
+            .expect(key.key)
+            .downcast_mut::<T>()
+            .unwrap()
     }
 }

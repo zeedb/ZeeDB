@@ -1,9 +1,11 @@
-use ast::Index;
+use catalog::CATALOG_KEY;
+use context::Context;
 use cpuprofiler::PROFILER;
-use execute::Program;
+use execute::MetadataCatalog;
+use parser::{Parser, PARSER_KEY};
+use statistics::STATISTICS_KEY;
 use std::collections::HashMap;
-use storage::Storage;
-use zetasql::SimpleCatalogProto;
+use storage::STORAGE_KEY;
 
 /// View profiles with ~/go/bin/pprof --http localhost:8888 benchmarks/profiles/___.profile
 fn main() {
@@ -13,27 +15,19 @@ fn main() {
     );
 }
 
-fn bench(profile: &str, q: &str) {
-    let mut storage = execute::adventure_works();
-    let catalog = execute::catalog(&mut storage, 100);
-    let indexes = execute::indexes(&mut storage, 100);
-    let program = compile(&mut storage, &catalog, &indexes, &q);
+fn bench(profile: &str, sql: &str) {
+    let mut context = Context::default();
+    let (storage, statistics) = execute::adventure_works();
+    context.insert(STORAGE_KEY, storage);
+    context.insert(STATISTICS_KEY, statistics);
+    context.insert(PARSER_KEY, Parser::default());
+    context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
+    let expr = context[PARSER_KEY].analyze(sql, catalog::ROOT_CATALOG_ID, 100, vec![], &context);
+    let expr = planner::optimize(expr, 100, &context);
     let mut profiler = PROFILER.lock().unwrap();
     profiler.start(profile).unwrap();
     for txn in 0..1000 {
-        program.execute(&mut storage, 100 + txn).last();
+        execute::execute_mut(expr.clone(), 100 + txn, HashMap::new(), &mut context).last();
     }
     profiler.stop().unwrap();
-}
-
-fn compile<'a>(
-    storage: &'a mut Storage,
-    catalog: &SimpleCatalogProto,
-    indexes: &HashMap<i64, Vec<Index>>,
-    sql: &str,
-) -> Program {
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, catalog, sql).expect(sql);
-    let expr = planner::optimize(catalog::ROOT_CATALOG_ID, catalog, indexes, storage, expr);
-    let program = execute::compile(expr);
-    program
 }

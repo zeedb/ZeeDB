@@ -8,11 +8,13 @@ publish = false
 cpuprofiler = "0.0.4"
 regex = "1.4.2"
 ast = { path = "../ast" }
+context = { path = "../context" }
 catalog = { path = "../catalog" }
 execute = { path = "../execute" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 storage = { path = "../storage" }
+statistics = { path = "../statistics" }
 zetasql = { path = "../zetasql" }
 
 [[bin]]

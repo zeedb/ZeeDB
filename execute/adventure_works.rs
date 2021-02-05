@@ -114,7 +114,6 @@ fn execute(script: Vec<&str>, txn: &mut i64, context: &mut Context) {
     let parser = context.get(PARSER_KEY);
     let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, *txn, vec![], context);
     let expr = planner::optimize(expr, *txn, context);
-    dbg!(&sql, &expr);
     crate::execute::execute_mut(expr, *txn, HashMap::new(), context).last();
     *txn += 1;
 }
