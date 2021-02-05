@@ -604,7 +604,7 @@ fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
 fn rewrite_logical_rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
     expr.bottom_up_rewrite(&|expr| match expr {
         LogicalRewrite { sql } => {
-            let parser = context.get(PARSER_KEY);
+            let parser = &context[PARSER_KEY];
             let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
             rewrite(expr, txn, context)
         }

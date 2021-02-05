@@ -111,7 +111,7 @@ fn populate_adventure_works(n_store: usize, context: &mut Context) {
 
 fn execute(script: Vec<&str>, txn: &mut i64, context: &mut Context) {
     let sql = script.join("\n");
-    let parser = context.get(PARSER_KEY);
+    let parser = &context[PARSER_KEY];
     let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, *txn, vec![], context);
     let expr = planner::optimize(expr, *txn, context);
     crate::execute::execute_mut(expr, *txn, HashMap::new(), context).last();

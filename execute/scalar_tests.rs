@@ -637,7 +637,7 @@ fn eval(sql: &str) -> Value {
     context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     let sql = format!("select {}", sql);
     let txn = 100;
-    let parser = context.get(PARSER_KEY);
+    let parser = &context[PARSER_KEY];
     let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, txn, vec![], &context);
     let expr = planner::optimize(expr, txn, &context);
     let mut batch = crate::execute::execute(expr, txn, HashMap::new(), &context)

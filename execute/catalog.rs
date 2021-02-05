@@ -242,7 +242,7 @@ impl PlanCache {
                 context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
                 context.insert(PARSER_KEY, Parser::default());
                 context.insert(STATISTICS_KEY, Statistics::default());
-                let parser = context.get(PARSER_KEY);
+                let parser = &context[PARSER_KEY];
                 let expr =
                     parser.analyze(self.query, catalog::ROOT_CATALOG_ID, 0, variables, &context);
                 planner::optimize(expr, 0, &context)

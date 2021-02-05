@@ -1148,8 +1148,8 @@ impl<'a, T: 'static> std::ops::Index<ContextKey<T>> for QueryState<'a> {
 
     fn index(&self, index: ContextKey<T>) -> &Self::Output {
         match (&self.context, &self.context_mut) {
-            (Some(context), _) => context.get(index),
-            (_, Some(context)) => context.get(index),
+            (Some(context), _) => &context[index],
+            (_, Some(context)) => &context[index],
             (None, None) => panic!("Neither QueryState.context nor QueryState.context_mut is set"),
         }
     }
@@ -1158,7 +1158,7 @@ impl<'a, T: 'static> std::ops::Index<ContextKey<T>> for QueryState<'a> {
 impl<'a, T: 'static> std::ops::IndexMut<ContextKey<T>> for QueryState<'a> {
     fn index_mut(&mut self, index: ContextKey<T>) -> &mut Self::Output {
         match &mut self.context_mut {
-            Some(context) => context.get_mut(index),
+            Some(context) => &mut context[index],
             None => panic!("QueryState.context_mut is not set"),
         }
     }

@@ -16,16 +16,6 @@ pub struct ContextKey<T> {
 }
 
 impl Context {
-    // TODO inline
-    pub fn get<T: 'static>(&self, key: ContextKey<T>) -> &T {
-        &self[key]
-    }
-
-    // TODO inline
-    pub fn get_mut<T: 'static>(&mut self, key: ContextKey<T>) -> &mut T {
-        &mut self[key]
-    }
-
     pub fn insert<T: 'static>(&mut self, key: ContextKey<T>, any: T) {
         if self.store.insert(key.key, Box::new(any)).is_some() {
             panic!("{} is already present", key.key)

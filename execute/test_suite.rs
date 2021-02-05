@@ -78,7 +78,7 @@ fn trim(sql: &str) -> String {
 }
 
 fn run(sql: &str, txn: i64, context: &mut Context) -> String {
-    let parser = context.get(PARSER_KEY);
+    let parser = &context[PARSER_KEY];
     let expr = parser.analyze(sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
     let expr = planner::optimize(expr, txn, context);
     let batches: Vec<_> = crate::execute::execute_mut(expr, txn, HashMap::new(), context).collect();

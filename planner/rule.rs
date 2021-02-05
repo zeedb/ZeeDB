@@ -351,7 +351,7 @@ impl Rule {
                 } = bind
                 {
                     // TODO return multiple indexes!
-                    let catalog: &Box<dyn Catalog> = parent.context.get(CATALOG_KEY);
+                    let catalog = &parent.context[CATALOG_KEY];
                     for index in catalog.indexes(table.id, parent.txn, &parent.context) {
                         if let Some((lookup, predicates)) = index.matches(&predicates) {
                             return Some(IndexScan {
@@ -414,7 +414,7 @@ impl Rule {
                     } = *left
                     {
                         // TODO return multiple indexes!
-                        let catalog: &Box<dyn Catalog> = parent.context.get(CATALOG_KEY);
+                        let catalog = &parent.context[CATALOG_KEY];
                         for index in catalog.indexes(table.id, parent.txn, &parent.context) {
                             if let Some((lookup, mut predicates)) = index.matches(join.predicates())
                             {
@@ -497,7 +497,7 @@ impl Rule {
                     columns,
                 } = bind
                 {
-                    let catalog: &Box<dyn Catalog> = parent.context.get(CATALOG_KEY);
+                    let catalog = &parent.context[CATALOG_KEY];
                     let indexes = catalog.indexes(table.id, parent.txn, &parent.context);
                     return Some(Insert {
                         table,
