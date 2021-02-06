@@ -1,6 +1,6 @@
 use crate::parser::*;
 use ast::*;
-use catalog::{Catalog, EmptyCatalog, CATALOG_KEY};
+use catalog::{BootstrapCatalog, Catalog, CATALOG_KEY};
 use context::Context;
 
 #[test]
@@ -19,18 +19,6 @@ fn test_split() {
     let sql = "select 1; select 2";
     analyze(sql);
 }
-
-// #[test]
-// fn test_not_available_fn() {
-//     match analyze(
-//         catalog::ROOT_CATALOG_ID,
-//         &catalog::default_catalog(),
-//         "select to_proto(true)",
-//     ) {
-//         Ok(_) => panic!("expected error"),
-//         Err(_) => (),
-//     }
-// }
 
 #[test]
 fn test_metadata() {
@@ -69,12 +57,12 @@ fn test_call() {
 
 fn analyze(sql: &str) -> Expr {
     let mut context = Context::default();
-    context.insert(CATALOG_KEY, Box::new(EmptyCatalog));
+    context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
     Parser::default().analyze(sql, catalog::ROOT_CATALOG_ID, 0, vec![], &mut context)
 }
 
 fn format(sql: &str) -> String {
     let mut context = Context::default();
-    context.insert(CATALOG_KEY, Box::new(EmptyCatalog));
+    context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
     Parser::default().format(sql)
 }
