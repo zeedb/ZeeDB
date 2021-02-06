@@ -1,5 +1,6 @@
-use crate::hash_table::*;
 use kernel::*;
+
+use crate::hash_table::*;
 
 #[test]
 fn test_hash_table() {

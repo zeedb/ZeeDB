@@ -1,10 +1,12 @@
-use crate::hash_table::HashTable;
+use std::{collections::HashMap, sync::mpsc::Receiver};
+
 use ast::{Expr, Index, *};
 use context::{Context, ContextKey};
 use kernel::{RecordBatch, *};
 use statistics::{TableStatistics, STATISTICS_KEY};
-use std::{collections::HashMap, sync::mpsc::Receiver};
 use storage::*;
+
+use crate::hash_table::HashTable;
 
 pub fn execute(
     expr: Expr,
@@ -1134,11 +1136,11 @@ impl Node {
 }
 
 impl RemoteExecution for SingleNodeRemoteExecution {
-    fn broadcast(&self, expr: Expr) -> Receiver<RecordBatch> {
+    fn broadcast(&self, _expr: Expr) -> Receiver<RecordBatch> {
         todo!()
     }
 
-    fn exchange(&self, expr: Expr, hash_bucket: i32) -> Receiver<RecordBatch> {
+    fn exchange(&self, _expr: Expr, _hash_bucket: i32) -> Receiver<RecordBatch> {
         todo!()
     }
 }

@@ -1,9 +1,10 @@
-use crate::page::*;
 use kernel::*;
+
+use crate::page::*;
 
 #[test]
 fn test_fixed_types() {
-    let mut page = Page::empty(
+    let page = Page::empty(
         0,
         vec![
             ("boolean".to_string(), DataType::Bool),
@@ -64,7 +65,7 @@ true    1     1.1     1970-01-02 1970-01-01 00:00:00 2000  9223372036854775807
 
 #[test]
 fn test_var_types() {
-    let mut page = Page::empty(
+    let page = Page::empty(
         0,
         vec![
             ("int64".to_string(), DataType::I64),
@@ -113,7 +114,7 @@ int64 string $xmin $xmax
 
 #[test]
 fn test_insert_delete() {
-    let mut page = Page::empty(
+    let page = Page::empty(
         0,
         vec![
             ("a".to_string(), DataType::I64),

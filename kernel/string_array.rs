@@ -1,9 +1,11 @@
+use std::ops::Range;
+
+use serde::{Deserialize, Serialize};
+
 use crate::{
     AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, DateArray, F64Array, I32Array,
     I64Array, TimestampArray,
 };
-use serde::{Deserialize, Serialize};
-use std::ops::Range;
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct StringArray {
@@ -204,7 +206,7 @@ impl<'a> Array<'a> for StringArray {
         }
     }
 
-    fn set(&mut self, index: usize, value: Option<Self::Element>) {
+    fn set(&mut self, _index: usize, _value: Option<Self::Element>) {
         panic!("set is not available for string type")
     }
 

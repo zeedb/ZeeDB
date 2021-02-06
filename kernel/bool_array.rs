@@ -1,9 +1,11 @@
+use std::ops::Range;
+
+use serde::{Deserialize, Serialize};
+
 use crate::{
     AnyArray, Array, BitSlice, Bitmask, DataType, DateArray, F64Array, I64Array, StringArray,
     TimestampArray,
 };
-use serde::{Deserialize, Serialize};
-use std::ops::Range;
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct BoolArray {

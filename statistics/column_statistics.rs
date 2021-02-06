@@ -1,10 +1,12 @@
-use crate::histogram::*;
-use hyperloglogplus::*;
-use kernel::*;
 use std::{
     cmp::Ordering,
     hash::{BuildHasherDefault, Hash, Hasher},
 };
+
+use hyperloglogplus::*;
+use kernel::*;
+
+use crate::histogram::*;
 
 #[derive(Clone, Debug)]
 pub enum ColumnStatistics {

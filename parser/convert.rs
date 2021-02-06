@@ -1,6 +1,7 @@
+use std::{borrow::Borrow, collections::HashMap};
+
 use ast::*;
 use kernel::*;
-use std::{borrow::Borrow, collections::HashMap};
 use zetasql::{
     any_resolved_aggregate_scan_base_proto::Node::*, any_resolved_create_statement_proto::Node::*,
     any_resolved_create_table_stmt_base_proto::Node::*, any_resolved_expr_proto::Node::*,

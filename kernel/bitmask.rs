@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, ops::Range};
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Bitmask {

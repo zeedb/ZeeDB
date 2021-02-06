@@ -1,9 +1,10 @@
-use ast::{AggregateExpr, AggregateFunction, Value};
-use kernel::*;
 use std::{
     collections::HashMap,
     hash::{Hash, Hasher},
 };
+
+use ast::{AggregateExpr, AggregateFunction, Value};
+use kernel::*;
 
 pub struct GroupByAggregate {
     group_by_batches: Vec<Batch>,

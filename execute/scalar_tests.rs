@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use crate::MetadataCatalog;
 use ast::Value;
 use catalog::CATALOG_KEY;
 use chrono::{NaiveDate, TimeZone, Utc};
@@ -9,6 +8,8 @@ use kernel::{AnyArray, Array};
 use parser::{Parser, PARSER_KEY};
 use statistics::{Statistics, STATISTICS_KEY};
 use storage::{Storage, STORAGE_KEY};
+
+use crate::MetadataCatalog;
 
 #[test]
 fn test_math_i64() {

@@ -1,6 +1,7 @@
-use crate::test_suite::*;
 use statistics::Statistics;
 use storage::Storage;
+
+use crate::test_suite::*;
 
 #[test]
 fn test_join_using() {

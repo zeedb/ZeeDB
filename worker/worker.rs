@@ -1,15 +1,13 @@
-use ast::Expr;
-use catalog::CATALOG_KEY;
-use context::Context;
-use execute::MetadataCatalog;
-use kernel::{AnyArray, RecordBatch};
-use parser::{Parser, PARSER_KEY};
-use protos::{worker_server::Worker, BroadcastRequest, ExchangeRequest, RecordStream};
-use statistics::{Statistics, STATISTICS_KEY};
 use std::{
     collections::{hash_map::Entry, HashMap},
     thread,
 };
+
+use ast::Expr;
+use context::Context;
+use kernel::{AnyArray, RecordBatch};
+use protos::{worker_server::Worker, BroadcastRequest, ExchangeRequest, RecordStream};
+use statistics::{Statistics, STATISTICS_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::{
     mpsc::{channel, Receiver, Sender},
@@ -164,9 +162,9 @@ fn broadcast(mut results: Receiver<RecordBatch>, listeners: Vec<Sender<RecordBat
 }
 
 fn exchange(
-    mut results: Receiver<RecordBatch>,
-    hash_column: String,
-    listeners: Vec<(i32, Sender<RecordBatch>)>,
+    _results: Receiver<RecordBatch>,
+    _hash_column: String,
+    _listeners: Vec<(i32, Sender<RecordBatch>)>,
 ) {
     todo!()
 }

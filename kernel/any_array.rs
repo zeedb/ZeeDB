@@ -1,9 +1,11 @@
+use std::{cmp::Ordering, ops::Range};
+
+use serde::{Deserialize, Serialize};
+
 use crate::{
     Array, BoolArray, DataType, DateArray, F64Array, I32Array, I64Array, StringArray,
     TimestampArray, U64Array,
 };
-use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, ops::Range};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AnyArray {

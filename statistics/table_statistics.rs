@@ -1,6 +1,8 @@
-use crate::ColumnStatistics;
-use kernel::{DataType, RecordBatch};
 use std::collections::{hash_map::Entry, HashMap};
+
+use kernel::{DataType, RecordBatch};
+
+use crate::ColumnStatistics;
 
 #[derive(Clone, Debug)]
 pub struct TableStatistics {

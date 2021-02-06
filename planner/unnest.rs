@@ -1,5 +1,6 @@
-use ast::*;
 use std::collections::{HashMap, HashSet};
+
+use ast::*;
 
 /// Unnest arbitrary subqueries using the "general unnesting" strategy described in
 ///   "Unnesting Arbitrary Queries" Neumann and Kemper

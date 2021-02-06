@@ -1,11 +1,13 @@
-use crate::Page;
-use kernel::RecordBatch;
 use std::{
     pin::Pin,
     task::{Context, Poll},
 };
+
+use kernel::RecordBatch;
 use tokio::sync::mpsc::Receiver;
 use tonic::{codegen::Stream, Status};
+
+use crate::Page;
 
 pub struct RecordStream {
     receiver: Receiver<RecordBatch>,

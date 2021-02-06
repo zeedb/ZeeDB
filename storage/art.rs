@@ -373,7 +373,7 @@ impl Node {
     fn take(&mut self) -> Option<i64> {
         match self {
             Node::Null => None,
-            Node::Leaf(node) => {
+            Node::Leaf(_node) => {
                 if let Node::Leaf(node) = std::mem::take(self) {
                     Some(node.value)
                 } else {
@@ -396,7 +396,7 @@ impl Node {
                 }));
                 None
             }
-            Node::Leaf(node) => {
+            Node::Leaf(_node) => {
                 self.grow();
                 self.set(digit, key, value)
             }

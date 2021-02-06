@@ -1,8 +1,9 @@
-use crate::catalog::*;
 use ast::Index;
 use context::Context;
 use kernel::*;
 use zetasql::{function_enums::*, *};
+
+use crate::catalog::*;
 
 #[derive(Clone)]
 pub struct BootstrapCatalog;
@@ -10,10 +11,10 @@ pub struct BootstrapCatalog;
 impl Catalog for BootstrapCatalog {
     fn catalog(
         &self,
-        catalog_id: i64,
-        table_names: Vec<Vec<String>>,
-        txn: i64,
-        context: &Context,
+        _catalog_id: i64,
+        _table_names: Vec<Vec<String>>,
+        _txn: i64,
+        _context: &Context,
     ) -> SimpleCatalogProto {
         SimpleCatalogProto {
             catalog: vec![bootstrap_metadata_catalog()],
@@ -22,7 +23,7 @@ impl Catalog for BootstrapCatalog {
         }
     }
 
-    fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
+    fn indexes(&self, _table_id: i64, _txn: i64, _context: &Context) -> Vec<Index> {
         vec![]
     }
 }

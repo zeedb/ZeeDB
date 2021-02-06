@@ -1,3 +1,5 @@
+use std::collections::{hash_map::Entry, HashMap};
+
 use ast::{Index, *};
 use catalog::{builtin_function_options, BootstrapCatalog, Catalog, CATALOG_KEY};
 use context::Context;
@@ -5,7 +7,6 @@ use kernel::*;
 use once_cell::sync::OnceCell;
 use parser::{Parser, PARSER_KEY};
 use statistics::{Statistics, STATISTICS_KEY};
-use std::collections::{hash_map::Entry, HashMap};
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
 pub struct MetadataCatalog;

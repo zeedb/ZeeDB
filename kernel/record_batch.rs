@@ -1,6 +1,8 @@
-use crate::{any_array::*, array_like::*, bool_array::*, data_type::*};
-use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, fmt::Debug, ops::Range};
+
+use serde::{Deserialize, Serialize};
+
+use crate::{any_array::*, array_like::*, bool_array::*, data_type::*};
 
 // TODO using serde on RecordBatch is a bad idea, we should serialize/deserialize to Arrow format.
 #[derive(Clone, Serialize, Deserialize)]

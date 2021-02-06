@@ -1,5 +1,6 @@
-use crate::ColumnStatistics;
 use kernel::*;
+
+use crate::ColumnStatistics;
 
 #[test]
 fn test_count_distinct() {

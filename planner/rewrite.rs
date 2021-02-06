@@ -1,9 +1,11 @@
-use crate::unnest::unnest_dependent_joins;
+use std::collections::HashMap;
+
 use ast::*;
 use chrono::{NaiveDate, TimeZone, Utc};
 use context::Context;
-use parser::{Parser, PARSER_KEY};
-use std::collections::HashMap;
+use parser::PARSER_KEY;
+
+use crate::unnest::unnest_dependent_joins;
 
 pub fn rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
     let expr = expr.top_down_rewrite(&|e| apply_repeatedly(rewrite_ddl, e));

@@ -1,10 +1,12 @@
-use crate::search_space::*;
-use ast::*;
-use statistics::{ColumnStatistics, NotNan, Statistics};
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter},
 };
+
+use ast::*;
+use statistics::{ColumnStatistics, NotNan, Statistics};
+
+use crate::search_space::*;
 
 #[derive(Clone)]
 pub struct LogicalProps {
@@ -178,7 +180,7 @@ fn map(
     } else {
         HashMap::new()
     };
-    for (x, c) in projects {
+    for (_x, c) in projects {
         // TODO some simple scalars could be supported by adjusting the histogram.
         columns.insert(c.clone(), None);
     }
@@ -233,7 +235,7 @@ fn group_by_cardinality(group_by: &Vec<Column>, input: &LogicalProps) -> Option<
     Some(cardinality)
 }
 
-fn limit_offset(limit: usize, offset: usize, input: &LogicalProps) -> LogicalProps {
+fn limit_offset(limit: usize, _offset: usize, input: &LogicalProps) -> LogicalProps {
     LogicalProps {
         cardinality: input.cardinality.min(limit as f64),
         columns: input.columns.clone(),

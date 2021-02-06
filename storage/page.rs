@@ -1,8 +1,9 @@
-use kernel::*;
 use std::{
     fmt,
     sync::{atomic::*, Arc},
 };
+
+use kernel::*;
 
 pub const PAGE_SIZE: usize = 1024;
 

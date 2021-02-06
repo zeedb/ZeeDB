@@ -1,3 +1,9 @@
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicI64, Ordering},
+    thread,
+};
+
 use catalog::CATALOG_KEY;
 use context::Context;
 use execute::MetadataCatalog;
@@ -5,11 +11,6 @@ use kernel::{AnyArray, RecordBatch};
 use parser::{Parser, PARSER_KEY};
 use protos::{coordinator_server::Coordinator, RecordStream, SubmitRequest};
 use statistics::{Statistics, STATISTICS_KEY};
-use std::{
-    collections::HashMap,
-    sync::atomic::{AtomicI64, Ordering},
-    thread,
-};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::{channel, Receiver};
 use tonic::{Request, Response, Status};

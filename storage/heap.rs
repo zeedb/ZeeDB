@@ -1,6 +1,8 @@
-use crate::page::*;
-use kernel::*;
 use std::fmt;
+
+use kernel::*;
+
+use crate::page::*;
 
 // Heap represents a logical table as a list of pages.
 // New tuples are added to the end of the heap.

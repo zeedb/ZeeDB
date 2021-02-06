@@ -1,11 +1,12 @@
 use std::sync::Mutex;
 
-use crate::{convert::convert, server::ParseClient};
 use ast::Expr;
-use catalog::{Catalog, CATALOG_KEY};
+use catalog::CATALOG_KEY;
 use context::{Context, ContextKey};
 use kernel::*;
 use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
+
+use crate::{convert::convert, server::ParseClient};
 
 pub const MAX_QUERY: usize = 4_194_304;
 pub const PARSER_KEY: ContextKey<Parser> = ContextKey::new("PARSER");

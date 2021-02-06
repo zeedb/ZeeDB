@@ -1,7 +1,8 @@
-use crate::parser::*;
 use ast::*;
-use catalog::{BootstrapCatalog, Catalog, CATALOG_KEY};
+use catalog::{BootstrapCatalog, CATALOG_KEY};
 use context::Context;
+
+use crate::parser::*;
 
 #[test]
 fn test_analyze() {

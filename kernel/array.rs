@@ -1,6 +1,8 @@
-use crate::{AnyArray, BoolArray, DataType, I32Array, U64Array};
 use std::{cmp::Ordering, ops::Range};
+
 use twox_hash::xxh3;
+
+use crate::{AnyArray, BoolArray, DataType, I32Array, U64Array};
 
 pub trait Array<'a>: Sized + Clone {
     type Element: Sized + PartialEq + PartialOrd;

@@ -1,10 +1,11 @@
-use context::ContextKey;
-
-use crate::{art::Art, heap::*};
 use std::{
     fmt,
     sync::atomic::{AtomicI64, Ordering},
 };
+
+use context::ContextKey;
+
+use crate::{art::Art, heap::*};
 
 pub const STORAGE_KEY: ContextKey<Storage> = ContextKey::new("STORAGE");
 

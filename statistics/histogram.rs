@@ -142,7 +142,7 @@ impl<T: Ord + Default> Histogram<T> {
             //    fraction < p(data < upper)
             // Ideally, we would take the midpoint of these two points, but this isn't always defined.
             // Instead, we will return upper.
-            let (value, sum) =
+            let (value, _sum) =
                 match cdf.binary_search_by(|(_, probe)| probe.partial_cmp(fraction).unwrap()) {
                     Err(0) => cdf[0],
                     Err(i) if i == cdf.len() => cdf[i - 1],

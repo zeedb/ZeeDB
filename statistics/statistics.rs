@@ -1,10 +1,11 @@
-use crate::{ColumnStatistics, TableStatistics};
-use context::ContextKey;
-use kernel::DataType;
 use std::{
     collections::HashMap,
     ops::{Index, IndexMut},
 };
+
+use context::ContextKey;
+
+use crate::TableStatistics;
 
 pub const STATISTICS_KEY: ContextKey<Statistics> = ContextKey::new("STATISTICS");
 

@@ -1,6 +1,7 @@
-use crate::eval::*;
 use ast::DatePart;
 use chrono::Weekday;
+
+use crate::eval::*;
 
 #[test]
 fn test_extract_from_date() {

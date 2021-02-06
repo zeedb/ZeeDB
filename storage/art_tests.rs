@@ -1,5 +1,6 @@
-use crate::art::*;
 use rand::{rngs::SmallRng, Rng, SeedableRng};
+
+use crate::art::*;
 
 #[test]
 fn set() {
@@ -63,7 +64,7 @@ fn set() {
         /* rng */
         let mut g = rand::thread_rng();
 
-        for experiment in 0..10 {
+        for _experiment in 0..10 {
             for i in 0..N {
                 keys[i] = g.gen();
                 values[i] = i as i64;
@@ -404,7 +405,7 @@ fn partial_range() {
             m.insert(&key, i as i64);
             keys.push(key);
         }
-        for experiment in 0..1000 {
+        for _experiment in 0..1000 {
             let start: usize = rng.gen::<u32>() as usize % N;
             let mut end: usize = 0;
             while end < start {

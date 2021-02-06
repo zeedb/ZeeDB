@@ -1,4 +1,5 @@
-use crate::worker::*;
+use std::error::Error;
+
 use catalog::CATALOG_KEY;
 use context::Context;
 use execute::MetadataCatalog;
@@ -6,12 +7,13 @@ use kernel::{AnyArray, Array, I64Array, RecordBatch};
 use parser::{Parser, PARSER_KEY};
 use protos::{worker_client::WorkerClient, worker_server::WorkerServer, BroadcastRequest};
 use statistics::{Statistics, STATISTICS_KEY};
-use std::{collections::HashMap, error::Error};
 use storage::{Storage, STORAGE_KEY};
 use tonic::{
     transport::{Channel, Endpoint, Server},
     Request,
 };
+
+use crate::worker::*;
 
 #[tokio::test]
 async fn test_broadcast() {

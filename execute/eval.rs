@@ -1,9 +1,10 @@
-use crate::execute::QueryState;
 use ast::*;
 use chrono::*;
 use kernel::*;
 use regex::{Captures, Regex};
 use storage::STORAGE_KEY;
+
+use crate::execute::QueryState;
 
 pub(crate) fn all(predicates: &Vec<Scalar>, input: &RecordBatch, state: &QueryState) -> BoolArray {
     let mut mask = BoolArray::trues(input.len());
@@ -31,7 +32,7 @@ pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, state: &QueryState) -> 
 }
 
 fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyArray {
-    let mut e = |a| eval(a, input, state);
+    let e = |a| eval(a, input, state);
     match function {
         F::CurrentDate | F::CurrentTimestamp => panic!(
             "{} should have been eliminated in the rewrite phase",

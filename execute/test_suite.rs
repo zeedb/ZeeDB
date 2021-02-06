@@ -1,12 +1,13 @@
-use crate::MetadataCatalog;
-use ast::Expr;
+use std::{collections::HashMap, fmt::Write};
+
 use catalog::CATALOG_KEY;
 use context::Context;
 use parser::{Parser, PARSER_KEY};
 use regex::Regex;
 use statistics::{Statistics, STATISTICS_KEY};
-use std::{collections::HashMap, fmt::Write};
 use storage::{Storage, STORAGE_KEY};
+
+use crate::MetadataCatalog;
 
 pub struct TestSuite {
     txn: i64,

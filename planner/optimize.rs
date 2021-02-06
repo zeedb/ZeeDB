@@ -1,8 +1,8 @@
-use crate::{cost::*, rule::*, search_space::*};
 use ast::{Expr, *};
-use catalog::Catalog;
 use context::Context;
-use statistics::{Statistics, STATISTICS_KEY};
+use statistics::STATISTICS_KEY;
+
+use crate::{cost::*, rule::*, search_space::*};
 
 const TRACE: bool = false;
 

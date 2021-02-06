@@ -1,7 +1,9 @@
-use crate::{optimize::Optimizer, search_space::*};
-use ast::*;
-use catalog::{Catalog, CATALOG_KEY};
 use std::collections::HashSet;
+
+use ast::*;
+use catalog::CATALOG_KEY;
+
+use crate::{optimize::Optimizer, search_space::*};
 
 #[derive(Debug, Eq, PartialEq, Hash, Copy, Clone)]
 pub(crate) enum Rule {

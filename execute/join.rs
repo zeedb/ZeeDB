@@ -1,6 +1,7 @@
-use crate::hash_table::HashTable;
 use ast::*;
 use kernel::*;
+
+use crate::hash_table::HashTable;
 
 pub fn hash_join(
     left: &HashTable,

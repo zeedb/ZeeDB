@@ -1,9 +1,10 @@
-use once_cell::sync::OnceCell;
 use std::{
     process::Command,
     sync::mpsc::{sync_channel, Receiver, SyncSender},
     thread,
 };
+
+use once_cell::sync::OnceCell;
 use tokio::runtime::Runtime;
 use tonic::{Request, Response, Status};
 use zetasql::{

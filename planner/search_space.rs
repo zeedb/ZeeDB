@@ -1,10 +1,12 @@
-use crate::{cardinality_estimation::*, cost::*, rule::*};
-use ast::*;
 use std::{
     collections::{HashMap, HashSet},
     fmt, ops,
     ops::{Index, IndexMut},
 };
+
+use ast::*;
+
+use crate::{cardinality_estimation::*, cost::*, rule::*};
 
 // SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
 pub(crate) struct SearchSpace {

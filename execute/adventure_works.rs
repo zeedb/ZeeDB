@@ -1,6 +1,5 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
-use crate::{MetadataCatalog, SingleNodeRemoteExecution};
 use catalog::CATALOG_KEY;
 use chrono::*;
 use context::Context;
@@ -9,6 +8,8 @@ use parser::{Parser, PARSER_KEY};
 use rand::{rngs::SmallRng, Rng, SeedableRng};
 use statistics::{Statistics, STATISTICS_KEY};
 use storage::{Storage, STORAGE_KEY};
+
+use crate::MetadataCatalog;
 
 pub fn adventure_works() -> (Storage, Statistics) {
     static ADVENTURE_WORKS: OnceCell<(Storage, Statistics)> = OnceCell::new();

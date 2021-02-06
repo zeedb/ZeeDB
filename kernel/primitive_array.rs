@@ -1,6 +1,8 @@
-use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, StringArray};
-use serde::{Deserialize, Serialize};
 use std::ops::Range;
+
+use serde::{Deserialize, Serialize};
+
+use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, StringArray};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct I64Array {

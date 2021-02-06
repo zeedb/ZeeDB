@@ -645,15 +645,15 @@ struct AdventureWorksCatalog;
 impl Catalog for AdventureWorksCatalog {
     fn catalog(
         &self,
-        catalog_id: i64,
-        table_names: Vec<Vec<String>>,
-        txn: i64,
-        context: &Context,
+        _catalog_id: i64,
+        _table_names: Vec<Vec<String>>,
+        _txn: i64,
+        _context: &Context,
     ) -> SimpleCatalogProto {
         adventure_works()
     }
 
-    fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<ast::Index> {
+    fn indexes(&self, _table_id: i64, _txn: i64, _context: &Context) -> Vec<ast::Index> {
         vec![]
     }
 }

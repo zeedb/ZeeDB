@@ -1,6 +1,7 @@
-use crate::{cardinality_estimation::LogicalProps, search_space::*};
 use ast::*;
 use statistics::Statistics;
+
+use crate::{cardinality_estimation::LogicalProps, search_space::*};
 
 pub type Cost = f64;
 
