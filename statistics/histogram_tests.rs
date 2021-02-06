@@ -8,8 +8,8 @@ fn delta(x: f64, y: f64) -> f64 {
 
 #[test]
 fn test_k_limits() {
-    let _: Histogram<i64> = Histogram::with_capacity(MIN_K);
-    let _: Histogram<i64> = Histogram::with_capacity(MAX_K);
+    let _: Histogram<i64> = Histogram::new(MIN_K, DEFAULT_M);
+    let _: Histogram<i64> = Histogram::new(MAX_K, DEFAULT_M);
 }
 
 #[test]
@@ -78,24 +78,24 @@ fn test_100_items() {
 #[test]
 fn test_many_items_exact_mode() {
     let mut sketch = Histogram::default();
-    const n: usize = 200;
-    for i in 0..n {
+    const N: usize = 200;
+    for i in 0..N {
         sketch.insert(i);
         assert!(sketch.count() == i + 1);
     }
     assert!(!sketch.is_empty());
     assert!(!sketch.is_estimation_mode());
-    assert_eq!(sketch.retained(), n);
+    assert_eq!(sketch.retained(), N);
 
     let fractions = [0.0, 0.5, 1.0];
     let quantiles = sketch.quantiles(&fractions).unwrap();
     assert!(quantiles.len() == 3);
     assert!(*quantiles[0] == 0);
-    assert!(*quantiles[1] == n / 2);
-    assert!(*quantiles[2] == n - 1);
+    assert!(*quantiles[1] == N / 2);
+    assert!(*quantiles[2] == N - 1);
 
-    for i in 0..n {
-        let true_rank = i as f64 / n as f64;
+    for i in 0..N {
+        let true_rank = i as f64 / N as f64;
         assert!(sketch.rank(i) == Some(true_rank));
     }
 }

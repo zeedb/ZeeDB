@@ -50,17 +50,6 @@ impl TestSuite {
         self.txn += 1;
     }
 
-    pub fn error(&mut self, sql: &str) {
-        writeln!(
-            &mut self.log,
-            "error: {}\n{}\n",
-            trim(&sql),
-            run(&sql, self.txn, &mut self.context)
-        )
-        .unwrap_err();
-        self.txn += 1;
-    }
-
     pub fn finish(self, output: &str) {
         if !test_fixtures::matches_expected(output, self.log) {
             panic!("{}", output)

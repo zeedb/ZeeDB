@@ -138,24 +138,12 @@ pub fn get_bit(data: &[u8], i: usize) -> bool {
     (data[i >> 3] & BIT_MASK[i & 7]) != 0
 }
 
-unsafe fn get_bit_raw(data: *const u8, i: usize) -> bool {
-    (*data.add(i >> 3) & BIT_MASK[i & 7]) != 0
-}
-
 pub fn set_bit(data: &mut [u8], i: usize) {
     data[i >> 3] |= BIT_MASK[i & 7];
 }
 
-unsafe fn set_bit_raw(data: *mut u8, i: usize) {
-    *data.add(i >> 3) |= BIT_MASK[i & 7];
-}
-
 pub fn unset_bit(data: &mut [u8], i: usize) {
     data[i >> 3] &= !BIT_MASK[i & 7];
-}
-
-unsafe fn unset_bit_raw(data: *mut u8, i: usize) {
-    *data.add(i >> 3) &= !BIT_MASK[i & 7];
 }
 
 static BIT_MASK: [u8; 8] = [1, 2, 4, 8, 16, 32, 64, 128];

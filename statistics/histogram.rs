@@ -27,11 +27,7 @@ pub struct Histogram<T: Ord + Default> {
 }
 
 impl<T: Ord + Default> Histogram<T> {
-    pub(crate) fn with_capacity(k: usize) -> Self {
-        Self::new(k, DEFAULT_M)
-    }
-
-    fn new(k: usize, m: usize) -> Self {
+    pub(crate) fn new(k: usize, m: usize) -> Self {
         assert!(MIN_K <= k && k <= MAX_K);
 
         Self {
@@ -331,13 +327,13 @@ fn int_cap_aux(k: usize, depth: usize) -> usize {
 fn int_cap_aux_aux(k: usize, depth: usize) -> usize {
     assert!(depth <= 30);
     let twok = k << 1;
-    let tmp = (twok << depth) / powers_of_three[depth];
+    let tmp = (twok << depth) / POWERS_OF_THREE[depth];
     let result = (tmp + 1) >> 1;
     assert!(result <= k);
     result
 }
 
-const powers_of_three: [usize; 31] = [
+const POWERS_OF_THREE: [usize; 31] = [
     1,
     3,
     9,
