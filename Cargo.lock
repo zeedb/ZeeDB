@@ -105,11 +105,13 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "catalog",
+ "context",
  "cpuprofiler",
  "execute",
  "parser",
  "planner",
  "regex",
+ "statistics",
  "storage",
  "zetasql",
 ]
@@ -147,6 +149,7 @@ name = "catalog"
 version = "0.1.0"
 dependencies = [
  "ast",
+ "context",
  "kernel",
  "zetasql",
 ]
@@ -174,6 +177,33 @@ dependencies = [
  "num-traits",
  "time",
  "winapi",
+]
+
+[[package]]
+name = "context"
+version = "0.1.0"
+
+[[package]]
+name = "coordinator"
+version = "0.1.0"
+dependencies = [
+ "ast",
+ "bincode",
+ "catalog",
+ "context",
+ "execute",
+ "kernel",
+ "once_cell",
+ "parser",
+ "planner",
+ "prost",
+ "prost-types",
+ "protos",
+ "rand 0.8.2",
+ "statistics",
+ "storage",
+ "tokio",
+ "tonic",
 ]
 
 [[package]]
@@ -218,6 +248,7 @@ dependencies = [
  "ast",
  "catalog",
  "chrono",
+ "context",
  "kernel",
  "num-traits",
  "once_cell",
@@ -654,6 +685,7 @@ dependencies = [
  "ast",
  "catalog",
  "chrono",
+ "context",
  "encoding",
  "futures",
  "kernel",
@@ -749,6 +781,7 @@ dependencies = [
  "ast",
  "catalog",
  "chrono",
+ "context",
  "encoding",
  "kernel",
  "parser",
@@ -841,9 +874,12 @@ dependencies = [
 name = "protos"
 version = "0.1.0"
 dependencies = [
+ "bincode",
+ "kernel",
  "prost",
  "prost-build",
  "prost-types",
+ "tokio",
  "tonic",
  "tonic-build",
 ]
@@ -1027,6 +1063,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "statistics"
 version = "0.1.0"
 dependencies = [
+ "catalog",
+ "context",
  "hyperloglogplus",
  "kernel",
  "rand 0.7.3",
@@ -1038,6 +1076,7 @@ name = "storage"
 version = "0.1.0"
 dependencies = [
  "catalog",
+ "context",
  "kernel",
  "packed_simd_2",
  "rand 0.8.2",
@@ -1382,6 +1421,7 @@ dependencies = [
  "ast",
  "bincode",
  "catalog",
+ "context",
  "execute",
  "kernel",
  "once_cell",
@@ -1391,6 +1431,7 @@ dependencies = [
  "prost-types",
  "protos",
  "rand 0.8.2",
+ "statistics",
  "storage",
  "tokio",
  "tonic",
