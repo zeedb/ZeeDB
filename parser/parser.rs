@@ -54,9 +54,7 @@ impl Parser {
             .drain(..)
             .map(|name| name.table_name_segment)
             .collect();
-        let catalog = context
-            .get(CATALOG_KEY)
-            .catalog(catalog_id, table_names, txn, context);
+        let catalog = context[CATALOG_KEY].catalog(catalog_id, table_names, txn, context);
         let mut offset = 0;
         let mut exprs = vec![];
         loop {

@@ -5,6 +5,6 @@ fn main() {
         .build_client(true)
         .build_server(true)
         .out_dir(".")
-        .compile_with_config(config, &["../protos/worker.proto"], &["../protos"])
+        .compile_with_config(config, &["../protos/rpc.proto"], &["../protos"])
         .unwrap();
 }

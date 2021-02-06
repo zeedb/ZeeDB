@@ -17,9 +17,11 @@ tokio = { version = "1.0.2", features = ["macros", "rt-multi-thread"] }
 tonic = "0.4.0"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
+context = { path = "../context" }
 execute = { path = "../execute" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 protos = { path = "../protos" }
+statistics = { path = "../statistics" }
 storage = { path = "../storage" }
 kernel = { path = "../kernel" }

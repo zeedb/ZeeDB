@@ -1,45 +1,30 @@
 use crate::worker::*;
+use catalog::CATALOG_KEY;
+use context::Context;
+use execute::MetadataCatalog;
 use kernel::{AnyArray, Array, I64Array, RecordBatch};
-use protos::worker::{
-    worker_client::WorkerClient, worker_server::WorkerServer, BroadcastRequest, SubmitRequest,
-};
-use std::error::Error;
-use storage::Storage;
+use parser::{Parser, PARSER_KEY};
+use protos::{worker_client::WorkerClient, worker_server::WorkerServer, BroadcastRequest};
+use statistics::{Statistics, STATISTICS_KEY};
+use std::{collections::HashMap, error::Error};
+use storage::{Storage, STORAGE_KEY};
 use tonic::{
     transport::{Channel, Endpoint, Server},
     Request,
 };
 
 #[tokio::test]
-async fn test_submit() {
-    tokio::spawn(server());
-    let mut client = client().await.unwrap();
-    let mut stream = client
-        .submit(Request::new(SubmitRequest {
-            sql: "select 1".to_string(),
-        }))
-        .await
-        .unwrap()
-        .into_inner();
-    let page = stream.message().await.unwrap().unwrap();
-    let actual: RecordBatch = bincode::deserialize(&page.record_batch).unwrap();
-    let expected = RecordBatch::new(vec![(
-        "$col1".to_string(),
-        AnyArray::I64(I64Array::from_values(vec![1])),
-    )]);
-    assert_eq!(format!("{:?}", expected), format!("{:?}", actual));
-}
-
-#[tokio::test]
 async fn test_broadcast() {
     tokio::spawn(server());
     let mut client = client().await.unwrap();
-    let mut storage = Storage::default(); // TODO
-    let catalog = execute::catalog(&mut storage, 100);
-    let indexes = execute::indexes(&mut storage, 100);
+    let mut context = Context::default();
+    context.insert(STORAGE_KEY, Storage::default());
+    context.insert(STATISTICS_KEY, Statistics::default());
+    context.insert(PARSER_KEY, Parser::default());
+    context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     let sql = "select 1";
-    let expr = parser::analyze(catalog::ROOT_CATALOG_ID, &catalog, sql).expect(sql);
-    let expr = planner::optimize(catalog::ROOT_CATALOG_ID, &catalog, &indexes, &storage, expr);
+    let expr = context[PARSER_KEY].analyze(sql, catalog::ROOT_CATALOG_ID, 100, vec![], &context);
+    let expr = planner::optimize(expr, 100, &context);
     let mut stream = client
         .broadcast(Request::new(BroadcastRequest {
             expr: bincode::serialize(&expr).unwrap(),

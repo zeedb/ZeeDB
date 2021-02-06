@@ -153,7 +153,7 @@ impl<'a> Optimizer<'a> {
         // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
         let parent = self.ss[mid].parent;
         let upper_bound = self.ss[parent].upper_bound[require].unwrap_or(f64::MAX);
-        let statistics = self.context.get(STATISTICS_KEY);
+        let statistics = &self.context[STATISTICS_KEY];
         let physical_cost = physical_cost(mid, statistics, &self.ss);
         // If we can find a winning strategy for each input and an associated cost,
         // try to declare the current MultiExpr as the winner of its group.
@@ -274,7 +274,7 @@ impl<'a> Optimizer<'a> {
             let mexpr = MultiExpr::new(gid, removed);
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
-            let statistics = self.context.get(STATISTICS_KEY);
+            let statistics = &self.context[STATISTICS_KEY];
             let props =
                 crate::cardinality_estimation::compute_logical_props(mid, statistics, &self.ss);
             let lower_bound = compute_lower_bound(&self.ss[mid], &props, &self.ss);

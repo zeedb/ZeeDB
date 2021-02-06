@@ -1,5 +1,5 @@
+use crate::Page;
 use kernel::RecordBatch;
-use protos::worker::Page;
 use std::{
     pin::Pin,
     task::{Context, Poll},

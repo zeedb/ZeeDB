@@ -1,15 +1,18 @@
 syntax = "proto3";
 
-package worker;
+package rpc;
 
-service Worker {
+service Coordinator {
   rpc Submit (SubmitRequest) returns (stream Page) {}
-  rpc Broadcast (BroadcastRequest) returns (stream Page) {}
-  rpc Exchange (ExchangeRequest) returns (stream Page) {}
 }
 
 message SubmitRequest {
   string sql = 1;
+}
+
+service Worker {
+  rpc Broadcast (BroadcastRequest) returns (stream Page) {}
+  rpc Exchange (ExchangeRequest) returns (stream Page) {}
 }
 
 message BroadcastRequest {
