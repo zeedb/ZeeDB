@@ -1,4 +1,4 @@
-use std::fmt;
+use std::{fmt, sync::Arc};
 
 use kernel::*;
 
@@ -9,7 +9,7 @@ use crate::page::*;
 // Deleted tuples are periodically garbage-collected and the heap is compacted.
 #[derive(Clone)]
 pub struct Heap {
-    pages: Vec<Page>,
+    pages: Vec<Arc<Page>>,
 }
 
 impl Heap {
@@ -17,37 +17,40 @@ impl Heap {
         Self { pages: vec![] }
     }
 
-    pub fn scan(&self) -> Vec<Page> {
+    pub fn scan(&self) -> Vec<Arc<Page>> {
         self.pages.clone()
     }
 
-    pub fn bitmap_scan(&self, mut tids: Vec<i64>, projects: &Vec<String>) -> Vec<RecordBatch> {
-        if tids.is_empty() {
-            return vec![RecordBatch::empty(self.pages[0].schema(projects))];
+    pub fn bitmap_scan(&self, sorted_tids: &Vec<i64>) -> Vec<Arc<Page>> {
+        if sorted_tids.is_empty() {
+            return vec![];
         }
-        // Sort tids so we can access pages in-order.
-        tids.sort();
         // Collect tids into 1 batch per page, and scan each page.
-        let mut batches = vec![];
         let mut i = 0;
-        while i < tids.len() {
-            let pid = tids[i] as usize / PAGE_SIZE;
-            let mut rids = I32Array::new();
-            while i < tids.len() && pid == tids[i] as usize / PAGE_SIZE {
-                let rid = tids[i] as usize % PAGE_SIZE;
-                rids.push(Some(rid as i32));
-                i += 1;
+        let mut j = 0;
+        let mut matches = vec![];
+        while i < sorted_tids.len() && j < self.pages.len() {
+            let pid = sorted_tids[i] as usize / PAGE_SIZE;
+            if pid < j {
+                // Go to the next tid.
+                i += 1
+            } else if j < pid {
+                // Go to the next page.
+                j += 1
+            } else {
+                // Retain the current page.
+                matches.push(self.pages[j].clone());
+                // Go to the next page.
+                j += 1
             }
-            let batch = self.page(pid).select(projects);
-            batches.push(batch.gather(&rids));
         }
-        batches
+        matches
     }
 
     pub fn insert(&mut self, records: &RecordBatch, txn: i64) -> I64Array {
         if self.pages.is_empty() {
             self.pages
-                .push(Page::empty(self.pages.len(), records.schema()));
+                .push(Arc::new(Page::empty(self.pages.len(), records.schema())));
         }
         // Allocate arrays to keep track of where we insert the rows.
         let mut tids = I64Array::with_capacity(records.len());
@@ -71,7 +74,7 @@ impl Heap {
         // If there are leftover records, add a page and try again.
         if *offset < records.len() {
             self.pages
-                .push(Page::empty(self.pages.len(), records.schema()));
+                .push(Arc::new(Page::empty(self.pages.len(), records.schema())));
             self.insert_more(records, txn, tids, offset);
         }
     }

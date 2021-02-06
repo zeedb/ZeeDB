@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::mpsc::Receiver};
+use std::{
+    collections::HashMap,
+    sync::{mpsc::Receiver, Arc},
+};
 
 use ast::{Expr, Index, *};
 use context::Context;
@@ -55,7 +58,7 @@ enum Node {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
         table: Table,
-        scan: Option<Vec<Page>>,
+        scan: Option<Vec<Arc<Page>>>,
     },
     IndexScan {
         include_existing: bool,
@@ -103,7 +106,7 @@ enum Node {
     GetTempTable {
         name: String,
         columns: Vec<Column>,
-        scan: Option<Vec<Page>>,
+        scan: Option<Vec<Arc<Page>>>,
     },
     Aggregate {
         finished: bool,
@@ -505,19 +508,15 @@ impl Node {
                             .scan(),
                     );
                 }
-                match scan.as_mut().unwrap().pop() {
-                    Some(page) => {
-                        let select_names = projects.iter().map(|c| c.name.clone()).collect();
-                        let query_names = projects
-                            .iter()
-                            .map(|c| (c.name.clone(), c.canonical_name()))
-                            .collect();
-                        let input = page.select(&select_names).rename(&query_names);
-                        let boolean = crate::eval::all(predicates, &input, state);
-                        Some(input.compress(&boolean))
-                    }
-                    None => None,
-                }
+                let page = scan.as_mut().unwrap().pop()?;
+                let select_names = projects.iter().map(|c| c.name.clone()).collect();
+                let query_names = projects
+                    .iter()
+                    .map(|c| (c.name.clone(), c.canonical_name()))
+                    .collect();
+                let input = page.select(&select_names).rename(&query_names);
+                let boolean = crate::eval::all(predicates, &input, state);
+                Some(input.compress(&boolean))
             }
             Node::IndexScan {
                 include_existing,
@@ -536,7 +535,7 @@ impl Node {
                     .collect();
                 let keys = crate::index::byte_key_prefix(columns.iter().map(|c| c).collect());
                 // Look up scalars in the index.
-                let tids = {
+                let sorted_tids = {
                     let storage = state.context[STORAGE_KEY].lock().unwrap();
                     let mut tids = vec![];
                     let art = storage.index(index.index_id);
@@ -546,20 +545,55 @@ impl Node {
                         let next = art.range(start..end.as_slice());
                         tids.extend(next);
                     }
+                    tids.sort();
                     tids
                 };
-                // Perform a selective scan of the table.
+                // Select pages that contain tids.
+                let matching_pages = state.context[STORAGE_KEY]
+                    .lock()
+                    .unwrap()
+                    .table(table.id)
+                    .bitmap_scan(&sorted_tids);
+                /// Returns a slice of the first n tids that have page-id pid.
+                fn rids(tids: &[i64], pid: usize) -> I32Array {
+                    let mut rids = I32Array::new();
+                    for tid in tids {
+                        if *tid as usize / PAGE_SIZE > pid {
+                            break;
+                        }
+                        let rid = *tid as usize % PAGE_SIZE;
+                        rids.push(Some(rid as i32));
+                    }
+                    rids
+                }
+                // Perform a bitmap scan on each page.
                 let select_names = projects.iter().map(|c| c.name.clone()).collect();
                 let query_names = projects
                     .iter()
                     .map(|c| (c.name.clone(), c.canonical_name()))
                     .collect();
-                let scan = state.context[STORAGE_KEY]
-                    .lock()
-                    .unwrap()
-                    .table(table.id)
-                    .bitmap_scan(tids, &select_names);
-                let mut output = RecordBatch::cat(scan).rename(&query_names);
+                let mut i = 0;
+                let mut j = 0;
+                let mut filtered_pages = vec![];
+                while i < sorted_tids.len() && j < matching_pages.len() {
+                    let pid = sorted_tids[i] as usize / PAGE_SIZE;
+                    if pid < j {
+                        // Go to the next tid.
+                        i += 1
+                    } else if j < pid {
+                        // Go to the next page.
+                        j += 1
+                    } else {
+                        // Filter the current page.
+                        let rids = rids(&sorted_tids[i..], pid);
+                        let page = matching_pages[j].select(&select_names).gather(&rids);
+                        filtered_pages.push(page);
+                        // Go to the next page.
+                        j += 1
+                    }
+                }
+                // Combine the filtered pages.
+                let mut output = RecordBatch::cat(filtered_pages).rename(&query_names);
                 if *include_existing {
                     output = RecordBatch::zip(output, input);
                 }

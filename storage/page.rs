@@ -1,7 +1,4 @@
-use std::{
-    fmt,
-    sync::{atomic::*, Arc},
-};
+use std::{fmt, sync::atomic::*};
 
 use kernel::*;
 
@@ -18,20 +15,14 @@ pub const PAGE_SIZE: usize = 1024;
 // 3  z  3     MAX
 //       0     0
 //       0     0
-#[derive(Clone)]
 pub struct Page {
-    inner: Arc<Inner>,
-}
-
-struct Inner {
     pid: usize,
     columns: Vec<(String, Data)>,
-    xmin: [i64; PAGE_SIZE],
-    xmax: [i64; PAGE_SIZE],
+    xmin: [AtomicI64; PAGE_SIZE],
+    xmax: [AtomicI64; PAGE_SIZE],
     len: AtomicUsize,
 }
 
-#[derive(Clone)]
 enum Data {
     Bool {
         values: [u8; PAGE_SIZE / 8],
@@ -135,6 +126,10 @@ impl Data {
         }
     }
 
+    unsafe fn as_mut(&self) -> &mut Self {
+        ((self as *const Self) as *mut Self).as_mut().unwrap()
+    }
+
     fn extend(&mut self, start: usize, end: usize, from: &AnyArray, offset: usize) {
         match (self, from) {
             (Data::Bool { values, is_valid }, AnyArray::Bool(from)) => {
@@ -231,16 +226,14 @@ impl Page {
     // Allocate a mutable page that can hold PAGE_SIZE tuples.
     pub fn empty(pid: usize, mut schema: Vec<(String, DataType)>) -> Self {
         Self {
-            inner: Arc::new(Inner {
-                pid,
-                columns: schema
-                    .drain(..)
-                    .map(|(name, data_type)| (name, Data::new(data_type)))
-                    .collect(),
-                xmin: [0; PAGE_SIZE],
-                xmax: [0; PAGE_SIZE],
-                len: AtomicUsize::new(0),
-            }),
+            pid,
+            columns: schema
+                .drain(..)
+                .map(|(name, data_type)| (name, Data::new(data_type)))
+                .collect(),
+            xmin: zeros(),
+            xmax: zeros(),
+            len: AtomicUsize::new(0),
         }
     }
 
@@ -251,7 +244,6 @@ impl Page {
                 let data_type = match find.as_str() {
                     "$xmin" | "$xmax" | "$tid" => DataType::I64,
                     find => self
-                        .inner
                         .columns
                         .iter()
                         .find(|(name, _)| find == name)
@@ -264,21 +256,20 @@ impl Page {
     }
 
     pub fn select(&self, projects: &Vec<String>) -> RecordBatch {
-        let len = self.inner.len.load(Ordering::Relaxed);
+        let len = self.len.load(Ordering::Relaxed);
         let columns: Vec<(String, AnyArray)> = projects
             .iter()
             .map(|find| {
                 let array = match find.as_str() {
-                    "$xmin" => Self::xcolumn(&self.inner.xmin[..len]),
-                    "$xmax" => Self::xcolumn(&self.inner.xmax[..len]),
+                    "$xmin" => Self::xcolumn(&self.xmin[..len]),
+                    "$xmax" => Self::xcolumn(&self.xmax[..len]),
                     "$tid" => {
-                        let start = (self.inner.pid * PAGE_SIZE) as i64;
+                        let start = (self.pid * PAGE_SIZE) as i64;
                         let end = start + len as i64;
                         let tids: Vec<i64> = (start..end).collect();
                         AnyArray::I64(I64Array::from_values(tids))
                     }
                     find => self
-                        .inner
                         .columns
                         .iter()
                         .find(|(name, _)| find == name)
@@ -291,71 +282,55 @@ impl Page {
         RecordBatch::new(columns)
     }
 
-    fn xcolumn(values: &[i64]) -> AnyArray {
-        let is_valid = vec![u8::MAX].repeat((values.len() + 7) / 8);
-        AnyArray::I64(I64Array::from_slice(
-            values,
-            BitSlice::from_slice(&is_valid, 0..values.len()),
-        ))
+    fn xcolumn(values: &[AtomicI64]) -> AnyArray {
+        let mut array = I64Array::with_capacity(values.len());
+        for value in values {
+            array.push(Some(value.load(Ordering::Relaxed)));
+        }
+        AnyArray::I64(array)
     }
 
     pub fn star(&self) -> Vec<String> {
-        self.inner
-            .columns
-            .iter()
-            .map(|(n, _)| format!("{}", n))
-            .collect()
+        self.columns.iter().map(|(n, _)| format!("{}", n)).collect()
     }
 
     pub fn insert(&self, records: &RecordBatch, txn: i64, tids: &mut I64Array, offset: &mut usize) {
         let (start, end) = self.reserve(records.len() - *offset);
         // Write the new rows in the reserved slots.
-        for (dst_name, dst_array) in &mut self.inner_mut().columns {
+        for (dst_name, dst_array) in &self.columns {
             for (src_name, src_array) in &records.columns {
                 if dst_name == src_name {
-                    dst_array.extend(start, end, src_array, *offset);
+                    unsafe {
+                        dst_array.as_mut().extend(start, end, src_array, *offset);
+                    }
                 }
             }
         }
         for rid in start..end {
             // Make the rows visible to subsequent transactions.
-            self.inner_mut().xmin[rid] = txn;
-            self.inner_mut().xmax[rid] = i64::MAX;
+            self.xmin[rid].store(txn, Ordering::Relaxed);
+            self.xmax[rid].store(i64::MAX, Ordering::Relaxed);
             // Write new tids.
-            let tid = self.inner.pid * PAGE_SIZE + rid;
+            let tid = self.pid * PAGE_SIZE + rid;
             tids.push(Some(tid as i64));
         }
         *offset += end - start;
     }
 
-    fn inner_mut(&self) -> &mut Inner {
-        unsafe { (Arc::as_ptr(&self.inner) as *mut Inner).as_mut().unwrap() }
-    }
-
     pub fn delete(&self, row: usize, txn: i64) -> bool {
-        if self.inner.xmax[row] > txn {
-            self.inner_mut().xmax[row] = txn;
-            true
-        } else {
-            false
-        }
+        self.xmax[row].compare_and_swap(i64::MAX, txn, Ordering::Relaxed) == i64::MAX
     }
 
     fn reserve(&self, request: usize) -> (usize, usize) {
-        let start = self.inner.len.load(Ordering::Relaxed);
+        let start = self.len.load(Ordering::Relaxed);
         let end = start + request;
         // If there's not enough space for request, take whatever is available.
         if end > PAGE_SIZE {
-            let start = self.inner.len.swap(PAGE_SIZE, Ordering::Relaxed);
+            let start = self.len.swap(PAGE_SIZE, Ordering::Relaxed);
             return (start, PAGE_SIZE);
         }
         // If someone else concurrently reserves rows, try again.
-        if self
-            .inner
-            .len
-            .compare_and_swap(start, end, Ordering::Relaxed)
-            != start
-        {
+        if self.len.compare_and_swap(start, end, Ordering::Relaxed) != start {
             return self.reserve(request);
         }
         // Otherwise, we have successfully reserved a segment of the page.
@@ -363,7 +338,7 @@ impl Page {
     }
 
     pub fn approx_num_rows(&self) -> usize {
-        self.inner.len.load(Ordering::Relaxed)
+        self.len.load(Ordering::Relaxed)
     }
 
     pub(crate) fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {
@@ -385,4 +360,17 @@ impl fmt::Debug for Page {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.print(f, 0)
     }
+}
+
+fn zeros() -> [AtomicI64; PAGE_SIZE] {
+    let mut data: [std::mem::MaybeUninit<AtomicI64>; PAGE_SIZE] =
+        unsafe { std::mem::MaybeUninit::uninit().assume_init() };
+
+    for elem in &mut data[..] {
+        unsafe {
+            std::ptr::write(elem.as_mut_ptr(), AtomicI64::default());
+        }
+    }
+
+    unsafe { std::mem::transmute::<_, [AtomicI64; PAGE_SIZE]>(data) }
 }
