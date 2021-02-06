@@ -24,5 +24,5 @@ mod test_suite;
 pub use crate::{
     adventure_works::adventure_works,
     catalog::MetadataCatalog,
-    execute::{execute, execute_mut, RemoteExecution, SingleNodeRemoteExecution},
+    execute::{execute, RemoteExecution, SingleNodeRemoteExecution},
 };

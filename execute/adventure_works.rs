@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use catalog::CATALOG_KEY;
 use chrono::*;
@@ -21,12 +21,15 @@ pub fn adventure_works() -> (Storage, Statistics) {
 
 fn generate_adventure_works(n_store: usize) -> (Storage, Statistics) {
     let mut context = Context::default();
-    context.insert(STORAGE_KEY, Storage::default());
-    context.insert(STATISTICS_KEY, Statistics::default());
+    context.insert(STORAGE_KEY, Mutex::new(Storage::default()));
+    context.insert(STATISTICS_KEY, Mutex::new(Statistics::default()));
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     populate_adventure_works(n_store, &mut context);
-    (context.remove(STORAGE_KEY), context.remove(STATISTICS_KEY))
+    (
+        context.remove(STORAGE_KEY).into_inner().unwrap(),
+        context.remove(STATISTICS_KEY).into_inner().unwrap(),
+    )
 }
 
 fn populate_adventure_works(n_store: usize, context: &mut Context) {
@@ -115,7 +118,7 @@ fn execute(script: Vec<&str>, txn: &mut i64, context: &mut Context) {
     let parser = &context[PARSER_KEY];
     let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, *txn, vec![], context);
     let expr = planner::optimize(expr, *txn, context);
-    crate::execute::execute_mut(expr, *txn, HashMap::new(), context).last();
+    crate::execute::execute(expr, *txn, HashMap::new(), context).last();
     *txn += 1;
 }
 

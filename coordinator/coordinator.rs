@@ -1,6 +1,9 @@
 use std::{
     collections::HashMap,
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Mutex,
+    },
     thread,
 };
 
@@ -30,8 +33,8 @@ impl CoordinatorNode {
         let (sender, receiver) = channel(1);
         thread::spawn(move || {
             let mut context = Context::default();
-            context.insert(STORAGE_KEY, Storage::default());
-            context.insert(STATISTICS_KEY, Statistics::default());
+            context.insert(STORAGE_KEY, Mutex::new(Storage::default()));
+            context.insert(STATISTICS_KEY, Mutex::new(Statistics::default()));
             context.insert(PARSER_KEY, Parser::default());
             context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
             let types = variables
@@ -41,7 +44,7 @@ impl CoordinatorNode {
             let expr =
                 context[PARSER_KEY].analyze(&sql, catalog::ROOT_CATALOG_ID, txn, types, &context);
             let expr = planner::optimize(expr, txn, &context);
-            let execute = execute::execute_mut(expr, txn, variables, &mut context);
+            let execute = execute::execute(expr, txn, variables, &mut context);
             for batch in execute {
                 sender.blocking_send(batch).unwrap();
             }

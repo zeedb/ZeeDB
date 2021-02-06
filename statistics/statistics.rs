@@ -1,13 +1,14 @@
 use std::{
     collections::HashMap,
     ops::{Index, IndexMut},
+    sync::Mutex,
 };
 
 use context::ContextKey;
 
 use crate::TableStatistics;
 
-pub const STATISTICS_KEY: ContextKey<Statistics> = ContextKey::new("STATISTICS");
+pub const STATISTICS_KEY: ContextKey<Mutex<Statistics>> = ContextKey::new("STATISTICS");
 
 #[derive(Clone, Debug)]
 pub struct Statistics {

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::mpsc::Receiver};
 
 use ast::{Expr, Index, *};
-use context::{Context, ContextKey};
+use context::Context;
 use kernel::{RecordBatch, *};
 use statistics::{TableStatistics, STATISTICS_KEY};
 use storage::*;
@@ -19,27 +19,7 @@ pub fn execute(
         state: QueryState {
             txn,
             variables,
-            context: Some(context),
-            context_mut: None,
-            temp_tables: Storage::default(),
-            temp_table_ids: HashMap::new(),
-        },
-    }
-}
-
-pub fn execute_mut(
-    expr: Expr,
-    txn: i64,
-    variables: HashMap<String, AnyArray>,
-    context: &mut Context,
-) -> RunningQuery<'_> {
-    RunningQuery {
-        input: Node::compile(expr),
-        state: QueryState {
-            txn,
-            variables,
-            context: None,
-            context_mut: Some(context),
+            context,
             temp_tables: Storage::default(),
             temp_table_ids: HashMap::new(),
         },
@@ -61,8 +41,7 @@ pub struct RunningQuery<'a> {
 pub(crate) struct QueryState<'a> {
     pub txn: i64,
     pub variables: HashMap<String, AnyArray>,
-    pub context: Option<&'a Context>,
-    pub context_mut: Option<&'a mut Context>,
+    pub context: &'a Context,
     pub temp_tables: Storage,
     pub temp_table_ids: HashMap<String, i64>,
 }
@@ -518,7 +497,13 @@ impl Node {
                 scan,
             } => {
                 if scan.is_none() {
-                    *scan = Some(state[STORAGE_KEY].table(table.id).scan());
+                    *scan = Some(
+                        state.context[STORAGE_KEY]
+                            .lock()
+                            .unwrap()
+                            .table(table.id)
+                            .scan(),
+                    );
                 }
                 match scan.as_mut().unwrap().pop() {
                     Some(page) => {
@@ -551,21 +536,27 @@ impl Node {
                     .collect();
                 let keys = crate::index::byte_key_prefix(columns.iter().map(|c| c).collect());
                 // Look up scalars in the index.
-                let art = state[STORAGE_KEY].index(index.index_id);
-                let mut tids = vec![];
-                for i in 0..keys.len() {
-                    let start = keys.get(i);
-                    let end = crate::index::upper_bound(start);
-                    let next = art.range(start..end.as_slice());
-                    tids.extend(next);
-                }
+                let tids = {
+                    let storage = state.context[STORAGE_KEY].lock().unwrap();
+                    let mut tids = vec![];
+                    let art = storage.index(index.index_id);
+                    for i in 0..keys.len() {
+                        let start = keys.get(i);
+                        let end = crate::index::upper_bound(start);
+                        let next = art.range(start..end.as_slice());
+                        tids.extend(next);
+                    }
+                    tids
+                };
                 // Perform a selective scan of the table.
                 let select_names = projects.iter().map(|c| c.name.clone()).collect();
                 let query_names = projects
                     .iter()
                     .map(|c| (c.name.clone(), c.canonical_name()))
                     .collect();
-                let scan = state[STORAGE_KEY]
+                let scan = state.context[STORAGE_KEY]
+                    .lock()
+                    .unwrap()
                     .table(table.id)
                     .bitmap_scan(tids, &select_names);
                 let mut output = RecordBatch::cat(scan).rename(&query_names);
@@ -980,13 +971,20 @@ impl Node {
                     let input = input.rename(&renames);
                     // Append rows to the table heap.
                     let txn = state.txn;
-                    let tids = state[STORAGE_KEY].table_mut(table.id).insert(&input, txn);
+                    let tids = state.context[STORAGE_KEY]
+                        .lock()
+                        .unwrap()
+                        .table_mut(table.id)
+                        .insert(&input, txn);
                     // Update statistics.
                     statistics.insert(&input);
                     // Append entries to each index.
                     for index in indexes.iter_mut() {
                         crate::index::insert(
-                            state[STORAGE_KEY].index_mut(index.index_id),
+                            state.context[STORAGE_KEY]
+                                .lock()
+                                .unwrap()
+                                .index_mut(index.index_id),
                             &index.columns,
                             &input,
                             &tids,
@@ -996,7 +994,9 @@ impl Node {
                 // TODO Insert should be split into 2 operations, UpdateStatistics ( Insert ... )
                 // Insert should take place on worker nodes and return partial statistics of newly inserted rows.
                 // UpdateStatistics should take place on coordinator node and merge partial statistics into global statistics.
-                state[STATISTICS_KEY]
+                state.context[STATISTICS_KEY]
+                    .lock()
+                    .unwrap()
                     .get_mut(table.id)
                     .expect(&table.name)
                     .merge(statistics);
@@ -1036,7 +1036,8 @@ impl Node {
                 };
                 let tids = tids.gather(&tids.sort());
                 // Invalidate the old row versions.
-                let heap = state[STORAGE_KEY].table(table.id);
+                let storage = state.context[STORAGE_KEY].lock().unwrap();
+                let heap = storage.table(table.id);
                 let mut i = 0;
                 while i < tids.len() {
                     let pid = tids.get(0).unwrap() as usize / storage::PAGE_SIZE;
@@ -1083,8 +1084,11 @@ impl Node {
                         let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
-                                state[STORAGE_KEY].create_table(id);
-                                state[STATISTICS_KEY].insert(id, TableStatistics::default());
+                                state.context[STORAGE_KEY].lock().unwrap().create_table(id);
+                                state.context[STATISTICS_KEY]
+                                    .lock()
+                                    .unwrap()
+                                    .insert(id, TableStatistics::default());
                             }
                         }
                     }
@@ -1092,8 +1096,8 @@ impl Node {
                         let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
-                                state[STORAGE_KEY].drop_table(id);
-                                state[STATISTICS_KEY].remove(id);
+                                state.context[STORAGE_KEY].lock().unwrap().drop_table(id);
+                                state.context[STATISTICS_KEY].lock().unwrap().remove(id);
                             }
                         }
                     }
@@ -1101,7 +1105,7 @@ impl Node {
                         let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
-                                state[STORAGE_KEY].create_index(id);
+                                state.context[STORAGE_KEY].lock().unwrap().create_index(id);
                             }
                         }
                     }
@@ -1109,7 +1113,7 @@ impl Node {
                         let ids = crate::eval::eval(id, &input, state).as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
-                                state[STORAGE_KEY].drop_index(id);
+                                state.context[STORAGE_KEY].lock().unwrap().drop_index(id);
                             }
                         }
                     }
@@ -1142,27 +1146,6 @@ impl RemoteExecution for SingleNodeRemoteExecution {
 
     fn exchange(&self, _expr: Expr, _hash_bucket: i32) -> Receiver<RecordBatch> {
         todo!()
-    }
-}
-
-impl<'a, T: 'static> std::ops::Index<ContextKey<T>> for QueryState<'a> {
-    type Output = T;
-
-    fn index(&self, index: ContextKey<T>) -> &Self::Output {
-        match (&self.context, &self.context_mut) {
-            (Some(context), _) => &context[index],
-            (_, Some(context)) => &context[index],
-            (None, None) => panic!("Neither QueryState.context nor QueryState.context_mut is set"),
-        }
-    }
-}
-
-impl<'a, T: 'static> std::ops::IndexMut<ContextKey<T>> for QueryState<'a> {
-    fn index_mut(&mut self, index: ContextKey<T>) -> &mut Self::Output {
-        match &mut self.context_mut {
-            Some(context) => &mut context[index],
-            None => panic!("QueryState.context_mut is not set"),
-        }
     }
 }
 

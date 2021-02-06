@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use ast::Value;
 use catalog::CATALOG_KEY;
@@ -632,8 +632,8 @@ fn test_casts() {
 
 fn eval(sql: &str) -> Value {
     let mut context = Context::default();
-    context.insert(STORAGE_KEY, Storage::default());
-    context.insert(STATISTICS_KEY, Statistics::default());
+    context.insert(STORAGE_KEY, Mutex::new(Storage::default()));
+    context.insert(STATISTICS_KEY, Mutex::new(Statistics::default()));
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     let sql = format!("select {}", sql);

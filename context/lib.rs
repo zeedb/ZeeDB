@@ -1,9 +1,4 @@
-use std::{
-    any::Any,
-    collections::HashMap,
-    marker::PhantomData,
-    ops::{Index, IndexMut},
-};
+use std::{any::Any, collections::HashMap, marker::PhantomData, ops::Index};
 
 #[derive(Default)]
 pub struct Context {
@@ -45,15 +40,5 @@ impl<T: 'static> Index<ContextKey<T>> for Context {
             .expect(key.key)
             .downcast_ref::<T>()
             .expect(key.key)
-    }
-}
-
-impl<T: 'static> IndexMut<ContextKey<T>> for Context {
-    fn index_mut(&mut self, key: ContextKey<T>) -> &mut Self::Output {
-        self.store
-            .get_mut(key.key)
-            .expect(key.key)
-            .downcast_mut::<T>()
-            .unwrap()
     }
 }

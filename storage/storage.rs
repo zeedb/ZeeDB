@@ -1,13 +1,16 @@
 use std::{
     fmt,
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Mutex,
+    },
 };
 
 use context::ContextKey;
 
 use crate::{art::Art, heap::*};
 
-pub const STORAGE_KEY: ContextKey<Storage> = ContextKey::new("STORAGE");
+pub const STORAGE_KEY: ContextKey<Mutex<Storage>> = ContextKey::new("STORAGE");
 
 pub struct Storage {
     tables: Vec<Heap>,

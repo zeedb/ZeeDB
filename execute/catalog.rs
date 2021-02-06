@@ -1,4 +1,7 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Mutex,
+};
 
 use ast::{Index, *};
 use catalog::{builtin_function_options, BootstrapCatalog, Catalog, CATALOG_KEY};
@@ -242,7 +245,7 @@ impl PlanCache {
                 let mut context = Context::default();
                 context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
                 context.insert(PARSER_KEY, Parser::default());
-                context.insert(STATISTICS_KEY, Statistics::default());
+                context.insert(STATISTICS_KEY, Mutex::new(Statistics::default()));
                 let parser = &context[PARSER_KEY];
                 let expr =
                     parser.analyze(self.query, catalog::ROOT_CATALOG_ID, 0, variables, &context);

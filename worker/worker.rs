@@ -41,9 +41,9 @@ impl WorkerNode {
         thread::spawn(move || {
             // TODO use real shared context
             let mut context = Context::default();
-            context.insert(STORAGE_KEY, Storage::default());
-            context.insert(STATISTICS_KEY, Statistics::default());
-            let running = execute::execute_mut(expr, txn, variables, &mut context);
+            context.insert(STORAGE_KEY, std::sync::Mutex::new(Storage::default()));
+            context.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
+            let running = execute::execute(expr, txn, variables, &mut context);
             for batch in running {
                 sender.blocking_send(batch).unwrap();
             }

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Write};
+use std::{collections::HashMap, fmt::Write, sync::Mutex};
 
 use catalog::CATALOG_KEY;
 use context::Context;
@@ -18,8 +18,8 @@ pub struct TestSuite {
 impl TestSuite {
     pub fn new(storage: Storage, statistics: Statistics) -> Self {
         let mut context = Context::default();
-        context.insert(STORAGE_KEY, storage);
-        context.insert(STATISTICS_KEY, statistics);
+        context.insert(STORAGE_KEY, Mutex::new(storage));
+        context.insert(STATISTICS_KEY, Mutex::new(statistics));
         context.insert(PARSER_KEY, Parser::default());
         context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
         Self {
@@ -71,7 +71,7 @@ fn run(sql: &str, txn: i64, context: &mut Context) -> String {
     let parser = &context[PARSER_KEY];
     let expr = parser.analyze(sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
     let expr = planner::optimize(expr, txn, context);
-    let batches: Vec<_> = crate::execute::execute_mut(expr, txn, HashMap::new(), context).collect();
+    let batches: Vec<_> = crate::execute::execute(expr, txn, HashMap::new(), context).collect();
     if batches.is_empty() {
         "EMPTY".to_string()
     } else {

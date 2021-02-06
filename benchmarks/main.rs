@@ -4,7 +4,7 @@ use cpuprofiler::PROFILER;
 use execute::MetadataCatalog;
 use parser::{Parser, PARSER_KEY};
 use statistics::STATISTICS_KEY;
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 use storage::STORAGE_KEY;
 
 /// View profiles with ~/go/bin/pprof --http localhost:8888 benchmarks/profiles/___.profile
@@ -18,8 +18,8 @@ fn main() {
 fn bench(profile: &str, sql: &str) {
     let mut context = Context::default();
     let (storage, statistics) = execute::adventure_works();
-    context.insert(STORAGE_KEY, storage);
-    context.insert(STATISTICS_KEY, statistics);
+    context.insert(STORAGE_KEY, Mutex::new(storage));
+    context.insert(STATISTICS_KEY, Mutex::new(statistics));
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     let expr = context[PARSER_KEY].analyze(sql, catalog::ROOT_CATALOG_ID, 100, vec![], &context);
@@ -27,7 +27,7 @@ fn bench(profile: &str, sql: &str) {
     let mut profiler = PROFILER.lock().unwrap();
     profiler.start(profile).unwrap();
     for txn in 0..1000 {
-        execute::execute_mut(expr.clone(), 100 + txn, HashMap::new(), &mut context).last();
+        execute::execute(expr.clone(), 100 + txn, HashMap::new(), &mut context).last();
     }
     profiler.stop().unwrap();
 }

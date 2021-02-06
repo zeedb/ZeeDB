@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, sync::Mutex};
 
 use catalog::CATALOG_KEY;
 use context::Context;
@@ -20,8 +20,8 @@ async fn test_broadcast() {
     tokio::spawn(server());
     let mut client = client().await.unwrap();
     let mut context = Context::default();
-    context.insert(STORAGE_KEY, Storage::default());
-    context.insert(STATISTICS_KEY, Statistics::default());
+    context.insert(STORAGE_KEY, Mutex::new(Storage::default()));
+    context.insert(STATISTICS_KEY, Mutex::new(Statistics::default()));
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
     let sql = "select 1";
