@@ -206,6 +206,7 @@ dependencies = [
  "prost-types",
  "protos",
  "rand 0.8.2",
+ "rayon",
  "statistics",
  "storage",
  "tokio",
