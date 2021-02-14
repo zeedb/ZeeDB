@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     process::Command,
     sync::mpsc::{sync_channel, Receiver, SyncSender},
     thread,
@@ -6,7 +7,10 @@ use std::{
 
 use once_cell::sync::OnceCell;
 use tokio::runtime::Runtime;
-use tonic::{Request, Response, Status};
+use tonic::{
+    transport::{Channel, Endpoint},
+    Request, Response, Status,
+};
 use zetasql::{
     zeta_sql_local_service_client::ZetaSqlLocalServiceClient, AnalyzeRequest, AnalyzeResponse,
     ExtractTableNamesFromStatementRequest, ExtractTableNamesFromStatementResponse,
@@ -139,9 +143,7 @@ fn start_server_process() {
 /// Process parse requests inside the parser thread, and send the results back to the requester thread.
 fn process_requests(receiver: Receiver<ParseRequest>) {
     let runtime = Runtime::new().unwrap();
-    let mut client = runtime
-        .block_on(ZetaSqlLocalServiceClient::connect("http://127.0.0.1:50051"))
-        .unwrap();
+    let mut client = runtime.block_on(client()).unwrap();
     loop {
         match receiver.recv().unwrap() {
             ParseRequest::FormatSql { request, response } => response
@@ -155,4 +157,9 @@ fn process_requests(receiver: Receiver<ParseRequest>) {
                 .unwrap(),
         }
     }
+}
+
+async fn client() -> Result<ZetaSqlLocalServiceClient<Channel>, Box<dyn Error>> {
+    let chan = Endpoint::new("http://127.0.0.1:50051")?.connect_lazy()?;
+    Ok(ZetaSqlLocalServiceClient::new(chan))
 }
