@@ -1,12 +1,10 @@
-use std::{
-    collections::{hash_map::Entry, HashMap},
-    thread,
-};
+use std::collections::{hash_map::Entry, HashMap};
 
 use ast::Expr;
 use context::Context;
 use kernel::{AnyArray, RecordBatch};
 use protos::{worker_server::Worker, BroadcastRequest, ExchangeRequest, RecordStream};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use statistics::{Statistics, STATISTICS_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::{
@@ -15,8 +13,9 @@ use tokio::sync::{
 };
 use tonic::{Request, Response, Status};
 
-#[derive(Default)]
 pub struct WorkerNode {
+    threads: ThreadPool,
+    context: Context,
     broadcast: Mutex<HashMap<(Expr, i64), Broadcast>>,
     exchange: Mutex<HashMap<(Expr, i64), Exchange>>,
 }
@@ -37,18 +36,28 @@ impl WorkerNode {
         variables: HashMap<String, AnyArray>,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = channel(1);
-        // TODO this should be run on a thread pool with a single writer thread with access to &mut Context, and N_CPUS-1 reader threads with access to &Context.
-        thread::spawn(move || {
-            // TODO use real shared context
-            let mut context = Context::default();
-            context.insert(STORAGE_KEY, std::sync::Mutex::new(Storage::default()));
-            context.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
-            let running = execute::execute(expr, txn, variables, &mut context);
+        self.threads.install(|| {
+            let running = execute::execute(expr, txn, variables, &self.context);
             for batch in running {
                 sender.blocking_send(batch).unwrap();
             }
         });
         receiver
+    }
+}
+
+impl Default for WorkerNode {
+    fn default() -> Self {
+        let mut context = Context::default();
+        context.insert(STORAGE_KEY, std::sync::Mutex::new(Storage::default()));
+        // TODO this should only be needed on coordinator.
+        context.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
+        Self {
+            threads: ThreadPoolBuilder::new().build().unwrap(),
+            context,
+            broadcast: Default::default(),
+            exchange: Default::default(),
+        }
     }
 }
 
