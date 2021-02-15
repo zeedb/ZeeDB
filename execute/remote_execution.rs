@@ -18,7 +18,7 @@ impl RemoteExecution for SingleNodeRemoteExecution {
     fn submit(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = sync_channel(0);
@@ -33,7 +33,7 @@ impl RemoteExecution for SingleNodeRemoteExecution {
     fn broadcast(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
     ) -> Receiver<RecordBatch> {
         self.submit(expr, variables, txn)
@@ -42,7 +42,7 @@ impl RemoteExecution for SingleNodeRemoteExecution {
     fn exchange(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
         _hash_column: String,
         _hash_bucket: i32,

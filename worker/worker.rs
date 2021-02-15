@@ -33,7 +33,7 @@ impl WorkerNode {
         &self,
         expr: Expr,
         txn: i64,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = channel(1);
         self.threads.install(|| {
@@ -69,9 +69,13 @@ impl Worker for WorkerNode {
         &self,
         request: Request<BroadcastRequest>,
     ) -> Result<Response<Self::BroadcastStream>, Status> {
-        let request = request.into_inner();
+        let mut request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
-        let variables = HashMap::new(); // TODO
+        let variables: HashMap<String, AnyArray> = request
+            .variables
+            .drain()
+            .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
+            .collect();
         let listeners = request.listeners as usize;
         let receiver = match self.broadcast.lock().await.entry((expr, request.txn)) {
             Entry::Occupied(mut occupied) => {
@@ -81,7 +85,7 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn), topic) = occupied.remove_entry();
-                    broadcast(self.execute(expr, txn, variables), topic.listeners);
+                    broadcast(self.execute(expr, txn, &variables), topic.listeners);
                 }
                 receiver
             }
@@ -90,7 +94,7 @@ impl Worker for WorkerNode {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, txn) = vacant.into_key();
-                    broadcast(self.execute(expr, txn, variables), vec![sender]);
+                    broadcast(self.execute(expr, txn, &variables), vec![sender]);
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Broadcast {
@@ -125,7 +129,7 @@ impl Worker for WorkerNode {
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn), topic) = occupied.remove_entry();
                     exchange(
-                        self.execute(expr, txn, variables),
+                        self.execute(expr, txn, &variables),
                         request.hash_column,
                         topic.listeners,
                     );
@@ -138,7 +142,7 @@ impl Worker for WorkerNode {
                 if listeners == 1 {
                     let (expr, txn) = vacant.into_key();
                     exchange(
-                        self.execute(expr, txn, variables),
+                        self.execute(expr, txn, &variables),
                         request.hash_column,
                         vec![(request.hash_bucket, sender)],
                     );

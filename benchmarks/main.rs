@@ -27,7 +27,7 @@ fn bench(profile: &str, sql: &str) {
     let mut profiler = PROFILER.lock().unwrap();
     profiler.start(profile).unwrap();
     for txn in 0..1000 {
-        execute::execute(expr.clone(), 100 + txn, HashMap::new(), &mut context).last();
+        execute::execute(expr.clone(), 100 + txn, &HashMap::new(), &mut context).last();
     }
     profiler.stop().unwrap();
 }

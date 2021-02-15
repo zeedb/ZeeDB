@@ -1,5 +1,8 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, ops::Index};
 
+/// Context holds references to shared components that can call each other.
+/// It allows us to avoid passing a zillion arguments to every top-level function.
+/// The members of Context should be long-lived, globally-scoped components, for example the parser.
 #[derive(Default)]
 pub struct Context {
     store: HashMap<&'static str, Box<dyn Any + Send + Sync>>,

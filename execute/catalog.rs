@@ -113,7 +113,7 @@ fn select_catalog(
         "catalog_name".to_string(),
         AnyArray::String(StringArray::from_values(vec![catalog_name])),
     );
-    let batches = execute(Q.get(variable_types(&variables)), txn, variables, context);
+    let batches = execute(Q.get(variable_types(&variables)), txn, &variables, context);
     let batch = match batches.first() {
         Some(first) => first,
         None => panic!(
@@ -160,7 +160,7 @@ fn select_table(
         name: Some(table_name.to_string()),
         ..Default::default()
     };
-    for batch in execute(Q.get(variable_types(&variables)), txn, variables, context) {
+    for batch in execute(Q.get(variable_types(&variables)), txn, &variables, context) {
         for offset in 0..batch.len() {
             let table_id = as_i64(&batch, 0).get(offset).unwrap();
             let column_name = as_string(&batch, 1).get(offset).unwrap();
@@ -198,7 +198,7 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
         AnyArray::I64(I64Array::from_values(vec![table_id])),
     );
     let mut indexes: Vec<Index> = vec![];
-    for batch in execute(Q.get(variable_types(&variables)), txn, variables, context) {
+    for batch in execute(Q.get(variable_types(&variables)), txn, &variables, context) {
         for offset in 0..batch.len() {
             let index_id = as_i64(&batch, 0).get(offset).unwrap();
             let column_name = as_string(&batch, 1).get(offset).unwrap();
@@ -220,7 +220,7 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
 fn execute(
     expr: Expr,
     txn: i64,
-    variables: HashMap<String, AnyArray>,
+    variables: &HashMap<String, AnyArray>,
     context: &Context,
 ) -> Vec<RecordBatch> {
     crate::execute::execute(expr, txn, variables, context).collect()

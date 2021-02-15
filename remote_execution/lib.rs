@@ -23,19 +23,19 @@ pub trait RemoteExecution {
     fn submit(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
     ) -> Receiver<RecordBatch>;
     fn broadcast(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
     ) -> Receiver<RecordBatch>;
     fn exchange(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
         hash_column: String,
         hash_bucket: i32,
@@ -61,7 +61,7 @@ impl RemoteExecution for RpcRemoteExecution {
     fn submit(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = sync_channel(0);
@@ -89,7 +89,7 @@ impl RemoteExecution for RpcRemoteExecution {
     fn broadcast(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = sync_channel(0);
@@ -117,7 +117,7 @@ impl RemoteExecution for RpcRemoteExecution {
     fn exchange(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
+        variables: &HashMap<String, AnyArray>,
         txn: i64,
         hash_column: String,
         hash_bucket: i32,

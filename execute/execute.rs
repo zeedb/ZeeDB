@@ -8,17 +8,17 @@ use storage::*;
 
 use crate::hash_table::HashTable;
 
-pub fn execute(
+pub fn execute<'a>(
     expr: Expr,
     txn: i64,
-    variables: HashMap<String, AnyArray>,
-    context: &Context,
-) -> RunningQuery<'_> {
+    variables: &HashMap<String, AnyArray>,
+    context: &'a Context,
+) -> RunningQuery<'a> {
     RunningQuery {
         input: Node::compile(expr),
         state: QueryState {
             txn,
-            variables,
+            variables: variables.clone(),
             context,
             temp_tables: Storage::default(),
             temp_table_ids: HashMap::new(),
