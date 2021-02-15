@@ -41,7 +41,7 @@ impl Default for RemoteExecution {
 }
 
 impl RemoteExecution {
-    fn submit(
+    pub fn submit(
         &self,
         expr: Expr,
         variables: &HashMap<String, AnyArray>,
@@ -69,7 +69,7 @@ impl RemoteExecution {
         receiver
     }
 
-    fn broadcast(
+    pub fn broadcast(
         &self,
         expr: Expr,
         variables: &HashMap<String, AnyArray>,
@@ -97,7 +97,7 @@ impl RemoteExecution {
         receiver
     }
 
-    fn exchange(
+    pub fn exchange(
         &self,
         expr: Expr,
         variables: &HashMap<String, AnyArray>,

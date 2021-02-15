@@ -65,7 +65,7 @@ impl Coordinator for CoordinatorNode {
                 &context,
             );
             let expr = planner::optimize(expr, txn, &context);
-            let execute = execute::execute(expr, txn, &variables, &context);
+            let execute = context[REMOTE_EXECUTION_KEY].submit(expr, &variables, txn);
             for batch in execute {
                 sender.blocking_send(batch).unwrap();
             }
