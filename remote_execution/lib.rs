@@ -16,48 +16,31 @@ use tonic::{
     Request, Streaming,
 };
 
-pub const REMOTE_EXECUTION_KEY: ContextKey<Box<dyn RemoteExecution + Send + Sync>> =
-    ContextKey::new("REMOTE_EXECUTION");
+pub const REMOTE_EXECUTION_KEY: ContextKey<RemoteExecution> = ContextKey::new("REMOTE_EXECUTION");
 
-pub trait RemoteExecution {
-    fn submit(
-        &self,
-        expr: Expr,
-        variables: &HashMap<String, AnyArray>,
-        txn: i64,
-    ) -> Receiver<RecordBatch>;
-    fn broadcast(
-        &self,
-        expr: Expr,
-        variables: &HashMap<String, AnyArray>,
-        txn: i64,
-    ) -> Receiver<RecordBatch>;
-    fn exchange(
-        &self,
-        expr: Expr,
-        variables: &HashMap<String, AnyArray>,
-        txn: i64,
-        hash_column: String,
-        hash_bucket: i32,
-    ) -> Receiver<RecordBatch>;
-}
-
-pub struct RpcRemoteExecution {
+pub struct RemoteExecution {
     workers: Vec<Mutex<WorkerClient<Channel>>>,
     runtime: Runtime,
 }
 
-impl Default for RpcRemoteExecution {
+impl Default for RemoteExecution {
     fn default() -> Self {
-        let workers: usize = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
+        let workers: Vec<_> = std::env::vars()
+            .filter(|(key, _)| key.starts_with("WORKER_"))
+            .map(|(_, dst)| Mutex::new(worker(dst)))
+            .collect();
+        assert!(
+            workers.len() > 0,
+            "There are no environment variables starting with WORKER_"
+        );
         Self {
-            workers: (0..workers).map(|i| Mutex::new(worker(i))).collect(),
+            workers,
             runtime: Runtime::new().unwrap(),
         }
     }
 }
 
-impl RemoteExecution for RpcRemoteExecution {
+impl RemoteExecution {
     fn submit(
         &self,
         expr: Expr,
@@ -157,11 +140,7 @@ async fn consume(mut stream: Streaming<Page>, sender: SyncSender<RecordBatch>) {
     }
 }
 
-fn worker(i: usize) -> WorkerClient<Channel> {
-    let dst = format!(
-        "zdb-worker-{}.zdb-worker.default.svc.cluster.local:50052",
-        i
-    );
+fn worker(dst: String) -> WorkerClient<Channel> {
     let chan = Endpoint::new(dst).unwrap().connect_lazy().unwrap();
     WorkerClient::new(chan)
 }

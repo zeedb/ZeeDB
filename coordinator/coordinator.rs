@@ -2,20 +2,19 @@ use std::{
     collections::HashMap,
     sync::{
         atomic::{AtomicI64, Ordering},
-        Arc, Mutex,
+        Arc,
     },
 };
 
 use catalog::CATALOG_KEY;
 use context::Context;
-use execute::{MetadataCatalog, SingleNodeRemoteExecution};
+use execute::MetadataCatalog;
 use kernel::AnyArray;
 use parser::{Parser, PARSER_KEY};
 use protos::{coordinator_server::Coordinator, RecordStream, SubmitRequest};
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use remote_execution::{RemoteExecution, REMOTE_EXECUTION_KEY};
 use statistics::{Statistics, STATISTICS_KEY};
-use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::channel;
 use tonic::{Request, Response, Status};
 
@@ -25,36 +24,13 @@ pub struct CoordinatorNode {
     txn: AtomicI64,
 }
 
-impl CoordinatorNode {
-    pub fn testing() -> Self {
-        // Set up local, single-node worker context.
-        let mut worker = Context::default();
-        worker.insert(STORAGE_KEY, Mutex::new(Storage::default()));
-        // Set up coordinator node that calls the local worker.
-        let mut coordinator = Context::default();
-        coordinator.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
-        coordinator.insert(PARSER_KEY, Parser::default());
-        coordinator.insert(CATALOG_KEY, Box::new(MetadataCatalog));
-        coordinator.insert(
-            REMOTE_EXECUTION_KEY,
-            Box::new(SingleNodeRemoteExecution::new(worker)),
-        );
-        Self::new(coordinator)
-    }
-
-    pub fn production() -> Self {
+impl Default for CoordinatorNode {
+    fn default() -> Self {
         let mut context = Context::default();
         context.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
         context.insert(PARSER_KEY, Parser::default());
         context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
-        context.insert(
-            REMOTE_EXECUTION_KEY,
-            Box::new(RpcRemoteExecution::default()),
-        );
-        Self::new(context)
-    }
-
-    fn new(context: Context) -> Self {
+        context.insert(REMOTE_EXECUTION_KEY, RemoteExecution::default());
         Self {
             threads: ThreadPoolBuilder::new().build().unwrap(),
             context: Arc::new(context),

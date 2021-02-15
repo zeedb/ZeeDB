@@ -8,8 +8,7 @@ use context::Context;
 use kernel::{AnyArray, RecordBatch};
 use protos::{worker_server::Worker, BroadcastRequest, ExchangeRequest, RecordStream};
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
-use statistics::{Statistics, STATISTICS_KEY};
+use remote_execution::{RemoteExecution, REMOTE_EXECUTION_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::{
     mpsc::{channel, Receiver, Sender},
@@ -56,10 +55,7 @@ impl Default for WorkerNode {
     fn default() -> Self {
         let mut context = Context::default();
         context.insert(STORAGE_KEY, std::sync::Mutex::new(Storage::default()));
-        context.insert(
-            REMOTE_EXECUTION_KEY,
-            Box::new(RpcRemoteExecution::default()),
-        );
+        context.insert(REMOTE_EXECUTION_KEY, RemoteExecution::default());
         Self {
             threads: ThreadPoolBuilder::new().build().unwrap(),
             context: Arc::new(context),

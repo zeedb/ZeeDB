@@ -1,17 +1,20 @@
 use kernel::{AnyArray, Array, I64Array, RecordBatch};
 use protos::{
-    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer, SubmitRequest,
+    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
+    worker_server::WorkerServer, SubmitRequest,
 };
 use std::error::Error;
 use tonic::{
     transport::{Channel, Endpoint, Server},
     Request,
 };
+use worker::WorkerNode;
 
 use crate::coordinator::CoordinatorNode;
 
 #[tokio::test]
 async fn test_submit() {
+    std::env::set_var("WORKER_0", "http://[::1]:50052");
     tokio::spawn(server());
     let mut client = client().await.unwrap();
     let mut stream = client
@@ -33,7 +36,8 @@ async fn test_submit() {
 async fn server() {
     let addr = "[::1]:50052".parse().unwrap();
     Server::builder()
-        .add_service(CoordinatorServer::new(CoordinatorNode::testing()))
+        .add_service(CoordinatorServer::new(CoordinatorNode::default()))
+        .add_service(WorkerServer::new(WorkerNode::default()))
         .serve(addr)
         .await
         .unwrap()

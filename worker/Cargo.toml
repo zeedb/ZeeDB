@@ -3,9 +3,8 @@ name = "worker"
 version = "0.1.0"
 edition = "2018"
 
-[[bin]]
-name = "worker"
-path = "main.rs"
+[lib] 
+path = "lib.rs"
 
 [dependencies]
 bincode = "1.3.1"

@@ -17,6 +17,7 @@ use crate::worker::*;
 
 #[tokio::test]
 async fn test_broadcast() {
+    std::env::set_var("WORKER_0", "http://[::1]:50052");
     tokio::spawn(server());
     let mut client = client().await.unwrap();
     let mut context = Context::default();
