@@ -207,6 +207,7 @@ dependencies = [
  "protos",
  "rand 0.8.2",
  "rayon",
+ "remote_execution",
  "statistics",
  "storage",
  "tokio",
@@ -299,6 +300,7 @@ name = "execute"
 version = "0.1.0"
 dependencies = [
  "ast",
+ "bincode",
  "catalog",
  "chrono",
  "context",
@@ -309,7 +311,9 @@ dependencies = [
  "planner",
  "protos",
  "rand 0.8.2",
+ "rayon",
  "regex",
+ "remote_execution",
  "statistics",
  "storage",
  "test_fixtures",
@@ -1089,6 +1093,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5eb417147ba9860a96cfe72a0b93bf88fee1744b5636ec99ab20c1aa9376581"
 
 [[package]]
+name = "remote_execution"
+version = "0.1.0"
+dependencies = [
+ "ast",
+ "bincode",
+ "context",
+ "kernel",
+ "protos",
+ "rayon",
+ "tokio",
+ "tonic",
+]
+
+[[package]]
 name = "remove_dir_all"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1525,6 +1543,7 @@ dependencies = [
  "protos",
  "rand 0.8.2",
  "rayon",
+ "remote_execution",
  "statistics",
  "storage",
  "tokio",

@@ -16,13 +16,10 @@ mod index;
 mod join;
 #[cfg(test)]
 mod optimize_tests;
+mod remote_execution;
 #[cfg(test)]
 mod scalar_tests;
 #[cfg(test)]
 mod test_suite;
 
-pub use crate::{
-    adventure_works::adventure_works,
-    catalog::MetadataCatalog,
-    execute::{execute, RemoteExecution, SingleNodeRemoteExecution},
-};
+pub use crate::{adventure_works::adventure_works, catalog::MetadataCatalog, execute::execute};

@@ -1,4 +1,4 @@
-use std::{error::Error, sync::Mutex};
+use std::{collections::HashMap, error::Error, sync::Mutex};
 
 use catalog::CATALOG_KEY;
 use context::Context;
@@ -30,6 +30,7 @@ async fn test_broadcast() {
     let mut stream = client
         .broadcast(Request::new(BroadcastRequest {
             expr: bincode::serialize(&expr).unwrap(),
+            variables: HashMap::new(),
             txn: 100,
             listeners: 1,
         }))

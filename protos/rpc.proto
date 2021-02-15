@@ -17,16 +17,18 @@ service Worker {
 
 message BroadcastRequest {
   bytes expr = 1;
-  int64 txn = 2;
-  int32 listeners = 3;
+  map<string, bytes> variables = 2;
+  int64 txn = 3;
+  int32 listeners = 4;
 }
 
 message ExchangeRequest {
   bytes expr = 1;
-  int64 txn = 2;
-  int32 listeners = 3;
-  string hash_column = 4;
-  int32 hash_bucket = 5;
+  map<string, bytes> variables = 2;
+  int64 txn = 3;
+  int32 listeners = 4;
+  string hash_column = 5;
+  int32 hash_bucket = 6;
 }
 
 message Page {

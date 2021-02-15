@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    sync::{mpsc::Receiver, Arc},
-};
+use std::{collections::HashMap, sync::Arc};
 
 use ast::{Expr, Index, *};
 use context::Context;
@@ -28,13 +25,6 @@ pub fn execute(
         },
     }
 }
-
-pub trait RemoteExecution {
-    fn broadcast(&self, expr: Expr) -> Receiver<RecordBatch>;
-    fn exchange(&self, expr: Expr, hash_bucket: i32) -> Receiver<RecordBatch>;
-}
-
-pub struct SingleNodeRemoteExecution;
 
 pub struct RunningQuery<'a> {
     state: QueryState<'a>,
@@ -1170,16 +1160,6 @@ impl Node {
                 }
             }
         }
-    }
-}
-
-impl RemoteExecution for SingleNodeRemoteExecution {
-    fn broadcast(&self, _expr: Expr) -> Receiver<RecordBatch> {
-        todo!()
-    }
-
-    fn exchange(&self, _expr: Expr, _hash_bucket: i32) -> Receiver<RecordBatch> {
-        todo!()
     }
 }
 
