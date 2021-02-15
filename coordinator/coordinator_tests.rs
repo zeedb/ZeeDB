@@ -33,7 +33,7 @@ async fn test_submit() {
 async fn server() {
     let addr = "[::1]:50052".parse().unwrap();
     Server::builder()
-        .add_service(CoordinatorServer::new(CoordinatorNode::default()))
+        .add_service(CoordinatorServer::new(CoordinatorNode::testing()))
         .serve(addr)
         .await
         .unwrap()

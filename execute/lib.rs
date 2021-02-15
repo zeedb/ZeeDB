@@ -22,4 +22,7 @@ mod scalar_tests;
 #[cfg(test)]
 mod test_suite;
 
-pub use crate::{adventure_works::adventure_works, catalog::MetadataCatalog, execute::execute};
+pub use crate::{
+    adventure_works::adventure_works, catalog::MetadataCatalog, execute::execute,
+    remote_execution::SingleNodeRemoteExecution,
+};

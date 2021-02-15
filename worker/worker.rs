@@ -1,10 +1,14 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::{
+    collections::{hash_map::Entry, HashMap},
+    sync::Arc,
+};
 
 use ast::Expr;
 use context::Context;
 use kernel::{AnyArray, RecordBatch};
 use protos::{worker_server::Worker, BroadcastRequest, ExchangeRequest, RecordStream};
 use rayon::{ThreadPool, ThreadPoolBuilder};
+use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use statistics::{Statistics, STATISTICS_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::{
@@ -15,7 +19,7 @@ use tonic::{Request, Response, Status};
 
 pub struct WorkerNode {
     threads: ThreadPool,
-    context: Context,
+    context: Arc<Context>,
     broadcast: Mutex<HashMap<(Expr, i64), Broadcast>>,
     exchange: Mutex<HashMap<(Expr, i64), Exchange>>,
 }
@@ -36,8 +40,10 @@ impl WorkerNode {
         variables: &HashMap<String, AnyArray>,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = channel(1);
-        self.threads.install(|| {
-            let running = execute::execute(expr, txn, variables, &self.context);
+        let context = self.context.clone();
+        let variables = variables.clone();
+        self.threads.spawn(move || {
+            let running = execute::execute(expr, txn, &variables, &context);
             for batch in running {
                 sender.blocking_send(batch).unwrap();
             }
@@ -50,11 +56,13 @@ impl Default for WorkerNode {
     fn default() -> Self {
         let mut context = Context::default();
         context.insert(STORAGE_KEY, std::sync::Mutex::new(Storage::default()));
-        // TODO this should only be needed on coordinator.
-        context.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
+        context.insert(
+            REMOTE_EXECUTION_KEY,
+            Box::new(RpcRemoteExecution::default()),
+        );
         Self {
             threads: ThreadPoolBuilder::new().build().unwrap(),
-            context,
+            context: Arc::new(context),
             broadcast: Default::default(),
             exchange: Default::default(),
         }

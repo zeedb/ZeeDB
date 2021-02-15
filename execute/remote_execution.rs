@@ -1,17 +1,29 @@
 use std::{
     collections::HashMap,
-    sync::mpsc::{sync_channel, Receiver},
+    sync::{
+        mpsc::{sync_channel, Receiver},
+        Arc,
+    },
 };
 
 use ast::Expr;
 use context::Context;
 use kernel::{AnyArray, RecordBatch};
-use rayon::ThreadPool;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::RemoteExecution;
 
 pub struct SingleNodeRemoteExecution {
     threads: ThreadPool,
-    context: Context,
+    context: Arc<Context>,
+}
+
+impl SingleNodeRemoteExecution {
+    pub fn new(context: Context) -> Self {
+        Self {
+            threads: ThreadPoolBuilder::new().build().unwrap(),
+            context: Arc::new(context),
+        }
+    }
 }
 
 impl RemoteExecution for SingleNodeRemoteExecution {
@@ -22,8 +34,10 @@ impl RemoteExecution for SingleNodeRemoteExecution {
         txn: i64,
     ) -> Receiver<RecordBatch> {
         let (sender, receiver) = sync_channel(0);
-        self.threads.install(|| {
-            for batch in crate::execute::execute(expr, txn, variables, &self.context) {
+        let context = self.context.clone();
+        let variables = variables.clone();
+        self.threads.spawn(move || {
+            for batch in crate::execute::execute(expr, txn, &variables, &context) {
                 sender.send(batch).unwrap();
             }
         });
