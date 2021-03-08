@@ -924,7 +924,7 @@ impl Converter {
         &mut self,
         subquery_parameters: Vec<Column>,
         join: Join,
-        subquery: Expr,
+        mut subquery: Expr,
         outer: Expr,
     ) -> Expr {
         if subquery_parameters.is_empty() {
@@ -983,11 +983,14 @@ impl Converter {
                 )
             })
             .collect();
+        let mut domain = outer.clone();
+        subquery.subst(&map_subquery_parameters);
+        domain.subst(&map_subquery_parameters);
         let dependent_join = LogicalDependentJoin {
             parameters: rename_subquery_parameters.clone(),
             predicates: vec![],
-            subquery: Box::new(subquery.clone().subst(&map_subquery_parameters)),
-            domain: Box::new(outer.clone().subst(&map_subquery_parameters)),
+            subquery: Box::new(subquery),
+            domain: Box::new(domain),
         };
         //             LogicalJoin
         //              +       +

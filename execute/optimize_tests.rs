@@ -46,11 +46,11 @@ fn test_correlated() {
     );
     t.comment("insert_table_free_single_join");
     t.ok(
-        "explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', (select current_timestamp()))",
+        "explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', (select timestamp '2020-01-01'))",
     );
     t.comment("insert_two_table_free_single_joins");
     t.ok(
-        "explain insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))",
+        "explain insert into person (person_id, modified_date) values (1, (select timestamp '2020-01-01')), (2, (select timestamp '2020-01-01'))",
     );
     t.comment("update_semi_join");
     t.ok(
@@ -167,7 +167,7 @@ fn test_dml() {
     t.ok("explain delete customer where person_id = 1");
     t.comment("insert_values");
     t.ok(
-        "explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', current_timestamp())",
+        "explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', timestamp '2020-01-01')",
     );
     t.comment("update_where");
     t.ok("explain update person set first_name = 'Foo' where person_id = 1");
@@ -303,7 +303,7 @@ fn test_with() {
     let mut t = TestSuite::new(storage, statistics);
     t.comment("redundant_with_clause_with_projection");
     t.ok(
-        "explain with foo as (select customer_id, current_date() as r from customer) select customer_id, r from foo",
+        "explain with foo as (select customer_id, 1 as r from customer) select customer_id, r from foo",
     );
     t.comment("redundant_with_clause");
     t.ok("explain with foo as (select * from customer) select customer_id from foo");
@@ -317,7 +317,7 @@ fn test_with() {
     );
     t.comment("use_with_project_twice");
     t.ok(
-        "explain with foo as (select *, current_date() as r from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.r = f2.r",
+        "explain with foo as (select *, 1 as r from customer) select f1.customer_id, f2.customer_id from foo f1, foo f2 where f1.r = f2.r",
     );
     t.comment("use_with_select_star_twice");
     t.ok(

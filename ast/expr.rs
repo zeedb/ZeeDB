@@ -331,62 +331,6 @@ impl Expr {
         }
     }
 
-    pub fn has_side_effects(&self) -> bool {
-        match self {
-            Expr::LogicalInsert { .. }
-            | Expr::LogicalUpdate { .. }
-            | Expr::LogicalDelete { .. }
-            | Expr::LogicalCreateDatabase { .. }
-            | Expr::LogicalCreateTable { .. }
-            | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalDrop { .. } => true,
-            Expr::Leaf { .. }
-            | Expr::LogicalSingleGet { .. }
-            | Expr::LogicalGet { .. }
-            | Expr::LogicalFilter { .. }
-            | Expr::LogicalOut { .. }
-            | Expr::LogicalMap { .. }
-            | Expr::LogicalJoin { .. }
-            | Expr::LogicalDependentJoin { .. }
-            | Expr::LogicalWith { .. }
-            | Expr::LogicalCreateTempTable { .. }
-            | Expr::LogicalGetWith { .. }
-            | Expr::LogicalAggregate { .. }
-            | Expr::LogicalLimit { .. }
-            | Expr::LogicalSort { .. }
-            | Expr::LogicalUnion { .. }
-            | Expr::LogicalValues { .. }
-            | Expr::LogicalScript { .. }
-            | Expr::LogicalAssign { .. }
-            | Expr::LogicalCall { .. }
-            | Expr::LogicalExplain { .. }
-            | Expr::LogicalRewrite { .. } => false,
-            Expr::TableFreeScan
-            | Expr::SeqScan { .. }
-            | Expr::IndexScan { .. }
-            | Expr::Filter { .. }
-            | Expr::Out { .. }
-            | Expr::Map { .. }
-            | Expr::NestedLoop { .. }
-            | Expr::HashJoin { .. }
-            | Expr::CreateTempTable { .. }
-            | Expr::GetTempTable { .. }
-            | Expr::Aggregate { .. }
-            | Expr::Limit { .. }
-            | Expr::Sort { .. }
-            | Expr::Union { .. }
-            | Expr::Broadcast { .. }
-            | Expr::Exchange { .. }
-            | Expr::Insert { .. }
-            | Expr::Values { .. }
-            | Expr::Delete { .. }
-            | Expr::Script { .. }
-            | Expr::Assign { .. }
-            | Expr::Call { .. }
-            | Expr::Explain { .. } => panic!("{} is a physical operator", self.name()),
-        }
-    }
-
     pub fn len(&self) -> usize {
         match self {
             Expr::LogicalJoin { .. }
@@ -442,471 +386,9 @@ impl Expr {
         }
     }
 
-    // TODO replace this with a version that updates in-place.
-    pub fn map(self, visitor: impl Fn(Expr) -> Expr) -> Expr {
-        match self {
-            Expr::LogicalFilter { predicates, input } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalFilter { predicates, input }
-            }
-            Expr::LogicalOut { projects, input } => Expr::LogicalOut {
-                projects,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::LogicalMap {
-                include_existing,
-                projects,
-                input,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalMap {
-                    include_existing,
-                    projects,
-                    input,
-                }
-            }
-            Expr::LogicalJoin { join, left, right } => {
-                let left = Box::new(visitor(*left));
-                let right = Box::new(visitor(*right));
-                Expr::LogicalJoin { join, left, right }
-            }
-            Expr::LogicalDependentJoin {
-                parameters,
-                predicates,
-                subquery,
-                domain,
-            } => {
-                let subquery = Box::new(visitor(*subquery));
-                let domain = Box::new(visitor(*domain));
-                Expr::LogicalDependentJoin {
-                    parameters,
-                    predicates,
-                    subquery,
-                    domain,
-                }
-            }
-            Expr::LogicalWith {
-                name,
-                columns,
-                left,
-                right,
-            } => {
-                let left = Box::new(visitor(*left));
-                let right = Box::new(visitor(*right));
-                Expr::LogicalWith {
-                    name,
-                    columns,
-                    left,
-                    right,
-                }
-            }
-            Expr::LogicalCreateTempTable {
-                name,
-                columns,
-                input,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalCreateTempTable {
-                    name,
-                    columns,
-                    input,
-                }
-            }
-            Expr::LogicalAggregate {
-                group_by,
-                aggregate,
-                input,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalAggregate {
-                    group_by,
-                    aggregate,
-                    input,
-                }
-            }
-            Expr::LogicalLimit {
-                limit,
-                offset,
-                input,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalLimit {
-                    limit,
-                    offset,
-                    input,
-                }
-            }
-            Expr::LogicalSort { order_by, input } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalSort { order_by, input }
-            }
-            Expr::LogicalUnion { left, right } => {
-                let left = Box::new(visitor(*left));
-                let right = Box::new(visitor(*right));
-                Expr::LogicalUnion { left, right }
-            }
-            Expr::LogicalInsert {
-                table,
-                input,
-                columns,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalInsert {
-                    table,
-                    input,
-                    columns,
-                }
-            }
-            Expr::LogicalValues {
-                columns,
-                values,
-                input,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalValues {
-                    columns,
-                    values,
-                    input,
-                }
-            }
-            Expr::LogicalUpdate {
-                table,
-                tid,
-                input,
-                columns,
-            } => {
-                let input = Box::new(visitor(*input));
-                Expr::LogicalUpdate {
-                    table,
-                    tid,
-                    input,
-                    columns,
-                }
-            }
-            Expr::LogicalDelete { table, tid, input } => Expr::LogicalDelete {
-                table,
-                tid,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Filter { predicates, input } => Expr::Filter {
-                predicates,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Out { projects, input } => Expr::Out {
-                projects,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Map {
-                include_existing,
-                projects,
-                input,
-            } => Expr::Map {
-                include_existing,
-                projects,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::NestedLoop { join, left, right } => Expr::NestedLoop {
-                join,
-                left: Box::new(visitor(*left)),
-                right: Box::new(visitor(*right)),
-            },
-            Expr::HashJoin {
-                broadcast,
-                join,
-                partition_left,
-                partition_right,
-                left,
-                right,
-            } => Expr::HashJoin {
-                broadcast,
-                join,
-                partition_left,
-                partition_right,
-                left: Box::new(visitor(*left)),
-                right: Box::new(visitor(*right)),
-            },
-            Expr::CreateTempTable {
-                name,
-                columns,
-                input,
-            } => Expr::CreateTempTable {
-                name,
-                columns,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::GetTempTable { name, columns } => Expr::GetTempTable { name, columns },
-            Expr::IndexScan {
-                include_existing,
-                projects,
-                predicates,
-                lookup,
-                index,
-                table,
-                input,
-            } => Expr::IndexScan {
-                include_existing,
-                projects,
-                predicates,
-                lookup,
-                index,
-                table,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Aggregate {
-                group_by,
-                aggregate,
-                input,
-            } => Expr::Aggregate {
-                group_by,
-                aggregate,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Limit {
-                limit,
-                offset,
-                input,
-            } => Expr::Limit {
-                limit,
-                offset,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Sort { order_by, input } => Expr::Sort {
-                order_by,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Union { left, right } => Expr::Union {
-                left: Box::new(visitor(*left)),
-                right: Box::new(visitor(*right)),
-            },
-            Expr::Broadcast { input } => Expr::Broadcast {
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Exchange { input } => Expr::Exchange {
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Insert {
-                table,
-                indexes,
-                input,
-                columns,
-            } => Expr::Insert {
-                table,
-                indexes,
-                input: Box::new(visitor(*input)),
-                columns,
-            },
-            Expr::Values {
-                columns,
-                values,
-                input,
-            } => Expr::Values {
-                columns,
-                values,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Delete { table, tid, input } => Expr::Delete {
-                table,
-                tid,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::LogicalScript { statements } => Expr::LogicalScript {
-                statements: map(visitor, statements),
-            },
-            Expr::Script { statements } => Expr::Script {
-                statements: map(visitor, statements),
-            },
-            Expr::LogicalAssign {
-                variable,
-                value,
-                input,
-            } => Expr::LogicalAssign {
-                variable,
-                value,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Assign {
-                variable,
-                value,
-                input,
-            } => Expr::Assign {
-                variable,
-                value,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::LogicalCall { procedure, input } => Expr::LogicalCall {
-                procedure,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Call { procedure, input } => Expr::Call {
-                procedure,
-                input: Box::new(visitor(*input)),
-            },
-            Expr::LogicalExplain { input } => Expr::LogicalExplain {
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Explain { input } => Expr::Explain {
-                input: Box::new(visitor(*input)),
-            },
-            Expr::Leaf { .. }
-            | Expr::LogicalSingleGet { .. }
-            | Expr::LogicalGet { .. }
-            | Expr::LogicalGetWith { .. }
-            | Expr::LogicalCreateDatabase { .. }
-            | Expr::LogicalCreateTable { .. }
-            | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalDrop { .. }
-            | Expr::LogicalRewrite { .. }
-            | Expr::TableFreeScan { .. }
-            | Expr::SeqScan { .. } => self,
-        }
-    }
-
-    // TODO replace this with a version that updates in-place.
-    pub fn map_scalar<F: Fn(Scalar) -> Scalar>(self, visitor: F) -> Expr {
-        let map_predicates = |mut predicates: Vec<Scalar>| -> Vec<Scalar> {
-            predicates.drain(..).map(|scalar| visitor(scalar)).collect()
-        };
-        let map_projects = |mut projects: Vec<(Scalar, Column)>| -> Vec<(Scalar, Column)> {
-            projects
-                .drain(..)
-                .map(|(scalar, column)| (visitor(scalar), column))
-                .collect()
-        };
-        let map_join = |join: Join| -> Join {
-            match join {
-                Join::Inner(predicates) => Join::Inner(map_predicates(predicates)),
-                Join::Right(predicates) => Join::Right(map_predicates(predicates)),
-                Join::Outer(predicates) => Join::Outer(map_predicates(predicates)),
-                Join::Semi(predicates) => Join::Semi(map_predicates(predicates)),
-                Join::Anti(predicates) => Join::Anti(map_predicates(predicates)),
-                Join::Single(predicates) => Join::Single(map_predicates(predicates)),
-                Join::Mark(column, predicates) => Join::Mark(column, map_predicates(predicates)),
-            }
-        };
-        let map_procedure = |procedure: Procedure| -> Procedure {
-            match procedure {
-                Procedure::CreateTable(argument) => Procedure::CreateTable(visitor(argument)),
-                Procedure::DropTable(argument) => Procedure::DropTable(visitor(argument)),
-                Procedure::CreateIndex(argument) => Procedure::CreateIndex(visitor(argument)),
-                Procedure::DropIndex(argument) => Procedure::DropIndex(visitor(argument)),
-            }
-        };
-        self.map(|expr| match expr {
-            Expr::Leaf { gid } => Expr::Leaf { gid },
-            Expr::LogicalSingleGet => Expr::LogicalSingleGet,
-            Expr::LogicalGet {
-                projects,
-                predicates,
-                table,
-            } => Expr::LogicalGet {
-                projects,
-                predicates: map_predicates(predicates),
-                table,
-            },
-            Expr::LogicalFilter { predicates, input } => Expr::LogicalFilter {
-                predicates: map_predicates(predicates),
-                input,
-            },
-            Expr::LogicalDependentJoin {
-                parameters,
-                predicates,
-                subquery,
-                domain,
-            } => Expr::LogicalDependentJoin {
-                parameters,
-                predicates: map_predicates(predicates),
-                subquery,
-                domain,
-            },
-            Expr::LogicalMap {
-                include_existing,
-                projects,
-                input,
-            } => Expr::LogicalMap {
-                include_existing,
-                projects: map_projects(projects),
-                input,
-            },
-            Expr::LogicalJoin { join, left, right } => Expr::LogicalJoin {
-                join: map_join(join),
-                left,
-                right,
-            },
-            Expr::LogicalAssign {
-                variable,
-                value,
-                input,
-            } => Expr::LogicalAssign {
-                variable,
-                value: visitor(value),
-                input,
-            },
-            Expr::LogicalCall { procedure, input } => Expr::LogicalCall {
-                procedure: map_procedure(procedure),
-                input,
-            },
-            Expr::LogicalExplain { input } => Expr::LogicalExplain { input },
-            Expr::LogicalOut { .. }
-            | Expr::LogicalWith { .. }
-            | Expr::LogicalCreateTempTable { .. }
-            | Expr::LogicalGetWith { .. }
-            | Expr::LogicalAggregate { .. }
-            | Expr::LogicalLimit { .. }
-            | Expr::LogicalSort { .. }
-            | Expr::LogicalUnion { .. }
-            | Expr::LogicalInsert { .. }
-            | Expr::LogicalValues { .. }
-            | Expr::LogicalUpdate { .. }
-            | Expr::LogicalDelete { .. }
-            | Expr::LogicalCreateDatabase { .. }
-            | Expr::LogicalCreateTable { .. }
-            | Expr::LogicalCreateIndex { .. }
-            | Expr::LogicalDrop { .. }
-            | Expr::LogicalScript { .. }
-            | Expr::LogicalRewrite { .. } => expr,
-            Expr::TableFreeScan
-            | Expr::SeqScan { .. }
-            | Expr::IndexScan { .. }
-            | Expr::Filter { .. }
-            | Expr::Out { .. }
-            | Expr::Map { .. }
-            | Expr::NestedLoop { .. }
-            | Expr::HashJoin { .. }
-            | Expr::CreateTempTable { .. }
-            | Expr::GetTempTable { .. }
-            | Expr::Aggregate { .. }
-            | Expr::Limit { .. }
-            | Expr::Sort { .. }
-            | Expr::Union { .. }
-            | Expr::Broadcast { .. }
-            | Expr::Exchange { .. }
-            | Expr::Insert { .. }
-            | Expr::Values { .. }
-            | Expr::Delete { .. }
-            | Expr::Script { .. }
-            | Expr::Assign { .. }
-            | Expr::Call { .. }
-            | Expr::Explain { .. } => panic!(
-                "map_scalar is not implemented for physical operator {}",
-                expr.name()
-            ),
-        })
-    }
-
-    pub fn bottom_up_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
-        let operator = self.map(|child| child.bottom_up_rewrite(visitor));
-        visitor(operator)
-    }
-
-    pub fn top_down_rewrite(self, visitor: &impl Fn(Expr) -> Expr) -> Expr {
-        let expr = visitor(self);
-        expr.map(|child| child.top_down_rewrite(visitor))
-    }
-
-    pub fn iter(&self) -> ExprIterator {
-        ExprIterator {
-            parent: self,
-            offset: 0,
+    pub fn pre_order(&self) -> PreOrderTraversal {
+        PreOrderTraversal {
+            deferred: vec![self],
         }
     }
 
@@ -1047,25 +529,30 @@ impl Expr {
 
     pub fn references(&self) -> HashSet<Column> {
         let mut set = HashSet::new();
+        self.collect_references(&mut set);
+        set
+    }
+
+    fn collect_references(&self, set: &mut HashSet<Column>) {
         match self {
             Expr::LogicalGet { predicates, .. } | Expr::LogicalFilter { predicates, .. } => {
                 for p in predicates {
-                    set.extend(p.references());
+                    p.collect_references(set);
                 }
             }
             Expr::LogicalMap { projects, .. } => {
                 for (x, _) in projects {
-                    set.extend(x.references());
+                    x.collect_references(set);
                 }
             }
             Expr::LogicalJoin { join, .. } => {
                 for p in join.predicates() {
-                    set.extend(p.references());
+                    p.collect_references(set);
                 }
             }
             Expr::LogicalDependentJoin { predicates, .. } => {
                 for p in predicates {
-                    set.extend(p.references());
+                    p.collect_references(set);
                 }
             }
             Expr::LogicalWith { columns, .. } | Expr::LogicalGetWith { columns, .. } => {
@@ -1092,16 +579,14 @@ impl Expr {
                 set.extend(columns.clone());
                 for array in values {
                     for x in array {
-                        set.extend(x.references());
+                        x.collect_references(set);
                     }
                 }
             }
             Expr::LogicalAssign { value, .. } => {
-                set.extend(value.references());
+                value.collect_references(set);
             }
-            Expr::LogicalCall { procedure, .. } => {
-                set.extend(procedure.references());
-            }
+            Expr::LogicalCall { procedure, .. } => procedure.collect_references(set),
             Expr::LogicalSingleGet { .. }
             | Expr::Leaf { .. }
             | Expr::LogicalOut { .. }
@@ -1141,17 +626,16 @@ impl Expr {
             | Expr::Assign { .. }
             | Expr::Call { .. }
             | Expr::Explain { .. } => unimplemented!(
-                "free is not implemented for physical operator {}",
+                "references is not implemented for physical operator {}",
                 self.name()
             ),
         }
         for i in 0..self.len() {
-            set.extend(self[i].references());
+            self[i].collect_references(set)
         }
-        set
     }
 
-    pub fn subst(self, map: &HashMap<Column, Column>) -> Self {
+    pub fn subst(&mut self, map: &HashMap<Column, Column>) {
         let subst_c = |c: &Column| map.get(c).unwrap_or(c).clone();
         let subst_x = |x: &Scalar| x.clone().subst(map);
         let subst_o = |o: &OrderBy| OrderBy {
@@ -1162,75 +646,43 @@ impl Expr {
             Expr::LogicalGet {
                 projects,
                 predicates,
-                table,
-            } => Expr::LogicalGet {
-                projects: projects.iter().map(subst_c).collect(),
-                predicates: predicates.iter().map(subst_x).collect(),
-                table: table.clone(),
-            },
-            Expr::LogicalFilter { predicates, input } => Expr::LogicalFilter {
-                predicates: predicates.iter().map(subst_x).collect(),
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalMap {
-                include_existing,
-                projects,
-                input,
-            } => Expr::LogicalMap {
-                include_existing,
-                projects: projects
+                ..
+            } => {
+                *projects = projects.iter().map(subst_c).collect();
+                *predicates = predicates.iter().map(subst_x).collect();
+            }
+            Expr::LogicalFilter { predicates, .. } => {
+                *predicates = predicates.iter().map(subst_x).collect();
+            }
+            Expr::LogicalMap { projects, .. } => {
+                *projects = projects
                     .iter()
                     .map(|(x, c)| (subst_x(x), subst_c(c)))
-                    .collect(),
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalJoin { join, left, right } => Expr::LogicalJoin {
-                join: join.replace(join.predicates().iter().map(subst_x).collect()),
-                left: Box::new(left.subst(map)),
-                right: Box::new(right.subst(map)),
-            },
+                    .collect();
+            }
+            Expr::LogicalJoin { join, .. } => {
+                *join = join.replace(join.predicates().iter().map(subst_x).collect());
+            }
             Expr::LogicalDependentJoin {
                 parameters,
                 predicates,
-                subquery,
-                domain,
-            } => Expr::LogicalDependentJoin {
-                parameters: parameters.iter().map(subst_c).collect(),
-                predicates: predicates.iter().map(subst_x).collect(),
-                subquery: Box::new(subquery.subst(map)),
-                domain: Box::new(domain.subst(map)),
-            },
-            Expr::LogicalWith {
-                name,
-                columns,
-                left,
-                right,
-            } => Expr::LogicalWith {
-                name: name.clone(),
-                columns: columns.iter().map(subst_c).collect(),
-                left: Box::new(left.subst(map)),
-                right: Box::new(right.subst(map)),
-            },
-            Expr::LogicalCreateTempTable {
-                name,
-                columns,
-                input,
-            } => Expr::LogicalCreateTempTable {
-                name: name.clone(),
-                columns: columns.iter().map(subst_c).collect(),
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalGetWith { name, columns } => Expr::LogicalGetWith {
-                name: name.clone(),
-                columns: columns.iter().map(subst_c).collect(),
-            },
+                ..
+            } => {
+                *parameters = parameters.iter().map(subst_c).collect();
+                *predicates = predicates.iter().map(subst_x).collect();
+            }
+            Expr::LogicalWith { columns, .. }
+            | Expr::LogicalCreateTempTable { columns, .. }
+            | Expr::LogicalGetWith { columns, .. } => {
+                *columns = columns.iter().map(subst_c).collect();
+            }
             Expr::LogicalAggregate {
                 group_by,
                 aggregate,
-                input,
-            } => Expr::LogicalAggregate {
-                group_by: group_by.iter().map(subst_c).collect(),
-                aggregate: aggregate
+                ..
+            } => {
+                *group_by = group_by.iter().map(subst_c).collect();
+                *aggregate = aggregate
                     .iter()
                     .map(
                         |AggregateExpr {
@@ -1245,63 +697,28 @@ impl Expr {
                             output: subst_c(output),
                         },
                     )
-                    .collect(),
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalSort { order_by, input } => Expr::LogicalSort {
-                order_by: order_by.iter().map(subst_o).collect(),
-                input: Box::new(input.subst(map)),
-            },
+                    .collect();
+            }
+            Expr::LogicalSort { order_by, .. } => {
+                *order_by = order_by.iter().map(subst_o).collect()
+            }
             Expr::LogicalValues {
-                columns,
-                values,
-                input,
-            } => Expr::LogicalValues {
-                columns: columns.iter().map(subst_c).collect(),
-                values: values
+                columns, values, ..
+            } => {
+                *columns = columns.iter().map(subst_c).collect();
+                *values = values
                     .iter()
                     .map(|row| row.iter().map(subst_x).collect())
-                    .collect(),
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalAssign {
-                variable,
-                value,
-                input,
-            } => Expr::LogicalAssign {
-                variable,
-                value,
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalCall { procedure, input } => Expr::LogicalCall {
-                procedure,
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalExplain { input } => Expr::LogicalExplain {
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalOut { projects, input } => Expr::LogicalOut {
-                projects: projects.iter().map(subst_c).collect(),
-                input: Box::new(input.subst(map)),
-            },
-            Expr::LogicalUpdate {
-                table,
-                tid,
-                input,
-                columns,
-            } => Expr::LogicalUpdate {
-                table,
-                tid: subst_c(&tid),
-                input: Box::new(input.subst(map)),
-                columns,
-            },
-            Expr::LogicalDelete { table, tid, input } => Expr::LogicalDelete {
-                table,
-                tid: subst_c(&tid),
-                input: Box::new(input.subst(map)),
-            },
+                    .collect();
+            }
+            Expr::LogicalOut { projects, .. } => {
+                *projects = projects.iter().map(subst_c).collect();
+            }
+            Expr::LogicalUpdate { tid, .. } | Expr::LogicalDelete { tid, .. } => {
+                *tid = subst_c(&tid);
+            }
             Expr::Leaf { .. }
-            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalSingleGet
             | Expr::LogicalLimit { .. }
             | Expr::LogicalUnion { .. }
             | Expr::LogicalInsert { .. }
@@ -1310,7 +727,10 @@ impl Expr {
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. }
             | Expr::LogicalScript { .. }
-            | Expr::LogicalRewrite { .. } => self.map(|child| child.subst(map)),
+            | Expr::LogicalAssign { .. }
+            | Expr::LogicalCall { .. }
+            | Expr::LogicalExplain { .. }
+            | Expr::LogicalRewrite { .. } => {}
             Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
             | Expr::IndexScan { .. }
@@ -1337,6 +757,9 @@ impl Expr {
                 "subst is not implemented for physical operator {}",
                 self.name()
             ),
+        }
+        for i in 0..self.len() {
+            self[i].subst(map)
         }
     }
 }
@@ -1478,6 +901,12 @@ impl std::ops::IndexMut<usize> for Expr {
                 &mut statements[index]
             }
         }
+    }
+}
+
+impl Default for Expr {
+    fn default() -> Self {
+        Expr::Leaf { gid: usize::MAX }
     }
 }
 
@@ -1643,10 +1072,18 @@ impl Scalar {
         }
     }
 
+    pub fn len(&self) -> usize {
+        match self {
+            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => 0,
+            Scalar::Call(f) => f.len(),
+            Scalar::Cast(_, _) => 1,
+        }
+    }
+
     pub fn references(&self) -> HashSet<Column> {
-        let mut free = HashSet::new();
-        self.collect_references(&mut free);
-        free
+        let mut set = HashSet::new();
+        self.collect_references(&mut set);
+        set
     }
 
     fn collect_references(&self, free: &mut HashSet<Column>) {
@@ -1662,19 +1099,6 @@ impl Scalar {
             }
             Scalar::Cast(scalar, _) => scalar.collect_references(free),
         }
-    }
-
-    pub fn map(self, visitor: impl Fn(Scalar) -> Scalar) -> Self {
-        match self {
-            Scalar::Call(function) => Scalar::Call(Box::new(function.map(visitor))),
-            Scalar::Cast(scalar, data_type) => Scalar::Cast(Box::new(visitor(*scalar)), data_type),
-            other => other,
-        }
-    }
-
-    pub fn bottom_up_rewrite(self, visitor: &impl Fn(Scalar) -> Scalar) -> Self {
-        let scalar = self.map(|child| child.bottom_up_rewrite(visitor));
-        visitor(scalar)
     }
 
     pub fn subst(self, map: &HashMap<Column, Column>) -> Self {
@@ -1701,6 +1125,40 @@ impl Scalar {
         match self {
             Scalar::Column(c) => c == column,
             _ => false,
+        }
+    }
+}
+
+impl std::ops::Index<usize> for Scalar {
+    type Output = Scalar;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!(index),
+            Scalar::Call(f) => &f[index],
+            Scalar::Cast(x, _) => {
+                if index == 0 {
+                    x.as_ref()
+                } else {
+                    panic!(index)
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::IndexMut<usize> for Scalar {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match self {
+            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!(index),
+            Scalar::Call(f) => &mut f[index],
+            Scalar::Cast(x, _) => {
+                if index == 0 {
+                    x.as_mut()
+                } else {
+                    panic!(index)
+                }
+            }
         }
     }
 }
@@ -1827,6 +1285,478 @@ pub enum F {
     SubstrString(Scalar, Scalar, Option<Scalar>),
     CaseNoValue(Vec<(Scalar, Scalar)>, Scalar),
     CaseWithValue(Scalar, Vec<(Scalar, Scalar)>, Scalar),
+}
+
+impl F {
+    pub fn len(&self) -> usize {
+        match self {
+            F::CurrentDate | F::CurrentTimestamp | F::Xid => 0,
+            F::AbsDouble(_)
+            | F::AbsInt64(_)
+            | F::AcosDouble(_)
+            | F::AcoshDouble(_)
+            | F::AsinDouble(_)
+            | F::AsinhDouble(_)
+            | F::AtanDouble(_)
+            | F::AtanhDouble(_)
+            | F::ByteLengthString(_)
+            | F::CeilDouble(_)
+            | F::CharLengthString(_)
+            | F::ChrString(_)
+            | F::CosDouble(_)
+            | F::CoshDouble(_)
+            | F::DateFromTimestamp(_)
+            | F::DateFromUnixDate(_)
+            | F::DecimalLogarithmDouble(_)
+            | F::ExpDouble(_)
+            | F::ExtractDateFromTimestamp(_)
+            | F::FloorDouble(_)
+            | F::IsFalse(_)
+            | F::IsInf(_)
+            | F::IsNan(_)
+            | F::IsNull(_)
+            | F::IsTrue(_)
+            | F::LengthString(_)
+            | F::LowerString(_)
+            | F::NaturalLogarithmDouble(_)
+            | F::NextVal(_)
+            | F::Not(_)
+            | F::ReverseString(_)
+            | F::RoundDouble(_)
+            | F::SignDouble(_)
+            | F::SignInt64(_)
+            | F::SinDouble(_)
+            | F::SinhDouble(_)
+            | F::SqrtDouble(_)
+            | F::StringFromDate(_)
+            | F::StringFromTimestamp(_)
+            | F::TanDouble(_)
+            | F::TanhDouble(_)
+            | F::TimestampFromDate(_)
+            | F::TimestampFromString(_)
+            | F::TimestampFromUnixMicrosInt64(_)
+            | F::TruncDouble(_)
+            | F::UnaryMinusDouble(_)
+            | F::UnaryMinusInt64(_)
+            | F::UnixDate(_)
+            | F::UnixMicrosFromTimestamp(_)
+            | F::UpperString(_)
+            | F::DateTruncDate(_, _)
+            | F::ExtractFromDate(_, _)
+            | F::ExtractFromTimestamp(_, _)
+            | F::TrimString(_, None)
+            | F::TimestampTrunc(_, _)
+            | F::LtrimString(_, None)
+            | F::RtrimString(_, None) => 1,
+            F::AddDouble(_, _)
+            | F::AddInt64(_, _)
+            | F::And(_, _)
+            | F::Atan2Double(_, _)
+            | F::DivideDouble(_, _)
+            | F::DivInt64(_, _)
+            | F::EndsWithString(_, _)
+            | F::Equal(_, _)
+            | F::FormatDate(_, _)
+            | F::FormatTimestamp(_, _)
+            | F::Greater(_, _)
+            | F::GreaterOrEqual(_, _)
+            | F::Ifnull(_, _)
+            | F::Is(_, _)
+            | F::LeftString(_, _)
+            | F::Less(_, _)
+            | F::LessOrEqual(_, _)
+            | F::LogarithmDouble(_, _)
+            | F::LtrimString(_, Some(_))
+            | F::ModInt64(_, _)
+            | F::MultiplyDouble(_, _)
+            | F::MultiplyInt64(_, _)
+            | F::NotEqual(_, _)
+            | F::Nullif(_, _)
+            | F::Or(_, _)
+            | F::ParseDate(_, _)
+            | F::ParseTimestamp(_, _)
+            | F::PowDouble(_, _)
+            | F::RegexpContainsString(_, _)
+            | F::RegexpExtractString(_, _)
+            | F::RepeatString(_, _)
+            | F::RightString(_, _)
+            | F::RoundWithDigitsDouble(_, _)
+            | F::RtrimString(_, Some(_))
+            | F::StartsWithString(_, _)
+            | F::StringLike(_, _)
+            | F::StrposString(_, _)
+            | F::SubtractDouble(_, _)
+            | F::SubtractInt64(_, _)
+            | F::TrimString(_, Some(_))
+            | F::TruncWithDigitsDouble(_, _)
+            | F::DateAddDate(_, _, _)
+            | F::DateDiffDate(_, _, _)
+            | F::DateSubDate(_, _, _)
+            | F::TimestampAdd(_, _, _)
+            | F::TimestampDiff(_, _, _)
+            | F::TimestampSub(_, _, _)
+            | F::SubstrString(_, _, None) => 2,
+            F::Between(_, _, _)
+            | F::DateFromYearMonthDay(_, _, _)
+            | F::If(_, _, _)
+            | F::LpadString(_, _, _)
+            | F::RegexpReplaceString(_, _, _)
+            | F::ReplaceString(_, _, _)
+            | F::RpadString(_, _, _)
+            | F::SubstrString(_, _, Some(_)) => 3,
+            F::Coalesce(varargs)
+            | F::ConcatString(varargs)
+            | F::Greatest(varargs)
+            | F::Least(varargs) => varargs.len(),
+            F::In(_, varargs) => varargs.len() + 1,
+            F::CaseNoValue(varargs, _) => varargs.len() * 2 + 1,
+            F::CaseWithValue(_, varargs, _) => varargs.len() * 2 + 2,
+        }
+    }
+}
+
+impl std::ops::Index<usize> for F {
+    type Output = Scalar;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        match self {
+            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!(index),
+            F::AbsDouble(a)
+            | F::AbsInt64(a)
+            | F::AcosDouble(a)
+            | F::AcoshDouble(a)
+            | F::AsinDouble(a)
+            | F::AsinhDouble(a)
+            | F::AtanDouble(a)
+            | F::AtanhDouble(a)
+            | F::ByteLengthString(a)
+            | F::CeilDouble(a)
+            | F::CharLengthString(a)
+            | F::ChrString(a)
+            | F::CosDouble(a)
+            | F::CoshDouble(a)
+            | F::DateFromTimestamp(a)
+            | F::DateFromUnixDate(a)
+            | F::DecimalLogarithmDouble(a)
+            | F::ExpDouble(a)
+            | F::ExtractDateFromTimestamp(a)
+            | F::FloorDouble(a)
+            | F::IsFalse(a)
+            | F::IsInf(a)
+            | F::IsNan(a)
+            | F::IsNull(a)
+            | F::IsTrue(a)
+            | F::LengthString(a)
+            | F::LowerString(a)
+            | F::NaturalLogarithmDouble(a)
+            | F::NextVal(a)
+            | F::Not(a)
+            | F::ReverseString(a)
+            | F::RoundDouble(a)
+            | F::SignDouble(a)
+            | F::SignInt64(a)
+            | F::SinDouble(a)
+            | F::SinhDouble(a)
+            | F::SqrtDouble(a)
+            | F::StringFromDate(a)
+            | F::StringFromTimestamp(a)
+            | F::TanDouble(a)
+            | F::TanhDouble(a)
+            | F::TimestampFromDate(a)
+            | F::TimestampFromString(a)
+            | F::TimestampFromUnixMicrosInt64(a)
+            | F::TruncDouble(a)
+            | F::UnaryMinusDouble(a)
+            | F::UnaryMinusInt64(a)
+            | F::UnixDate(a)
+            | F::UnixMicrosFromTimestamp(a)
+            | F::UpperString(a)
+            | F::DateTruncDate(a, _)
+            | F::ExtractFromDate(a, _)
+            | F::ExtractFromTimestamp(a, _)
+            | F::TrimString(a, None)
+            | F::TimestampTrunc(a, _)
+            | F::LtrimString(a, None)
+            | F::RtrimString(a, None) => match index {
+                0 => a,
+                _ => panic!(index),
+            },
+            F::AddDouble(a, b)
+            | F::AddInt64(a, b)
+            | F::And(a, b)
+            | F::Atan2Double(a, b)
+            | F::DivideDouble(a, b)
+            | F::DivInt64(a, b)
+            | F::EndsWithString(a, b)
+            | F::Equal(a, b)
+            | F::FormatDate(a, b)
+            | F::FormatTimestamp(a, b)
+            | F::Greater(a, b)
+            | F::GreaterOrEqual(a, b)
+            | F::Ifnull(a, b)
+            | F::Is(a, b)
+            | F::LeftString(a, b)
+            | F::Less(a, b)
+            | F::LessOrEqual(a, b)
+            | F::LogarithmDouble(a, b)
+            | F::LtrimString(a, Some(b))
+            | F::ModInt64(a, b)
+            | F::MultiplyDouble(a, b)
+            | F::MultiplyInt64(a, b)
+            | F::NotEqual(a, b)
+            | F::Nullif(a, b)
+            | F::Or(a, b)
+            | F::ParseDate(a, b)
+            | F::ParseTimestamp(a, b)
+            | F::PowDouble(a, b)
+            | F::RegexpContainsString(a, b)
+            | F::RegexpExtractString(a, b)
+            | F::RepeatString(a, b)
+            | F::RightString(a, b)
+            | F::RoundWithDigitsDouble(a, b)
+            | F::RtrimString(a, Some(b))
+            | F::StartsWithString(a, b)
+            | F::StringLike(a, b)
+            | F::StrposString(a, b)
+            | F::SubtractDouble(a, b)
+            | F::SubtractInt64(a, b)
+            | F::TrimString(a, Some(b))
+            | F::TruncWithDigitsDouble(a, b)
+            | F::DateAddDate(a, b, _)
+            | F::DateDiffDate(a, b, _)
+            | F::DateSubDate(a, b, _)
+            | F::TimestampAdd(a, b, _)
+            | F::TimestampDiff(a, b, _)
+            | F::TimestampSub(a, b, _)
+            | F::SubstrString(a, b, None) => match index {
+                0 => a,
+                1 => b,
+                _ => panic!(index),
+            },
+            F::Between(a, b, c)
+            | F::DateFromYearMonthDay(a, b, c)
+            | F::If(a, b, c)
+            | F::LpadString(a, b, c)
+            | F::RegexpReplaceString(a, b, c)
+            | F::ReplaceString(a, b, c)
+            | F::RpadString(a, b, c)
+            | F::SubstrString(a, b, Some(c)) => match index {
+                0 => a,
+                1 => b,
+                2 => c,
+                _ => panic!(index),
+            },
+            F::Coalesce(varargs)
+            | F::ConcatString(varargs)
+            | F::Greatest(varargs)
+            | F::Least(varargs) => &varargs[index],
+            F::In(a, varargs) => match index {
+                0 => a,
+                _ => &varargs[index - 1],
+            },
+            F::CaseNoValue(varargs, default) => {
+                if index < varargs.len() * 2 {
+                    let (a, b) = &varargs[index / 2];
+                    match index % 2 {
+                        0 => a,
+                        1 => b,
+                        _ => panic!(),
+                    }
+                } else if index == varargs.len() * 2 {
+                    default
+                } else {
+                    panic!(index)
+                }
+            }
+            F::CaseWithValue(value, varargs, default) => {
+                if index == 0 {
+                    value
+                } else if index - 1 < varargs.len() * 2 {
+                    let (a, b) = &varargs[(index - 1) / 2];
+                    match (index - 1) % 2 {
+                        0 => a,
+                        1 => b,
+                        _ => panic!(),
+                    }
+                } else if (index - 1) == varargs.len() * 2 {
+                    default
+                } else {
+                    panic!(index)
+                }
+            }
+        }
+    }
+}
+
+impl std::ops::IndexMut<usize> for F {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        match self {
+            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!(index),
+            F::AbsDouble(a)
+            | F::AbsInt64(a)
+            | F::AcosDouble(a)
+            | F::AcoshDouble(a)
+            | F::AsinDouble(a)
+            | F::AsinhDouble(a)
+            | F::AtanDouble(a)
+            | F::AtanhDouble(a)
+            | F::ByteLengthString(a)
+            | F::CeilDouble(a)
+            | F::CharLengthString(a)
+            | F::ChrString(a)
+            | F::CosDouble(a)
+            | F::CoshDouble(a)
+            | F::DateFromTimestamp(a)
+            | F::DateFromUnixDate(a)
+            | F::DecimalLogarithmDouble(a)
+            | F::ExpDouble(a)
+            | F::ExtractDateFromTimestamp(a)
+            | F::FloorDouble(a)
+            | F::IsFalse(a)
+            | F::IsInf(a)
+            | F::IsNan(a)
+            | F::IsNull(a)
+            | F::IsTrue(a)
+            | F::LengthString(a)
+            | F::LowerString(a)
+            | F::NaturalLogarithmDouble(a)
+            | F::NextVal(a)
+            | F::Not(a)
+            | F::ReverseString(a)
+            | F::RoundDouble(a)
+            | F::SignDouble(a)
+            | F::SignInt64(a)
+            | F::SinDouble(a)
+            | F::SinhDouble(a)
+            | F::SqrtDouble(a)
+            | F::StringFromDate(a)
+            | F::StringFromTimestamp(a)
+            | F::TanDouble(a)
+            | F::TanhDouble(a)
+            | F::TimestampFromDate(a)
+            | F::TimestampFromString(a)
+            | F::TimestampFromUnixMicrosInt64(a)
+            | F::TruncDouble(a)
+            | F::UnaryMinusDouble(a)
+            | F::UnaryMinusInt64(a)
+            | F::UnixDate(a)
+            | F::UnixMicrosFromTimestamp(a)
+            | F::UpperString(a)
+            | F::DateTruncDate(a, _)
+            | F::ExtractFromDate(a, _)
+            | F::ExtractFromTimestamp(a, _)
+            | F::TrimString(a, None)
+            | F::TimestampTrunc(a, _)
+            | F::LtrimString(a, None)
+            | F::RtrimString(a, None) => match index {
+                0 => a,
+                _ => panic!(index),
+            },
+            F::AddDouble(a, b)
+            | F::AddInt64(a, b)
+            | F::And(a, b)
+            | F::Atan2Double(a, b)
+            | F::DivideDouble(a, b)
+            | F::DivInt64(a, b)
+            | F::EndsWithString(a, b)
+            | F::Equal(a, b)
+            | F::FormatDate(a, b)
+            | F::FormatTimestamp(a, b)
+            | F::Greater(a, b)
+            | F::GreaterOrEqual(a, b)
+            | F::Ifnull(a, b)
+            | F::Is(a, b)
+            | F::LeftString(a, b)
+            | F::Less(a, b)
+            | F::LessOrEqual(a, b)
+            | F::LogarithmDouble(a, b)
+            | F::LtrimString(a, Some(b))
+            | F::ModInt64(a, b)
+            | F::MultiplyDouble(a, b)
+            | F::MultiplyInt64(a, b)
+            | F::NotEqual(a, b)
+            | F::Nullif(a, b)
+            | F::Or(a, b)
+            | F::ParseDate(a, b)
+            | F::ParseTimestamp(a, b)
+            | F::PowDouble(a, b)
+            | F::RegexpContainsString(a, b)
+            | F::RegexpExtractString(a, b)
+            | F::RepeatString(a, b)
+            | F::RightString(a, b)
+            | F::RoundWithDigitsDouble(a, b)
+            | F::RtrimString(a, Some(b))
+            | F::StartsWithString(a, b)
+            | F::StringLike(a, b)
+            | F::StrposString(a, b)
+            | F::SubtractDouble(a, b)
+            | F::SubtractInt64(a, b)
+            | F::TrimString(a, Some(b))
+            | F::TruncWithDigitsDouble(a, b)
+            | F::DateAddDate(a, b, _)
+            | F::DateDiffDate(a, b, _)
+            | F::DateSubDate(a, b, _)
+            | F::TimestampAdd(a, b, _)
+            | F::TimestampDiff(a, b, _)
+            | F::TimestampSub(a, b, _)
+            | F::SubstrString(a, b, None) => match index {
+                0 => a,
+                1 => b,
+                _ => panic!(index),
+            },
+            F::Between(a, b, c)
+            | F::DateFromYearMonthDay(a, b, c)
+            | F::If(a, b, c)
+            | F::LpadString(a, b, c)
+            | F::RegexpReplaceString(a, b, c)
+            | F::ReplaceString(a, b, c)
+            | F::RpadString(a, b, c)
+            | F::SubstrString(a, b, Some(c)) => match index {
+                0 => a,
+                1 => b,
+                2 => c,
+                _ => panic!(index),
+            },
+            F::Coalesce(varargs)
+            | F::ConcatString(varargs)
+            | F::Greatest(varargs)
+            | F::Least(varargs) => &mut varargs[index],
+            F::In(a, varargs) => match index {
+                0 => a,
+                _ => &mut varargs[index - 1],
+            },
+            F::CaseNoValue(varargs, default) => {
+                if index < varargs.len() * 2 {
+                    let (a, b) = &mut varargs[index / 2];
+                    match index % 2 {
+                        0 => a,
+                        1 => b,
+                        _ => panic!(),
+                    }
+                } else if index == varargs.len() * 2 {
+                    default
+                } else {
+                    panic!(index)
+                }
+            }
+            F::CaseWithValue(value, varargs, default) => {
+                if index == 0 {
+                    value
+                } else if index - 1 < varargs.len() * 2 {
+                    let (a, b) = &mut varargs[(index - 1) / 2];
+                    match (index - 1) % 2 {
+                        0 => a,
+                        1 => b,
+                        _ => panic!(),
+                    }
+                } else if (index - 1) == varargs.len() * 2 {
+                    default
+                } else {
+                    panic!(index)
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -2806,12 +2736,12 @@ pub enum Procedure {
 }
 
 impl Procedure {
-    fn references(&self) -> HashSet<Column> {
+    fn collect_references(&self, set: &mut HashSet<Column>) {
         match self {
             Procedure::CreateTable(argument)
             | Procedure::DropTable(argument)
             | Procedure::CreateIndex(argument)
-            | Procedure::DropIndex(argument) => argument.references(),
+            | Procedure::DropIndex(argument) => argument.collect_references(set),
         }
     }
 }
@@ -2827,28 +2757,18 @@ impl fmt::Display for Procedure {
     }
 }
 
-pub struct ExprIterator<'it> {
-    parent: &'it Expr,
-    offset: usize,
+pub struct PreOrderTraversal<'it> {
+    deferred: Vec<&'it Expr>,
 }
 
-impl<'it> Iterator for ExprIterator<'it> {
+impl<'it> Iterator for PreOrderTraversal<'it> {
     type Item = &'it Expr;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.offset < self.parent.len() {
-            self.offset += 1;
-            Some(&self.parent[self.offset - 1])
-        } else {
-            None
+        let next = self.deferred.pop()?;
+        for i in 0..next.len() {
+            self.deferred.push(&next[next.len() - 1 - i]);
         }
+        Some(next)
     }
-}
-
-fn map(visitor: impl Fn(Expr) -> Expr, list: Vec<Expr>) -> Vec<Expr> {
-    let mut mapped = Vec::with_capacity(list.len());
-    for expr in list {
-        mapped.push(visitor(expr))
-    }
-    mapped
 }

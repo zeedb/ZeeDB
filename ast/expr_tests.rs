@@ -1,22 +1,26 @@
 use crate::expr::*;
 
 #[test]
-fn test_bottom_up_rewrite() {
-    let before = Expr::LogicalFilter {
+fn test_rewrite() {
+    let mut expr = Expr::LogicalFilter {
         predicates: vec![],
         input: Box::new(Expr::LogicalGetWith {
             name: "x".to_string(),
             columns: vec![],
         }),
     };
-    let visitor = |expr: Expr| match expr {
-        Expr::LogicalGetWith { .. } => Expr::LogicalGetWith {
-            name: "y".to_string(),
-            columns: vec![],
-        },
-        _ => expr,
-    };
-    let after = before.bottom_up_rewrite(&visitor);
+    fn pre_order(expr: &mut Expr) {
+        match expr {
+            Expr::LogicalGetWith { name, .. } => {
+                *name = "y".to_string();
+            }
+            _ => {}
+        }
+        for i in 0..expr.len() {
+            pre_order(&mut expr[i])
+        }
+    }
+    pre_order(&mut expr);
     let expected = Expr::LogicalFilter {
         predicates: vec![],
         input: Box::new(Expr::LogicalGetWith {
@@ -24,7 +28,7 @@ fn test_bottom_up_rewrite() {
             columns: vec![],
         }),
     };
-    assert_eq!(expected, after);
+    assert_eq!(expected, expr);
 }
 
 #[test]

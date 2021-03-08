@@ -53,19 +53,19 @@ Map person.person_id
 			SeqScan person
 
 # insert_table_free_single_join
-ok: explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', (select current_timestamp()))
-plan                                                                                                                                                                                                  
+ok: explain insert into person (person_id, first_name, last_name, modified_date) values (1, 'Foo', 'Bar', (select timestamp '2020-01-01'))
+plan                                                                                                                                                                                                       
 Insert person
 	Values person.person_id person.first_name person.last_name person.modified_date [1 "Foo" "Bar" $expr_subquery.$col1]
-		Map $expr_subquery.$col1:(CurrentTimestamp), ..
+		Map $expr_subquery.$col1:2020-01-01 00:00:00 UTC, ..
 			TableFreeScan
 
 # insert_two_table_free_single_joins
-ok: explain insert into person (person_id, modified_date) values (1, (select current_timestamp())), (2, (select current_timestamp()))
-plan                                                                                                                                                                                                                    
+ok: explain insert into person (person_id, modified_date) values (1, (select timestamp '2020-01-01')), (2, (select timestamp '2020-01-01'))
+plan                                                                                                                                                                                                                              
 Insert person
 	Values person.person_id person.modified_date [1 $expr_subquery.$col1] [2 $expr_subquery.$col1]
-		Map $expr_subquery.$col1:(CurrentTimestamp) $expr_subquery.$col1:(CurrentTimestamp), ..
+		Map $expr_subquery.$col1:2020-01-01 00:00:00 UTC $expr_subquery.$col1:2020-01-01 00:00:00 UTC, ..
 			TableFreeScan
 
 # update_semi_join

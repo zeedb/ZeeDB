@@ -8,14 +8,15 @@ use parser::PARSER_KEY;
 use crate::unnest::unnest_dependent_joins;
 
 pub fn rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
-    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(rewrite_ddl, e));
-    let expr = rewrite_scalars(expr);
-    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(unnest_dependent_joins, e));
-    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_predicates, e));
-    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(remove_dependent_join, e));
-    let expr = expr.bottom_up_rewrite(&|e| apply_repeatedly(optimize_join_type, e));
-    let expr = expr.top_down_rewrite(&|e| apply_repeatedly(push_down_projections, e));
-    let expr = rewrite_logical_rewrite(expr, txn, context);
+    let expr = top_down_rewrite(expr, rewrite_ddl);
+    let expr = top_down_rewrite(expr, rewrite_with);
+    let expr = top_down_rewrite(expr, rewrite_scalars);
+    let expr = bottom_up_rewrite(expr, unnest_dependent_joins);
+    let expr = top_down_rewrite(expr, push_down_predicates);
+    let expr = bottom_up_rewrite(expr, remove_dependent_join);
+    let expr = bottom_up_rewrite(expr, optimize_join_type);
+    let expr = top_down_rewrite(expr, push_down_projections);
+    let expr = top_down_rewrite(expr, |expr| rewrite_logical_rewrite(expr, txn, context));
     expr
 }
 
@@ -138,17 +139,139 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
     }
 }
 
-fn rewrite_scalars(expr: Expr) -> Expr {
-    expr.map_scalar(|scalar| {
-        scalar.bottom_up_rewrite(&|scalar| match scalar {
-            Scalar::Call(function) => match *function {
-                F::CurrentDate => Scalar::Literal(Value::Date(Some(current_date()))),
-                F::CurrentTimestamp => Scalar::Literal(Value::Timestamp(Some(current_timestamp()))),
-                other => Scalar::Call(Box::new(other)),
-            },
-            other => other,
-        })
-    })
+fn rewrite_with(expr: Expr) -> Result<Expr, Expr> {
+    match expr {
+        LogicalWith {
+            name,
+            columns,
+            left,
+            right,
+        } => Ok(LogicalScript {
+            statements: vec![
+                LogicalCreateTempTable {
+                    name: name,
+                    columns,
+                    input: left,
+                },
+                *right,
+            ],
+        }),
+        _ => Err(expr),
+    }
+}
+
+pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
+    fn visit(scalar: &mut Scalar) -> bool {
+        let mut did_rewrite = false;
+        if let Scalar::Call(f) = scalar {
+            match f.as_mut() {
+                F::CurrentDate => {
+                    *scalar = Scalar::Literal(Value::Date(Some(current_date())));
+                    did_rewrite = true;
+                }
+                F::CurrentTimestamp => {
+                    *scalar = Scalar::Literal(Value::Timestamp(Some(current_timestamp())));
+                    did_rewrite = true;
+                }
+                _ => {
+                    for i in 0..scalar.len() {
+                        did_rewrite = did_rewrite || visit(&mut scalar[i])
+                    }
+                }
+            }
+        }
+        did_rewrite
+    }
+    let visit_predicates = |predicates: &mut Vec<Scalar>| {
+        let mut did_rewrite = false;
+        for p in predicates {
+            did_rewrite = did_rewrite || visit(p)
+        }
+        did_rewrite
+    };
+    let visit_projects = |projects: &mut Vec<(Scalar, Column)>| {
+        let mut did_rewrite = false;
+        for (p, _) in projects {
+            did_rewrite = did_rewrite || visit(p)
+        }
+        did_rewrite
+    };
+    let visit_join = |join: &mut Join| match join {
+        Join::Inner(predicates)
+        | Join::Right(predicates)
+        | Join::Outer(predicates)
+        | Join::Semi(predicates)
+        | Join::Anti(predicates)
+        | Join::Single(predicates)
+        | Join::Mark(_, predicates) => visit_predicates(predicates),
+    };
+    let visit_procedure = |procedure: &mut Procedure| match procedure {
+        Procedure::CreateTable(argument)
+        | Procedure::DropTable(argument)
+        | Procedure::CreateIndex(argument)
+        | Procedure::DropIndex(argument) => visit(argument),
+    };
+    let did_rewrite = match &mut expr {
+        Expr::LogicalGet { predicates, .. }
+        | Expr::LogicalFilter { predicates, .. }
+        | Expr::LogicalDependentJoin { predicates, .. } => visit_predicates(predicates),
+        Expr::LogicalMap { projects, .. } => visit_projects(projects),
+        Expr::LogicalJoin { join, .. } => visit_join(join),
+        Expr::LogicalAssign { value, .. } => visit(value),
+        Expr::LogicalCall { procedure, .. } => visit_procedure(procedure),
+        Expr::Leaf { .. }
+        | Expr::LogicalSingleGet { .. }
+        | Expr::LogicalOut { .. }
+        | Expr::LogicalWith { .. }
+        | Expr::LogicalCreateTempTable { .. }
+        | Expr::LogicalGetWith { .. }
+        | Expr::LogicalAggregate { .. }
+        | Expr::LogicalLimit { .. }
+        | Expr::LogicalSort { .. }
+        | Expr::LogicalUnion { .. }
+        | Expr::LogicalInsert { .. }
+        | Expr::LogicalValues { .. }
+        | Expr::LogicalUpdate { .. }
+        | Expr::LogicalDelete { .. }
+        | Expr::LogicalCreateDatabase { .. }
+        | Expr::LogicalCreateTable { .. }
+        | Expr::LogicalCreateIndex { .. }
+        | Expr::LogicalDrop { .. }
+        | Expr::LogicalScript { .. }
+        | Expr::LogicalExplain { .. }
+        | Expr::LogicalRewrite { .. } => false,
+        Expr::TableFreeScan
+        | Expr::SeqScan { .. }
+        | Expr::IndexScan { .. }
+        | Expr::Filter { .. }
+        | Expr::Out { .. }
+        | Expr::Map { .. }
+        | Expr::NestedLoop { .. }
+        | Expr::HashJoin { .. }
+        | Expr::CreateTempTable { .. }
+        | Expr::GetTempTable { .. }
+        | Expr::Aggregate { .. }
+        | Expr::Limit { .. }
+        | Expr::Sort { .. }
+        | Expr::Union { .. }
+        | Expr::Broadcast { .. }
+        | Expr::Exchange { .. }
+        | Expr::Insert { .. }
+        | Expr::Values { .. }
+        | Expr::Delete { .. }
+        | Expr::Script { .. }
+        | Expr::Assign { .. }
+        | Expr::Call { .. }
+        | Expr::Explain { .. } => panic!(
+            "rewrite_scalars is not implemented for physical operator {}",
+            expr.name()
+        ),
+    };
+    if did_rewrite {
+        Ok(expr)
+    } else {
+        Err(expr)
+    }
 }
 
 fn optimize_join_type(expr: Expr) -> Result<Expr, Expr> {
@@ -249,16 +372,6 @@ fn optimize_join_type(expr: Expr) -> Result<Expr, Expr> {
                 })
             }
         }
-        LogicalWith {
-            name,
-            columns,
-            left,
-            right,
-        } => match count_get_with(&name, &right) {
-            0 if !left.has_side_effects() => Ok(*right),
-            1 => Ok(inline_with(&name, &columns, left.as_ref(), *right)),
-            _ => Ok(with_to_script(name, columns, *left, *right)),
-        },
         _ => Err(expr),
     }
 }
@@ -603,22 +716,42 @@ fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
     }
 }
 
-fn rewrite_logical_rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
-    expr.bottom_up_rewrite(&|expr| match expr {
+fn rewrite_logical_rewrite(expr: Expr, txn: i64, context: &Context) -> Result<Expr, Expr> {
+    match expr {
         LogicalRewrite { sql } => {
             let parser = &context[PARSER_KEY];
             let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
-            rewrite(expr, txn, context)
+            let expr = rewrite(expr, txn, context);
+            Ok(expr)
         }
-        other => other,
-    })
+        _ => Err(expr),
+    }
 }
 
-fn apply_repeatedly(f: impl Fn(Expr) -> Result<Expr, Expr>, mut expr: Expr) -> Expr {
-    loop {
-        expr = match f(expr) {
-            Ok(expr) => expr,
-            Err(expr) => return expr,
+fn bottom_up_rewrite(mut expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {
+    // First, rewrite the children.
+    for i in 0..expr.len() {
+        expr[i] = bottom_up_rewrite(std::mem::take(&mut expr[i]), f)
+    }
+    match f(expr) {
+        // If f succeeded, we may have new children that need to be rewritten.
+        Ok(expr) => bottom_up_rewrite(expr, f),
+        // Otherwise, we have reached a fixed point.
+        Err(expr) => expr,
+    }
+}
+
+fn top_down_rewrite(expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {
+    // First, rewrite the parent.
+    match f(expr) {
+        // If f succeeded, we may have a new parent that needs to be rewritten.
+        Ok(expr) => top_down_rewrite(expr, f),
+        // Otherwise, proceed with rewriting the children.
+        Err(mut expr) => {
+            for i in 0..expr.len() {
+                expr[i] = top_down_rewrite(std::mem::take(&mut expr[i]), f)
+            }
+            expr
         }
     }
 }
@@ -702,53 +835,6 @@ fn is_table_free_scan(input: &Expr) -> Option<Vec<(Scalar, Column)>> {
         }
         LogicalSingleGet => Some(vec![]),
         _ => None,
-    }
-}
-
-fn count_get_with(name: &String, expr: &Expr) -> usize {
-    match expr {
-        LogicalGetWith { name: get_name, .. } => {
-            if name == get_name {
-                1
-            } else {
-                0
-            }
-        }
-        _ if expr.is_logical() => expr.iter().map(|expr| count_get_with(name, expr)).sum(),
-        _ => panic!("{} is not logical", expr),
-    }
-}
-
-fn inline_with(name: &String, columns: &Vec<Column>, left: &Expr, right: Expr) -> Expr {
-    match right {
-        LogicalGetWith {
-            name: get_name,
-            columns: get_columns,
-        } if name == &get_name => {
-            let mut projects = vec![];
-            for i in 0..columns.len() {
-                projects.push((Scalar::Column(columns[i].clone()), get_columns[i].clone()))
-            }
-            LogicalMap {
-                include_existing: false,
-                projects,
-                input: Box::new(left.clone()),
-            }
-        }
-        expr => expr.map(|child| inline_with(name, columns, left, child)),
-    }
-}
-
-fn with_to_script(name: String, columns: Vec<Column>, left: Expr, right: Expr) -> Expr {
-    LogicalScript {
-        statements: vec![
-            LogicalCreateTempTable {
-                name: name,
-                columns,
-                input: Box::new(left),
-            },
-            right,
-        ],
     }
 }
 

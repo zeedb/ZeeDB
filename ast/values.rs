@@ -155,7 +155,7 @@ fn date_value(date: i32) -> NaiveDate {
 
 fn timestamp_value(time: i64) -> DateTime<Utc> {
     DateTime::from_utc(
-        NaiveDateTime::from_timestamp(time / 1_000_000, ((time % 1_000_000) * 1_000_000) as u32),
+        NaiveDateTime::from_timestamp(time / 1_000_000, ((time % 1_000_000) * 1_000) as u32),
         Utc,
     )
 }

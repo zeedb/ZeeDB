@@ -17,7 +17,14 @@ pub(crate) fn unnest_dependent_joins(expr: Expr) -> Result<Expr, Expr> {
             subquery,
             ..
         } if !free_parameters(parameters, subquery).is_empty() => {
-            Ok(expr.top_down_rewrite(&|expr| push_dependent_join(expr)))
+            fn top_down_rewrite(expr: Expr) -> Expr {
+                let mut expr = push_dependent_join(expr);
+                for i in 0..expr.len() {
+                    expr[i] = top_down_rewrite(std::mem::take(&mut expr[i]))
+                }
+                expr
+            }
+            Ok(top_down_rewrite(expr))
         }
         _ => Err(expr),
     }
@@ -239,7 +246,7 @@ fn push_left(
 fn push_both(
     parameters: Vec<Column>,
     join: Join,
-    left_subquery: Box<Expr>,
+    mut left_subquery: Box<Expr>,
     right_subquery: Box<Expr>,
     domain: Box<Expr>,
 ) -> Expr {
@@ -248,8 +255,9 @@ fn push_both(
     let left_parameters_map: HashMap<_, _> = (0..parameters.len())
         .map(|i| (parameters[i].clone(), left_parameters[i].clone()))
         .collect();
-    let left_subquery = left_subquery.subst(&left_parameters_map);
-    let left_domain = domain.clone().subst(&left_parameters_map);
+    let mut left_domain = domain.clone();
+    left_subquery.subst(&left_parameters_map);
+    left_domain.subst(&left_parameters_map);
     // Add natural-join on domain to the top join predicates.
     let mut join_predicates = join.predicates().clone();
     for i in 0..parameters.len() {
@@ -264,8 +272,8 @@ fn push_both(
         left: Box::new(LogicalDependentJoin {
             parameters: left_parameters,
             predicates: vec![],
-            subquery: Box::new(left_subquery),
-            domain: Box::new(left_domain),
+            subquery: left_subquery,
+            domain: left_domain,
         }),
         right: Box::new(LogicalDependentJoin {
             parameters,

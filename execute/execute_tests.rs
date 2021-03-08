@@ -6,7 +6,7 @@ use crate::test_suite::*;
 #[test]
 fn test_join_using() {
     let mut t = TestSuite::new(Storage::default(), Statistics::default());
-    t.ok("with t1 as (select 1 as a), t2 as (select 1 as a) select * from t1 join t2 using (a)");
+    t.ok("select * from (select 1 as a) as t1 join (select 1 as a) as t2 using (a)");
     t.finish("examples/execute_join_using.testlog");
 }
 

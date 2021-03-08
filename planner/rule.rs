@@ -226,7 +226,7 @@ impl Rule {
             Rule::InsertBroadcast | Rule::InsertExchange => binds.push(Leaf {
                 gid: ss[mid].parent.0,
             }),
-            _ => binds.push(ss[mid].expr.clone().map(|group| group)),
+            _ => binds.push(ss[mid].expr.clone()),
         }
         binds
     }
