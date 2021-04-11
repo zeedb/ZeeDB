@@ -30,18 +30,20 @@ Filter (Less $subquery2.id 100) (Greater $subquery2.id 10)
 
 # pull_filter_through_aggregate
 ok: explain select store_id, (select count(*) from customer where customer.store_id = store.store_id) from store
-plan                                                                                                                                                                                                                                                                                                                                              
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col2:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
-		Exchange
-			Aggregate store_id $aggregate.$agg1:(Count $star)
-				Exchange
-					Map $star:1 store_id
-						Filter (Not (IsNull customer.store_id))
-							Map store_id:customer.store_id, ..
-								SeqScan customer
-		Exchange
-			SeqScan store
+		Exchange hash
+			Map hash:(Hash store_id), ..
+				Aggregate store_id $aggregate.$agg1:(Count $star)
+					Exchange ?
+						Map $star:1 store_id
+							Filter (Not (IsNull customer.store_id))
+								Map store_id:customer.store_id, ..
+									SeqScan customer
+		Exchange hash
+			Map hash:(Hash store.store_id), ..
+				SeqScan store
 
 # push_filter_through_project
 ok: explain select * from (select *, customer_id + 1 from customer) where customer_id = 1

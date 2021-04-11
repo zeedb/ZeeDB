@@ -24,13 +24,15 @@ Insert person
 
 # update_equi_join
 ok: explain update customer set account_number = account_number + 1 from person where customer.person_id = person.person_id
-plan                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                         
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:(AddInt64 customer.account_number 1) customer.modified_date $tid
 			HashJoin Inner (Equal customer.person_id person.person_id)
-				Exchange
-					SeqScan customer
-				Exchange
-					SeqScan person
+				Exchange hash
+					Map hash:(Hash customer.person_id), ..
+						SeqScan customer
+				Exchange hash
+					Map hash:(Hash person.person_id), ..
+						SeqScan person
 
