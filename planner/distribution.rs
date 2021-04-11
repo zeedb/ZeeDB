@@ -8,6 +8,16 @@ pub fn set_hash_columns(mut expr: Expr) -> Expr {
                 top_down_rewrite(input, None);
             }
             (
+                Aggregate {
+                    partition_by: Some(partition_by),
+                    input,
+                    ..
+                },
+                _,
+            ) => {
+                top_down_rewrite(input, Some(partition_by.clone()));
+            }
+            (
                 HashJoin {
                     broadcast: false,
                     partition_left,

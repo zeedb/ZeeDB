@@ -277,6 +277,7 @@ impl Node {
                 group_by,
                 aggregate,
                 input,
+                ..
             } => Node::Aggregate {
                 finished: false,
                 group_by,

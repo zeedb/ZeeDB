@@ -208,6 +208,7 @@ pub enum Expr {
         columns: Vec<Column>,
     },
     Aggregate {
+        partition_by: Option<Column>,
         group_by: Vec<Column>,
         aggregate: Vec<AggregateExpr>,
         input: Box<Expr>,

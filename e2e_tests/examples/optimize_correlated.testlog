@@ -134,17 +134,18 @@ Map $query.$col1:store.name
 
 # single_equi_join_group_by
 ok: explain select store_id, (select count(1) from customer where customer.store_id = store.store_id) as customers from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                             
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
 Map $query.customers:$aggregate.$agg1 store.store_id
 	HashJoin Single (Is store.store_id store_id)
 		Exchange hash
 			Map hash:(Hash store_id), ..
 				Aggregate store_id $aggregate.$agg1:(Count $count)
-					Exchange ?
-						Map $count:1 store_id
-							Filter (Not (IsNull customer.store_id))
-								Map store_id:customer.store_id, ..
-									SeqScan customer
+					Exchange hash
+						Map hash:(Hash store_id), ..
+							Map $count:1 store_id
+								Filter (Not (IsNull customer.store_id))
+									Map store_id:customer.store_id, ..
+										SeqScan customer
 		Exchange hash
 			Map hash:(Hash store.store_id), ..
 				SeqScan store
@@ -168,7 +169,7 @@ Map $query.$col1:1
 
 # semi_join_anti_join
 ok: explain select 1 from customer where exists (select 1 from person where person.person_id = customer.person_id) and not exists (select 1 from store where store.store_id = customer.store_id and custo...
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map $query.$col1:1
 	HashJoin Anti (Is customer.store_id store_id) (Is customer.modified_date modified_date)
 		Exchange hash
@@ -180,17 +181,18 @@ Map $query.$col1:1
 								SeqScan store
 						Map hash:(Hash store_id), ..
 							Aggregate store_id modified_date
-								Exchange ?
-									HashJoin Mark $exists (Is customer.person_id person_id)
-										Exchange hash
-											Map hash:(Hash person_id), ..
-												Map $expr_subquery.$col1:1 person_id
-													Filter (Not (IsNull person.person_id))
-														Map person_id:person.person_id, ..
-															SeqScan person
-										Exchange hash
-											Map hash:(Hash customer.person_id), ..
-												SeqScan customer
+								Exchange hash
+									Map hash:(Hash store_id modified_date), ..
+										HashJoin Mark $exists (Is customer.person_id person_id)
+											Exchange hash
+												Map hash:(Hash person_id), ..
+													Map $expr_subquery.$col1:1 person_id
+														Filter (Not (IsNull person.person_id))
+															Map person_id:person.person_id, ..
+																SeqScan person
+											Exchange hash
+												Map hash:(Hash customer.person_id), ..
+													SeqScan customer
 		Exchange hash
 			Map hash:(Hash customer.store_id customer.modified_date), ..
 				Map $exists:true $xmax $xmin customer.modified_date customer.person_id customer.store_id
@@ -254,42 +256,45 @@ Map $query.$col1:store.name $query.$col2:person.first_name
 
 # semi_join_to_group_by
 ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Equal customer.customer_id $aggregate.$agg1)
 		Exchange hash
 			Map hash:(Hash store_id $aggregate.$agg1), ..
 				Map $aggregate.$agg1 store_id
 					Aggregate $groupby.account_number store_id $aggregate.$agg1:(Max $max)
-						Exchange ?
-							Map $groupby.account_number:customer.account_number $max:customer.customer_id store_id
-								Filter (Not (IsNull customer.store_id))
-									Map store_id:customer.store_id, ..
-										SeqScan customer
+						Exchange hash
+							Map hash:(Hash $groupby.account_number store_id), ..
+								Map $groupby.account_number:customer.account_number $max:customer.customer_id store_id
+									Filter (Not (IsNull customer.store_id))
+										Map store_id:customer.store_id, ..
+											SeqScan customer
 		Exchange hash
 			Map hash:(Hash customer.store_id customer.customer_id), ..
 				SeqScan customer
 
 # semi_join_to_group_by_correlated_column
 ok: explain select 1 from customer c1 where c1.customer_id in (select max(c2.customer_id) from customer c2 where c1.store_id = c2.store_id group by c2.account_number, c1.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
 Map $query.$col1:1
 	HashJoin Semi (Is customer.store_id store_id) (Is customer.account_number account_number) (Equal customer.customer_id $aggregate.$agg1)
 		Exchange hash
 			Map hash:(Hash store_id account_number $aggregate.$agg1), ..
 				Map $aggregate.$agg1 store_id account_number
 					Aggregate $groupby.account_number $groupby.account_number store_id account_number $aggregate.$agg1:(Max $max)
-						Exchange ?
-							Map $groupby.account_number:customer.account_number $groupby.account_number:account_number $max:customer.customer_id store_id account_number
-								HashJoin Inner (Equal store_id customer.store_id)
-									Exchange hash
-										Map hash:(Hash store_id), ..
-											Aggregate store_id account_number
-												Exchange ?
-													SeqScan customer
-									Exchange hash
-										Map hash:(Hash customer.store_id), ..
-											SeqScan customer
+						Exchange hash
+							Map hash:(Hash $groupby.account_number $groupby.account_number store_id account_number), ..
+								Map $groupby.account_number:customer.account_number $groupby.account_number:account_number $max:customer.customer_id store_id account_number
+									HashJoin Inner (Equal store_id customer.store_id)
+										Exchange hash
+											Map hash:(Hash store_id), ..
+												Aggregate store_id account_number
+													Exchange hash
+														Map hash:(Hash store_id account_number), ..
+															SeqScan customer
+										Exchange hash
+											Map hash:(Hash customer.store_id), ..
+												SeqScan customer
 		Exchange hash
 			Map hash:(Hash customer.store_id customer.account_number customer.customer_id), ..
 				SeqScan customer
@@ -311,49 +316,52 @@ Map $query.$col1:1
 
 # single_join_with_condition
 ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and store.name like 'A%') from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id) (Is store.name name)
 		Exchange hash
 			Map hash:(Hash store_id name), ..
 				Aggregate store_id name $aggregate.$agg1:(Max $max)
-					Exchange ?
-						Map $max:customer.modified_date store_id name
-							HashJoin Inner (Equal customer.store_id store_id)
-								Exchange hash
-									Map hash:(Hash store_id), ..
-										Aggregate store_id name
-											Exchange ?
-												Filter* (StringLike name "A%")
-													SeqScan store
-								Exchange hash
-									Map hash:(Hash customer.store_id), ..
-										SeqScan customer
+					Exchange hash
+						Map hash:(Hash store_id name), ..
+							Map $max:customer.modified_date store_id name
+								HashJoin Inner (Equal customer.store_id store_id)
+									Exchange hash
+										Map hash:(Hash store_id), ..
+											Aggregate store_id name
+												Exchange hash
+													Map hash:(Hash store_id name), ..
+														Filter* (StringLike name "A%")
+															SeqScan store
+									Exchange hash
+										Map hash:(Hash customer.store_id), ..
+											SeqScan customer
 		Exchange hash
 			Map hash:(Hash store.store_id store.name), ..
 				SeqScan store
 
 # single_join_with_condition_and_group_by
 ok: explain select (select max(modified_date) from customer where customer.store_id = store.store_id and customer.account_number > 100) from store
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Map $query.$col1:$aggregate.$agg1
 	HashJoin Single (Is store.store_id store_id)
 		Exchange hash
 			Map hash:(Hash store_id), ..
 				Aggregate store_id $aggregate.$agg1:(Max $max)
-					Exchange ?
-						Map $max:customer.modified_date store_id
-							Filter (Not (IsNull customer.store_id))
-								Map store_id:customer.store_id, ..
-									Filter* (Greater customer.account_number 100)
-										SeqScan customer
+					Exchange hash
+						Map hash:(Hash store_id), ..
+							Map $max:customer.modified_date store_id
+								Filter (Not (IsNull customer.store_id))
+									Map store_id:customer.store_id, ..
+										Filter* (Greater customer.account_number 100)
+											SeqScan customer
 		Exchange hash
 			Map hash:(Hash store.store_id), ..
 				SeqScan store
 
 # semi_join_in_where_clause
 ok: explain select customer_id from customer c1, store where c1.store_id = store.store_id and c1.modified_date in (select modified_date from customer c2 where c2.account_number > c1.account_number)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 Map customer.customer_id
 	HashJoin Semi (Is customer.account_number account_number) (Equal customer.modified_date customer.modified_date)
 		Exchange hash
@@ -363,11 +371,12 @@ Map customer.customer_id
 						Broadcast
 							SeqScan customer
 						Aggregate account_number
-							Exchange ?
-								NestedLoop Inner
-									Broadcast
-										SeqScan store
-									SeqScan customer
+							Exchange hash
+								Map hash:(Hash account_number), ..
+									NestedLoop Inner
+										Broadcast
+											SeqScan store
+										SeqScan customer
 		Exchange hash
 			Map hash:(Hash customer.account_number customer.modified_date), ..
 				HashJoin Inner (Equal customer.store_id store.store_id)
@@ -410,7 +419,7 @@ Limit 10 0
 
 # update_set_table_free_single_join
 ok: explain update person set first_name = (select last_name) where person_id = 1
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              
 Insert person
 	Delete person
 		Map person.person_id person.first_name:$expr_subquery.last_name person.last_name person.modified_date $tid
@@ -419,10 +428,11 @@ Insert person
 					Map hash:(Hash last_name), ..
 						Map $expr_subquery.last_name:last_name last_name
 							Aggregate last_name
-								Exchange ?
-									IndexScan person(person_id:1)
-											Broadcast
-												TableFreeScan
+								Exchange hash
+									Map hash:(Hash last_name), ..
+										IndexScan person(person_id:1)
+												Broadcast
+													TableFreeScan
 				Exchange hash
 					Map hash:(Hash person.last_name), ..
 						IndexScan person(person_id:1)
@@ -431,7 +441,7 @@ Insert person
 
 # update_set_redundant_single_join
 ok: explain update customer set account_number = (select person.person_id) from person where customer.person_id = person.person_id
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            
 Insert customer
 	Delete customer
 		Map customer.customer_id customer.person_id customer.store_id customer.account_number:$expr_subquery.person_id customer.modified_date $tid
@@ -440,14 +450,15 @@ Insert customer
 					Map hash:(Hash person_id), ..
 						Map $expr_subquery.person_id:person_id person_id
 							Aggregate person_id
-								Exchange ?
-									HashJoin Inner (Equal customer.person_id person_id)
-										Exchange hash
-											Map hash:(Hash customer.person_id), ..
-												SeqScan customer
-										Exchange hash
-											Map hash:(Hash person_id), ..
-												SeqScan person
+								Exchange hash
+									Map hash:(Hash person_id), ..
+										HashJoin Inner (Equal customer.person_id person_id)
+											Exchange hash
+												Map hash:(Hash customer.person_id), ..
+													SeqScan customer
+											Exchange hash
+												Map hash:(Hash person_id), ..
+													SeqScan person
 				Exchange hash
 					Map hash:(Hash person.person_id), ..
 						HashJoin Inner (Equal customer.person_id person.person_id)

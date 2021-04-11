@@ -60,15 +60,16 @@ Map $query.$col1:1
 
 # remove_single_join_column
 ok: explain select (select customer_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                 
+plan                                                                                                                                                                                                                                                                                                                                                                                                            
 Map $query.$col1:$expr_subquery.customer_id
 	HashJoin Single (Is customer.customer_id customer_id)
 		Exchange hash
 			Map hash:(Hash customer_id), ..
 				Map $expr_subquery.customer_id:customer_id customer_id
 					Aggregate customer_id
-						Exchange ?
-							SeqScan customer
+						Exchange hash
+							Map hash:(Hash customer_id), ..
+								SeqScan customer
 		Exchange hash
 			Map hash:(Hash customer.customer_id), ..
 				SeqScan customer

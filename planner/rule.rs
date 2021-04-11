@@ -444,11 +444,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(Aggregate {
-                        group_by,
-                        aggregate,
-                        input,
-                    });
+                    return Some(to_aggregate(group_by, aggregate, input));
                 }
             }
             Rule::LogicalLimitToLimit => {
@@ -593,6 +589,26 @@ impl Rule {
             Rule::LogicalExplainToExplain,
             Rule::LogicalScriptToScript,
         ]
+    }
+}
+
+fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box<Expr>) -> Expr {
+    if group_by.is_empty() {
+        Aggregate {
+            partition_by: None,
+            group_by,
+            aggregate,
+            input,
+        }
+    } else {
+        let partition_by = group_by.iter().map(|c| Scalar::Column(c.clone())).collect();
+        let (partition_by, input) = create_hash_column(partition_by, *input);
+        Aggregate {
+            partition_by: Some(partition_by),
+            group_by,
+            aggregate,
+            input: Box::new(input),
+        }
     }
 }
 

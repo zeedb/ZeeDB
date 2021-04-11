@@ -15,16 +15,18 @@ Aggregate $aggregate.$agg1:(Count Distinct $count) $aggregate.$agg2:(Count Disti
 			SeqScan integers
 
 ok: explain select div(x, 2), count(distinct x) from integers group by 1
-plan                                                                                                                                                            
+plan                                                                                                                                                                                                      
 Aggregate $groupby.$col1 $aggregate.$agg1:(Count Distinct $count)
-	Exchange ?
-		Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x
-			SeqScan integers
+	Exchange hash
+		Map hash:(Hash $groupby.$col1), ..
+			Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x
+				SeqScan integers
 
 ok: explain select div(x, 2), count(distinct x), count(distinct div(x, 2)) from integers group by 1
-plan                                                                                                                                                                                                                                    
+plan                                                                                                                                                                                                                                                                              
 Aggregate $groupby.$col1 $aggregate.$agg1:(Count Distinct $count) $aggregate.$agg2:(Count Distinct $count)
-	Exchange ?
-		Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x $count:(DivInt64 integers.x 2)
-			SeqScan integers
+	Exchange hash
+		Map hash:(Hash $groupby.$col1), ..
+			Map $groupby.$col1:(DivInt64 integers.x 2) $count:integers.x $count:(DivInt64 integers.x 2)
+				SeqScan integers
 

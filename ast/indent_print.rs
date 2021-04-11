@@ -141,6 +141,7 @@ impl IndentPrint for Expr {
                 group_by,
                 aggregate,
                 input,
+                ..
             } => {
                 write!(f, "{}", self.name())?;
                 for column in group_by {

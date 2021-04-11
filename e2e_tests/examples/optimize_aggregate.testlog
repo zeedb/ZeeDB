@@ -20,11 +20,12 @@ Aggregate $aggregate.$agg1:(Count Distinct $count) $aggregate.$agg2:(Sum Distinc
 
 # group_by
 ok: explain select store_id from customer group by 1
-plan                                                                                                 
+plan                                                                                                                                              
 Aggregate $groupby.store_id
-	Exchange ?
-		Map $groupby.store_id:customer.store_id
-			SeqScan customer
+	Exchange hash
+		Map hash:(Hash $groupby.store_id), ..
+			Map $groupby.store_id:customer.store_id
+				SeqScan customer
 
 # avg
 ok: explain select avg(store_id) from customer
