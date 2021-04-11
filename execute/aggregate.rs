@@ -14,7 +14,7 @@ pub struct GroupByAggregate {
 
 struct Batch {
     group_by: Vec<AnyArray>,
-    hash: U64Array,
+    hash: I64Array,
 }
 
 struct Key {
@@ -51,9 +51,9 @@ impl GroupByAggregate {
         let len = group_by.first().or(aggregate.first()).unwrap().len();
         // Add batch to the universe of tuples that we know about.
         let hash = if group_by.is_empty() {
-            U64Array::zeros(len)
+            I64Array::zeros(len)
         } else {
-            U64Array::hash_all(&group_by)
+            I64Array::hash_all(&group_by)
         };
         self.group_by_batches.push(Batch { group_by, hash });
         // Add each new tuple to the hash table.
@@ -153,10 +153,12 @@ impl GroupByAggregate {
     }
 
     fn hash(&self, row: &Key) -> u64 {
-        self.group_by_batches[row.batch as usize]
+        let bytes = self.group_by_batches[row.batch as usize]
             .hash
             .get(row.tuple as usize)
             .unwrap()
+            .to_ne_bytes();
+        u64::from_ne_bytes(bytes)
     }
 }
 

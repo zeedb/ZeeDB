@@ -202,8 +202,16 @@ impl IndentPrint for Expr {
                 input.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::Exchange { input } => {
-                write!(f, "{}", self.name())?;
+            Expr::Exchange { hash_column, input } => {
+                write!(
+                    f,
+                    "{} {}",
+                    self.name(),
+                    match hash_column {
+                        Some(name) => &name.name,
+                        None => "?",
+                    }
+                )?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)?;
                 Ok(())

@@ -1,4 +1,4 @@
-use crate::{AnyArray, Array, Bitmask, BoolArray};
+use crate::{Array, Bitmask, BoolArray};
 
 macro_rules! array_like {
     ($T:ident, $t:ty) => {
@@ -106,7 +106,6 @@ macro_rules! array_like {
 }
 
 array_like!(I32Array, i32);
-array_like!(U64Array, u64);
 
 impl I32Array {
     pub fn conflict(&self, mask: &BoolArray, len: usize) -> bool {
@@ -127,15 +126,5 @@ impl I32Array {
             }
         }
         false
-    }
-}
-
-impl U64Array {
-    pub fn hash_all(columns: &Vec<AnyArray>) -> Self {
-        let mut seeds = U64Array::zeros(columns[0].len());
-        for column in columns {
-            column.hash(&mut seeds);
-        }
-        seeds
     }
 }

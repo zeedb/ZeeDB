@@ -720,7 +720,7 @@ fn rewrite_logical_rewrite(expr: Expr, txn: i64, context: &Context) -> Result<Ex
     match expr {
         LogicalRewrite { sql } => {
             let parser = &context[PARSER_KEY];
-            let expr = parser.analyze(&sql, catalog::ROOT_CATALOG_ID, txn, vec![], context);
+            let expr = parser.analyze(&sql, catalog_types::ROOT_CATALOG_ID, txn, vec![], context);
             let expr = rewrite(expr, txn, context);
             Ok(expr)
         }

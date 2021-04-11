@@ -1,7 +1,0 @@
-select customer.customer_id, store.store_id 
-from customer, store
-
-LogicalMap customer.customer_id store.store_id
-	LogicalJoin Inner
-		LogicalGet customer
-		LogicalGet store

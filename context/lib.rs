@@ -1,4 +1,6 @@
-use std::{any::Any, collections::HashMap, marker::PhantomData, ops::Index};
+use std::{any::Any, collections::HashMap, marker::PhantomData, ops::Index, sync::Arc};
+
+use grpcio::Environment;
 
 /// Context holds references to shared components that can call each other.
 /// It allows us to avoid passing a zillion arguments to every top-level function.
@@ -46,3 +48,9 @@ impl<T: 'static + Send + Sync> Index<ContextKey<T>> for Context {
             .expect(key.key)
     }
 }
+
+/// ID of the current worker. Dense integers in range `0..context[WORKER_COUNT_KEY]`.
+pub const WORKER_ID_KEY: ContextKey<i32> = ContextKey::new("WORKER_ID_KEY");
+
+/// Number of workers in the current cluster.
+pub const WORKER_COUNT_KEY: ContextKey<i32> = ContextKey::new("WORKER_COUNT_KEY");

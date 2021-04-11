@@ -1,3 +1,0 @@
-create index first_name_index on person (first_name)
-
-LogicalCreateIndex first_name_index person first_name

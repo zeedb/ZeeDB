@@ -51,6 +51,7 @@ fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyAr
         F::ConcatString(varargs) => {
             StringArray::concat(varargs.iter().map(|a| e(a).as_string()).collect()).as_any()
         }
+        F::Hash(varargs) => AnyArray::I64(I64Array::hash_all(&varargs.iter().map(e).collect())),
         F::Greatest(varargs) => AnyArray::greatest(varargs.iter().map(e).collect()),
         F::Least(varargs) => AnyArray::least(varargs.iter().map(e).collect()),
         F::AbsDouble(a) => unary(&e(a).as_f64(), f64::abs),

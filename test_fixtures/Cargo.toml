@@ -8,5 +8,4 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-catalog = { path = "../catalog" }
 zetasql = { path = "../zetasql" }

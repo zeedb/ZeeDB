@@ -307,428 +307,1058 @@ pub struct LanguageOptionsRequest {
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
 pub struct AnalyzerOptionsRequest {}
-#[doc = r" Generated client implementations."]
-pub mod zeta_sql_local_service_client {
-    #![allow(unused_variables, dead_code, missing_docs)]
-    use tonic::codegen::*;
-    #[doc = " Note that *all* service RPCs are locked down to only be authorized by"]
-    #[doc = " the user that started the ZetaSql service.  This disallows random users"]
-    #[doc = " from sending requests to this service to be executed on behalf of the"]
-    #[doc = " user that started the service.  Given that this service does not currently"]
-    #[doc = " provide access to external data, this lockdown is precautionary and"]
-    #[doc = " conservative.  But the lockdown will be necessary once the reference"]
-    #[doc = " implementation is extended to execute full queries over external data,"]
-    #[doc = " since we cannot allow random users to run queries over data accessible by"]
-    #[doc = " the (different) user that started the ZetaSql service."]
-    pub struct ZetaSqlLocalServiceClient<T> {
-        inner: tonic::client::Grpc<T>,
-    }
-    impl ZetaSqlLocalServiceClient<tonic::transport::Channel> {
-        #[doc = r" Attempt to create a new client by connecting to a given endpoint."]
-        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
-        where
-            D: std::convert::TryInto<tonic::transport::Endpoint>,
-            D::Error: Into<StdError>,
-        {
-            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
-            Ok(Self::new(conn))
+const METHOD_ZETA_SQL_LOCAL_SERVICE_PREPARE: ::grpcio::Method<PrepareRequest, PrepareResponse> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/Prepare",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE: ::grpcio::Method<EvaluateRequest, EvaluateResponse> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/Evaluate",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE_STREAM: ::grpcio::Method<
+    EvaluateRequestBatch,
+    EvaluateResponseBatch,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Duplex,
+    name: "/zetasql.local_service.ZetaSqlLocalService/EvaluateStream",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_UNPREPARE: ::grpcio::Method<UnprepareRequest, ()> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/Unprepare",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_GET_TABLE_FROM_PROTO: ::grpcio::Method<
+    TableFromProtoRequest,
+    super::SimpleTableProto,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/GetTableFromProto",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_CATALOG: ::grpcio::Method<
+    RegisterCatalogRequest,
+    RegisterResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/RegisterCatalog",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_PARSE_RESUME_LOCATION: ::grpcio::Method<
+    super::ParseResumeLocationProto,
+    RegisterResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/RegisterParseResumeLocation",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_ANALYZE: ::grpcio::Method<AnalyzeRequest, AnalyzeResponse> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/Analyze",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_BUILD_SQL: ::grpcio::Method<BuildSqlRequest, BuildSqlResponse> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/BuildSql",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_STATEMENT: ::grpcio::Method<
+    ExtractTableNamesFromStatementRequest,
+    ExtractTableNamesFromStatementResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/ExtractTableNamesFromStatement",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_NEXT_STATEMENT: ::grpcio::Method<
+    ExtractTableNamesFromNextStatementRequest,
+    ExtractTableNamesFromNextStatementResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/ExtractTableNamesFromNextStatement",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_FORMAT_SQL: ::grpcio::Method<
+    FormatSqlRequest,
+    FormatSqlResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/FormatSql",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_LENIENT_FORMAT_SQL: ::grpcio::Method<
+    FormatSqlRequest,
+    FormatSqlResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/LenientFormatSql",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_CATALOG: ::grpcio::Method<UnregisterRequest, ()> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/UnregisterCatalog",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_PARSE_RESUME_LOCATION: ::grpcio::Method<
+    UnregisterRequest,
+    (),
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/UnregisterParseResumeLocation",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_GET_BUILTIN_FUNCTIONS: ::grpcio::Method<
+    super::ZetaSqlBuiltinFunctionOptionsProto,
+    GetBuiltinFunctionsResponse,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/GetBuiltinFunctions",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_ADD_SIMPLE_TABLE: ::grpcio::Method<AddSimpleTableRequest, ()> =
+    ::grpcio::Method {
+        ty: ::grpcio::MethodType::Unary,
+        name: "/zetasql.local_service.ZetaSqlLocalService/AddSimpleTable",
+        req_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+        resp_mar: ::grpcio::Marshaller {
+            ser: ::grpcio::pr_ser,
+            de: ::grpcio::pr_de,
+        },
+    };
+const METHOD_ZETA_SQL_LOCAL_SERVICE_GET_LANGUAGE_OPTIONS: ::grpcio::Method<
+    LanguageOptionsRequest,
+    super::LanguageOptionsProto,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/GetLanguageOptions",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+const METHOD_ZETA_SQL_LOCAL_SERVICE_GET_ANALYZER_OPTIONS: ::grpcio::Method<
+    AnalyzerOptionsRequest,
+    super::AnalyzerOptionsProto,
+> = ::grpcio::Method {
+    ty: ::grpcio::MethodType::Unary,
+    name: "/zetasql.local_service.ZetaSqlLocalService/GetAnalyzerOptions",
+    req_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+    resp_mar: ::grpcio::Marshaller {
+        ser: ::grpcio::pr_ser,
+        de: ::grpcio::pr_de,
+    },
+};
+#[derive(Clone)]
+pub struct ZetaSqlLocalServiceClient {
+    client: ::grpcio::Client,
+}
+impl ZetaSqlLocalServiceClient {
+    pub fn new(channel: ::grpcio::Channel) -> Self {
+        ZetaSqlLocalServiceClient {
+            client: ::grpcio::Client::new(channel),
         }
     }
-    impl<T> ZetaSqlLocalServiceClient<T>
-    where
-        T: tonic::client::GrpcService<tonic::body::BoxBody>,
-        T::ResponseBody: Body + HttpBody + Send + 'static,
-        T::Error: Into<StdError>,
-        <T::ResponseBody as HttpBody>::Error: Into<StdError> + Send,
+    pub fn prepare_opt(
+        &self,
+        req: &PrepareRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<PrepareResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_PREPARE, req, opt)
+    }
+    pub fn prepare(&self, req: &PrepareRequest) -> ::grpcio::Result<PrepareResponse> {
+        self.prepare_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn prepare_async_opt(
+        &self,
+        req: &PrepareRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<PrepareResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_PREPARE, req, opt)
+    }
+    pub fn prepare_async(
+        &self,
+        req: &PrepareRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<PrepareResponse>> {
+        self.prepare_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn evaluate_opt(
+        &self,
+        req: &EvaluateRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<EvaluateResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE, req, opt)
+    }
+    pub fn evaluate(&self, req: &EvaluateRequest) -> ::grpcio::Result<EvaluateResponse> {
+        self.evaluate_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn evaluate_async_opt(
+        &self,
+        req: &EvaluateRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<EvaluateResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE, req, opt)
+    }
+    pub fn evaluate_async(
+        &self,
+        req: &EvaluateRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<EvaluateResponse>> {
+        self.evaluate_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn evaluate_stream_opt(
+        &self,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<(
+        ::grpcio::ClientDuplexSender<EvaluateRequestBatch>,
+        ::grpcio::ClientDuplexReceiver<EvaluateResponseBatch>,
+    )> {
+        self.client
+            .duplex_streaming(&METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE_STREAM, opt)
+    }
+    pub fn evaluate_stream(
+        &self,
+    ) -> ::grpcio::Result<(
+        ::grpcio::ClientDuplexSender<EvaluateRequestBatch>,
+        ::grpcio::ClientDuplexReceiver<EvaluateResponseBatch>,
+    )> {
+        self.evaluate_stream_opt(::grpcio::CallOption::default())
+    }
+    pub fn unprepare_opt(
+        &self,
+        req: &UnprepareRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<()> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_UNPREPARE, req, opt)
+    }
+    pub fn unprepare(&self, req: &UnprepareRequest) -> ::grpcio::Result<()> {
+        self.unprepare_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn unprepare_async_opt(
+        &self,
+        req: &UnprepareRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_UNPREPARE, req, opt)
+    }
+    pub fn unprepare_async(
+        &self,
+        req: &UnprepareRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.unprepare_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_table_from_proto_opt(
+        &self,
+        req: &TableFromProtoRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<super::SimpleTableProto> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_TABLE_FROM_PROTO,
+            req,
+            opt,
+        )
+    }
+    pub fn get_table_from_proto(
+        &self,
+        req: &TableFromProtoRequest,
+    ) -> ::grpcio::Result<super::SimpleTableProto> {
+        self.get_table_from_proto_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_table_from_proto_async_opt(
+        &self,
+        req: &TableFromProtoRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::SimpleTableProto>> {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_TABLE_FROM_PROTO,
+            req,
+            opt,
+        )
+    }
+    pub fn get_table_from_proto_async(
+        &self,
+        req: &TableFromProtoRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::SimpleTableProto>> {
+        self.get_table_from_proto_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn register_catalog_opt(
+        &self,
+        req: &RegisterCatalogRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<RegisterResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_CATALOG, req, opt)
+    }
+    pub fn register_catalog(
+        &self,
+        req: &RegisterCatalogRequest,
+    ) -> ::grpcio::Result<RegisterResponse> {
+        self.register_catalog_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn register_catalog_async_opt(
+        &self,
+        req: &RegisterCatalogRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<RegisterResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_CATALOG, req, opt)
+    }
+    pub fn register_catalog_async(
+        &self,
+        req: &RegisterCatalogRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<RegisterResponse>> {
+        self.register_catalog_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn register_parse_resume_location_opt(
+        &self,
+        req: &super::ParseResumeLocationProto,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<RegisterResponse> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_PARSE_RESUME_LOCATION,
+            req,
+            opt,
+        )
+    }
+    pub fn register_parse_resume_location(
+        &self,
+        req: &super::ParseResumeLocationProto,
+    ) -> ::grpcio::Result<RegisterResponse> {
+        self.register_parse_resume_location_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn register_parse_resume_location_async_opt(
+        &self,
+        req: &super::ParseResumeLocationProto,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<RegisterResponse>> {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_PARSE_RESUME_LOCATION,
+            req,
+            opt,
+        )
+    }
+    pub fn register_parse_resume_location_async(
+        &self,
+        req: &super::ParseResumeLocationProto,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<RegisterResponse>> {
+        self.register_parse_resume_location_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn analyze_opt(
+        &self,
+        req: &AnalyzeRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<AnalyzeResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_ANALYZE, req, opt)
+    }
+    pub fn analyze(&self, req: &AnalyzeRequest) -> ::grpcio::Result<AnalyzeResponse> {
+        self.analyze_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn analyze_async_opt(
+        &self,
+        req: &AnalyzeRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<AnalyzeResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_ANALYZE, req, opt)
+    }
+    pub fn analyze_async(
+        &self,
+        req: &AnalyzeRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<AnalyzeResponse>> {
+        self.analyze_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn build_sql_opt(
+        &self,
+        req: &BuildSqlRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<BuildSqlResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_BUILD_SQL, req, opt)
+    }
+    pub fn build_sql(&self, req: &BuildSqlRequest) -> ::grpcio::Result<BuildSqlResponse> {
+        self.build_sql_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn build_sql_async_opt(
+        &self,
+        req: &BuildSqlRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<BuildSqlResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_BUILD_SQL, req, opt)
+    }
+    pub fn build_sql_async(
+        &self,
+        req: &BuildSqlRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<BuildSqlResponse>> {
+        self.build_sql_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn extract_table_names_from_statement_opt(
+        &self,
+        req: &ExtractTableNamesFromStatementRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<ExtractTableNamesFromStatementResponse> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_STATEMENT,
+            req,
+            opt,
+        )
+    }
+    pub fn extract_table_names_from_statement(
+        &self,
+        req: &ExtractTableNamesFromStatementRequest,
+    ) -> ::grpcio::Result<ExtractTableNamesFromStatementResponse> {
+        self.extract_table_names_from_statement_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn extract_table_names_from_statement_async_opt(
+        &self,
+        req: &ExtractTableNamesFromStatementRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<ExtractTableNamesFromStatementResponse>>
     {
-        pub fn new(inner: T) -> Self {
-            let inner = tonic::client::Grpc::new(inner);
-            Self { inner }
-        }
-        pub fn with_interceptor(inner: T, interceptor: impl Into<tonic::Interceptor>) -> Self {
-            let inner = tonic::client::Grpc::with_interceptor(inner, interceptor);
-            Self { inner }
-        }
-        #[doc = " Prepare the sql expression in PrepareRequest with given columns and"]
-        #[doc = " parameters with zetasql::PreparedExpression and return the result"]
-        #[doc = " type as PrepareResponse. The prepared expression will be kept at server"]
-        #[doc = " side which can be referred to with the returned id."]
-        pub async fn prepare(
-            &mut self,
-            request: impl tonic::IntoRequest<super::PrepareRequest>,
-        ) -> Result<tonic::Response<super::PrepareResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/Prepare",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Evaluate the prepared expression in EvaluateRequest with given columns and"]
-        #[doc = " parameters with zetasql::PreparedExpression and return the result"]
-        #[doc = " and value as EvaluateResponse."]
-        pub async fn evaluate(
-            &mut self,
-            request: impl tonic::IntoRequest<super::EvaluateRequest>,
-        ) -> Result<tonic::Response<super::EvaluateResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/Evaluate",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Evaluate a Stream of prepared expression batches and return a stream of"]
-        #[doc = " result batches. Requests will be evaluated and returned in the same order"]
-        #[doc = " as received, but batches may be packed differently."]
-        pub async fn evaluate_stream(
-            &mut self,
-            request: impl tonic::IntoStreamingRequest<Message = super::EvaluateRequestBatch>,
-        ) -> Result<
-            tonic::Response<tonic::codec::Streaming<super::EvaluateResponseBatch>>,
-            tonic::Status,
-        > {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/EvaluateStream",
-            );
-            self.inner
-                .streaming(request.into_streaming_request(), path, codec)
-                .await
-        }
-        #[doc = " Cleanup the prepared expression kept at server side with given id."]
-        pub async fn unprepare(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UnprepareRequest>,
-        ) -> Result<tonic::Response<()>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/Unprepare",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Get a table schema from a proto."]
-        pub async fn get_table_from_proto(
-            &mut self,
-            request: impl tonic::IntoRequest<super::TableFromProtoRequest>,
-        ) -> Result<tonic::Response<super::super::SimpleTableProto>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/GetTableFromProto",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Register a catalog at server side so that it can be reused."]
-        pub async fn register_catalog(
-            &mut self,
-            request: impl tonic::IntoRequest<super::RegisterCatalogRequest>,
-        ) -> Result<tonic::Response<super::RegisterResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/RegisterCatalog",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Register a parse resume location"]
-        pub async fn register_parse_resume_location(
-            &mut self,
-            request: impl tonic::IntoRequest<super::super::ParseResumeLocationProto>,
-        ) -> Result<tonic::Response<super::RegisterResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/RegisterParseResumeLocation",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Analyze a SQL statement, return the resolved AST and an optional byte"]
-        #[doc = " position if end of input is not yet reached."]
-        pub async fn analyze(
-            &mut self,
-            request: impl tonic::IntoRequest<super::AnalyzeRequest>,
-        ) -> Result<tonic::Response<super::AnalyzeResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/Analyze",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Build a SQL statement or expression from a resolved AST."]
-        pub async fn build_sql(
-            &mut self,
-            request: impl tonic::IntoRequest<super::BuildSqlRequest>,
-        ) -> Result<tonic::Response<super::BuildSqlResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/BuildSql",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Validate statement and extract table names."]
-        pub async fn extract_table_names_from_statement(
-            &mut self,
-            request: impl tonic::IntoRequest<super::ExtractTableNamesFromStatementRequest>,
-        ) -> Result<tonic::Response<super::ExtractTableNamesFromStatementResponse>, tonic::Status>
-        {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/ExtractTableNamesFromStatement",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Validate statement, return table names and a byte offset of the next"]
-        #[doc = " statement."]
-        #[doc = ""]
-        #[doc = " Statements are separated by semicolons. A final semicolon is not required"]
-        #[doc = " on the last statement. Whitespace between statements is ignored. Whitespace"]
-        #[doc = " after that last semicolon is treated as a separate empty statement and"]
-        #[doc = " would cause a parse error."]
-        #[doc = ""]
-        #[doc = " Full text passed to this method does not need to be syntactically valid;"]
-        #[doc = " only the current statement pointed by parse_resume_location should be"]
-        #[doc = " parseable."]
-        #[doc = ""]
-        #[doc = " Passing incorrect parse_resume_position (negative or pointing outside"]
-        #[doc = " input data) would result in a generic::internal error."]
-        #[doc = ""]
-        #[doc = " If language options are not provided, the parser would use a default"]
-        #[doc = " LanguageOptions object. Refer to the LanguageOptions class definition"]
-        #[doc = " for the exact implementation details."]
-        #[doc = ""]
-        #[doc = " Client can detect that there's no more SQL statements to parse"]
-        #[doc = " by comparing this byte offset to the overall input length"]
-        #[doc = " (similar to Analyze method)"]
-        #[doc = ""]
-        #[doc = " After a parse error, parse_resume_location is not available; it's up"]
-        #[doc = " to client to try and recover from parse errors."]
-        #[doc = ""]
-        #[doc = " Unsupported statements (e.g. SET statements from F1 dialect) are treated"]
-        #[doc = " as parse errors."]
-        #[doc = ""]
-        #[doc = " Note: statements are handled by ParseNextStatement function."]
-        #[doc = " Documentation on that function is the source of truth on the behavior."]
-        #[doc = ""]
-        pub async fn extract_table_names_from_next_statement(
-            &mut self,
-            request: impl tonic::IntoRequest<super::ExtractTableNamesFromNextStatementRequest>,
-        ) -> Result<tonic::Response<super::ExtractTableNamesFromNextStatementResponse>, tonic::Status>
-        {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/ExtractTableNamesFromNextStatement",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Format a SQL statement (see also (broken link))"]
-        pub async fn format_sql(
-            &mut self,
-            request: impl tonic::IntoRequest<super::FormatSqlRequest>,
-        ) -> Result<tonic::Response<super::FormatSqlResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/FormatSql",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Format a SQL statement using the new lenient_formatter.h"]
-        pub async fn lenient_format_sql(
-            &mut self,
-            request: impl tonic::IntoRequest<super::FormatSqlRequest>,
-        ) -> Result<tonic::Response<super::FormatSqlResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/LenientFormatSql",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Cleanup a registered catalog."]
-        pub async fn unregister_catalog(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UnregisterRequest>,
-        ) -> Result<tonic::Response<()>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/UnregisterCatalog",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Cleanup a registered parse resume location."]
-        pub async fn unregister_parse_resume_location(
-            &mut self,
-            request: impl tonic::IntoRequest<super::UnregisterRequest>,
-        ) -> Result<tonic::Response<()>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/UnregisterParseResumeLocation",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Get ZetaSQL builtin functions specified by given options."]
-        pub async fn get_builtin_functions(
-            &mut self,
-            request: impl tonic::IntoRequest<super::super::ZetaSqlBuiltinFunctionOptionsProto>,
-        ) -> Result<tonic::Response<super::GetBuiltinFunctionsResponse>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/GetBuiltinFunctions",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Add SimpleTable"]
-        pub async fn add_simple_table(
-            &mut self,
-            request: impl tonic::IntoRequest<super::AddSimpleTableRequest>,
-        ) -> Result<tonic::Response<()>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/AddSimpleTable",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Gets ZetaSQL lanauge options."]
-        pub async fn get_language_options(
-            &mut self,
-            request: impl tonic::IntoRequest<super::LanguageOptionsRequest>,
-        ) -> Result<tonic::Response<super::super::LanguageOptionsProto>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/GetLanguageOptions",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
-        #[doc = " Gets ZetaSQL analyzer options."]
-        pub async fn get_analyzer_options(
-            &mut self,
-            request: impl tonic::IntoRequest<super::AnalyzerOptionsRequest>,
-        ) -> Result<tonic::Response<super::super::AnalyzerOptionsProto>, tonic::Status> {
-            self.inner.ready().await.map_err(|e| {
-                tonic::Status::new(
-                    tonic::Code::Unknown,
-                    format!("Service was not ready: {}", e.into()),
-                )
-            })?;
-            let codec = tonic::codec::ProstCodec::default();
-            let path = http::uri::PathAndQuery::from_static(
-                "/zetasql.local_service.ZetaSqlLocalService/GetAnalyzerOptions",
-            );
-            self.inner.unary(request.into_request(), path, codec).await
-        }
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_STATEMENT,
+            req,
+            opt,
+        )
     }
-    impl<T: Clone> Clone for ZetaSqlLocalServiceClient<T> {
-        fn clone(&self) -> Self {
-            Self {
-                inner: self.inner.clone(),
-            }
-        }
+    pub fn extract_table_names_from_statement_async(
+        &self,
+        req: &ExtractTableNamesFromStatementRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<ExtractTableNamesFromStatementResponse>>
+    {
+        self.extract_table_names_from_statement_async_opt(req, ::grpcio::CallOption::default())
     }
-    impl<T> std::fmt::Debug for ZetaSqlLocalServiceClient<T> {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "ZetaSqlLocalServiceClient {{ ... }}")
-        }
+    pub fn extract_table_names_from_next_statement_opt(
+        &self,
+        req: &ExtractTableNamesFromNextStatementRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<ExtractTableNamesFromNextStatementResponse> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_NEXT_STATEMENT,
+            req,
+            opt,
+        )
     }
+    pub fn extract_table_names_from_next_statement(
+        &self,
+        req: &ExtractTableNamesFromNextStatementRequest,
+    ) -> ::grpcio::Result<ExtractTableNamesFromNextStatementResponse> {
+        self.extract_table_names_from_next_statement_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn extract_table_names_from_next_statement_async_opt(
+        &self,
+        req: &ExtractTableNamesFromNextStatementRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<ExtractTableNamesFromNextStatementResponse>>
+    {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_NEXT_STATEMENT,
+            req,
+            opt,
+        )
+    }
+    pub fn extract_table_names_from_next_statement_async(
+        &self,
+        req: &ExtractTableNamesFromNextStatementRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<ExtractTableNamesFromNextStatementResponse>>
+    {
+        self.extract_table_names_from_next_statement_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn format_sql_opt(
+        &self,
+        req: &FormatSqlRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<FormatSqlResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_FORMAT_SQL, req, opt)
+    }
+    pub fn format_sql(&self, req: &FormatSqlRequest) -> ::grpcio::Result<FormatSqlResponse> {
+        self.format_sql_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn format_sql_async_opt(
+        &self,
+        req: &FormatSqlRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<FormatSqlResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_FORMAT_SQL, req, opt)
+    }
+    pub fn format_sql_async(
+        &self,
+        req: &FormatSqlRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<FormatSqlResponse>> {
+        self.format_sql_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn lenient_format_sql_opt(
+        &self,
+        req: &FormatSqlRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<FormatSqlResponse> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_LENIENT_FORMAT_SQL, req, opt)
+    }
+    pub fn lenient_format_sql(
+        &self,
+        req: &FormatSqlRequest,
+    ) -> ::grpcio::Result<FormatSqlResponse> {
+        self.lenient_format_sql_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn lenient_format_sql_async_opt(
+        &self,
+        req: &FormatSqlRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<FormatSqlResponse>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_LENIENT_FORMAT_SQL, req, opt)
+    }
+    pub fn lenient_format_sql_async(
+        &self,
+        req: &FormatSqlRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<FormatSqlResponse>> {
+        self.lenient_format_sql_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn unregister_catalog_opt(
+        &self,
+        req: &UnregisterRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<()> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_CATALOG, req, opt)
+    }
+    pub fn unregister_catalog(&self, req: &UnregisterRequest) -> ::grpcio::Result<()> {
+        self.unregister_catalog_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn unregister_catalog_async_opt(
+        &self,
+        req: &UnregisterRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_CATALOG, req, opt)
+    }
+    pub fn unregister_catalog_async(
+        &self,
+        req: &UnregisterRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.unregister_catalog_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn unregister_parse_resume_location_opt(
+        &self,
+        req: &UnregisterRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<()> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_PARSE_RESUME_LOCATION,
+            req,
+            opt,
+        )
+    }
+    pub fn unregister_parse_resume_location(
+        &self,
+        req: &UnregisterRequest,
+    ) -> ::grpcio::Result<()> {
+        self.unregister_parse_resume_location_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn unregister_parse_resume_location_async_opt(
+        &self,
+        req: &UnregisterRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_PARSE_RESUME_LOCATION,
+            req,
+            opt,
+        )
+    }
+    pub fn unregister_parse_resume_location_async(
+        &self,
+        req: &UnregisterRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.unregister_parse_resume_location_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_builtin_functions_opt(
+        &self,
+        req: &super::ZetaSqlBuiltinFunctionOptionsProto,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<GetBuiltinFunctionsResponse> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_BUILTIN_FUNCTIONS,
+            req,
+            opt,
+        )
+    }
+    pub fn get_builtin_functions(
+        &self,
+        req: &super::ZetaSqlBuiltinFunctionOptionsProto,
+    ) -> ::grpcio::Result<GetBuiltinFunctionsResponse> {
+        self.get_builtin_functions_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_builtin_functions_async_opt(
+        &self,
+        req: &super::ZetaSqlBuiltinFunctionOptionsProto,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<GetBuiltinFunctionsResponse>> {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_BUILTIN_FUNCTIONS,
+            req,
+            opt,
+        )
+    }
+    pub fn get_builtin_functions_async(
+        &self,
+        req: &super::ZetaSqlBuiltinFunctionOptionsProto,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<GetBuiltinFunctionsResponse>> {
+        self.get_builtin_functions_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn add_simple_table_opt(
+        &self,
+        req: &AddSimpleTableRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<()> {
+        self.client
+            .unary_call(&METHOD_ZETA_SQL_LOCAL_SERVICE_ADD_SIMPLE_TABLE, req, opt)
+    }
+    pub fn add_simple_table(&self, req: &AddSimpleTableRequest) -> ::grpcio::Result<()> {
+        self.add_simple_table_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn add_simple_table_async_opt(
+        &self,
+        req: &AddSimpleTableRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.client
+            .unary_call_async(&METHOD_ZETA_SQL_LOCAL_SERVICE_ADD_SIMPLE_TABLE, req, opt)
+    }
+    pub fn add_simple_table_async(
+        &self,
+        req: &AddSimpleTableRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<()>> {
+        self.add_simple_table_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_language_options_opt(
+        &self,
+        req: &LanguageOptionsRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<super::LanguageOptionsProto> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_LANGUAGE_OPTIONS,
+            req,
+            opt,
+        )
+    }
+    pub fn get_language_options(
+        &self,
+        req: &LanguageOptionsRequest,
+    ) -> ::grpcio::Result<super::LanguageOptionsProto> {
+        self.get_language_options_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_language_options_async_opt(
+        &self,
+        req: &LanguageOptionsRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::LanguageOptionsProto>> {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_LANGUAGE_OPTIONS,
+            req,
+            opt,
+        )
+    }
+    pub fn get_language_options_async(
+        &self,
+        req: &LanguageOptionsRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::LanguageOptionsProto>> {
+        self.get_language_options_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_analyzer_options_opt(
+        &self,
+        req: &AnalyzerOptionsRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<super::AnalyzerOptionsProto> {
+        self.client.unary_call(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_ANALYZER_OPTIONS,
+            req,
+            opt,
+        )
+    }
+    pub fn get_analyzer_options(
+        &self,
+        req: &AnalyzerOptionsRequest,
+    ) -> ::grpcio::Result<super::AnalyzerOptionsProto> {
+        self.get_analyzer_options_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn get_analyzer_options_async_opt(
+        &self,
+        req: &AnalyzerOptionsRequest,
+        opt: ::grpcio::CallOption,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::AnalyzerOptionsProto>> {
+        self.client.unary_call_async(
+            &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_ANALYZER_OPTIONS,
+            req,
+            opt,
+        )
+    }
+    pub fn get_analyzer_options_async(
+        &self,
+        req: &AnalyzerOptionsRequest,
+    ) -> ::grpcio::Result<::grpcio::ClientUnaryReceiver<super::AnalyzerOptionsProto>> {
+        self.get_analyzer_options_async_opt(req, ::grpcio::CallOption::default())
+    }
+    pub fn spawn<F>(&self, f: F)
+    where
+        F: ::futures::Future<Output = ()> + Send + 'static,
+    {
+        self.client.spawn(f)
+    }
+}
+pub trait ZetaSqlLocalService {
+    fn prepare(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: PrepareRequest,
+        sink: ::grpcio::UnarySink<PrepareResponse>,
+    );
+    fn evaluate(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: EvaluateRequest,
+        sink: ::grpcio::UnarySink<EvaluateResponse>,
+    );
+    fn evaluate_stream(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        stream: ::grpcio::RequestStream<EvaluateRequestBatch>,
+        sink: ::grpcio::DuplexSink<EvaluateResponseBatch>,
+    );
+    fn unprepare(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: UnprepareRequest,
+        sink: ::grpcio::UnarySink<()>,
+    );
+    fn get_table_from_proto(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: TableFromProtoRequest,
+        sink: ::grpcio::UnarySink<super::SimpleTableProto>,
+    );
+    fn register_catalog(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: RegisterCatalogRequest,
+        sink: ::grpcio::UnarySink<RegisterResponse>,
+    );
+    fn register_parse_resume_location(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: super::ParseResumeLocationProto,
+        sink: ::grpcio::UnarySink<RegisterResponse>,
+    );
+    fn analyze(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: AnalyzeRequest,
+        sink: ::grpcio::UnarySink<AnalyzeResponse>,
+    );
+    fn build_sql(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: BuildSqlRequest,
+        sink: ::grpcio::UnarySink<BuildSqlResponse>,
+    );
+    fn extract_table_names_from_statement(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: ExtractTableNamesFromStatementRequest,
+        sink: ::grpcio::UnarySink<ExtractTableNamesFromStatementResponse>,
+    );
+    fn extract_table_names_from_next_statement(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: ExtractTableNamesFromNextStatementRequest,
+        sink: ::grpcio::UnarySink<ExtractTableNamesFromNextStatementResponse>,
+    );
+    fn format_sql(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: FormatSqlRequest,
+        sink: ::grpcio::UnarySink<FormatSqlResponse>,
+    );
+    fn lenient_format_sql(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: FormatSqlRequest,
+        sink: ::grpcio::UnarySink<FormatSqlResponse>,
+    );
+    fn unregister_catalog(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: UnregisterRequest,
+        sink: ::grpcio::UnarySink<()>,
+    );
+    fn unregister_parse_resume_location(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: UnregisterRequest,
+        sink: ::grpcio::UnarySink<()>,
+    );
+    fn get_builtin_functions(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: super::ZetaSqlBuiltinFunctionOptionsProto,
+        sink: ::grpcio::UnarySink<GetBuiltinFunctionsResponse>,
+    );
+    fn add_simple_table(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: AddSimpleTableRequest,
+        sink: ::grpcio::UnarySink<()>,
+    );
+    fn get_language_options(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: LanguageOptionsRequest,
+        sink: ::grpcio::UnarySink<super::LanguageOptionsProto>,
+    );
+    fn get_analyzer_options(
+        &mut self,
+        ctx: ::grpcio::RpcContext,
+        req: AnalyzerOptionsRequest,
+        sink: ::grpcio::UnarySink<super::AnalyzerOptionsProto>,
+    );
+}
+pub fn create_zeta_sql_local_service<S: ZetaSqlLocalService + Send + Clone + 'static>(
+    s: S,
+) -> ::grpcio::Service {
+    let mut builder = ::grpcio::ServiceBuilder::new();
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_PREPARE,
+        move |ctx, req, resp| instance.prepare(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE,
+        move |ctx, req, resp| instance.evaluate(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_duplex_streaming_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_EVALUATE_STREAM,
+        move |ctx, req, resp| instance.evaluate_stream(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_UNPREPARE,
+        move |ctx, req, resp| instance.unprepare(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_TABLE_FROM_PROTO,
+        move |ctx, req, resp| instance.get_table_from_proto(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_CATALOG,
+        move |ctx, req, resp| instance.register_catalog(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_REGISTER_PARSE_RESUME_LOCATION,
+        move |ctx, req, resp| instance.register_parse_resume_location(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_ANALYZE,
+        move |ctx, req, resp| instance.analyze(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_BUILD_SQL,
+        move |ctx, req, resp| instance.build_sql(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_STATEMENT,
+        move |ctx, req, resp| instance.extract_table_names_from_statement(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_EXTRACT_TABLE_NAMES_FROM_NEXT_STATEMENT,
+        move |ctx, req, resp| instance.extract_table_names_from_next_statement(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_FORMAT_SQL,
+        move |ctx, req, resp| instance.format_sql(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_LENIENT_FORMAT_SQL,
+        move |ctx, req, resp| instance.lenient_format_sql(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_CATALOG,
+        move |ctx, req, resp| instance.unregister_catalog(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_UNREGISTER_PARSE_RESUME_LOCATION,
+        move |ctx, req, resp| instance.unregister_parse_resume_location(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_BUILTIN_FUNCTIONS,
+        move |ctx, req, resp| instance.get_builtin_functions(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_ADD_SIMPLE_TABLE,
+        move |ctx, req, resp| instance.add_simple_table(ctx, req, resp),
+    );
+    let mut instance = s.clone();
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_LANGUAGE_OPTIONS,
+        move |ctx, req, resp| instance.get_language_options(ctx, req, resp),
+    );
+    let mut instance = s;
+    builder = builder.add_unary_handler(
+        &METHOD_ZETA_SQL_LOCAL_SERVICE_GET_ANALYZER_OPTIONS,
+        move |ctx, req, resp| instance.get_analyzer_options(ctx, req, resp),
+    );
+    builder.build()
 }

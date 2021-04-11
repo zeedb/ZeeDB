@@ -10,7 +10,7 @@ pub fn read_expected(path: &str) -> io::Result<String> {
     Ok(expect)
 }
 
-pub fn matches_expected(path: &str, found: String) -> bool {
+pub fn matches_expected(path: &str, found: &str) -> bool {
     match read_expected(path) {
         Ok(expect) if expect == found => true,
         _ => {

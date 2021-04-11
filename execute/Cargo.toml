@@ -10,14 +10,12 @@ path = "lib.rs"
 [dependencies]
 bincode = "1.3.1"
 chrono = "0.4.11"
+futures = { version = "0.3.13", features = ["executor"] }
 num-traits = "0.2.14"
-once_cell = "1.5.2"
 rand = { version = "0.8.2", features = ["small_rng"]}
 regex = "1.4.2"
-tokio = { version = "1.0.2", features = ["macros", "rt-multi-thread"] }
-tonic = "0.4.0"
+
 ast = { path = "../ast" }
-catalog = { path = "../catalog" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }
@@ -28,6 +26,3 @@ remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
 storage = { path = "../storage" }
 zetasql = { path = "../zetasql" }
-
-[dev-dependencies]
-test_fixtures = { path = "../test_fixtures" }

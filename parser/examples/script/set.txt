@@ -1,7 +1,0 @@
-set x = (select 1);
-
-LogicalAssign x $expr_subquery.$col1
-	LogicalJoin Single
-		LogicalMap $expr_subquery.$col1:1
-			LogicalSingleGet
-		LogicalSingleGet

@@ -11,7 +11,7 @@ fn test_hash_table() {
         ("b".to_string(), AnyArray::I64(I64Array::from_values(b))),
     ];
     let probe = RecordBatch::new(columns);
-    let partition_by = vec![probe.columns[0].1.clone()];
+    let partition_by = probe.columns[0].1.clone().as_i64();
     let table = HashTable::new(&probe, &partition_by);
     let (left_index, right_index) = table.probe(&partition_by);
     let left = table.build().gather(&left_index);

@@ -1,9 +1,9 @@
 use ast::Index;
+use catalog_types::Catalog;
 use context::Context;
-use kernel::*;
 use zetasql::{function_enums::*, *};
 
-use crate::catalog::*;
+use catalog_types::builtin_function_options;
 
 #[derive(Clone)]
 pub struct BootstrapCatalog;
@@ -26,80 +26,6 @@ impl Catalog for BootstrapCatalog {
     fn indexes(&self, _table_id: i64, _txn: i64, _context: &Context) -> Vec<Index> {
         vec![]
     }
-}
-
-pub fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
-    vec![(
-        5,
-        RecordBatch::new(vec![
-            (
-                "sequence_id".to_string(),
-                AnyArray::I64(I64Array::from_values(vec![0, 1, 2])),
-            ),
-            (
-                "sequence_name".to_string(),
-                AnyArray::String(StringArray::from_values(vec!["catalog", "table", "index"])),
-            ),
-        ]),
-    )]
-}
-
-pub fn bootstrap_sequences() -> Vec<(i64, i64)> {
-    vec![(0, 100), (1, 100), (2, 100)]
-}
-
-pub fn bootstrap_statistics() -> Vec<(i64, Vec<(&'static str, DataType)>)> {
-    vec![
-        (
-            0, // catalog
-            vec![
-                ("parent_catalog_id", DataType::I64),
-                ("catalog_id", DataType::I64),
-                ("catalog_name", DataType::String),
-            ],
-        ),
-        (
-            1, // table
-            vec![
-                ("catalog_id", DataType::I64),
-                ("table_id", DataType::I64),
-                ("table_name", DataType::String),
-            ],
-        ),
-        (
-            2, // column
-            vec![
-                ("table_id", DataType::I64),
-                ("column_id", DataType::I64),
-                ("column_name", DataType::String),
-                ("column_type", DataType::String),
-            ],
-        ),
-        (
-            3, // index
-            vec![
-                ("catalog_id", DataType::I64),
-                ("index_id", DataType::I64),
-                ("table_id", DataType::I64),
-                ("index_name", DataType::String),
-            ],
-        ),
-        (
-            4, // index_column
-            vec![
-                ("index_id", DataType::I64),
-                ("column_id", DataType::I64),
-                ("index_order", DataType::I64),
-            ],
-        ),
-        (
-            5, // sequence
-            vec![
-                ("sequence_id", DataType::I64),
-                ("sequence_name", DataType::String),
-            ],
-        ),
-    ]
 }
 
 pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {

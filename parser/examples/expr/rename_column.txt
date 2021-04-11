@@ -1,6 +1,0 @@
-select a + 1 
-from (select customer_id as a from customer)
-
-LogicalMap $query.$col1:(AddInt64 customer.customer_id 1)
-	LogicalMap customer.customer_id
-		LogicalGet customer

@@ -6,70 +6,77 @@ use std::{
     },
 };
 
-use catalog::CATALOG_KEY;
+use catalog::MetadataCatalog;
+use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::Context;
-use execute::MetadataCatalog;
+use futures::{executor::block_on, SinkExt, StreamExt};
+use grpcio::{RpcContext, ServerStreamingSink, WriteFlags};
 use kernel::AnyArray;
 use parser::{Parser, PARSER_KEY};
-use protos::{coordinator_server::Coordinator, RecordStream, SubmitRequest};
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RemoteExecution, REMOTE_EXECUTION_KEY};
-use statistics::{Statistics, STATISTICS_KEY};
-use tokio::sync::mpsc::channel;
-use tonic::{Request, Response, Status};
+use protos::{Coordinator, Page, SubmitRequest};
+use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 
+#[derive(Clone)]
 pub struct CoordinatorNode {
-    threads: ThreadPool,
     context: Arc<Context>,
-    txn: AtomicI64,
+    txn: Arc<AtomicI64>,
 }
 
 impl Default for CoordinatorNode {
     fn default() -> Self {
         let mut context = Context::default();
-        context.insert(STATISTICS_KEY, std::sync::Mutex::new(Statistics::default()));
         context.insert(PARSER_KEY, Parser::default());
         context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
-        context.insert(REMOTE_EXECUTION_KEY, RemoteExecution::default());
+        context.insert(
+            REMOTE_EXECUTION_KEY,
+            Box::new(RpcRemoteExecution::default()),
+        );
         Self {
-            threads: ThreadPoolBuilder::new().build().unwrap(),
             context: Arc::new(context),
             txn: Default::default(),
         }
     }
 }
 
-#[tonic::async_trait]
 impl Coordinator for CoordinatorNode {
-    type SubmitStream = RecordStream;
-
-    async fn submit(
-        &self,
-        request: Request<SubmitRequest>,
-    ) -> Result<Response<Self::SubmitStream>, Status> {
-        let request = request.into_inner();
-        let variables: HashMap<String, AnyArray> = HashMap::new(); // TODO
+    fn submit(
+        &mut self,
+        ctx: RpcContext,
+        mut req: SubmitRequest,
+        mut sink: ServerStreamingSink<Page>,
+    ) {
+        let variables: HashMap<String, AnyArray> = req
+            .variables
+            .drain()
+            .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
+            .collect();
         let txn = self.txn.fetch_add(1, Ordering::Relaxed);
-        let (sender, receiver) = channel(1);
-        let context = self.context.clone();
-        self.threads.spawn(move || {
-            let types = variables
-                .iter()
-                .map(|(name, value)| (name.clone(), value.data_type()))
-                .collect();
-            let expr = context[PARSER_KEY].analyze(
-                &request.sql,
-                catalog::ROOT_CATALOG_ID,
-                txn,
-                types,
-                &context,
-            );
-            let expr = planner::optimize(expr, txn, &context);
-            let execute = context[REMOTE_EXECUTION_KEY].submit(expr, &variables, txn);
-            for batch in execute {
-                sender.blocking_send(batch).unwrap();
+        let types = variables
+            .iter()
+            .map(|(name, value)| (name.clone(), value.data_type()))
+            .collect();
+        let expr =
+            self.context[PARSER_KEY].analyze(&req.sql, ROOT_CATALOG_ID, txn, types, &self.context);
+        let expr = planner::optimize(expr, txn, &self.context);
+        let mut stream = self.context[REMOTE_EXECUTION_KEY].submit(expr, &variables, txn);
+        rayon::spawn(move || {
+            // Send each batch of records produced by expr to the client.
+            loop {
+                match block_on(stream.next()) {
+                    Some(batch) => {
+                        block_on(sink.send((
+                            Page {
+                                record_batch: bincode::serialize(&batch).unwrap(),
+                            },
+                            WriteFlags::default(),
+                        )))
+                        .unwrap();
+                    }
+                    None => break,
+                }
             }
+            // Close the stream to the client.
+            block_on(sink.close()).unwrap();
         });
-        Ok(Response::new(RecordStream::new(receiver)))
     }
 }

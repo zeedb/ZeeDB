@@ -1,3 +1,0 @@
-create database foo
-
-LogicalCreateDatabase foo

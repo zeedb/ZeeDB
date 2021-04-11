@@ -259,3 +259,13 @@ fn float_equals(left: &Vec<f64>, right: &Vec<f64>) -> bool {
     }
     true
 }
+
+impl I64Array {
+    pub fn hash_all(columns: &Vec<AnyArray>) -> Self {
+        let mut seeds = I64Array::zeros(columns[0].len());
+        for column in columns {
+            column.hash(&mut seeds);
+        }
+        seeds
+    }
+}

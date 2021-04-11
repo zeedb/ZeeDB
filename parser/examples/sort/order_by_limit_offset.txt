@@ -1,9 +1,0 @@
-select customer_id 
-from customer 
-order by modified_date 
-limit 100 
-offset 10
-
-LogicalLimit 100 10
-	LogicalSort customer.modified_date
-		LogicalGet customer

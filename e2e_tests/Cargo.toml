@@ -1,0 +1,32 @@
+[package]
+name = "e2e_tests"
+version = "0.1.0"
+edition = "2018"
+
+[lib] 
+path = "lib.rs"
+
+[dependencies]
+bincode = "1.3.1"
+chrono = "0.4.11"
+futures = { version = "0.3.13", features = ["executor"] }
+grpcio = { version = "0.8.2", features = ["prost-codec"] }
+once_cell = "1.5.2"
+rand = { version = "0.8.2", features = ["small_rng"]}
+regex = "1.4.2"
+
+ast = { path = "../ast" }
+catalog = { path = "../catalog" }
+catalog_types = { path = "../catalog_types" }
+context = { path = "../context" }
+coordinator = { path = "../coordinator" }
+execute = { path = "../execute" }
+kernel = { path = "../kernel" }
+parser = { path = "../parser" }
+planner = { path = "../planner" }
+protos = { path = "../protos" }
+remote_execution = { path = "../remote_execution" }
+statistics = { path = "../statistics" }
+storage = { path = "../storage" }
+test_fixtures = { path = "../test_fixtures" }
+worker = { path = "../worker" }

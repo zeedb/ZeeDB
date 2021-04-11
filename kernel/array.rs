@@ -2,7 +2,7 @@ use std::{cmp::Ordering, ops::Range};
 
 use twox_hash::xxh3;
 
-use crate::{AnyArray, BoolArray, DataType, I32Array, U64Array};
+use crate::{AnyArray, BoolArray, DataType, I32Array, I64Array};
 
 pub trait Array<'a>: Sized + Clone {
     type Element: Sized + PartialEq + PartialOrd;
@@ -254,12 +254,12 @@ pub trait Array<'a>: Sized + Clone {
         self.get(i).partial_cmp(&self.get(j)).unwrap()
     }
 
-    fn hash(&self, state: &mut U64Array) {
+    fn hash(&self, state: &mut I64Array) {
         for i in 0..self.len() {
             if let Some(bytes) = self.bytes(i) {
-                let seed = state.get(i).unwrap();
+                let seed = u64::from_ne_bytes(state.get(i).unwrap().to_ne_bytes());
                 let hash = xxh3::hash64_with_seed(bytes, seed);
-                state.set(i, Some(hash))
+                state.set(i, Some(i64::from_ne_bytes(hash.to_ne_bytes())))
             }
         }
     }

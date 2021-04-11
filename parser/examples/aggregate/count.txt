@@ -1,7 +1,0 @@
-select count(*) 
-from person
-
-LogicalMap $aggregate.$agg1
-	LogicalAggregate $aggregate.$agg1:(Count $star)
-		LogicalMap $star:1
-			LogicalGet person

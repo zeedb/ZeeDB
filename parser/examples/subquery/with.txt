@@ -1,8 +1,0 @@
-with foo as (select customer_id from customer) select customer_id 
-from foo
-
-LogicalWith foo
-	LogicalMap customer.customer_id
-		LogicalGet customer
-	LogicalMap foo.customer_id
-		LogicalGetWith foo

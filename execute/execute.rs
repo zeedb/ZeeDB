@@ -1,9 +1,10 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use ast::{Expr, Index, *};
-use context::Context;
+use context::{Context, WORKER_ID_KEY};
+use futures::{executor::block_on, Stream, StreamExt};
 use kernel::{RecordBatch, *};
-use statistics::{TableStatistics, STATISTICS_KEY};
+use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
 use storage::*;
 
 use crate::hash_table::HashTable;
@@ -15,7 +16,7 @@ pub fn execute<'a>(
     context: &'a Context,
 ) -> RunningQuery<'a> {
     RunningQuery {
-        input: Node::compile(expr),
+        input: Node::compile(expr, txn, context),
         state: QueryState {
             txn,
             variables: variables.clone(),
@@ -78,15 +79,17 @@ enum Node {
         build_left: Option<RecordBatch>,
         unmatched_left: Option<BoolArray>,
         right: Box<Node>,
+        right_schema: Vec<(String, DataType)>,
     },
     HashJoin {
         join: Join,
-        partition_left: Vec<Scalar>,
-        partition_right: Vec<Scalar>,
+        partition_left: Column,
+        partition_right: Column,
         left: Box<Node>,
         build_left: Option<HashTable>,
         unmatched_left: Option<BoolArray>,
         right: Box<Node>,
+        right_schema: Vec<(String, DataType)>,
     },
     CreateTempTable {
         name: String,
@@ -119,10 +122,12 @@ enum Node {
         right: Box<Node>,
     },
     Broadcast {
-        input: Box<Node>,
+        input: Option<Expr>,
+        stream: Option<RemoteQuery>,
     },
     Exchange {
-        input: Box<Node>,
+        input: Option<(Column, Expr)>,
+        stream: Option<RemoteQuery>,
     },
     Insert {
         finished: bool,
@@ -161,6 +166,10 @@ enum Node {
     },
 }
 
+struct RemoteQuery {
+    inner: RecordStream,
+}
+
 impl<'a> Iterator for RunningQuery<'a> {
     type Item = RecordBatch;
 
@@ -170,7 +179,7 @@ impl<'a> Iterator for RunningQuery<'a> {
 }
 
 impl Node {
-    fn compile(expr: Expr) -> Self {
+    fn compile(expr: Expr, txn: i64, context: &Context) -> Self {
         match expr {
             TableFreeScan => Node::TableFreeScan { empty: false },
             SeqScan {
@@ -198,15 +207,15 @@ impl Node {
                 lookup,
                 index,
                 table,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Filter { predicates, input } => Node::Filter {
                 predicates,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Out { projects, input } => Node::Out {
                 projects,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Map {
                 include_existing,
@@ -215,15 +224,19 @@ impl Node {
             } => Node::Map {
                 include_existing,
                 projects,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
-            NestedLoop { join, left, right } => Node::NestedLoop {
-                join,
-                left: Box::new(Node::compile(*left)),
-                build_left: None,
-                unmatched_left: None,
-                right: Box::new(Node::compile(*right)),
-            },
+            NestedLoop { join, left, right } => {
+                let right_schema = schema(right.as_ref());
+                Node::NestedLoop {
+                    join,
+                    left: Box::new(Node::compile(*left, txn, context)),
+                    build_left: None,
+                    unmatched_left: None,
+                    right: Box::new(Node::compile(*right, txn, context)),
+                    right_schema,
+                }
+            }
             HashJoin {
                 join,
                 partition_left,
@@ -232,8 +245,9 @@ impl Node {
                 right,
                 ..
             } => {
-                let left = Box::new(Node::compile(*left));
-                let right = Box::new(Node::compile(*right));
+                let right_schema = schema(right.as_ref());
+                let left = Box::new(Node::compile(*left, txn, context));
+                let right = Box::new(Node::compile(*right, txn, context));
                 Node::HashJoin {
                     join,
                     partition_left,
@@ -242,6 +256,7 @@ impl Node {
                     build_left: None,
                     unmatched_left: None,
                     right,
+                    right_schema,
                 }
             }
             CreateTempTable {
@@ -251,7 +266,7 @@ impl Node {
             } => Node::CreateTempTable {
                 name,
                 columns,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             GetTempTable { name, columns } => Node::GetTempTable {
                 name,
@@ -266,7 +281,7 @@ impl Node {
                 finished: false,
                 group_by,
                 aggregate,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Limit {
                 limit,
@@ -276,33 +291,35 @@ impl Node {
                 cursor: 0,
                 limit,
                 offset,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Sort { order_by, input } => Node::Sort {
                 order_by,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Union { left, right } => Node::Union {
-                left: Box::new(Node::compile(*left)),
-                right: Box::new(Node::compile(*right)),
+                left: Box::new(Node::compile(*left, txn, context)),
+                right: Box::new(Node::compile(*right, txn, context)),
             },
             Broadcast { input } => Node::Broadcast {
-                input: Box::new(Node::compile(*input)),
+                input: Some(*input),
+                stream: None,
             },
-            Exchange { input } => Node::Exchange {
-                input: Box::new(Node::compile(*input)),
+            Exchange { hash_column, input } => Node::Exchange {
+                input: Some((hash_column.unwrap(), *input)),
+                stream: None,
             },
             Insert {
                 table,
                 indexes,
-                columns,
                 input,
+                columns,
             } => Node::Insert {
                 finished: false,
                 table,
                 indexes,
+                input: Box::new(Node::compile(*input, txn, context)),
                 columns,
-                input: Box::new(Node::compile(*input)),
             },
             Values {
                 columns,
@@ -311,17 +328,17 @@ impl Node {
             } => Node::Values {
                 columns,
                 values,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Delete { table, tid, input } => Node::Delete {
                 table,
                 tid,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Script { statements } => {
                 let mut compiled = vec![];
                 for expr in statements {
-                    compiled.push(Node::compile(expr))
+                    compiled.push(Node::compile(expr, txn, context))
                 }
                 Node::Script {
                     offset: 0,
@@ -335,11 +352,11 @@ impl Node {
             } => Node::Assign {
                 variable,
                 value,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Call { procedure, input } => Node::Call {
                 procedure,
-                input: Box::new(Node::compile(*input)),
+                input: Box::new(Node::compile(*input, txn, context)),
             },
             Explain { input } => Node::Explain {
                 finished: false,
@@ -373,102 +390,6 @@ impl Node {
             | LogicalAssign { .. }
             | LogicalCall { .. }
             | LogicalExplain { .. } => panic!("logical operation"),
-        }
-    }
-
-    fn schema(&self) -> Vec<(String, DataType)> {
-        match self {
-            Node::TableFreeScan { .. } => dummy_schema(),
-            Node::Filter { input, .. }
-            | Node::Limit { input, .. }
-            | Node::Sort { input, .. }
-            | Node::Union { left: input, .. }
-            | Node::Broadcast { input, .. }
-            | Node::Exchange { input, .. }
-            | Node::Delete { input, .. } => input.schema(),
-            Node::SeqScan { projects, .. } | Node::Out { projects, .. } => projects
-                .iter()
-                .map(|c| (c.canonical_name(), c.data_type))
-                .collect(),
-            Node::IndexScan {
-                include_existing,
-                projects,
-                input,
-                ..
-            } => {
-                let mut fields: Vec<_> = projects
-                    .iter()
-                    .map(|c| (c.canonical_name(), c.data_type))
-                    .collect();
-                if *include_existing {
-                    fields.extend_from_slice(&input.schema());
-                }
-                fields
-            }
-            Node::Map {
-                include_existing,
-                projects,
-                input,
-            } => {
-                let mut fields: Vec<_> = projects
-                    .iter()
-                    .map(|(_, c)| (c.canonical_name(), c.data_type))
-                    .collect();
-                if *include_existing {
-                    fields.extend_from_slice(&input.schema());
-                }
-                fields
-            }
-            Node::NestedLoop {
-                join, left, right, ..
-            } => {
-                let mut fields = vec![];
-                fields.extend_from_slice(&left.schema());
-                fields.extend_from_slice(&right.schema());
-                if let Join::Mark(column, _) = join {
-                    fields.push((column.canonical_name(), column.data_type))
-                }
-                fields
-            }
-            Node::HashJoin {
-                join, left, right, ..
-            } => {
-                let mut fields = vec![];
-                fields.extend_from_slice(&left.schema());
-                fields.extend_from_slice(&right.schema());
-                if let Join::Mark(column, _) = join {
-                    fields.push((column.canonical_name(), column.data_type))
-                }
-                fields
-            }
-            Node::GetTempTable { columns, .. } => columns
-                .iter()
-                .map(|column| (column.canonical_name(), column.data_type))
-                .collect(),
-            Node::Aggregate {
-                group_by,
-                aggregate,
-                ..
-            } => {
-                let mut fields = vec![];
-                for column in group_by {
-                    fields.push((column.canonical_name(), column.data_type));
-                }
-                for a in aggregate {
-                    fields.push((a.output.canonical_name(), a.output.data_type));
-                }
-                fields
-            }
-            Node::Values { columns, .. } => columns
-                .iter()
-                .map(|column| (column.canonical_name(), column.data_type))
-                .collect(),
-            Node::Script { statements, .. } => statements.last().unwrap().schema(),
-            Node::Explain { .. } => vec![("plan".to_string(), DataType::String)],
-            Node::CreateTempTable { .. }
-            | Node::Insert { .. }
-            | Node::Assign { .. }
-            | Node::Call { .. } => dummy_schema(),
         }
     }
 }
@@ -583,7 +504,7 @@ impl Node {
                     }
                 }
                 // Combine the filtered pages.
-                let mut output = RecordBatch::cat(filtered_pages).rename(&query_names);
+                let mut output = RecordBatch::cat(filtered_pages)?.rename(&query_names);
                 if *include_existing {
                     output = RecordBatch::zip(output, input);
                 }
@@ -630,6 +551,7 @@ impl Node {
                 build_left,
                 unmatched_left,
                 right,
+                right_schema,
             } => {
                 // If this is the first iteration, build the left side of the join into a single batch.
                 if build_left.is_none() {
@@ -657,7 +579,7 @@ impl Node {
                         Some(unmatched_left) => Some(crate::join::unmatched_tuples(
                             build_left.as_ref().unwrap(),
                             &unmatched_left,
-                            right.schema(),
+                            &right_schema,
                         )),
                         // The second time we receive 'Empty' from the right side, we are truly finished.
                         None => None,
@@ -728,15 +650,17 @@ impl Node {
                 build_left,
                 unmatched_left,
                 right,
+                right_schema,
             } => {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
                     let left = build(left, state)?;
-                    let partition_left: Vec<_> = partition_left
-                        .iter()
-                        .map(|x| crate::eval::eval(x, &left, state))
-                        .collect();
-                    let table = HashTable::new(&left, &partition_left);
+                    let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
+                    {
+                        AnyArray::I64(a) => a,
+                        _ => panic!(),
+                    };
+                    let table = HashTable::new(&left, partition_left);
                     *build_left = Some(table);
                     // Allocate a bit array to keep track of which rows on the left side never found join partners.
                     *unmatched_left = Some(BoolArray::trues(left.len()));
@@ -744,10 +668,11 @@ impl Node {
                 match right.next(state) {
                     // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
                     Some(right) => {
-                        let partition_right: Vec<_> = partition_right
-                            .iter()
-                            .map(|x| crate::eval::eval(x, &right, state))
-                            .collect();
+                        let partition_right =
+                            match right.find(&partition_right.canonical_name()).unwrap() {
+                                AnyArray::I64(a) => a,
+                                _ => panic!(),
+                            };
                         let filter =
                             |input: &RecordBatch| crate::eval::all(predicates, input, state);
                         Some(crate::join::hash_join(
@@ -764,7 +689,7 @@ impl Node {
                         Some(unmatched_left) => Some(crate::join::unmatched_tuples(
                             build_left.as_ref().unwrap().build(),
                             &unmatched_left,
-                            right.schema(),
+                            &right_schema,
                         )),
                         // The second time we receive 'Empty' from the right side, we are truly finished.
                         None => None,
@@ -783,19 +708,20 @@ impl Node {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
                     let left = build(left, state)?;
-                    let partition_left: Vec<_> = partition_left
-                        .iter()
-                        .map(|x| crate::eval::eval(x, &left, state))
-                        .collect();
+                    let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
+                    {
+                        AnyArray::I64(a) => a,
+                        _ => panic!(),
+                    };
                     let table = HashTable::new(&left, &partition_left);
                     *build_left = Some(table);
                 }
                 // Get the next batch of rows from the right (probe) side.
                 let right = right.next(state)?;
-                let partition_right: Vec<_> = partition_right
-                    .iter()
-                    .map(|x| crate::eval::eval(x, &right, state))
-                    .collect();
+                let partition_right = match right.find(&partition_right.canonical_name()).unwrap() {
+                    AnyArray::I64(a) => a,
+                    _ => panic!(),
+                };
                 let filter =
                     |input: &RecordBatch| crate::eval::all(join.predicates(), input, state);
                 // Join a batch of rows to the left (build) side.
@@ -901,12 +827,18 @@ impl Node {
                 loop {
                     match input.next(state) {
                         None => {
-                            let schema = self.schema();
+                            let mut names = vec![];
+                            for c in group_by {
+                                names.push(c.canonical_name());
+                            }
+                            for e in aggregate {
+                                names.push(e.output.canonical_name());
+                            }
                             let columns = operator
                                 .finish()
                                 .drain(..)
                                 .enumerate()
-                                .map(|(i, array)| (schema[i].0.clone(), array))
+                                .map(|(i, array)| (std::mem::take(&mut names[i]), array))
                                 .collect();
                             return Some(RecordBatch::new(columns));
                         }
@@ -963,11 +895,31 @@ impl Node {
                 Some(batch) => Some(batch),
                 None => right.next(state),
             },
-            Node::Broadcast { input } => {
-                input.next(state) // TODO
+            Node::Broadcast { input, stream } => {
+                if let Some(expr) = input.take() {
+                    *stream = Some(RemoteQuery::new(
+                        state.context[REMOTE_EXECUTION_KEY].broadcast(
+                            expr,
+                            &state.variables,
+                            state.txn,
+                        ),
+                    ));
+                }
+                block_on(stream.as_mut().unwrap().inner.next())
             }
-            Node::Exchange { input } => {
-                input.next(state) // TODO
+            Node::Exchange { input, stream } => {
+                if let Some((hash_column, expr)) = input.take() {
+                    *stream = Some(RemoteQuery::new(
+                        state.context[REMOTE_EXECUTION_KEY].exchange(
+                            expr,
+                            &state.variables,
+                            state.txn,
+                            hash_column.canonical_name(),
+                            state.context[WORKER_ID_KEY],
+                        ),
+                    ));
+                }
+                block_on(stream.as_mut().unwrap().inner.next())
             }
             Node::Insert {
                 finished,
@@ -981,7 +933,6 @@ impl Node {
                 } else {
                     *finished = true;
                 }
-                let mut statistics = TableStatistics::default();
                 loop {
                     let input = match input.next(state) {
                         Some(next) => next,
@@ -995,35 +946,23 @@ impl Node {
                     let input = input.rename(&renames);
                     // Append rows to the table heap.
                     let txn = state.txn;
-                    let tids = state.context[STORAGE_KEY]
-                        .lock()
-                        .unwrap()
-                        .table_mut(table.id)
-                        .insert(&input, txn);
+                    let mut storage = state.context[STORAGE_KEY].lock().unwrap();
+                    let tids = storage.table_mut(table.id).insert(&input, txn);
                     // Update statistics.
-                    statistics.insert(&input);
-                    // Append entries to each index.
+                    storage
+                        .statistics_mut(table.id)
+                        .expect(&table.name)
+                        .insert(&input);
+                    // Update indexes.
                     for index in indexes.iter_mut() {
                         crate::index::insert(
-                            state.context[STORAGE_KEY]
-                                .lock()
-                                .unwrap()
-                                .index_mut(index.index_id),
+                            storage.index_mut(index.index_id),
                             &index.columns,
                             &input,
                             &tids,
                         );
                     }
                 }
-                // TODO Insert should be split into 2 operations, UpdateStatistics ( Insert ... )
-                // Insert should take place on worker nodes and return partial statistics of newly inserted rows.
-                // UpdateStatistics should take place on coordinator node and merge partial statistics into global statistics.
-                state.context[STATISTICS_KEY]
-                    .lock()
-                    .unwrap()
-                    .get_mut(table.id)
-                    .expect(&table.name)
-                    .merge(statistics);
                 // Insert returns no values.
                 None
             }
@@ -1109,10 +1048,6 @@ impl Node {
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.context[STORAGE_KEY].lock().unwrap().create_table(id);
-                                state.context[STATISTICS_KEY]
-                                    .lock()
-                                    .unwrap()
-                                    .insert(id, TableStatistics::default());
                             }
                         }
                     }
@@ -1121,7 +1056,6 @@ impl Node {
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.context[STORAGE_KEY].lock().unwrap().drop_table(id);
-                                state.context[STATISTICS_KEY].lock().unwrap().remove(id);
                             }
                         }
                     }
@@ -1163,6 +1097,18 @@ impl Node {
     }
 }
 
+impl RemoteQuery {
+    fn new(inner: RecordStream) -> Self {
+        Self { inner }
+    }
+}
+
+impl Debug for RemoteQuery {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("<stream>")
+    }
+}
+
 fn dummy_row() -> RecordBatch {
     RecordBatch::new(vec![(
         "$dummy".to_string(),
@@ -1174,13 +1120,136 @@ fn dummy_schema() -> Vec<(String, DataType)> {
     vec![("$dummy".to_string(), DataType::Bool)]
 }
 
+fn schema(expr: &Expr) -> Vec<(String, DataType)> {
+    match expr {
+        TableFreeScan { .. } => dummy_schema(),
+        Filter { input, .. }
+        | Limit { input, .. }
+        | Sort { input, .. }
+        | Union { left: input, .. }
+        | Broadcast { input, .. }
+        | Exchange { input, .. }
+        | Delete { input, .. } => schema(&*input),
+        SeqScan { projects, .. } | Out { projects, .. } => projects
+            .iter()
+            .map(|c| (c.canonical_name(), c.data_type))
+            .collect(),
+        IndexScan {
+            include_existing,
+            projects,
+            input,
+            ..
+        } => {
+            let mut fields: Vec<_> = projects
+                .iter()
+                .map(|c| (c.canonical_name(), c.data_type))
+                .collect();
+            if *include_existing {
+                fields.extend_from_slice(&schema(&*input));
+            }
+            fields
+        }
+        Map {
+            include_existing,
+            projects,
+            input,
+        } => {
+            let mut fields: Vec<_> = projects
+                .iter()
+                .map(|(_, c)| (c.canonical_name(), c.data_type))
+                .collect();
+            if *include_existing {
+                fields.extend_from_slice(&schema(&*input));
+            }
+            fields
+        }
+        NestedLoop {
+            join, left, right, ..
+        } => {
+            let mut fields = vec![];
+            fields.extend_from_slice(&schema(&*left));
+            fields.extend_from_slice(&schema(&*right));
+            if let Join::Mark(column, _) = join {
+                fields.push((column.canonical_name(), column.data_type))
+            }
+            fields
+        }
+        HashJoin {
+            join, left, right, ..
+        } => {
+            let mut fields = vec![];
+            fields.extend_from_slice(&schema(&*left));
+            fields.extend_from_slice(&schema(&*right));
+            if let Join::Mark(column, _) = join {
+                fields.push((column.canonical_name(), column.data_type))
+            }
+            fields
+        }
+        GetTempTable { columns, .. } => columns
+            .iter()
+            .map(|column| (column.canonical_name(), column.data_type))
+            .collect(),
+        Aggregate {
+            group_by,
+            aggregate,
+            ..
+        } => {
+            let mut fields = vec![];
+            for column in group_by {
+                fields.push((column.canonical_name(), column.data_type));
+            }
+            for a in aggregate {
+                fields.push((a.output.canonical_name(), a.output.data_type));
+            }
+            fields
+        }
+        Values { columns, .. } => columns
+            .iter()
+            .map(|column| (column.canonical_name(), column.data_type))
+            .collect(),
+        Script { statements, .. } => schema(statements.last().unwrap()),
+        Explain { .. } => vec![("plan".to_string(), DataType::String)],
+        CreateTempTable { .. } | Insert { .. } | Assign { .. } | Call { .. } => dummy_schema(),
+        Leaf { .. }
+        | LogicalSingleGet { .. }
+        | LogicalGet { .. }
+        | LogicalFilter { .. }
+        | LogicalOut { .. }
+        | LogicalMap { .. }
+        | LogicalJoin { .. }
+        | LogicalDependentJoin { .. }
+        | LogicalWith { .. }
+        | LogicalCreateTempTable { .. }
+        | LogicalGetWith { .. }
+        | LogicalAggregate { .. }
+        | LogicalLimit { .. }
+        | LogicalSort { .. }
+        | LogicalUnion { .. }
+        | LogicalInsert { .. }
+        | LogicalValues { .. }
+        | LogicalUpdate { .. }
+        | LogicalDelete { .. }
+        | LogicalCreateDatabase { .. }
+        | LogicalCreateTable { .. }
+        | LogicalCreateIndex { .. }
+        | LogicalDrop { .. }
+        | LogicalScript { .. }
+        | LogicalAssign { .. }
+        | LogicalCall { .. }
+        | LogicalExplain { .. }
+        | LogicalRewrite { .. } => panic!(
+            "schema is not implemented for logical operator {}",
+            expr.name()
+        ),
+    }
+}
+
 // TODO instead of calling a function, insert a Build operator into the tree.
 fn build(input: &mut Node, state: &mut QueryState) -> Option<RecordBatch> {
     let mut batches = vec![];
     loop {
         match input.next(state) {
-            None if batches.is_empty() => return None,
-            None => return Some(RecordBatch::cat(batches)),
+            None => return RecordBatch::cat(batches),
             Some(batch) => batches.push(batch),
         }
     }

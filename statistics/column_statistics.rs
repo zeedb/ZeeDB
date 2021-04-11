@@ -1,14 +1,15 @@
 use std::{
     cmp::Ordering,
-    hash::{BuildHasherDefault, Hash, Hasher},
+    hash::{BuildHasher, Hash, Hasher},
 };
 
 use hyperloglogplus::*;
 use kernel::*;
+use serde::{Deserialize, Serialize};
 
 use crate::histogram::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ColumnStatistics {
     Bool(TypedColumnStatistics<bool>),
     I64(TypedColumnStatistics<i64>),
@@ -18,19 +19,22 @@ pub enum ColumnStatistics {
     String(TypedColumnStatistics<String>),
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Clone, Default, Debug, Serialize, Deserialize)]
 pub struct TypedColumnStatistics<T: Hash + Ord + Default + Clone> {
     count_distinct: CountDistinct<T>,
     histogram: Histogram<T>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct CountDistinct<T: Hash> {
-    hll: HyperLogLogPlus<T, BuildHasherDefault<twox_hash::Xxh3Hash64>>,
+    hll: HyperLogLogPlus<T, BuildTwoXHasher>,
     cache: f64,
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct BuildTwoXHasher;
+
+#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Default, Serialize, Deserialize)]
 pub struct NotNan(pub f64);
 
 impl Eq for NotNan {}
@@ -174,8 +178,16 @@ impl<T: Hash + Ord + Default + Clone> TypedColumnStatistics<T> {
 impl<T: Hash> Default for CountDistinct<T> {
     fn default() -> Self {
         Self {
-            hll: HyperLogLogPlus::new(4, BuildHasherDefault::default()).unwrap(),
+            hll: HyperLogLogPlus::new(4, BuildTwoXHasher).unwrap(),
             cache: 0.0,
         }
+    }
+}
+
+impl BuildHasher for BuildTwoXHasher {
+    type Hasher = twox_hash::Xxh3Hash64;
+
+    fn build_hasher(&self) -> Self::Hasher {
+        twox_hash::Xxh3Hash64::default()
     }
 }

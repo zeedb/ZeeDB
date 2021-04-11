@@ -1,4 +1,0 @@
-select cast(1 as numeric) as bignum
-
-LogicalMap $query.bignum:0
-	LogicalSingleGet

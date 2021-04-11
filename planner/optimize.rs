@@ -1,6 +1,6 @@
 use ast::{Expr, *};
 use context::Context;
-use statistics::STATISTICS_KEY;
+use remote_execution::REMOTE_EXECUTION_KEY;
 
 use crate::{cost::*, rule::*, search_space::*};
 
@@ -19,7 +19,8 @@ pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
         _ => panic!("copy_in_new did not replace expr with Leaf"),
     };
     optimizer.optimize_group(gid, PhysicalProp::None);
-    optimizer.winner(gid, PhysicalProp::None)
+    let expr = optimizer.winner(gid, PhysicalProp::None);
+    crate::distribution::set_hash_columns(expr)
 }
 
 // Our implementation of tasks differs from Columbia/Cascades:
@@ -153,10 +154,8 @@ impl<'a> Optimizer<'a> {
         // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
         let parent = self.ss[mid].parent;
         let upper_bound = self.ss[parent].upper_bound[require].unwrap_or(f64::MAX);
-        let physical_cost = {
-            let statistics = self.context[STATISTICS_KEY].lock().unwrap();
-            physical_cost(mid, &*statistics, &self.ss)
-        };
+        let physical_cost =
+            physical_cost(mid, self.context[REMOTE_EXECUTION_KEY].as_ref(), &self.ss);
         // If we can find a winning strategy for each input and an associated cost,
         // try to declare the current MultiExpr as the winner of its group.
         if self.optimize_inputs(mid, physical_cost, upper_bound) {
@@ -276,10 +275,11 @@ impl<'a> Optimizer<'a> {
             let mexpr = MultiExpr::new(gid, removed);
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
-            let props = {
-                let statistics = self.context[STATISTICS_KEY].lock().unwrap();
-                crate::cardinality_estimation::compute_logical_props(mid, &*statistics, &self.ss)
-            };
+            let props = crate::cardinality_estimation::compute_logical_props(
+                mid,
+                self.context[REMOTE_EXECUTION_KEY].as_ref(),
+                &self.ss,
+            );
             let lower_bound = compute_lower_bound(&self.ss[mid], &props, &self.ss);
             let group = Group {
                 logical: vec![mid],

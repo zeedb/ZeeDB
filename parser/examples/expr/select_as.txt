@@ -1,4 +1,0 @@
-select "foo" as a
-
-LogicalMap $query.a:"foo"
-	LogicalSingleGet

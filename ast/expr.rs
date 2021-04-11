@@ -193,8 +193,8 @@ pub enum Expr {
     HashJoin {
         broadcast: bool,
         join: Join,
-        partition_left: Vec<Scalar>,
-        partition_right: Vec<Scalar>,
+        partition_left: Column,
+        partition_right: Column,
         left: Box<Expr>,
         right: Box<Expr>,
     },
@@ -225,12 +225,14 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
-    // Broadcast broadcasts the build side of a join to every node.
+    /// Broadcast broadcasts the build side of a join to every node.
     Broadcast {
         input: Box<Expr>,
     },
-    // Exchange shuffles data during joins and aggregations.
+    /// Exchange shuffles data during joins and aggregations.
     Exchange {
+        /// hash_column is initially unset during the optimization phase, to reduce the size of the search space, then added before compilation.
+        hash_column: Option<Column>,
         input: Box<Expr>,
     },
     Insert {
@@ -1171,6 +1173,7 @@ pub enum F {
     Xid,
     Coalesce(Vec<Scalar>),
     ConcatString(Vec<Scalar>),
+    Hash(Vec<Scalar>),
     Greatest(Vec<Scalar>),
     Least(Vec<Scalar>),
     AbsDouble(Scalar),
@@ -1406,6 +1409,7 @@ impl F {
             | F::SubstrString(_, _, Some(_)) => 3,
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
+            | F::Hash(varargs)
             | F::Greatest(varargs)
             | F::Least(varargs) => varargs.len(),
             F::In(_, varargs) => varargs.len() + 1,
@@ -1548,6 +1552,7 @@ impl std::ops::Index<usize> for F {
             },
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
+            | F::Hash(varargs)
             | F::Greatest(varargs)
             | F::Least(varargs) => &varargs[index],
             F::In(a, varargs) => match index {
@@ -1719,6 +1724,7 @@ impl std::ops::IndexMut<usize> for F {
             },
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
+            | F::Hash(varargs)
             | F::Greatest(varargs)
             | F::Least(varargs) => &mut varargs[index],
             F::In(a, varargs) => match index {
@@ -2154,6 +2160,7 @@ impl F {
             F::Xid => "Xid",
             F::Coalesce(_) => "Coalesce",
             F::ConcatString(_) => "ConcatString",
+            F::Hash(_) => "Hash",
             F::Greatest(_) => "Greatest",
             F::Least(_) => "Least",
             F::AbsDouble(_) => "AbsDouble",
@@ -2276,6 +2283,7 @@ impl F {
             F::CurrentDate | F::CurrentTimestamp | F::Xid => vec![],
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
+            | F::Hash(varargs)
             | F::Greatest(varargs)
             | F::Least(varargs) => {
                 let mut arguments = vec![];
@@ -2505,6 +2513,7 @@ impl F {
             | F::DivInt64 { .. }
             | F::ExtractFromDate { .. }
             | F::ExtractFromTimestamp { .. }
+            | F::Hash { .. }
             | F::LengthString { .. }
             | F::ModInt64 { .. }
             | F::MultiplyInt64 { .. }
@@ -2556,6 +2565,7 @@ impl F {
             F::Xid => F::Xid,
             F::Coalesce(mut varargs) => F::Coalesce(varargs.drain(..).map(f).collect()),
             F::ConcatString(mut varargs) => F::ConcatString(varargs.drain(..).map(f).collect()),
+            F::Hash(mut varargs) => F::Hash(varargs.drain(..).map(f).collect()),
             F::Greatest(mut varargs) => F::Greatest(varargs.drain(..).map(f).collect()),
             F::Least(mut varargs) => F::Least(varargs.drain(..).map(f).collect()),
             F::In(a, mut varargs) => F::In(f(a), varargs.drain(..).map(f).collect()),

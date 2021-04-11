@@ -6,7 +6,7 @@ use crate::hash_table::HashTable;
 pub fn hash_join(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<AnyArray>,
+    partition_right: &I64Array,
     filter: impl Fn(&RecordBatch) -> BoolArray,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
@@ -28,7 +28,7 @@ pub fn hash_join(
         let unmatched_right = right.compress(&unmatched_mask);
         let unmatched_left = RecordBatch::nulls(left.build().schema(), unmatched_right.len());
         let unmatched = RecordBatch::zip(unmatched_left, unmatched_right);
-        RecordBatch::cat(vec![matched, unmatched])
+        RecordBatch::cat(vec![matched, unmatched]).unwrap()
     } else {
         matched
     }
@@ -37,7 +37,7 @@ pub fn hash_join(
 pub fn hash_join_semi(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<AnyArray>,
+    partition_right: &I64Array,
     filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -52,7 +52,7 @@ pub fn hash_join_semi(
 pub fn hash_join_anti(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<AnyArray>,
+    partition_right: &I64Array,
     filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -69,7 +69,7 @@ pub fn hash_join_anti(
 pub fn hash_join_single(
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<AnyArray>,
+    partition_right: &I64Array,
     filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -88,14 +88,14 @@ pub fn hash_join_single(
     let left_nulls = RecordBatch::nulls(left.build().schema(), right_unmatched.len());
     let unmatched = RecordBatch::zip(left_nulls, right_unmatched);
     assert!(matched.len() + unmatched.len() >= right.len());
-    RecordBatch::cat(vec![matched, unmatched])
+    RecordBatch::cat(vec![matched, unmatched]).unwrap()
 }
 
 pub fn hash_join_mark(
     mark: &Column,
     left: &HashTable,
     right: &RecordBatch,
-    partition_right: &Vec<AnyArray>,
+    partition_right: &I64Array,
     filter: impl Fn(&RecordBatch) -> BoolArray,
 ) -> RecordBatch {
     let (left_index, right_index) = left.probe(partition_right);
@@ -114,10 +114,10 @@ pub fn hash_join_mark(
 pub fn unmatched_tuples(
     left: &RecordBatch,
     unmatched_left: &BoolArray,
-    right: Vec<(String, DataType)>,
+    right: &Vec<(String, DataType)>,
 ) -> RecordBatch {
     let unmatched_left = left.compress(unmatched_left);
-    let unmatched_right = RecordBatch::nulls(right, unmatched_left.len());
+    let unmatched_right = RecordBatch::nulls(right.clone(), unmatched_left.len());
     RecordBatch::zip(unmatched_left, unmatched_right)
 }
 
@@ -142,7 +142,7 @@ pub fn nested_loop(
         let left_nulls = RecordBatch::nulls(left.schema(), right_unmatched.len());
         result.push(RecordBatch::zip(left_nulls, right_unmatched));
     }
-    RecordBatch::cat(result)
+    RecordBatch::cat(result).unwrap()
 }
 
 pub fn nested_loop_semi(
@@ -184,7 +184,7 @@ pub fn nested_loop_single(
     let left_nulls = RecordBatch::nulls(left.schema(), right_unmatched.len());
     let unmatched = RecordBatch::zip(left_nulls, right_unmatched);
     assert!(matched.len() + unmatched.len() >= right.len());
-    RecordBatch::cat(vec![matched, unmatched])
+    RecordBatch::cat(vec![matched, unmatched]).unwrap()
 }
 
 pub fn nested_loop_mark(

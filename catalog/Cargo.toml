@@ -8,7 +8,15 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
+futures = { version = "0.3.13", features = ["executor"] }
+once_cell = "1.5.2"
+
 ast = { path = "../ast" }
+catalog_types = { path = "../catalog_types" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
+parser = { path = "../parser" }
+planner = { path = "../planner" }
+remote_execution = { path = "../remote_execution" }
+statistics = { path = "../statistics" }
 zetasql = { path = "../zetasql" }

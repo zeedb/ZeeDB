@@ -62,7 +62,10 @@ impl RecordBatch {
         Self::new(combined)
     }
 
-    pub fn cat(mut batches: Vec<Self>) -> Self {
+    pub fn cat(mut batches: Vec<Self>) -> Option<Self> {
+        if batches.is_empty() {
+            return None;
+        }
         let n_columns = batches[0].columns.len();
         let names: Vec<String> = batches[0]
             .columns
@@ -84,7 +87,7 @@ impl RecordBatch {
             .enumerate()
             .map(|(i, arrays)| (names[i].clone(), AnyArray::cat(arrays)))
             .collect();
-        Self::new(columns)
+        Some(Self::new(columns))
     }
 
     pub fn repeat(&self, n: usize) -> Self {

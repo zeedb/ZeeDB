@@ -1,3 +1,0 @@
-create table foo (id int64 primary key, attr string)
-
-LogicalCreateTable foo id:INT64 attr:STRING

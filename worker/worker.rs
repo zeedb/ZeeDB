@@ -1,187 +1,266 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use ast::Expr;
-use context::Context;
+use context::{Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
+use futures::{executor::block_on, SinkExt};
+use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 use kernel::{AnyArray, RecordBatch};
-use protos::{worker_server::Worker, BroadcastRequest, ExchangeRequest, RecordStream};
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RemoteExecution, REMOTE_EXECUTION_KEY};
-use storage::{Storage, STORAGE_KEY};
-use tokio::sync::{
-    mpsc::{channel, Receiver, Sender},
-    Mutex,
+use protos::{
+    ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest, ColumnStatisticsRequest,
+    ColumnStatisticsResponse, ExchangeRequest, Page, Worker,
 };
-use tonic::{Request, Response, Status};
+use remote_execution::{RemoteExecution, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use storage::{Storage, STORAGE_KEY};
 
+#[derive(Clone)]
 pub struct WorkerNode {
-    threads: ThreadPool,
     context: Arc<Context>,
-    broadcast: Mutex<HashMap<(Expr, i64), Broadcast>>,
-    exchange: Mutex<HashMap<(Expr, i64), Exchange>>,
+    broadcast: Arc<Mutex<HashMap<(Expr, i64), Broadcast>>>,
+    exchange: Arc<Mutex<HashMap<(Expr, i64), Exchange>>>,
 }
 
 struct Broadcast {
-    listeners: Vec<Sender<RecordBatch>>,
+    listeners: Vec<ServerStreamingSink<Page>>,
 }
 
 struct Exchange {
-    listeners: Vec<(i32, Sender<RecordBatch>)>,
-}
-
-impl WorkerNode {
-    fn execute(
-        &self,
-        expr: Expr,
-        txn: i64,
-        variables: &HashMap<String, AnyArray>,
-    ) -> Receiver<RecordBatch> {
-        let (sender, receiver) = channel(1);
-        let context = self.context.clone();
-        let variables = variables.clone();
-        self.threads.spawn(move || {
-            let running = execute::execute(expr, txn, &variables, &context);
-            for batch in running {
-                sender.blocking_send(batch).unwrap();
-            }
-        });
-        receiver
-    }
+    listeners: Vec<(i32, ServerStreamingSink<Page>)>,
 }
 
 impl Default for WorkerNode {
     fn default() -> Self {
+        Self::new(Storage::default())
+    }
+}
+
+impl WorkerNode {
+    pub fn new(storage: Storage) -> Self {
         let mut context = Context::default();
-        context.insert(STORAGE_KEY, std::sync::Mutex::new(Storage::default()));
-        context.insert(REMOTE_EXECUTION_KEY, RemoteExecution::default());
+        context.insert(STORAGE_KEY, Mutex::new(storage));
+        context.insert(
+            REMOTE_EXECUTION_KEY,
+            Box::new(RpcRemoteExecution::default()),
+        );
+        context.insert(WORKER_ID_KEY, env_var("WORKER_ID"));
+        context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
         Self {
-            threads: ThreadPoolBuilder::new().build().unwrap(),
             context: Arc::new(context),
             broadcast: Default::default(),
             exchange: Default::default(),
         }
     }
+
+    pub fn unwrap(self) -> Storage {
+        std::mem::take(&mut self.context[STORAGE_KEY].lock().unwrap())
+    }
 }
 
-#[tonic::async_trait]
 impl Worker for WorkerNode {
-    type BroadcastStream = RecordStream;
-
-    async fn broadcast(
-        &self,
-        request: Request<BroadcastRequest>,
-    ) -> Result<Response<Self::BroadcastStream>, Status> {
-        let mut request = request.into_inner();
-        let expr = bincode::deserialize(&request.expr).unwrap();
-        let variables: HashMap<String, AnyArray> = request
+    fn broadcast(
+        &mut self,
+        ctx: RpcContext,
+        mut req: BroadcastRequest,
+        sink: ServerStreamingSink<Page>,
+    ) {
+        let expr = bincode::deserialize(&req.expr).unwrap();
+        let variables: HashMap<String, AnyArray> = req
             .variables
             .drain()
             .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
             .collect();
-        let listeners = request.listeners as usize;
-        let receiver = match self.broadcast.lock().await.entry((expr, request.txn)) {
+        let listeners = req.listeners as usize;
+        match self.broadcast.lock().unwrap().entry((expr, req.txn)) {
             Entry::Occupied(mut occupied) => {
                 // Add a new listener to the existing list of listeners.
-                let (sender, receiver) = channel(1);
-                occupied.get_mut().listeners.push(sender);
+                occupied.get_mut().listeners.push(sink);
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn), topic) = occupied.remove_entry();
-                    broadcast(self.execute(expr, txn, &variables), topic.listeners);
+                    let context = self.context.clone();
+                    rayon::spawn(move || broadcast(expr, txn, variables, context, topic.listeners));
                 }
-                receiver
             }
             Entry::Vacant(vacant) => {
-                let (sender, receiver) = channel(1);
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, txn) = vacant.into_key();
-                    broadcast(self.execute(expr, txn, &variables), vec![sender]);
+                    let context = self.context.clone();
+                    rayon::spawn(move || broadcast(expr, txn, variables, context, vec![sink]));
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Broadcast {
-                        listeners: vec![sender],
+                        listeners: vec![sink],
                     });
                 }
-                receiver
             }
         };
-        Ok(Response::new(RecordStream::new(receiver)))
     }
 
-    type ExchangeStream = RecordStream;
-
-    async fn exchange(
-        &self,
-        request: Request<ExchangeRequest>,
-    ) -> Result<Response<Self::ExchangeStream>, Status> {
-        let request = request.into_inner();
-        let expr = bincode::deserialize(&request.expr).unwrap();
-        let variables = HashMap::new(); // TODO
-        let listeners = request.listeners as usize;
-        let receiver = match self.exchange.lock().await.entry((expr, request.txn)) {
+    fn exchange(
+        &mut self,
+        ctx: RpcContext,
+        mut req: ExchangeRequest,
+        sink: ServerStreamingSink<Page>,
+    ) {
+        let expr = bincode::deserialize(&req.expr).unwrap();
+        let variables: HashMap<String, AnyArray> = req
+            .variables
+            .drain()
+            .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
+            .collect();
+        let listeners = req.listeners as usize;
+        match self.exchange.lock().unwrap().entry((expr, req.txn)) {
             Entry::Occupied(mut occupied) => {
                 // Add a new listener to the existing list of listeners.
-                let (sender, receiver) = channel(1);
-                occupied
-                    .get_mut()
-                    .listeners
-                    .push((request.hash_bucket, sender));
+                occupied.get_mut().listeners.push((req.hash_bucket, sink));
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn), topic) = occupied.remove_entry();
-                    exchange(
-                        self.execute(expr, txn, &variables),
-                        request.hash_column,
-                        topic.listeners,
-                    );
+                    let context = self.context.clone();
+                    rayon::spawn(move || {
+                        exchange(
+                            expr,
+                            txn,
+                            variables,
+                            context,
+                            req.hash_column,
+                            topic.listeners,
+                        )
+                    });
                 }
-                receiver
             }
             Entry::Vacant(vacant) => {
-                let (sender, receiver) = channel(1);
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, txn) = vacant.into_key();
-                    exchange(
-                        self.execute(expr, txn, &variables),
-                        request.hash_column,
-                        vec![(request.hash_bucket, sender)],
-                    );
+                    let context = self.context.clone();
+                    rayon::spawn(move || {
+                        exchange(
+                            expr,
+                            txn,
+                            variables,
+                            context,
+                            req.hash_column,
+                            vec![(req.hash_bucket, sink)],
+                        )
+                    });
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Exchange {
-                        listeners: vec![(request.hash_bucket, sender)],
+                        listeners: vec![(req.hash_bucket, sink)],
                     });
                 }
-                receiver
             }
         };
-        Ok(Response::new(RecordStream::new(receiver)))
+    }
+
+    fn approx_cardinality(
+        &mut self,
+        ctx: RpcContext,
+        req: ApproxCardinalityRequest,
+        sink: grpcio::UnarySink<ApproxCardinalityResponse>,
+    ) {
+        let cardinality = self.context[STORAGE_KEY]
+            .lock()
+            .unwrap()
+            .statistics(req.table_id)
+            .unwrap()
+            .approx_cardinality() as f64;
+        ctx.spawn(async move {
+            sink.success(ApproxCardinalityResponse { cardinality })
+                .await
+                .unwrap()
+        })
+    }
+
+    fn column_statistics(
+        &mut self,
+        ctx: RpcContext,
+        req: ColumnStatisticsRequest,
+        sink: UnarySink<ColumnStatisticsResponse>,
+    ) {
+        let lock = self.context[STORAGE_KEY].lock().unwrap();
+        let statistics = lock
+            .statistics(req.table_id)
+            .unwrap()
+            .column(&req.column_name)
+            .map(|s| bincode::serialize(s).unwrap());
+        ctx.spawn(async move {
+            sink.success(ColumnStatisticsResponse { statistics })
+                .await
+                .unwrap()
+        })
     }
 }
 
-fn broadcast(mut results: Receiver<RecordBatch>, listeners: Vec<Sender<RecordBatch>>) {
-    tokio::spawn(async move {
-        loop {
-            match results.recv().await {
-                Some(next) => {
-                    for sender in &listeners {
-                        sender.send(next.clone()).await.unwrap();
-                    }
-                }
-                None => break,
-            }
+fn broadcast(
+    expr: Expr,
+    txn: i64,
+    variables: HashMap<String, AnyArray>,
+    context: Arc<Context>,
+    mut listeners: Vec<ServerStreamingSink<Page>>,
+) {
+    // Send each batch of records produced by expr to each worker node in the cluster.
+    for batch in execute::execute(expr, txn, &variables, &context) {
+        for sink in &mut listeners {
+            block_on(sink.send((
+                Page {
+                    record_batch: bincode::serialize(&batch).unwrap(),
+                },
+                WriteFlags::default(),
+            )))
+            .unwrap();
         }
-    });
+    }
+    // Close the stream to each worker node in the cluster.
+    for sink in &mut listeners {
+        block_on(sink.close()).unwrap();
+    }
 }
 
 fn exchange(
-    _results: Receiver<RecordBatch>,
-    _hash_column: String,
-    _listeners: Vec<(i32, Sender<RecordBatch>)>,
+    expr: Expr,
+    txn: i64,
+    variables: HashMap<String, AnyArray>,
+    context: Arc<Context>,
+    hash_column: String,
+    mut listeners: Vec<(i32, ServerStreamingSink<Page>)>,
 ) {
-    todo!()
+    // Order listeners by bucket.
+    listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
+    // Split up each batch of records produced by expr and send the splits to the worker nodes.
+    for batch in execute::execute(expr, txn, &variables, &context) {
+        for (hash_bucket, batch_part) in partition(batch, &hash_column, listeners.len())
+            .iter()
+            .enumerate()
+        {
+            let (_, sink) = &mut listeners[hash_bucket];
+            block_on(sink.send((
+                Page {
+                    record_batch: bincode::serialize(&batch_part).unwrap(),
+                },
+                WriteFlags::default(),
+            )))
+            .unwrap();
+        }
+    }
+    // Close the stream to each worker node in the cluster.
+    for (_, sink) in &mut listeners {
+        block_on(sink.close()).unwrap();
+    }
+}
+
+fn partition(batch: RecordBatch, hash_column: &str, workers: usize) -> Vec<RecordBatch> {
+    if workers == 1 {
+        vec![batch]
+    } else {
+        todo!()
+    }
+}
+
+fn env_var(key: &str) -> i32 {
+    std::env::var(key).expect(key).parse().unwrap()
 }

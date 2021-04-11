@@ -5,17 +5,16 @@ edition = "2018"
 publish = false
 
 [dependencies]
-cpuprofiler = "0.0.4"
+chrono = "0.4.11"
+futures = { version = "0.3.13", features = ["executor"] }
+grpcio = { version = "0.8.2", features = ["prost-codec"] }
+pprof = { version = "0.4.3", features = ["flamegraph"] }
+rand = { version = "0.8.2", features = ["small_rng"]}
 regex = "1.4.2"
-ast = { path = "../ast" }
-context = { path = "../context" }
-catalog = { path = "../catalog" }
-execute = { path = "../execute" }
-parser = { path = "../parser" }
-planner = { path = "../planner" }
-storage = { path = "../storage" }
-statistics = { path = "../statistics" }
-zetasql = { path = "../zetasql" }
+
+coordinator = { path = "../coordinator" }
+protos = { path = "../protos" }
+worker = { path = "../worker" }
 
 [[bin]]
 name = "benchmarks"

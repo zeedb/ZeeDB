@@ -1,10 +1,5 @@
 fn main() {
-    let mut config = prost_build::Config::new();
-    config.protoc_arg("--experimental_allow_proto3_optional");
-    tonic_build::configure()
-        .build_client(true)
-        .build_server(true)
-        .out_dir(".")
-        .compile_with_config(config, &["../protos/rpc.proto"], &["../protos"])
+    println!("cargo:rerun-if-changed={}", "../protos/rpc.proto");
+    grpcio_compiler::prost_codegen::compile_protos(&["../protos/rpc.proto"], &["../protos"], ".")
         .unwrap();
 }

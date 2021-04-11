@@ -8,7 +8,7 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
+futures = "0.3.13"
+grpcio = { version = "0.8.2", features = ["prost-codec"]}
 prost = "0.7.0"
 prost-types = "0.7.0"
-tokio = { version = "1.0.2", features = ["macros"] }
-tonic = "0.4.0"

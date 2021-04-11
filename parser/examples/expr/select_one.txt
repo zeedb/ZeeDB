@@ -1,4 +1,0 @@
-select 1
-
-LogicalMap $query.$col1:1
-	LogicalSingleGet

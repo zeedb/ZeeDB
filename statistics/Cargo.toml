@@ -10,7 +10,8 @@ path = "lib.rs"
 [dependencies]
 hyperloglogplus = "0.2.2"
 rand = "0.7.3"
+serde = { version = "1.0.123", features = ["derive"] }
 twox-hash = "1.6.0"
-catalog = { path = "../catalog" }
+
 context = { path = "../context" }
 kernel = { path = "../kernel" }

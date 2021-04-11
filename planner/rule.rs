@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 
 use ast::*;
-use catalog::CATALOG_KEY;
+use catalog_types::CATALOG_KEY;
+use kernel::DataType;
 
 use crate::{optimize::Optimizer, search_space::*};
 
@@ -323,6 +324,7 @@ impl Rule {
             }
             Rule::InsertExchange => {
                 return Some(Exchange {
+                    hash_column: None,
                     input: Box::new(bind),
                 });
             }
@@ -603,13 +605,17 @@ fn to_hash_join(ss: &SearchSpace, bind: Expr, broadcast: bool) -> Option<Expr> {
                 GroupID(*left),
                 GroupID(*right),
             ) {
+                let (partition_left, left) =
+                    create_hash_column(partition_left, Leaf { gid: *left });
+                let (partition_right, right) =
+                    create_hash_column(partition_right, Leaf { gid: *right });
                 return Some(HashJoin {
                     broadcast,
                     join,
                     partition_left,
                     partition_right,
-                    left: Box::new(Leaf { gid: *left }),
-                    right: Box::new(Leaf { gid: *right }),
+                    left: Box::new(left),
+                    right: Box::new(right),
                 });
             }
         }
@@ -650,4 +656,15 @@ fn hash_join(
 
 fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
     columns.iter().all(|c| group.props.columns.contains_key(c))
+}
+
+fn create_hash_column(partition_by: Vec<Scalar>, input: Expr) -> (Column, Expr) {
+    let column = Column::computed("hash", &None, DataType::I64);
+    let scalar = Scalar::Call(Box::new(F::Hash(partition_by)));
+    let expr = LogicalMap {
+        projects: vec![(scalar, column.clone())],
+        include_existing: true,
+        input: Box::new(input),
+    };
+    (column, expr)
 }

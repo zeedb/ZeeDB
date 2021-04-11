@@ -1,5 +1,0 @@
-select customer_id as a 
-from customer
-
-LogicalMap customer.customer_id
-	LogicalGet customer

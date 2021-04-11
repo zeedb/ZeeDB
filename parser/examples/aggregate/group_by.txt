@@ -1,8 +1,0 @@
-select store_id 
-from customer 
-group by 1
-
-LogicalMap $groupby.store_id
-	LogicalAggregate $groupby.store_id
-		LogicalMap $groupby.store_id:customer.store_id
-			LogicalGet customer

@@ -1,0 +1,13 @@
+[package]
+name = "catalog_types"
+version = "0.1.0"
+edition = "2018"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+ast = { path = "../ast" }
+context = { path = "../context" }
+zetasql = { path = "../zetasql" }

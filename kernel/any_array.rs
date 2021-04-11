@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     Array, BoolArray, DataType, DateArray, F64Array, I32Array, I64Array, StringArray,
-    TimestampArray, U64Array,
+    TimestampArray,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -272,7 +272,7 @@ impl AnyArray {
         unary_method!(self, array, array.cmp(i, j))
     }
 
-    pub fn hash(&self, state: &mut U64Array) {
+    pub fn hash(&self, state: &mut I64Array) {
         unary_method!(self, array, array.hash(state))
     }
 

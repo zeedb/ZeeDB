@@ -1,6 +1,0 @@
-select distinct store_id 
-from customer
-
-LogicalAggregate $distinct.store_id
-	LogicalMap $distinct.store_id:customer.store_id
-		LogicalGet customer

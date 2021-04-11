@@ -1,5 +1,0 @@
-select cast(customer_id as string) 
-from customer
-
-LogicalMap $query.$col1:(Cast customer.customer_id STRING)
-	LogicalGet customer

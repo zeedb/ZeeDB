@@ -1,7 +1,0 @@
-select customer_id 
-from customer 
-order by customer_id + 1
-
-LogicalSort $orderby.$orderbycol1
-	LogicalMap $orderby.$orderbycol1:(AddInt64 customer.customer_id 1) customer.customer_id
-		LogicalGet customer

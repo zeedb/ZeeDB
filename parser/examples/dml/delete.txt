@@ -1,6 +1,0 @@
-delete customer 
-where person_id = 1
-
-LogicalDelete customer
-	LogicalFilter (Equal customer.person_id 1)
-		LogicalGet customer

@@ -1,7 +1,0 @@
-select sum(1) 
-from person
-
-LogicalMap $aggregate.$agg1
-	LogicalAggregate $aggregate.$agg1:(Sum $sum)
-		LogicalMap $sum:1
-			LogicalGet person

@@ -1,7 +1,0 @@
-select customer_id 
-from customer 
-where store_id = 1
-
-LogicalMap customer.customer_id
-	LogicalFilter (Equal customer.store_id 1)
-		LogicalGet customer

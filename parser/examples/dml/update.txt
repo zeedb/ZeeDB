@@ -1,8 +1,0 @@
-update person 
-set first_name = "Foo" 
-where person_id = 1
-
-LogicalUpdate person
-	LogicalMap person.person_id person.first_name:"Foo" person.last_name person.modified_date $tid
-		LogicalFilter (Equal person.person_id 1)
-			LogicalGet person

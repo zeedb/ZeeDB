@@ -1,8 +1,0 @@
-set x = 1;
-select @x;
-
-LogicalScript
-	LogicalAssign x 1
-		LogicalSingleGet
-	LogicalMap $query.$col1:@x
-		LogicalSingleGet

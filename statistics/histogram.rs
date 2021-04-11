@@ -1,4 +1,5 @@
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 pub(crate) const DEFAULT_M: usize = 8;
 pub(crate) const DEFAULT_K: usize = 200;
@@ -8,7 +9,7 @@ pub(crate) const MAX_K: usize = (1 << 16) - 1;
 /// Histogram implements the approximate histogram described in:
 ///   "Streaming Quantiles Algorithms with Small Space and Update Time" https://arxiv.org/abs/1907.00236
 /// It is based on the C++ implementation in https://github.com/apache/datasketches-cpp/tree/master/kll
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Histogram<T: Ord + Default> {
     /// k is the size of the final, largest level.
     k: usize,

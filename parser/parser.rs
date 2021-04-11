@@ -1,54 +1,37 @@
-use std::sync::Mutex;
+use std::sync::Arc;
 
 use ast::Expr;
-use catalog::CATALOG_KEY;
+use catalog_types::CATALOG_KEY;
 use context::{Context, ContextKey};
+use grpcio::{ChannelBuilder, EnvBuilder, Environment};
 use kernel::*;
-use tokio::runtime::Runtime;
-use tonic::transport::{Channel, Endpoint};
-use zetasql::{
-    analyze_response::Result::*, analyzer_options_proto::QueryParameterProto,
-    zeta_sql_local_service_client::ZetaSqlLocalServiceClient, *,
-};
+use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
 
 pub const MAX_QUERY: usize = 4_194_304;
 pub const PARSER_KEY: ContextKey<Parser> = ContextKey::new("PARSER");
 
 pub struct Parser {
-    client: Mutex<ZetaSqlLocalServiceClient<Channel>>,
-    runtime: Runtime,
+    client: ZetaSqlLocalServiceClient,
 }
 
 impl Default for Parser {
     fn default() -> Self {
         crate::server::start_server_process();
-        // TODO this is necessary because we're mixing sync and async.
-        std::thread::spawn(|| {
-            let runtime = Runtime::new().unwrap();
-            let client = runtime
-                .block_on(async { Mutex::new(parser("http://127.0.0.1:50051".to_string())) });
-            Self { client, runtime }
-        })
-        .join()
-        .unwrap()
+        let ch =
+            ChannelBuilder::new(Arc::new(EnvBuilder::new().build())).connect("localhost:50051");
+        Self {
+            client: ZetaSqlLocalServiceClient::new(ch),
+        }
     }
-}
-
-fn parser(dst: String) -> ZetaSqlLocalServiceClient<Channel> {
-    let chan = Endpoint::new(dst).unwrap().connect_lazy().unwrap();
-    ZetaSqlLocalServiceClient::new(chan)
 }
 
 impl Parser {
     pub fn format(&self, sql: &str) -> String {
-        let mut client = self.client.lock().unwrap();
-        let request = tonic::Request::new(FormatSqlRequest {
-            sql: Some(sql.to_string()),
-        });
-        self.runtime
-            .block_on(client.format_sql(request))
+        self.client
+            .format_sql(&FormatSqlRequest {
+                sql: Some(sql.to_string()),
+            })
             .unwrap()
-            .into_inner()
             .sql
             .unwrap()
     }
@@ -62,17 +45,14 @@ impl Parser {
         context: &Context,
     ) -> Expr {
         // Extract table names from script.
-        let mut client = self.client.lock().unwrap();
-        let request = tonic::Request::new(ExtractTableNamesFromStatementRequest {
-            sql_statement: Some(sql.to_string()),
-            allow_script: Some(true),
-            options: Some(language_options()),
-        });
         let table_names = self
-            .runtime
-            .block_on(client.extract_table_names_from_statement(request))
-            .unwrap()
-            .into_inner()
+            .client
+            .extract_table_names_from_statement(&ExtractTableNamesFromStatementRequest {
+                sql_statement: Some(sql.to_string()),
+                allow_script: Some(true),
+                options: Some(language_options()),
+            })
+            .expect(sql)
             .table_name
             .drain(..)
             .map(|name| name.table_name_segment)
@@ -84,7 +64,7 @@ impl Parser {
         let mut exprs = vec![];
         loop {
             // Parse the next statement.
-            let request = tonic::Request::new(AnalyzeRequest {
+            let request = AnalyzeRequest {
                 simple_catalog: Some(catalog.clone()),
                 options: Some(AnalyzerOptionsProto {
                     default_timezone: Some("UTC".to_string()),
@@ -107,12 +87,8 @@ impl Parser {
                     },
                 )),
                 ..Default::default()
-            });
-            let response = self
-                .runtime
-                .block_on(client.analyze(request))
-                .unwrap()
-                .into_inner();
+            };
+            let response = self.client.analyze(&request).unwrap();
             let expr = match response.result.unwrap() {
                 ResolvedStatement(stmt) => crate::convert::convert(catalog_id, &stmt),
                 ResolvedExpression(_) => panic!("expected statement but found expression"),
@@ -144,8 +120,8 @@ impl Parser {
 
 fn language_options() -> LanguageOptionsProto {
     LanguageOptionsProto {
-        enabled_language_features: catalog::enabled_language_features(),
-        supported_statement_kinds: catalog::supported_statement_kinds(),
+        enabled_language_features: catalog_types::enabled_language_features(),
+        supported_statement_kinds: catalog_types::supported_statement_kinds(),
         ..Default::default()
     }
 }

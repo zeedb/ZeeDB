@@ -1,5 +1,5 @@
 use ast::*;
-use statistics::Statistics;
+use remote_execution::RemoteExecution;
 
 use crate::{cardinality_estimation::LogicalProps, search_space::*};
 
@@ -21,7 +21,11 @@ const NODES: Cost = 10.0; // TODO use the actual # of nodes at runtime.
 // physicalCost computes the local cost of the physical operator at the head of a multi-expression tree.
 // To compute the total physical cost of an expression, you need to choose a single physical expression
 // at every node of the tree and add up the local costs.
-pub(crate) fn physical_cost(mid: MultiExprID, statistics: &Statistics, ss: &SearchSpace) -> Cost {
+pub(crate) fn physical_cost(
+    mid: MultiExprID,
+    statistics: &dyn RemoteExecution,
+    ss: &SearchSpace,
+) -> Cost {
     let parent = ss[mid].parent;
     match &ss[mid].expr {
         TableFreeScan { .. }
@@ -34,8 +38,8 @@ pub(crate) fn physical_cost(mid: MultiExprID, statistics: &Statistics, ss: &Sear
         | Call { .. }
         | Explain { .. } => 0.0,
         SeqScan { table, .. } => {
-            let n = statistics[table.id].approx_cardinality();
-            n as f64 * SEQ_SCAN
+            let n = statistics.approx_cardinality(table.id);
+            n * SEQ_SCAN
         }
         IndexScan { .. } => {
             let n = ss[parent].props.cardinality;
@@ -88,7 +92,7 @@ pub(crate) fn physical_cost(mid: MultiExprID, statistics: &Statistics, ss: &Sear
             let n = ss[leaf(input)].props.cardinality;
             n * EXCHANGE * NODES
         }
-        Exchange { input } => {
+        Exchange { input, .. } => {
             let n = ss[leaf(input)].props.cardinality;
             n * EXCHANGE
         }

@@ -9,11 +9,10 @@ pub struct HashTable {
 }
 
 impl HashTable {
-    pub fn new(input: &RecordBatch, partition_by: &Vec<AnyArray>) -> Self {
+    pub fn new(input: &RecordBatch, partition_by: &I64Array) -> Self {
         let n_rows = input.len();
         let n_buckets = size_hash_table(n_rows);
-        let hashes = U64Array::hash_all(partition_by);
-        let buckets = bucketize(&hashes, n_buckets);
+        let buckets = bucketize(&partition_by, n_buckets);
         let indexes = buckets.sort();
         let tuples = input.gather(&indexes);
         let offsets = bucket_offsets(&buckets, n_buckets);
@@ -21,14 +20,13 @@ impl HashTable {
     }
 
     /// Identify matching rows from self (build side of join) and right (probe side of the join).
-    pub fn probe(&self, partition_by: &Vec<AnyArray>) -> (I32Array, I32Array) {
+    pub fn probe(&self, partition_by: &I64Array) -> (I32Array, I32Array) {
         let n_buckets = self.offsets.len() - 1;
-        let right_buckets = U64Array::hash_all(partition_by);
         let mut left_index = vec![];
         let mut right_index = vec![];
         // For each row from the probe side of the join, get the bucket...
-        for i_right in 0..right_buckets.len() {
-            let bucket = right_buckets.get(i_right).unwrap() as usize % n_buckets;
+        for i_right in 0..partition_by.len() {
+            let bucket = partition_by.get(i_right).unwrap() as usize % n_buckets;
             // ...for each row on the build side of the join with matching bucket...
             for i_left in self.offsets[bucket]..self.offsets[bucket + 1] {
                 // ...add a row to the output, effectively performing a cross-join.
@@ -46,10 +44,11 @@ impl HashTable {
     }
 }
 
-fn bucketize(hashes: &U64Array, n_buckets: usize) -> I32Array {
+fn bucketize(hashes: &I64Array, n_buckets: usize) -> I32Array {
     let mut indexes = I32Array::with_capacity(hashes.len());
     for i in 0..hashes.len() {
-        let bucket = hashes.get(i).unwrap() % n_buckets as u64;
+        let value = u64::from_ne_bytes(hashes.get(i).unwrap().to_ne_bytes());
+        let bucket = value % n_buckets as u64;
         indexes.push(Some(bucket as i32));
     }
     indexes

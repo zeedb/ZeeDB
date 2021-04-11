@@ -1,4 +1,0 @@
-select cast(1 as numeric)
-
-LogicalMap $query.$col1:0
-	LogicalSingleGet

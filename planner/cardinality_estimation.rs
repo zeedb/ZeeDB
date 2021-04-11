@@ -4,7 +4,8 @@ use std::{
 };
 
 use ast::*;
-use statistics::{ColumnStatistics, NotNan, Statistics};
+use remote_execution::RemoteExecution;
+use statistics::{ColumnStatistics, NotNan};
 
 use crate::search_space::*;
 
@@ -18,7 +19,7 @@ pub struct LogicalProps {
 
 pub(crate) fn compute_logical_props(
     mid: MultiExprID,
-    statistics: &Statistics,
+    statistics: &dyn RemoteExecution,
     ss: &SearchSpace,
 ) -> LogicalProps {
     let mexpr = &ss[mid];
@@ -113,24 +114,11 @@ pub(crate) fn compute_logical_props(
     }
 }
 
-fn scan(projects: &Vec<Column>, table: &Table, statistics: &Statistics) -> LogicalProps {
-    let table_statistics = statistics.get(table.id).expect(&table.name);
+fn scan(projects: &Vec<Column>, table: &Table, statistics: &dyn RemoteExecution) -> LogicalProps {
+    let stats = |c: &Column| statistics.column_statistics(c.table_id?, &c.name);
     LogicalProps {
-        cardinality: table_statistics.approx_cardinality() as f64,
-        columns: projects
-            .iter()
-            .map(|c| {
-                (
-                    c.clone(),
-                    Some(
-                        table_statistics
-                            .column(&c.name)
-                            .cloned()
-                            .unwrap_or_else(|| ColumnStatistics::new(c.data_type)),
-                    ),
-                )
-            })
-            .collect(),
+        cardinality: statistics.approx_cardinality(table.id),
+        columns: projects.iter().map(|c| (c.clone(), stats(c))).collect(),
     }
 }
 
