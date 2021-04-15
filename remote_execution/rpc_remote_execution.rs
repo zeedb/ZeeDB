@@ -1,7 +1,7 @@
 use std::{collections::HashMap, sync::Arc};
 
 use ast::Expr;
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use grpcio::{ChannelBuilder, EnvBuilder};
 use kernel::{AnyArray, RecordBatch};
 use protos::{

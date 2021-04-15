@@ -2,7 +2,7 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use ast::{Expr, Index, *};
 use context::{Context, WORKER_ID_KEY};
-use futures::{executor::block_on, Stream, StreamExt};
+use futures::{executor::block_on, StreamExt};
 use kernel::{RecordBatch, *};
 use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
 use storage::*;

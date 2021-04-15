@@ -41,7 +41,7 @@ impl Default for CoordinatorNode {
 impl Coordinator for CoordinatorNode {
     fn submit(
         &mut self,
-        ctx: RpcContext,
+        _ctx: RpcContext,
         mut req: SubmitRequest,
         mut sink: ServerStreamingSink<Page>,
     ) {

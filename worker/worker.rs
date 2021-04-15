@@ -12,7 +12,7 @@ use protos::{
     ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest, ColumnStatisticsRequest,
     ColumnStatisticsResponse, ExchangeRequest, Page, Worker,
 };
-use remote_execution::{RemoteExecution, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use storage::{Storage, STORAGE_KEY};
 
 #[derive(Clone)]
@@ -61,7 +61,7 @@ impl WorkerNode {
 impl Worker for WorkerNode {
     fn broadcast(
         &mut self,
-        ctx: RpcContext,
+        _ctx: RpcContext,
         mut req: BroadcastRequest,
         sink: ServerStreamingSink<Page>,
     ) {
@@ -101,7 +101,7 @@ impl Worker for WorkerNode {
 
     fn exchange(
         &mut self,
-        ctx: RpcContext,
+        _ctx: RpcContext,
         mut req: ExchangeRequest,
         sink: ServerStreamingSink<Page>,
     ) {
@@ -253,7 +253,7 @@ fn exchange(
     }
 }
 
-fn partition(batch: RecordBatch, hash_column: &str, workers: usize) -> Vec<RecordBatch> {
+fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<RecordBatch> {
     if workers == 1 {
         vec![batch]
     } else {

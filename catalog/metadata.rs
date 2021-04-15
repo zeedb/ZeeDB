@@ -5,7 +5,7 @@ use catalog_types::{
     builtin_function_options, Catalog, CATALOG_KEY, METADATA_CATALOG_ID, ROOT_CATALOG_ID,
 };
 use context::Context;
-use futures::{executor::block_on, Stream, StreamExt};
+use futures::{executor::block_on, StreamExt};
 use kernel::*;
 use once_cell::sync::OnceCell;
 use parser::{Parser, PARSER_KEY};
@@ -267,34 +267,39 @@ fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, AnyArra
 struct BootstrapStatistics;
 
 impl RemoteExecution for BootstrapStatistics {
-    fn approx_cardinality(&self, table_id: i64) -> f64 {
+    fn approx_cardinality(&self, _table_id: i64) -> f64 {
         1.0
     }
 
-    fn column_statistics(&self, table_id: i64, column_name: &str) -> Option<ColumnStatistics> {
+    fn column_statistics(&self, _table_id: i64, _column_name: &str) -> Option<ColumnStatistics> {
         None
     }
 
-    fn submit(&self, expr: Expr, variables: &HashMap<String, AnyArray>, txn: i64) -> RecordStream {
+    fn submit(
+        &self,
+        _expr: Expr,
+        _variables: &HashMap<String, AnyArray>,
+        _txn: i64,
+    ) -> RecordStream {
         panic!("RemoteExecution::submit is not available in BootstrapStatistics")
     }
 
     fn broadcast(
         &self,
-        expr: Expr,
-        variables: &HashMap<String, AnyArray>,
-        txn: i64,
+        _expr: Expr,
+        _variables: &HashMap<String, AnyArray>,
+        _txn: i64,
     ) -> RecordStream {
         panic!("RemoteExecution::broadcast is not available in BootstrapStatistics")
     }
 
     fn exchange(
         &self,
-        expr: Expr,
-        variables: &HashMap<String, AnyArray>,
-        txn: i64,
-        hash_column: String,
-        hash_bucket: i32,
+        _expr: Expr,
+        _variables: &HashMap<String, AnyArray>,
+        _txn: i64,
+        _hash_column: String,
+        _hash_bucket: i32,
     ) -> RecordStream {
         panic!("RemoteExecution::exchange is not available in BootstrapStatistics")
     }

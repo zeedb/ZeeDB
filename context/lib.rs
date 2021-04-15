@@ -1,6 +1,4 @@
-use std::{any::Any, collections::HashMap, marker::PhantomData, ops::Index, sync::Arc};
-
-use grpcio::Environment;
+use std::{any::Any, collections::HashMap, marker::PhantomData, ops::Index};
 
 /// Context holds references to shared components that can call each other.
 /// It allows us to avoid passing a zillion arguments to every top-level function.

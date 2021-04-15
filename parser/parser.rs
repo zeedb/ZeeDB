@@ -3,7 +3,7 @@ use std::sync::Arc;
 use ast::Expr;
 use catalog_types::CATALOG_KEY;
 use context::{Context, ContextKey};
-use grpcio::{ChannelBuilder, EnvBuilder, Environment};
+use grpcio::{ChannelBuilder, EnvBuilder};
 use kernel::*;
 use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
 

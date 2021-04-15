@@ -6,8 +6,7 @@ use std::{
 
 use coordinator::CoordinatorNode;
 use futures::{executor::block_on, StreamExt};
-use grpcio::{ChannelBuilder, EnvBuilder, Environment, Server, ServerBuilder};
-use kernel::{AnyArray, Array, I64Array, RecordBatch};
+use grpcio::{ChannelBuilder, EnvBuilder, Server, ServerBuilder};
 use once_cell::sync::{Lazy, OnceCell};
 use protos::{create_coordinator, create_worker, CoordinatorClient, SubmitRequest};
 use regex::Regex;
@@ -87,11 +86,11 @@ fn run(sql: &str, client: &mut CoordinatorClient) -> String {
     }
 }
 
-pub(crate) struct TestCluster {
-    pub(crate) coordinator: CoordinatorNode,
-    pub(crate) worker: WorkerNode,
-    pub(crate) server: Server,
-    pub(crate) client: CoordinatorClient,
+pub struct TestCluster {
+    pub coordinator: CoordinatorNode,
+    pub worker: WorkerNode,
+    pub server: Server,
+    pub client: CoordinatorClient,
 }
 
 impl TestCluster {
@@ -128,11 +127,11 @@ impl TestCluster {
         }
     }
 
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self::new(Storage::default())
     }
 
-    pub(crate) fn adventure_works() -> Self {
+    pub fn adventure_works() -> Self {
         static CACHE: OnceCell<Storage> = OnceCell::new();
         let storage = CACHE.get_or_init(|| {
             let cluster = TestCluster::empty();

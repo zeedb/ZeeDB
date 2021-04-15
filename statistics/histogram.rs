@@ -103,6 +103,7 @@ impl<T: Ord + Default> Histogram<T> {
         self.items.shrink_to(target);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn quantiles(&mut self, fractions: &[f64]) -> Option<Vec<&T>> {
         // If no items have been added, quantile is unknown.
         if self.is_empty() {
@@ -235,6 +236,7 @@ impl<T: Ord + Default> Histogram<T> {
         self.n
     }
 
+    #[allow(dead_code)]
     pub(crate) fn retained(&self) -> usize {
         self.levels[0]
     }
