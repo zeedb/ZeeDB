@@ -6,8 +6,6 @@ pub const ROOT_CATALOG_ID: i64 = 0;
 pub const METADATA_CATALOG_ID: i64 = 1;
 pub const CATALOG_KEY: ContextKey<Box<dyn Catalog>> = ContextKey::new("CATALOG");
 
-// TODO is it possible to eliminate the txn argument and just use latest transaction?
-
 pub trait Catalog: Send + Sync {
     fn catalog(
         &self,

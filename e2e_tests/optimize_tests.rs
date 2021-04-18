@@ -149,7 +149,6 @@ fn test_ddl() {
     t.ok("explain create index nested.foo_index on person (person_id)");
     t.comment("drop_index_nested");
     t.ok("explain drop index nested.foo_index");
-    // TODO what if create or drop names are nested?
     t.finish("examples/optimize_ddl.testlog");
 }
 

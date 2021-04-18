@@ -61,7 +61,6 @@ pub fn populate_adventure_works(n_store: usize, client: CoordinatorClient) {
         let lines: Vec<_> = (customer_id_start..n_customer.min(customer_id_start + 10_000))
             .map(|customer_id| {
                 let person_id = customers[customer_id];
-                // TODO some stores might have no customers.
                 let store_id = rng.gen_range(0..n_store);
                 let account_number = rng.gen_range(0..n_customer * 10);
                 let modified_date = timestamp(rng.gen_range(LOW_TIME..HIGH_TIME)).to_rfc3339();

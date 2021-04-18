@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    hash::{Hash, Hasher},
+    hash::{BuildHasherDefault, Hash, Hasher},
 };
 
 use ast::{AggregateExpr, AggregateFunction, Value};
@@ -8,7 +8,7 @@ use kernel::*;
 
 pub struct GroupByAggregate {
     group_by_batches: Vec<Batch>,
-    aggregate_slots: HashMap<Key, Vec<Acc>>,
+    aggregate_slots: HashMap<Key, Vec<Acc>, BuildKeyHasher>,
     aggregate_slot_template: Vec<Acc>,
 }
 
@@ -38,7 +38,7 @@ impl GroupByAggregate {
     pub fn new(aggregate_fns: &Vec<AggregateExpr>) -> Self {
         Self {
             group_by_batches: vec![],
-            aggregate_slots: HashMap::new(),
+            aggregate_slots: HashMap::default(),
             aggregate_slot_template: aggregate_fns
                 .iter()
                 .map(|a| Acc::new(&a.function, a.input.data_type))
@@ -162,10 +162,31 @@ impl GroupByAggregate {
     }
 }
 
+#[derive(Default)]
+struct KeyHasher {
+    value: u64,
+}
+
+impl Hasher for KeyHasher {
+    fn finish(&self) -> u64 {
+        self.value
+    }
+
+    fn write(&mut self, _bytes: &[u8]) {
+        unimplemented!()
+    }
+
+    fn write_u64(&mut self, i: u64) {
+        self.value = i;
+    }
+}
+
+type BuildKeyHasher = BuildHasherDefault<KeyHasher>;
+
 impl Hash for Key {
     fn hash<H: Hasher>(&self, state: &mut H) {
         unsafe {
-            // TODO this is going to hash something that has already been hashed, install a no-op hasher when we set up the map.
+            // KeyHasher defines write_u64 as a no-op.
             state.write_u64(self.parent.as_ref().unwrap().hash(self))
         }
     }
