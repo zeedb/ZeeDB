@@ -1,55 +1,55 @@
 # semi_join
 ok: explain select 1 from person where exists (select 1 from customer where customer.person_id = person.person_id)
-plan                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:1
 	HashJoin Semi (Is person.person_id person_id)
-		Exchange hash
-			Map hash:(Hash person_id), ..
+		Exchange $hash
+			Map $hash:(Hash person_id), ..
 				Map $expr_subquery.$col1:1 person_id
 					Filter (Not (IsNull customer.person_id))
 						Map person_id:customer.person_id, ..
 							SeqScan customer
-		Exchange hash
-			Map hash:(Hash person.person_id), ..
+		Exchange $hash
+			Map $hash:(Hash person.person_id), ..
 				SeqScan person
 
 # anti_join
 ok: explain select 1 from person where not exists (select 1 from customer where customer.person_id = person.person_id)
-plan                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                       
 Map $query.$col1:1
 	HashJoin Anti (Is person.person_id person_id)
-		Exchange hash
-			Map hash:(Hash person_id), ..
+		Exchange $hash
+			Map $hash:(Hash person_id), ..
 				Map $expr_subquery.$col1:1 person_id
 					Filter (Not (IsNull customer.person_id))
 						Map person_id:customer.person_id, ..
 							SeqScan customer
-		Exchange hash
-			Map hash:(Hash person.person_id), ..
+		Exchange $hash
+			Map $hash:(Hash person.person_id), ..
 				SeqScan person
 
 # single_join
 ok: explain select (select name from store where store.store_id = customer.customer_id and store.name like 'A%'), (select first_name from person where person.person_id = customer.person_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 Map $query.$col1:store.name $query.$col2:person.first_name
 	HashJoin Single (Is customer.person_id person_id)
 		Broadcast
-			Map hash:(Hash person_id), ..
+			Map $hash:(Hash person_id), ..
 				Map person.first_name person_id
 					Filter (Not (IsNull person.person_id))
 						Map person_id:person.person_id, ..
 							SeqScan person
-		Map hash:(Hash customer.person_id), ..
+		Map $hash:(Hash customer.person_id), ..
 			HashJoin Single (Is customer.customer_id customer_id)
-				Exchange hash
-					Map hash:(Hash customer_id), ..
+				Exchange $hash
+					Map $hash:(Hash customer_id), ..
 						Map store.name customer_id
 							Filter (Not (IsNull store.store_id))
 								Map customer_id:store.store_id, ..
 									Filter* (StringLike store.name "A%")
 										SeqScan store
-				Exchange hash
-					Map hash:(Hash customer.customer_id), ..
+				Exchange $hash
+					Map $hash:(Hash customer.customer_id), ..
 						SeqScan customer
 
 # remove_single_join
@@ -60,18 +60,18 @@ Map $query.$col1:1
 
 # remove_single_join_column
 ok: explain select (select customer_id) from customer
-plan                                                                                                                                                                                                                                                                                                                                                                                                            
+plan                                                                                                                                                                                                                                                                                                                                                                                                                  
 Map $query.$col1:$expr_subquery.customer_id
 	HashJoin Single (Is customer.customer_id customer_id)
-		Exchange hash
-			Map hash:(Hash customer_id), ..
+		Exchange $hash
+			Map $hash:(Hash customer_id), ..
 				Map $expr_subquery.customer_id:customer_id customer_id
 					Aggregate customer_id
-						Exchange hash
-							Map hash:(Hash customer_id), ..
+						Exchange $hash
+							Map $hash:(Hash customer_id), ..
 								SeqScan customer
-		Exchange hash
-			Map hash:(Hash customer.customer_id), ..
+		Exchange $hash
+			Map $hash:(Hash customer.customer_id), ..
 				SeqScan customer
 
 # nested_loop
@@ -85,26 +85,26 @@ Map customer.customer_id store.store_id
 
 # equi_join
 ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id
-plan                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                      
 Map customer.customer_id store.store_id
 	HashJoin Inner (Equal customer.store_id store.store_id)
-		Exchange hash
-			Map hash:(Hash store.store_id), ..
+		Exchange $hash
+			Map $hash:(Hash store.store_id), ..
 				SeqScan store
-		Exchange hash
-			Map hash:(Hash customer.store_id), ..
+		Exchange $hash
+			Map $hash:(Hash customer.store_id), ..
 				SeqScan customer
 
 # equi_full_outer_join
 ok: explain select customer.customer_id, store.store_id from customer full outer join store on customer.store_id = store.store_id
-plan                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                      
 Map customer.customer_id store.store_id
 	HashJoin Outer (Equal customer.store_id store.store_id)
-		Exchange hash
-			Map hash:(Hash customer.store_id), ..
+		Exchange $hash
+			Map $hash:(Hash customer.store_id), ..
 				SeqScan customer
-		Exchange hash
-			Map hash:(Hash store.store_id), ..
+		Exchange $hash
+			Map $hash:(Hash store.store_id), ..
 				SeqScan store
 
 # join_left_index_scan
@@ -141,60 +141,60 @@ Map customer.customer_id store.store_id
 
 # equi_join_right_index_scan
 ok: explain select customer.customer_id, store.store_id from customer, store where customer.store_id = store.store_id and store.store_id = 1
-plan                                                                                                                                                                                                                                                                               
+plan                                                                                                                                                                                                                                                                                 
 Map customer.customer_id store.store_id
 	HashJoin Inner (Equal customer.store_id store.store_id)
 		Broadcast
-			Map hash:(Hash store.store_id), ..
+			Map $hash:(Hash store.store_id), ..
 				IndexScan store(store_id:1)
 						Broadcast
 							TableFreeScan
-		Map hash:(Hash customer.store_id), ..
+		Map $hash:(Hash customer.store_id), ..
 			SeqScan customer
 
 # left_equi_join_right_index_scan
 ok: explain select customer.customer_id, store.store_id from customer left join store on customer.store_id = store.store_id where store.store_id = 1
-plan                                                                                                                                                                                                                                                                                          
+plan                                                                                                                                                                                                                                                                                              
 Map customer.customer_id store.store_id
 	Filter (Equal store.store_id 1)
 		HashJoin Right (Equal customer.store_id store.store_id)
-			Exchange hash
-				Map hash:(Hash store.store_id), ..
+			Exchange $hash
+				Map $hash:(Hash store.store_id), ..
 					SeqScan store
-			Exchange hash
-				Map hash:(Hash customer.store_id), ..
+			Exchange $hash
+				Map $hash:(Hash customer.store_id), ..
 					SeqScan customer
 
 # right_equi_join_right_index_scan
 ok: explain select customer.customer_id, store.store_id from customer right join store on customer.store_id = store.store_id where store.store_id = 1
-plan                                                                                                                                                                                                                                                                                                     
+plan                                                                                                                                                                                                                                                                                                         
 Map customer.customer_id store.store_id
 	HashJoin Right (Equal customer.store_id store.store_id)
-		Exchange hash
-			Map hash:(Hash customer.store_id), ..
+		Exchange $hash
+			Map $hash:(Hash customer.store_id), ..
 				SeqScan customer
-		Exchange hash
-			Map hash:(Hash store.store_id), ..
+		Exchange $hash
+			Map $hash:(Hash store.store_id), ..
 				IndexScan store(store_id:1)
 						Broadcast
 							TableFreeScan
 
 # two_inner_joins
 ok: explain select * from person join customer using (person_id) join store using (store_id)
-plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  
+plan                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          
 Map customer.store_id person.person_id person.first_name person.last_name person.modified_date customer.customer_id customer.account_number customer.modified_date store.name store.modified_date
 	HashJoin Inner (Equal person.person_id customer.person_id)
-		Exchange hash
-			Map hash:(Hash customer.person_id), ..
+		Exchange $hash
+			Map $hash:(Hash customer.person_id), ..
 				HashJoin Inner (Equal customer.store_id store.store_id)
-					Exchange hash
-						Map hash:(Hash store.store_id), ..
+					Exchange $hash
+						Map $hash:(Hash store.store_id), ..
 							SeqScan store
-					Exchange hash
-						Map hash:(Hash customer.store_id), ..
+					Exchange $hash
+						Map $hash:(Hash customer.store_id), ..
 							SeqScan customer
-		Exchange hash
-			Map hash:(Hash person.person_id), ..
+		Exchange $hash
+			Map $hash:(Hash person.person_id), ..
 				SeqScan person
 
 # remove_inner_join

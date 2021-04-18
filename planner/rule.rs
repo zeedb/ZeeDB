@@ -595,7 +595,7 @@ impl Rule {
 fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box<Expr>) -> Expr {
     if group_by.is_empty() {
         let hash_bucket = Scalar::Literal(Value::I64(Some(0))); // TODO randomize so different nodes get different aggregates.
-        let constant = Column::computed("constant", &None, DataType::I64);
+        let constant = Column::computed("$constant", &None, DataType::I64);
         Aggregate {
             partition_by: constant.clone(),
             group_by,
@@ -681,7 +681,7 @@ fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
 }
 
 fn create_hash_column(partition_by: Vec<Scalar>, input: Expr) -> (Column, Expr) {
-    let column = Column::computed("hash", &None, DataType::I64);
+    let column = Column::computed("$hash", &None, DataType::I64);
     let scalar = Scalar::Call(Box::new(F::Hash(partition_by)));
     let expr = LogicalMap {
         projects: vec![(scalar, column.clone())],
