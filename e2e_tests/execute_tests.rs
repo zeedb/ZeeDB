@@ -29,14 +29,16 @@ fn test_aggregate_functions() {
     t.setup("create table floats (x float64);");
     t.setup("create table dates (x date);");
     t.setup("create table timestamps (x timestamp);");
-    // TODO strings?
+    t.setup("create table strings (x string);");
     t.setup("insert into booleans values (true), (true), (false), (null);");
     t.setup("insert into integers values (1), (1), (2), (3), (null);");
     t.setup("insert into floats values (1.0), (2.0), (3.0), (null);");
     t.setup("insert into dates values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null);");
     t.setup("insert into timestamps values (timestamp '2000-01-01'), (timestamp '2000-01-02'), (timestamp '2000-01-03'), (null);");
+    t.setup("insert into strings values ('1'), ('1'), ('2'), ('3'), (null);");
     t.comment("simple aggregate counts");
     t.ok("select any_value(x), count(x), count(*) from integers");
+    t.ok("select any_value(x), count(x), count(*) from strings");
     t.comment("simple aggregate boolean");
     t.ok("select logical_and(x), logical_or(x), max(x), min(x) from booleans");
     t.comment("simple aggregate int");
@@ -52,6 +54,7 @@ fn test_aggregate_functions() {
     t.ok("select x from integers group by x order by x");
     t.ok("select x from dates group by x order by x");
     t.ok("select x from timestamps group by x order by x");
+    t.ok("select x from strings group by x order by x");
     t.ok("select booleans.x, integers.x from booleans, integers group by 1, 2 order by 1, 2");
     t.ok("select distinct booleans.x, integers.x from booleans, integers order by 1, 2");
     t.finish("examples/execute_aggregates.testlog");

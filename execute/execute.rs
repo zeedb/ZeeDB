@@ -1083,8 +1083,6 @@ impl Node {
                     None
                 } else {
                     *finished = true;
-                    // TODO explain plan should really be proper AST,
-                    // that can be serialized to string and deserialized.
                     Some(RecordBatch::new(vec![(
                         "plan".to_string(),
                         AnyArray::String(StringArray::from_values(vec![input

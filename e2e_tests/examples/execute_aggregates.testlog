@@ -3,13 +3,19 @@ setup: create table integers (x int64);
 setup: create table floats (x float64);
 setup: create table dates (x date);
 setup: create table timestamps (x timestamp);
+setup: create table strings (x string);
 setup: insert into booleans values (true), (true), (false), (null);
 setup: insert into integers values (1), (1), (2), (3), (null);
 setup: insert into floats values (1.0), (2.0), (3.0), (null);
 setup: insert into dates values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null);
 setup: insert into timestamps values (timestamp '2000-01-01'), (timestamp '2000-01-02'), (timestamp '2000-01-03'), (null);
+setup: insert into strings values ('1'), ('1'), ('2'), ('3'), (null);
 # simple aggregate counts
 ok: select any_value(x), count(x), count(*) from integers
+$agg1 $agg2 $agg3
+NULL  4     5    
+
+ok: select any_value(x), count(x), count(*) from strings
 $agg1 $agg2 $agg3
 NULL  4     5    
 
@@ -68,6 +74,13 @@ NULL
 2000-01-01 00:00:00
 2000-01-02 00:00:00
 2000-01-03 00:00:00
+
+ok: select x from strings group by x order by x
+x   
+NULL
+1   
+2   
+3   
 
 ok: select booleans.x, integers.x from booleans, integers group by 1, 2 order by 1, 2
 x     x   
