@@ -36,7 +36,6 @@ impl StringArray {
             let mut valid = true;
             for j in 0..arrays.len() {
                 if let Some(next) = arrays[j].get(i) {
-                    // TODO this can push junk data.
                     builder.buffer.push_str(next);
                 } else {
                     valid = false;

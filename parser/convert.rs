@@ -171,7 +171,6 @@ impl Converter {
             Some(expr) => self.predicate(expr.borrow(), &mut input),
             None => vec![],
         };
-        // TODO if we introduce the concept of a comparison join, some nested expressions can be handled.
         if input != dummy {
             panic!("Nested expressions are not allowed on the ON expressions of outer joins")
         }
@@ -536,6 +535,9 @@ impl Converter {
     }
 
     fn create_index(&mut self, q: &ResolvedCreateIndexStmtProto) -> Expr {
+        for option in &q.option_list {
+            panic!("CREATE INDEX does not support option {}", option.name());
+        }
         let name = Name {
             catalog_id: self.catalog_id,
             path: q.parent.get().name_path.clone(),
@@ -566,6 +568,9 @@ impl Converter {
     }
 
     fn create_table_base(&mut self, q: &ResolvedCreateTableStmtBaseProto) -> Expr {
+        for option in &q.option_list {
+            panic!("CREATE TABLE does not support option {}", option.name());
+        }
         let name = Name {
             catalog_id: self.catalog_id,
             path: q.parent.get().name_path.clone(),
@@ -762,7 +767,9 @@ impl Converter {
     }
 
     fn create_database(&mut self, q: &ResolvedCreateDatabaseStmtProto) -> Expr {
-        // TODO fail on unsupported options
+        for option in &q.option_list {
+            panic!("CREATE DATABASE does not support option {}", option.name());
+        }
         LogicalCreateDatabase {
             name: Name {
                 catalog_id: self.catalog_id,
@@ -1031,7 +1038,7 @@ impl Converter {
         Scalar::Column(self.column(&column_list(q)[0]))
     }
 
-    // TODO this mechanism is extremely fragile.
+    /// Register a column as belonging to a table.
     fn register_columns(&mut self, q: &ResolvedTableScanProto) {
         for c in &q.parent.get().column_list {
             if !self.known_columns.contains_key(&c.column_id.unwrap()) {
