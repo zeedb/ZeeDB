@@ -777,21 +777,20 @@ impl Node {
                 input,
             } => {
                 // Register a new temp table.
-                // TODO only do this step once.
                 let table_id = 100 + state.temp_table_ids.len() as i64;
                 state.temp_table_ids.insert(name.clone(), table_id);
                 state.temp_tables.create_table(table_id);
-                // Get a batch of rows ready to insert into the temp table.
-                let input = input.next(state)?;
+                // Temp table uses different column names.
                 let renames = columns
                     .iter()
                     .map(|c| (c.canonical_name(), c.name.clone()))
                     .collect();
-                let input = input.rename(&renames);
-                // Populate the table.
-                let heap = state.temp_tables.table_mut(table_id);
-                heap.insert(&input, state.txn);
-                None
+                // Insert entire input into the temp table.
+                loop {
+                    let batch = input.next(state)?.rename(&renames);
+                    let heap = state.temp_tables.table_mut(table_id);
+                    heap.insert(&batch, state.txn);
+                }
             }
             Node::GetTempTable {
                 name,
@@ -1245,7 +1244,6 @@ fn schema(expr: &Expr) -> Vec<(String, DataType)> {
     }
 }
 
-// TODO instead of calling a function, insert a Build operator into the tree.
 fn build(input: &mut Node, state: &mut QueryState) -> Option<RecordBatch> {
     let mut batches = vec![];
     loop {
