@@ -106,7 +106,7 @@ impl<'a> Optimizer<'a> {
             )
         }
         for expr in rule.bind(&self.ss, mid) {
-            if let Some(expr) = rule.apply(expr, &self) {
+            for expr in rule.apply(expr, &self) {
                 // Add mexpr if it isn't already present in the group.
                 if let Some(mid) = self.copy_in(expr, self.ss[mid].parent) {
                     if TRACE {

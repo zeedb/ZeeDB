@@ -232,7 +232,7 @@ impl Rule {
         binds
     }
 
-    pub fn apply(&self, bind: Expr, parent: &Optimizer) -> Option<Expr> {
+    pub fn apply(&self, bind: Expr, parent: &Optimizer) -> Vec<Expr> {
         match self {
             Rule::InnerJoinCommutivity => {
                 if let LogicalJoin {
@@ -242,7 +242,7 @@ impl Rule {
                     ..
                 } = bind
                 {
-                    return Some(LogicalJoin {
+                    return single(LogicalJoin {
                         join: Join::Inner(join_predicates.clone()),
                         left: right,
                         right: left,
@@ -303,7 +303,7 @@ impl Rule {
                                 for p in left_predicates {
                                     redistribute_predicate(p);
                                 }
-                                return Some(LogicalJoin {
+                                return single(LogicalJoin {
                                     join: Join::Inner(new_parent_predicates),
                                     left: Box::new(Leaf { gid: *left_left }),
                                     right: Box::new(LogicalJoin {
@@ -318,19 +318,19 @@ impl Rule {
                 }
             }
             Rule::InsertBroadcast => {
-                return Some(Broadcast {
+                return single(Broadcast {
                     input: Box::new(bind),
                 })
             }
             Rule::InsertExchange => {
-                return Some(Exchange {
+                return single(Exchange {
                     hash_column: None,
                     input: Box::new(bind),
                 });
             }
             Rule::LogicalGetToTableFreeScan => {
                 if let LogicalSingleGet = bind {
-                    return Some(TableFreeScan);
+                    return single(TableFreeScan);
                 }
             }
             Rule::LogicalGetToSeqScan => {
@@ -340,7 +340,7 @@ impl Rule {
                     table,
                 } = bind
                 {
-                    return Some(SeqScan {
+                    return single(SeqScan {
                         projects,
                         predicates,
                         table,
@@ -354,31 +354,32 @@ impl Rule {
                     table,
                 } = bind
                 {
-                    // TODO return multiple indexes!
+                    let mut results = vec![];
                     let catalog = &parent.context[CATALOG_KEY];
                     for index in catalog.indexes(table.id, parent.txn, &parent.context) {
                         if let Some((lookup, predicates)) = index.matches(&predicates) {
-                            return Some(IndexScan {
+                            results.push(IndexScan {
                                 include_existing: true,
-                                projects,
+                                projects: projects.clone(),
                                 predicates,
                                 lookup,
                                 index: index.clone(),
-                                table,
+                                table: table.clone(),
                                 input: Box::new(LogicalSingleGet),
                             });
                         }
                     }
+                    return results;
                 }
             }
             Rule::LogicalFilterToFilter => {
                 if let LogicalFilter { predicates, input } = bind {
-                    return Some(Filter { predicates, input });
+                    return single(Filter { predicates, input });
                 }
             }
             Rule::LogicalOutToOut => {
                 if let LogicalOut { projects, input } = bind {
-                    return Some(Out { projects, input });
+                    return single(Out { projects, input });
                 }
             }
             Rule::LogicalMapToMap => {
@@ -388,7 +389,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(Map {
+                    return single(Map {
                         include_existing,
                         projects,
                         input,
@@ -400,7 +401,7 @@ impl Rule {
                     join, left, right, ..
                 } = bind
                 {
-                    return Some(NestedLoop { join, left, right });
+                    return single(NestedLoop { join, left, right });
                 }
             }
             Rule::LogicalJoinToBroadcastHashJoin => {
@@ -417,23 +418,24 @@ impl Rule {
                         table,
                     } = *left
                     {
-                        // TODO return multiple indexes!
+                        let mut results = vec![];
                         let catalog = &parent.context[CATALOG_KEY];
                         for index in catalog.indexes(table.id, parent.txn, &parent.context) {
                             if let Some((lookup, mut predicates)) = index.matches(join.predicates())
                             {
-                                predicates.extend(table_predicates);
-                                return Some(IndexScan {
+                                predicates.extend(table_predicates.clone());
+                                results.push(IndexScan {
                                     include_existing: true,
-                                    projects,
+                                    projects: projects.clone(),
                                     predicates,
                                     lookup,
                                     index: index.clone(),
-                                    table,
-                                    input: right,
+                                    table: table.clone(),
+                                    input: right.clone(),
                                 });
                             }
                         }
+                        return results;
                     }
                 }
             }
@@ -444,7 +446,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(to_aggregate(group_by, aggregate, input));
+                    return single(to_aggregate(group_by, aggregate, input));
                 }
             }
             Rule::LogicalLimitToLimit => {
@@ -454,7 +456,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(Limit {
+                    return single(Limit {
                         limit,
                         offset,
                         input,
@@ -463,12 +465,12 @@ impl Rule {
             }
             Rule::LogicalSortToSort => {
                 if let LogicalSort { order_by, input } = bind {
-                    return Some(Sort { order_by, input });
+                    return single(Sort { order_by, input });
                 }
             }
             Rule::LogicallUnionToUnion => {
                 if let LogicalUnion { left, right, .. } = bind {
-                    return Some(Union { left, right });
+                    return single(Union { left, right });
                 }
             }
             Rule::LogicalCreateTempTableToCreateTempTable => {
@@ -478,7 +480,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(CreateTempTable {
+                    return single(CreateTempTable {
                         name,
                         columns,
                         input,
@@ -487,7 +489,7 @@ impl Rule {
             }
             Rule::LogicalGetWithToGetTempTable => {
                 if let LogicalGetWith { name, columns } = bind {
-                    return Some(GetTempTable { name, columns });
+                    return single(GetTempTable { name, columns });
                 }
             }
             Rule::LogicalInsertToInsert => {
@@ -499,7 +501,7 @@ impl Rule {
                 {
                     let catalog = &parent.context[CATALOG_KEY];
                     let indexes = catalog.indexes(table.id, parent.txn, &parent.context);
-                    return Some(Insert {
+                    return single(Insert {
                         table,
                         indexes,
                         input,
@@ -514,7 +516,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(Values {
+                    return single(Values {
                         columns,
                         values,
                         input,
@@ -523,7 +525,7 @@ impl Rule {
             }
             Rule::LogicalDeleteToDelete => {
                 if let LogicalDelete { table, tid, input } = bind {
-                    return Some(Delete { table, tid, input });
+                    return single(Delete { table, tid, input });
                 }
             }
             Rule::LogicalAssignToAssign => {
@@ -533,7 +535,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return Some(Assign {
+                    return single(Assign {
                         variable,
                         value,
                         input,
@@ -542,21 +544,21 @@ impl Rule {
             }
             Rule::LogicalCallToCall => {
                 if let LogicalCall { procedure, input } = bind {
-                    return Some(Call { procedure, input });
+                    return single(Call { procedure, input });
                 }
             }
             Rule::LogicalExplainToExplain => {
                 if let LogicalExplain { input } = bind {
-                    return Some(Explain { input });
+                    return single(Explain { input });
                 }
             }
             Rule::LogicalScriptToScript => {
                 if let LogicalScript { statements } = bind {
-                    return Some(Script { statements });
+                    return single(Script { statements });
                 }
             }
         }
-        None
+        vec![]
     }
 
     pub fn all() -> Vec<Rule> {
@@ -618,7 +620,11 @@ fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box
     }
 }
 
-fn to_hash_join(ss: &SearchSpace, bind: Expr, broadcast: bool) -> Option<Expr> {
+fn single(expr: Expr) -> Vec<Expr> {
+    vec![expr]
+}
+
+fn to_hash_join(ss: &SearchSpace, bind: Expr, broadcast: bool) -> Vec<Expr> {
     if let LogicalJoin { join, left, right } = bind {
         if let (Leaf { gid: left }, Leaf { gid: right }) = (left.as_ref(), right.as_ref()) {
             if let Some((partition_left, partition_right)) = hash_join(
@@ -631,7 +637,7 @@ fn to_hash_join(ss: &SearchSpace, bind: Expr, broadcast: bool) -> Option<Expr> {
                     create_hash_column(partition_left, Leaf { gid: *left });
                 let (partition_right, right) =
                     create_hash_column(partition_right, Leaf { gid: *right });
-                return Some(HashJoin {
+                return single(HashJoin {
                     broadcast,
                     join,
                     partition_left,
@@ -642,7 +648,7 @@ fn to_hash_join(ss: &SearchSpace, bind: Expr, broadcast: bool) -> Option<Expr> {
             }
         }
     }
-    None
+    vec![]
 }
 
 fn hash_join(
