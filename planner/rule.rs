@@ -594,17 +594,23 @@ impl Rule {
 
 fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box<Expr>) -> Expr {
     if group_by.is_empty() {
+        let hash_bucket = Scalar::Literal(Value::I64(Some(0))); // TODO randomize so different nodes get different aggregates.
+        let constant = Column::computed("constant", &None, DataType::I64);
         Aggregate {
-            partition_by: None,
+            partition_by: constant.clone(),
             group_by,
             aggregate,
-            input,
+            input: Box::new(LogicalMap {
+                projects: vec![(hash_bucket, constant.clone())],
+                include_existing: true,
+                input,
+            }),
         }
     } else {
         let partition_by = group_by.iter().map(|c| Scalar::Column(c.clone())).collect();
         let (partition_by, input) = create_hash_column(partition_by, *input);
         Aggregate {
-            partition_by: Some(partition_by),
+            partition_by,
             group_by,
             aggregate,
             input: Box::new(input),

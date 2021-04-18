@@ -22,7 +22,6 @@ fn test_literals() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_aggregate_functions() {
     let mut t = TestSuite::empty();
     t.setup("create table booleans (x boolean);");
@@ -78,7 +77,6 @@ fn test_metadata() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_aggregate_large() {
     let mut t = TestSuite::adventure_works();
     t.ok("select count(*) from person");
@@ -181,7 +179,6 @@ fn test_join_nested_loop() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_join_hash() {
     let mut t = TestSuite::adventure_works();
     t.comment("hash inner join");
@@ -236,7 +233,6 @@ fn test_with() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_correlated_exists() {
     let mut t = TestSuite::empty();
     t.setup("create table integers (i int64);");
@@ -261,7 +257,6 @@ fn test_correlated_exists() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_complex_correlated_subquery() {
     let mut t = TestSuite::empty();
     t.setup("create table integers (i int64);");
@@ -307,7 +302,6 @@ fn test_complex_correlated_subquery() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_correlated_subquery() {
     let mut t = TestSuite::empty();
     t.setup("create table integers (i int64);");
@@ -358,7 +352,6 @@ fn test_correlated_subquery() {
 }
 
 #[test]
-#[ignore] // TODO fix inserting exchange columns under aggregates.
 fn test_subquery_join() {
     let mut t = TestSuite::empty();
     t.setup("create table integers (i int64);");

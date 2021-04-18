@@ -71,6 +71,7 @@ pub(crate) fn compute_logical_props(
             let last = statements.last().unwrap();
             ss[leaf(last)].props.clone()
         }
+        LogicalExplain { input, .. } => ss[leaf(input)].props.clone(),
         LogicalInsert { .. }
         | LogicalValues { .. }
         | LogicalUpdate { .. }
@@ -82,7 +83,6 @@ pub(crate) fn compute_logical_props(
         | LogicalDrop { .. }
         | LogicalAssign { .. }
         | LogicalCall { .. }
-        | LogicalExplain { .. }
         | LogicalRewrite { .. } => LogicalProps {
             cardinality: 0.0,
             columns: HashMap::with_capacity(0),

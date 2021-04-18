@@ -94,7 +94,7 @@ pub struct TestCluster {
 }
 
 impl TestCluster {
-    fn new(storage: Storage) -> Self {
+    fn new(storage: Storage, txn: i64) -> Self {
         // Take a global lock, so we only initialize 1 cluster at a time.
         static GLOBAL: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
         let _lock = GLOBAL.lock().unwrap();
@@ -106,7 +106,7 @@ impl TestCluster {
         std::env::set_var("WORKER_COUNT", "1");
         // Create an empty 1-worker cluster.
         let worker = WorkerNode::new(storage);
-        let coordinator = CoordinatorNode::default();
+        let coordinator = CoordinatorNode::new(txn);
         // Start the server.
         let mut server = ServerBuilder::new(Arc::new(EnvBuilder::new().build()))
             .bind("127.0.0.1", port)
@@ -128,7 +128,7 @@ impl TestCluster {
     }
 
     pub fn empty() -> Self {
-        Self::new(Storage::default())
+        Self::new(Storage::default(), 0)
     }
 
     pub fn adventure_works() -> Self {
@@ -138,7 +138,7 @@ impl TestCluster {
             crate::adventure_works::populate_adventure_works(1_000, cluster.client);
             cluster.worker.unwrap()
         });
-        Self::new(storage.clone())
+        Self::new(storage.clone(), 100)
     }
 }
 
