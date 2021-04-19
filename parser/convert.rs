@@ -235,15 +235,15 @@ impl Converter {
             // UnionAll
             0 => self.union(&q.parent.get().column_list, &q.input_item_list),
             // UnionDistinct
-            1 => panic!("UNION DISTINCT is not supported"), // TODO
+            1 => panic!("UNION DISTINCT is not supported"),
             // IntersectAll
-            2 => panic!("UNION DISTINCT is not supported"), // TODO
+            2 => panic!("UNION DISTINCT is not supported"),
             // IntersectDistinct
-            3 => panic!("INTERSECT DISTINCT is not supported"), // TODO
+            3 => panic!("INTERSECT DISTINCT is not supported"),
             // ExceptAll
-            4 => panic!("EXCEPT ALL is not supported"), // TODO
+            4 => panic!("EXCEPT ALL is not supported"),
             // ExceptDistinct
-            5 => panic!("EXCEPT DISTINCT is not supported"), // TODO
+            5 => panic!("EXCEPT DISTINCT is not supported"),
             // Other
             other => panic!("{:?}", other),
         }

@@ -154,8 +154,7 @@ impl<'a> Optimizer<'a> {
         // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
         let parent = self.ss[mid].parent;
         let upper_bound = self.ss[parent].upper_bound[require].unwrap_or(f64::MAX);
-        let physical_cost =
-            physical_cost(mid, self.context[REMOTE_EXECUTION_KEY].as_ref(), &self.ss);
+        let physical_cost = physical_cost(mid, &self);
         // If we can find a winning strategy for each input and an associated cost,
         // try to declare the current MultiExpr as the winner of its group.
         if self.optimize_inputs(mid, physical_cost, upper_bound) {

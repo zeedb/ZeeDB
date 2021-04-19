@@ -106,6 +106,8 @@ impl TestCluster {
         std::env::set_var("WORKER_COUNT", "1");
         // Create an empty 1-worker cluster.
         let worker = WorkerNode::new(storage);
+        // TODO get rid of this and *actually* use multiple workers in the tests.
+        std::env::set_var("WORKER_COUNT", "10");
         let coordinator = CoordinatorNode::new(txn);
         // Start the server.
         let mut server = ServerBuilder::new(Arc::new(EnvBuilder::new().build()))

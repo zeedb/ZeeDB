@@ -4,7 +4,7 @@ use std::{
 };
 
 use ast::Expr;
-use context::{Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
+use context::{env_var, Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
 use futures::{executor::block_on, SinkExt};
 use grpcio::{RpcContext, ServerStreamingSink, UnarySink, WriteFlags};
 use kernel::{AnyArray, RecordBatch};
@@ -259,8 +259,4 @@ fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<Reco
     } else {
         todo!()
     }
-}
-
-fn env_var(key: &str) -> i32 {
-    std::env::var(key).expect(key).parse().unwrap()
 }

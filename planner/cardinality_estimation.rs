@@ -169,7 +169,6 @@ fn map(
         HashMap::new()
     };
     for (_x, c) in projects {
-        // TODO some simple scalars could be supported by adjusting the histogram.
         columns.insert(c.clone(), None);
     }
     LogicalProps {

@@ -4,7 +4,7 @@ use ast::{Index, *};
 use catalog_types::{
     builtin_function_options, Catalog, CATALOG_KEY, METADATA_CATALOG_ID, ROOT_CATALOG_ID,
 };
-use context::Context;
+use context::{env_var, Context, WORKER_COUNT_KEY};
 use futures::{executor::block_on, StreamExt};
 use kernel::*;
 use once_cell::sync::OnceCell;
@@ -249,6 +249,7 @@ fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, AnyArra
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
     context.insert(REMOTE_EXECUTION_KEY, Box::new(BootstrapStatistics));
+    context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
     // context.insert(REMOTE_EXECUTION_KEY, RemoteExecution::default());
     let variables = variables
         .iter()

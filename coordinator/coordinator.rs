@@ -8,7 +8,7 @@ use std::{
 
 use catalog::MetadataCatalog;
 use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
-use context::Context;
+use context::{env_var, Context, WORKER_COUNT_KEY};
 use futures::{executor::block_on, SinkExt, StreamExt};
 use grpcio::{RpcContext, ServerStreamingSink, WriteFlags};
 use kernel::AnyArray;
@@ -31,6 +31,7 @@ impl CoordinatorNode {
             REMOTE_EXECUTION_KEY,
             Box::new(RpcRemoteExecution::default()),
         );
+        context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
         Self {
             context: Arc::new(context),
             txn: Arc::new(AtomicI64::new(txn)),
