@@ -48,13 +48,10 @@ pub(crate) fn compute_logical_props(
             "{} should have been eliminated during rewrite phase",
             mexpr.expr.name()
         ),
-        LogicalGetWith { columns, .. } => {
-            // TODO get the props of the query so we can use a real estimate.
-            LogicalProps {
-                cardinality: 1.0,
-                columns: columns.iter().map(|c| (c.clone(), None)).collect(),
-            }
-        }
+        LogicalGetWith { name, columns } => LogicalProps {
+            cardinality: ss.temp_tables[name].cardinality,
+            columns: columns.iter().map(|c| (c.clone(), None)).collect(),
+        },
         LogicalAggregate {
             group_by,
             aggregate,

@@ -9,7 +9,7 @@ const TRACE: bool = false;
 pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
     let mut optimizer = Optimizer {
         txn,
-        ss: SearchSpace::new(),
+        ss: SearchSpace::default(),
         context,
     };
     let mut expr = crate::rewrite::rewrite(expr, txn, context);
@@ -266,6 +266,12 @@ impl<'a> Optimizer<'a> {
             // Recursively copy in the children.
             for i in 0..expr.len() {
                 self.copy_in_new(&mut expr[i]);
+            }
+            // Record temp tables.
+            if let LogicalCreateTempTable { name, input, .. } = expr {
+                self.ss
+                    .temp_tables
+                    .insert(name.clone(), self.ss[leaf(input)].props.clone());
             }
             // Replace expr with a Leaf node.
             let gid = self.ss.reserve();

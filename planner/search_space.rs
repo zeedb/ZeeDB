@@ -9,11 +9,13 @@ use ast::*;
 use crate::{cardinality_estimation::*, cost::*, rule::*};
 
 // SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
+#[derive(Default)]
 pub(crate) struct SearchSpace {
     pub groups: Vec<Option<Group>>,
     pub mexprs: Vec<MultiExpr>,
     pub memo_first: HashMap<Expr, MultiExprID>,
     pub memo_all: HashMap<(GroupID, Expr), MultiExprID>,
+    pub temp_tables: HashMap<String, LogicalProps>,
 }
 
 #[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq)]
@@ -86,15 +88,6 @@ pub enum PhysicalProp {
 }
 
 impl SearchSpace {
-    pub fn new() -> Self {
-        Self {
-            groups: vec![],
-            mexprs: vec![],
-            memo_first: HashMap::new(),
-            memo_all: HashMap::new(),
-        }
-    }
-
     pub fn reserve(&mut self) -> GroupID {
         self.groups.push(None);
         GroupID(self.groups.len() - 1)
