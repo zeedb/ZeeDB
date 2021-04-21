@@ -1,5 +1,3 @@
-#![feature(assoc_char_funcs)]
-
 mod aggregate;
 mod eval;
 #[cfg(test)]

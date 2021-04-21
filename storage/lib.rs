@@ -1,4 +1,3 @@
-#![feature(slice_strip)]
 #![feature(is_sorted)]
 
 mod art;

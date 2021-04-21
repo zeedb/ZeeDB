@@ -128,14 +128,14 @@ impl Node {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return Some(node.value);
                 }
                 None
             }
             Node::Node4(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return node.value;
                 }
@@ -147,7 +147,7 @@ impl Node {
                 None
             }
             Node::Node16(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return node.value;
                 }
@@ -164,7 +164,7 @@ impl Node {
                 None
             }
             Node::Node48(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return node.value;
                 }
@@ -175,7 +175,7 @@ impl Node {
                 None
             }
             Node::Node256(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 node.child[key[0] as usize].get(&key[1..])
             }
         }
@@ -185,14 +185,14 @@ impl Node {
         match self {
             Node::Null => None,
             Node::Leaf(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return self.take();
                 }
                 None
             }
             Node::Node4(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return self.take();
                 }
@@ -204,7 +204,7 @@ impl Node {
                 None
             }
             Node::Node16(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return self.take();
                 }
@@ -221,7 +221,7 @@ impl Node {
                 None
             }
             Node::Node48(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 if key.is_empty() {
                     return self.take();
                 }
@@ -232,7 +232,7 @@ impl Node {
                 None
             }
             Node::Node256(node) => {
-                let key = key.strip_prefix(&node.key)?;
+                let key = key.strip_prefix(&node.key[..])?;
                 node.child[key[0] as usize].remove(&key[1..])
             }
         }
@@ -248,14 +248,14 @@ impl Node {
         match self {
             Node::Null => Some(()),
             Node::Leaf(node) => {
-                if start_inclusive.le(&node.key) && end_exclusive.gt(&node.key) {
+                if start_inclusive.le(&node.key[..]) && end_exclusive.gt(&node.key[..]) {
                     acc.push(node.value);
                 }
                 Some(())
             }
             Node::Node4(node) => {
-                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
-                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                let start_inclusive = start_inclusive.drop_prefix(&node.key[..])?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key[..])?;
                 if start_inclusive.is_empty() {
                     if let Some(value) = node.value {
                         acc.push(value);
@@ -272,8 +272,8 @@ impl Node {
                 Some(())
             }
             Node::Node16(node) => {
-                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
-                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                let start_inclusive = start_inclusive.drop_prefix(&node.key[..])?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key[..])?;
                 if start_inclusive.is_empty() {
                     if let Some(value) = node.value {
                         acc.push(value);
@@ -290,8 +290,8 @@ impl Node {
                 Some(())
             }
             Node::Node48(node) => {
-                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
-                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                let start_inclusive = start_inclusive.drop_prefix(&node.key[..])?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key[..])?;
                 if start_inclusive.is_empty() {
                     if let Some(value) = node.value {
                         acc.push(value);
@@ -313,8 +313,8 @@ impl Node {
                 Some(())
             }
             Node::Node256(node) => {
-                let start_inclusive = start_inclusive.drop_prefix(&node.key)?;
-                let end_exclusive = end_exclusive.drop_prefix(&node.key)?;
+                let start_inclusive = start_inclusive.drop_prefix(&node.key[..])?;
+                let end_exclusive = end_exclusive.drop_prefix(&node.key[..])?;
                 if start_inclusive.is_empty() {
                     if let Some(value) = node.value {
                         acc.push(value);
@@ -348,11 +348,11 @@ impl Node {
     fn key(&self) -> &[u8] {
         match self {
             Node::Null => &[],
-            Node::Leaf(node) => &node.key,
-            Node::Node4(node) => &node.key,
-            Node::Node16(node) => &node.key,
-            Node::Node48(node) => &node.key,
-            Node::Node256(node) => &node.key,
+            Node::Leaf(node) => &node.key[..],
+            Node::Node4(node) => &node.key[..],
+            Node::Node16(node) => &node.key[..],
+            Node::Node48(node) => &node.key[..],
+            Node::Node256(node) => &node.key[..],
         }
     }
 
