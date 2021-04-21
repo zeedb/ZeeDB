@@ -1,3 +1,3 @@
 mod coordinator;
 
-pub use coordinator::CoordinatorNode;
+pub use crate::coordinator::CoordinatorNode;

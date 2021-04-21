@@ -7,4 +7,4 @@ mod optimize_tests;
 mod scalar_tests;
 mod test_suite;
 
-pub use test_suite::TestSuite;
+pub use crate::test_suite::TestSuite;

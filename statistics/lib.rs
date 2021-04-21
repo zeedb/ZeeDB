@@ -8,5 +8,7 @@ mod histogram;
 mod histogram_tests;
 mod table_statistics;
 
-pub use column_statistics::{ColumnStatistics, NotNan, TypedColumnStatistics};
-pub use table_statistics::TableStatistics;
+pub use crate::{
+    column_statistics::{ColumnStatistics, NotNan, TypedColumnStatistics},
+    table_statistics::TableStatistics,
+};

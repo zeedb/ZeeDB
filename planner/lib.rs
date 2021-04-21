@@ -10,4 +10,4 @@ mod rule;
 mod search_space;
 mod unnest;
 
-pub use optimize::optimize;
+pub use crate::optimize::optimize;

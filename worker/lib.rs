@@ -1,3 +1,3 @@
 mod worker;
 
-pub use worker::WorkerNode;
+pub use crate::worker::WorkerNode;
