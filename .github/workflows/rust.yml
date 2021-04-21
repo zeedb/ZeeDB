@@ -17,6 +17,8 @@ jobs:
     steps:
     - name: Switch to nightly
       run: rustup default nightly
+    - name: Update rust toolchain
+      run: rustup update
     - uses: actions/checkout@v2
     - uses: actions/cache@v2
       with:
