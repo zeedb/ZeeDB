@@ -87,13 +87,13 @@ impl std::ops::Index<usize> for Scalar {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!(index),
+            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!("{}", index),
             Scalar::Call(f) => &f[index],
             Scalar::Cast(x, _) => {
                 if index == 0 {
                     x.as_ref()
                 } else {
-                    panic!(index)
+                    panic!("{}", index)
                 }
             }
         }
@@ -103,13 +103,13 @@ impl std::ops::Index<usize> for Scalar {
 impl std::ops::IndexMut<usize> for Scalar {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!(index),
+            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!("{}", index),
             Scalar::Call(f) => &mut f[index],
             Scalar::Cast(x, _) => {
                 if index == 0 {
                     x.as_mut()
                 } else {
-                    panic!(index)
+                    panic!("{}", index)
                 }
             }
         }

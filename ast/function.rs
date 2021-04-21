@@ -263,7 +263,7 @@ impl std::ops::Index<usize> for F {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!(index),
+            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!("{}", index),
             F::AbsDouble(a)
             | F::AbsInt64(a)
             | F::AcosDouble(a)
@@ -322,7 +322,7 @@ impl std::ops::Index<usize> for F {
             | F::LtrimString(a, None)
             | F::RtrimString(a, None) => match index {
                 0 => a,
-                _ => panic!(index),
+                _ => panic!("{}", index),
             },
             F::AddDouble(a, b)
             | F::AddInt64(a, b)
@@ -374,7 +374,7 @@ impl std::ops::Index<usize> for F {
             | F::SubstrString(a, b, None) => match index {
                 0 => a,
                 1 => b,
-                _ => panic!(index),
+                _ => panic!("{}", index),
             },
             F::Between(a, b, c)
             | F::DateFromYearMonthDay(a, b, c)
@@ -387,7 +387,7 @@ impl std::ops::Index<usize> for F {
                 0 => a,
                 1 => b,
                 2 => c,
-                _ => panic!(index),
+                _ => panic!("{}", index),
             },
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
@@ -409,7 +409,7 @@ impl std::ops::Index<usize> for F {
                 } else if index == varargs.len() * 2 {
                     default
                 } else {
-                    panic!(index)
+                    panic!("{}", index)
                 }
             }
             F::CaseWithValue(value, varargs, default) => {
@@ -425,7 +425,7 @@ impl std::ops::Index<usize> for F {
                 } else if (index - 1) == varargs.len() * 2 {
                     default
                 } else {
-                    panic!(index)
+                    panic!("{}", index)
                 }
             }
         }
@@ -435,7 +435,7 @@ impl std::ops::Index<usize> for F {
 impl std::ops::IndexMut<usize> for F {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!(index),
+            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!("{}", index),
             F::AbsDouble(a)
             | F::AbsInt64(a)
             | F::AcosDouble(a)
@@ -494,7 +494,7 @@ impl std::ops::IndexMut<usize> for F {
             | F::LtrimString(a, None)
             | F::RtrimString(a, None) => match index {
                 0 => a,
-                _ => panic!(index),
+                _ => panic!("{}", index),
             },
             F::AddDouble(a, b)
             | F::AddInt64(a, b)
@@ -546,7 +546,7 @@ impl std::ops::IndexMut<usize> for F {
             | F::SubstrString(a, b, None) => match index {
                 0 => a,
                 1 => b,
-                _ => panic!(index),
+                _ => panic!("{}", index),
             },
             F::Between(a, b, c)
             | F::DateFromYearMonthDay(a, b, c)
@@ -559,7 +559,7 @@ impl std::ops::IndexMut<usize> for F {
                 0 => a,
                 1 => b,
                 2 => c,
-                _ => panic!(index),
+                _ => panic!("{}", index),
             },
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
@@ -581,7 +581,7 @@ impl std::ops::IndexMut<usize> for F {
                 } else if index == varargs.len() * 2 {
                     default
                 } else {
-                    panic!(index)
+                    panic!("{}", index)
                 }
             }
             F::CaseWithValue(value, varargs, default) => {
@@ -597,7 +597,7 @@ impl std::ops::IndexMut<usize> for F {
                 } else if (index - 1) == varargs.len() * 2 {
                     default
                 } else {
-                    panic!(index)
+                    panic!("{}", index)
                 }
             }
         }
