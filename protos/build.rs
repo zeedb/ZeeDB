@@ -1,5 +1,4 @@
 fn main() {
-    println!("cargo:rerun-if-changed={}", "../protos/rpc.proto");
-    grpcio_compiler::prost_codegen::compile_protos(&["../protos/rpc.proto"], &["../protos"], ".")
-        .unwrap();
+    println!("cargo:rerun-if-changed={}", "./rpc.proto");
+    grpcio_compiler::prost_codegen::compile_protos(&["./rpc.proto"], &["."], ".").unwrap();
 }

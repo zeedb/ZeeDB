@@ -1,1 +1,0 @@
-protos/ have been extracted from https://github.com/georgewfraser/zetasql

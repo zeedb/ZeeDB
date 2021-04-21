@@ -12,3 +12,6 @@ futures = "0.3.13"
 grpcio = { version = "0.8.2", features = ["prost-codec"]}
 prost = "0.7.0"
 prost-types = "0.7.0"
+
+[build-dependencies]
+grpcio-compiler = { version = "0.8.0", features = ["prost-codec"]}
