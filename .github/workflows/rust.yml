@@ -31,4 +31,6 @@ jobs:
     - name: Build
       run: cargo build
     - name: Run tests
+      env: 
+        RUST_BACKTRACE: 1
       run: cargo test -- --nocapture
