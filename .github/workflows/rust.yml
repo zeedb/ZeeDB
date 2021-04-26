@@ -33,4 +33,4 @@ jobs:
     - name: Run tests
       env: 
         RUST_BACKTRACE: 1
-      run: cargo test -- --nocapture
+      run: cargo test --package e2e_tests --lib -- execute_tests::test_ddl --exact --nocapture
