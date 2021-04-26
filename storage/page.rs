@@ -318,7 +318,8 @@ impl Page {
     }
 
     pub fn delete(&self, row: usize, txn: i64) -> bool {
-        self.xmax[row].compare_and_swap(i64::MAX, txn, Ordering::Relaxed) == i64::MAX
+        self.xmax[row].compare_exchange(i64::MAX, txn, Ordering::Relaxed, Ordering::Relaxed)
+            == Ok(i64::MAX)
     }
 
     fn reserve(&self, request: usize) -> (usize, usize) {
@@ -330,7 +331,11 @@ impl Page {
             return (start, PAGE_SIZE);
         }
         // If someone else concurrently reserves rows, try again.
-        if self.len.compare_and_swap(start, end, Ordering::Relaxed) != start {
+        if self
+            .len
+            .compare_exchange_weak(start, end, Ordering::Relaxed, Ordering::Relaxed)
+            != Ok(start)
+        {
             return self.reserve(request);
         }
         // Otherwise, we have successfully reserved a segment of the page.

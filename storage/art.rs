@@ -563,7 +563,7 @@ impl Node {
                 print!("\t");
             }
             println!("{}", str)
-        };
+        }
         match self {
             Node::Null => Ok(println(indent, format!("{}Null", prefix))),
             Node::Leaf(node) => Ok(println(
