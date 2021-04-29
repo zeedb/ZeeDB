@@ -1,0 +1,18 @@
+steps:
+- name: us-west1-docker.pkg.dev/zeedeebee/zeedb-containers/zeedb-builder:latest
+  env:
+    - RUSTC_WRAPPER=sccache
+    - CMAKE_C_COMPILER_LAUNCHER=sccache
+    - CMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - SCCACHE_GCS_BUCKET=zeedb-build-cache
+    - SCCACHE_GCS_OAUTH_URL=http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/697461006037@cloudbuild.gserviceaccount.com/token
+    - SCCACHE_GCS_RW_MODE=READ_WRITE
+    - CARGO_INCREMENTAL=0
+    - SCCACHE_LOG=debug # sccache verbose logging.
+    - VERBOSE=1 # cmake verbose logging.
+    # cargo argument -v or -vv enables verbose and very-verbose logging.
+  entrypoint: cargo
+  args: [build, -p, protos, -vv]
+  timeout: 600s
+options:
+  machineType: E2_HIGHCPU_8
