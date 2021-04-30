@@ -18,5 +18,5 @@ RUN \
     wget -qO- "https://github.com/zeedb/sccache/releases/download/$VERSION/sccache-$VERSION-x86_64-unknown-linux-musl.tar.gz" | tar -xz -C .; \
     chmod +x sccache-$VERSION-x86_64-unknown-linux-musl/sccache; \
     mv sccache-$VERSION-x86_64-unknown-linux-musl/sccache /usr/bin/sccache; \
-    rm -rf sccache-$VERSION-x86_64-unknown-linux-musl \
+    rm -rf sccache-$VERSION-x86_64-unknown-linux-musl; \
     sccache --version
