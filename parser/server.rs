@@ -32,6 +32,6 @@ pub fn start_server_process() {
     Command::new("sh")
         .arg("-c")
         .arg(SCRIPT)
-        .output()
+        .status()
         .expect("failed to start docker");
 }
