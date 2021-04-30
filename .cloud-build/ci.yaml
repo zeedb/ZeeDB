@@ -12,4 +12,7 @@ steps:
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
   entrypoint: cargo
+  args: [build]
+- name: us-west1-docker.pkg.dev/zeedeebee/zeedb-containers/zeedb-builder:latest
+  entrypoint: cargo
   args: [test, --package, e2e_tests, --lib, --, execute_tests::test_join_using, --exact, --nocapture]
