@@ -5,9 +5,13 @@ steps:
     - --cache=true
     - --destination=gcr.io/$PROJECT_ID/zeedb-builder
 - name: gcr.io/$PROJECT_ID/zeedb-builder
-  entrypoint: cargo
-  args: [build]
+  entrypoint: sh
+  args: [-c, 'cargo build -Z timings && sccache --show-stats']
   waitFor: ['-']
+artifacts:
+  objects: 
+    location: gs://zeedb-build-artifacts
+    paths: cargo-timing.html
 options:
   env:
     - RUSTC_WRAPPER=sccache
