@@ -1,5 +1,16 @@
 steps:
-- name: us-west1-docker.pkg.dev/zeedeebee/zeedb-containers/zeedb-builder:latest
+- name: gcr.io/kaniko-project/executor
+  args: 
+    - --dockerfile=.cloud-build/Dockerfile
+    - --cache=true
+    - --destination=gcr.io/$PROJECT_ID/zeedb-builder
+- name: gcr.io/$PROJECT_ID/zeedb-builder
+  entrypoint: cargo
+  args: [build]
+- name: gcr.io/$PROJECT_ID/zeedb-builder
+  entrypoint: cargo
+  args: [test, --package, parser, --lib, --, parser_tests::test_format, --exact, --nocapture]
+options:
   env:
     - RUSTC_WRAPPER=sccache
     - CMAKE_C_COMPILER_LAUNCHER=sccache
@@ -8,11 +19,16 @@ steps:
     - SCCACHE_GCS_OAUTH_URL=http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/697461006037@cloudbuild.gserviceaccount.com/token
     - SCCACHE_GCS_RW_MODE=READ_WRITE
     - CARGO_INCREMENTAL=0
+    - CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
-  entrypoint: cargo
-  args: [build]
-- name: us-west1-docker.pkg.dev/zeedeebee/zeedb-containers/zeedb-builder:latest
-  entrypoint: cargo
-  args: [test, --package, e2e_tests, --lib, --, execute_tests::test_join_using, --exact, --nocapture]
+  volumes:
+    - name: cargo-index
+      path: /usr/local/cargo/registry/index/ 
+    - name: cargo-cache
+      path: /usr/local/cargo/registry/cache/ 
+    - name: cargo-db
+      path: /usr/local/cargo/git/db/
+  machineType: E2_HIGHCPU_32
+timeout: 3600s
