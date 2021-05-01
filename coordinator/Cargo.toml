@@ -19,13 +19,11 @@ ast = { path = "../ast" }
 catalog = { path = "../catalog" }
 catalog_types = { path = "../catalog_types" }
 context = { path = "../context" }
-execute = { path = "../execute" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 protos = { path = "../protos" }
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
-storage = { path = "../storage" }
 kernel = { path = "../kernel" }
 
 [dev-dependencies]

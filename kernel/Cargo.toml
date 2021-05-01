@@ -11,5 +11,4 @@ path = "lib.rs"
 serde = { version = "1.0.123", features = ["derive"] }
 zetasql = { path = "../zetasql" }
 chrono = "0.4.11"
-regex = "1.4.2"
 twox-hash = "1.6.0"

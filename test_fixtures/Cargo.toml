@@ -8,4 +8,3 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-zetasql = { path = "../zetasql" }

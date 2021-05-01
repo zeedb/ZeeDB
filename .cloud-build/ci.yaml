@@ -7,9 +7,7 @@ steps:
 - name: gcr.io/$PROJECT_ID/zeedb-builder
   entrypoint: cargo
   args: [build]
-- name: gcr.io/$PROJECT_ID/zeedb-builder
-  entrypoint: cargo
-  args: [test, --package, parser, --lib, --, parser_tests::test_format, --exact, --nocapture]
+  waitFor: ['-']
 options:
   env:
     - RUSTC_WRAPPER=sccache
@@ -23,12 +21,10 @@ options:
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
-  volumes:
-    - name: cargo-index
-      path: /usr/local/cargo/registry/index/ 
-    - name: cargo-cache
-      path: /usr/local/cargo/registry/cache/ 
-    - name: cargo-db
-      path: /usr/local/cargo/git/db/
-  machineType: E2_HIGHCPU_32
-timeout: 3600s
+  # volumes:
+  #   - name: cargo-index
+  #     path: /usr/local/cargo/registry/index/ 
+  #   - name: cargo-cache
+  #     path: /usr/local/cargo/registry/cache/ 
+  #   - name: cargo-db
+  #     path: /usr/local/cargo/git/db/

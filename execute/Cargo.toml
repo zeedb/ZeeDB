@@ -18,10 +18,7 @@ regex = "1.4.2"
 ast = { path = "../ast" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
-parser = { path = "../parser" }
-planner = { path = "../planner" }
 protos = { path = "../protos" }
-rayon = "1.5.0"
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
 storage = { path = "../storage" }

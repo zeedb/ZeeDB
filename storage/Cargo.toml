@@ -9,7 +9,6 @@ path = "lib.rs"
 
 [dependencies]
 packed_simd = { version = "0.3.4", package = "packed_simd_2" }
-regex = "1.4.2"
 twox-hash = "1.6.0"
 context = { path = "../context" }
 kernel = { path = "../kernel" }

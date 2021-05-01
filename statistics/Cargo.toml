@@ -13,5 +13,4 @@ rand = "0.7.3"
 serde = { version = "1.0.123", features = ["derive"] }
 twox-hash = "1.6.0"
 
-context = { path = "../context" }
 kernel = { path = "../kernel" }

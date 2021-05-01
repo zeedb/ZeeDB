@@ -7,4 +7,3 @@ edition = "2018"
 path = "lib.rs"
 
 [dependencies]
-grpcio = { version = "0.8.2", default-features = false, features = ["prost-codec"]}

@@ -66,6 +66,7 @@ impl Coordinator for CoordinatorNode {
             self.context[PARSER_KEY].analyze(&req.sql, ROOT_CATALOG_ID, txn, types, &self.context);
         let expr = planner::optimize(expr, txn, &self.context);
         let mut stream = self.context[REMOTE_EXECUTION_KEY].submit(expr, &variables, txn);
+        // TODO eliminate use of rayon and remove dependency.
         rayon::spawn(move || {
             // Send each batch of records produced by expr to the client.
             loop {
