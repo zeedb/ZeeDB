@@ -79,6 +79,7 @@ fn test_metadata() {
     t.finish("examples/execute_metadata.testlog");
 }
 
+/*
 #[test]
 fn test_aggregate_large() {
     let mut t = TestSuite::adventure_works();
@@ -86,6 +87,7 @@ fn test_aggregate_large() {
     t.ok("select count(*) from customer");
     t.finish("examples/execute_aggregate_large.testlog");
 }
+ */
 
 #[test]
 fn test_ddl() {
@@ -154,6 +156,7 @@ fn test_update_index() {
     t.finish("examples/execute_update_index.testlog");
 }
 
+/*
 #[test]
 fn test_adventure_works() {
     TestSuite::adventure_works();
@@ -166,6 +169,7 @@ fn test_index() {
     t.ok("select * from customer join store using (store_id) where customer_id = 1");
     t.finish("examples/execute_index.testlog");
 }
+ */
 
 #[test]
 fn test_join_nested_loop() {
@@ -181,6 +185,7 @@ fn test_join_nested_loop() {
     t.finish("examples/execute_join_nested_loop.testlog");
 }
 
+/*
 #[test]
 fn test_join_hash() {
     let mut t = TestSuite::adventure_works();
@@ -210,6 +215,7 @@ fn test_join_hash() {
     );
     t.finish("examples/execute_join_hash.testlog");
 }
+ */
 
 #[test]
 fn test_limit() {

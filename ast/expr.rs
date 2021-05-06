@@ -181,8 +181,8 @@ pub enum Expr {
         input: Box<Expr>,
     },
     Map {
-        include_existing: bool,
         projects: Vec<(Scalar, Column)>,
+        include_existing: bool,
         input: Box<Expr>,
     },
     NestedLoop {

@@ -26,13 +26,6 @@ impl TestSuite {
         }
     }
 
-    pub fn adventure_works() -> Self {
-        Self {
-            log: "".to_string(),
-            cluster: TestCluster::adventure_works(),
-        }
-    }
-
     pub fn setup(&mut self, sql: &str) {
         run(&sql, &mut self.cluster.client);
         writeln!(&mut self.log, "setup: {}", trim(&sql)).unwrap();
@@ -131,16 +124,6 @@ impl TestCluster {
 
     pub fn empty() -> Self {
         Self::new(Storage::default(), 0)
-    }
-
-    pub fn adventure_works() -> Self {
-        static CACHE: OnceCell<Storage> = OnceCell::new();
-        let storage = CACHE.get_or_init(|| {
-            let cluster = TestCluster::empty();
-            crate::adventure_works::populate_adventure_works(1_000, cluster.client);
-            cluster.worker.unwrap()
-        });
-        Self::new(storage.clone(), 100)
     }
 }
 

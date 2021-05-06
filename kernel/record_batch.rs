@@ -12,6 +12,7 @@ pub struct RecordBatch {
 impl RecordBatch {
     pub fn new(columns: Vec<(String, AnyArray)>) -> Self {
         assert!(!columns.is_empty());
+
         for i in 1..columns.len() {
             let (left_name, left_column) = &columns[0];
             let (right_name, right_column) = &columns[i];

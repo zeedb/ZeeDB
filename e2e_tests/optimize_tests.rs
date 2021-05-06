@@ -1,5 +1,6 @@
 use crate::test_suite::*;
 
+/*
 #[test]
 fn test_aggregate() {
     let mut t = TestSuite::adventure_works();
@@ -311,6 +312,8 @@ fn test_with() {
     );
     t.finish("examples/optimize_with.testlog");
 }
+
+*/
 
 #[test]
 fn test_distinct() {

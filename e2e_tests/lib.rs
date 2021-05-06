@@ -1,4 +1,3 @@
-mod adventure_works;
 #[cfg(test)]
 mod execute_tests;
 #[cfg(test)]
