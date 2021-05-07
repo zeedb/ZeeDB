@@ -10,7 +10,8 @@ path = "lib.rs"
 [dependencies]
 chrono = "0.4.11"
 futures = "0.3.13"
-grpcio = { version = "0.8.2", default-features = false, features = ["prost-codec", "use-bindgen"]}
+tokio = { version = "1.5.0", features = ["rt"] }
+tonic = "0.4.3"
 prost = "0.7.0"
 prost-types = "0.7.0"
 time = "0.1.39"
@@ -19,6 +20,7 @@ ast = { path = "../ast" }
 catalog_types = { path = "../catalog_types" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
+protos = { path = "../protos" }
 zetasql = { path = "../zetasql" }
 
 [dev-dependencies]

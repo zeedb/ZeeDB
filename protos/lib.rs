@@ -1,3 +1,4 @@
 mod rpc;
+mod runtime;
 
-pub use crate::rpc::*;
+pub use crate::{rpc::*, runtime::*};

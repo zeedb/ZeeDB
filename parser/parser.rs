@@ -1,39 +1,56 @@
-use std::sync::Arc;
+use std::sync::Mutex;
 
 use ast::Expr;
-use catalog_types::CATALOG_KEY;
+use catalog_types::{enabled_language_features, supported_statement_kinds, CATALOG_KEY};
 use context::{Context, ContextKey};
-use grpcio::{ChannelBuilder, EnvBuilder};
 use kernel::*;
-use zetasql::{analyze_response::Result::*, analyzer_options_proto::QueryParameterProto, *};
+use tonic::{transport::Channel, Request};
+use zetasql::{
+    analyze_request::Target::ParseResumeLocation,
+    analyze_response::Result::{ResolvedExpression, ResolvedStatement},
+    analyzer_options_proto::QueryParameterProto,
+    zeta_sql_local_service_client::ZetaSqlLocalServiceClient,
+    *,
+};
+
+use crate::convert::convert;
 
 pub const MAX_QUERY: usize = 4_194_304;
 pub const PARSER_KEY: ContextKey<Parser> = ContextKey::new("PARSER");
 
 pub struct Parser {
-    client: ZetaSqlLocalServiceClient,
+    client: Mutex<ZetaSqlLocalServiceClient<Channel>>,
 }
 
 impl Default for Parser {
     fn default() -> Self {
-        crate::server::start_server_process();
-        let ch =
-            ChannelBuilder::new(Arc::new(EnvBuilder::new().build())).connect("localhost:50051");
-        Self {
-            client: ZetaSqlLocalServiceClient::new(ch),
-        }
+        protos::runtime().block_on(async {
+            crate::server::start_server_process();
+            let client = Mutex::new(
+                ZetaSqlLocalServiceClient::connect("http://localhost:50051")
+                    .await
+                    .unwrap(),
+            );
+            Self { client }
+        })
     }
 }
 
 impl Parser {
     pub fn format(&self, sql: &str) -> String {
-        self.client
-            .format_sql(&FormatSqlRequest {
-                sql: Some(sql.to_string()),
-            })
-            .unwrap()
-            .sql
-            .unwrap()
+        protos::runtime().block_on(async {
+            self.client
+                .lock()
+                .unwrap()
+                .format_sql(Request::new(FormatSqlRequest {
+                    sql: Some(sql.to_string()),
+                }))
+                .await
+                .unwrap()
+                .into_inner()
+                .sql
+                .unwrap()
+        })
     }
 
     pub fn analyze(
@@ -45,18 +62,25 @@ impl Parser {
         context: &Context,
     ) -> Expr {
         // Extract table names from script.
-        let table_names = self
-            .client
-            .extract_table_names_from_statement(&ExtractTableNamesFromStatementRequest {
-                sql_statement: Some(sql.to_string()),
-                allow_script: Some(true),
-                options: Some(language_options()),
-            })
-            .expect(sql)
-            .table_name
-            .drain(..)
-            .map(|name| name.table_name_segment)
-            .collect();
+        let table_names = protos::runtime().block_on(async move {
+            self.client
+                .lock()
+                .unwrap()
+                .extract_table_names_from_statement(Request::new(
+                    ExtractTableNamesFromStatementRequest {
+                        sql_statement: Some(sql.to_string()),
+                        allow_script: Some(true),
+                        options: Some(language_options()),
+                    },
+                ))
+                .await
+                .unwrap()
+                .into_inner()
+                .table_name
+                .drain(..)
+                .map(|name| name.table_name_segment)
+                .collect()
+        });
         // Construct a minimal catalog containing just the referenced tables.
         let catalog = context[CATALOG_KEY].catalog(catalog_id, table_names, txn, context);
         // Parse each statement in the script, one at a time, in a loop.
@@ -79,19 +103,27 @@ impl Parser {
                         .collect(),
                     ..Default::default()
                 }),
-                target: Some(analyze_request::Target::ParseResumeLocation(
-                    ParseResumeLocationProto {
-                        input: Some(sql.to_string()),
-                        byte_position: Some(offset),
-                        ..Default::default()
-                    },
-                )),
+                target: Some(ParseResumeLocation(ParseResumeLocationProto {
+                    input: Some(sql.to_string()),
+                    byte_position: Some(offset),
+                    ..Default::default()
+                })),
                 ..Default::default()
             };
-            let response = self.client.analyze(&request).unwrap();
+            let response = protos::runtime().block_on(async move {
+                self.client
+                    .lock()
+                    .unwrap()
+                    .analyze(Request::new(request))
+                    .await
+                    .unwrap()
+                    .into_inner()
+            });
             let expr = match response.result.unwrap() {
-                ResolvedStatement(stmt) => crate::convert::convert(catalog_id, &stmt),
-                ResolvedExpression(_) => panic!("expected statement but found expression"),
+                ResolvedStatement(stmt) => convert(catalog_id, &stmt),
+                ResolvedExpression(_) => {
+                    panic!("expected statement but found expression")
+                }
             };
             // If we detected a SET _ = _ statement, add it to the query scope.
             if let Expr::LogicalAssign {
@@ -120,8 +152,8 @@ impl Parser {
 
 fn language_options() -> LanguageOptionsProto {
     LanguageOptionsProto {
-        enabled_language_features: catalog_types::enabled_language_features(),
-        supported_statement_kinds: catalog_types::supported_statement_kinds(),
+        enabled_language_features: enabled_language_features(),
+        supported_statement_kinds: supported_statement_kinds(),
         ..Default::default()
     }
 }
