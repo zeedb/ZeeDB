@@ -1,15 +1,15 @@
 steps:
-- name: gcr.io/kaniko-project/executor
-  args: 
-    - --dockerfile=.cloud-build/Dockerfile
-    - --cache=true
-    - --destination=gcr.io/$PROJECT_ID/zeedb-builder
-- name: gcr.io/$PROJECT_ID/zeedb-builder
-  entrypoint: sh
-  args: [-c, 'cargo build -Z timings && sccache --show-stats']
-  waitFor: ['-']
+  - name: gcr.io/kaniko-project/executor
+    args:
+      - --dockerfile=.cloud-build/Dockerfile
+      - --cache=true
+      - --destination=gcr.io/$PROJECT_ID/zeedb-builder
+  - name: gcr.io/$PROJECT_ID/zeedb-builder
+    entrypoint: sh
+    args: [-c, "cargo build -Z timings && sccache --show-stats"]
+    waitFor: ["-"]
 artifacts:
-  objects: 
+  objects:
     location: gs://zeedb-build-artifacts
     paths: cargo-timing.html
 options:
@@ -22,11 +22,7 @@ options:
     - SCCACHE_GCS_RW_MODE=READ_WRITE
     - CARGO_INCREMENTAL=0
     - CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
-    # - CARGO_TARGET_DIR=/target
     - NO_RUSTFMT=1
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
-  # volumes:
-  #   - name: cargo-target
-  #     path: /target
