@@ -1,16 +1,17 @@
-use std::{
-    fmt::Write,
-    net::TcpListener,
-    sync::{Arc, Mutex},
-};
+use std::{fmt::Write, sync::Mutex};
 
 use coordinator::CoordinatorNode;
-use futures::{executor::block_on, StreamExt};
-use grpcio::{ChannelBuilder, EnvBuilder, Server, ServerBuilder};
-use once_cell::sync::{Lazy, OnceCell};
-use protos::{create_coordinator, create_worker, CoordinatorClient, SubmitRequest};
+use once_cell::sync::Lazy;
+use protos::{
+    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
+    worker_server::WorkerServer, SubmitRequest,
+};
 use regex::Regex;
 use storage::Storage;
+use tonic::{
+    transport::{Channel, Server},
+    Request,
+};
 use worker::WorkerNode;
 
 pub struct TestSuite {
@@ -27,7 +28,7 @@ impl TestSuite {
     }
 
     pub fn setup(&mut self, sql: &str) {
-        run(&sql, &mut self.cluster.client);
+        self.cluster.run(&sql);
         writeln!(&mut self.log, "setup: {}", trim(&sql)).unwrap();
     }
 
@@ -36,7 +37,7 @@ impl TestSuite {
     }
 
     pub fn ok(&mut self, sql: &str) {
-        let result = run(&sql, &mut self.cluster.client);
+        let result = self.cluster.run(&sql);
         writeln!(&mut self.log, "ok: {}\n{}\n", trim(&sql), result).unwrap();
     }
 
@@ -57,33 +58,9 @@ fn trim(sql: &str) -> String {
     trimmed
 }
 
-fn run(sql: &str, client: &mut CoordinatorClient) -> String {
-    let mut stream = client
-        .submit(&SubmitRequest {
-            sql: sql.to_string(),
-            variables: Default::default(),
-        })
-        .unwrap();
-    let mut batches = vec![];
-    loop {
-        match block_on(stream.next()) {
-            Some(Ok(page)) => batches.push(bincode::deserialize(&page.record_batch).unwrap()),
-            Some(Err(err)) => panic!("{}", err),
-            None => break,
-        }
-    }
-    if batches.is_empty() {
-        "EMPTY".to_string()
-    } else {
-        kernel::fixed_width(&batches)
-    }
-}
-
 pub struct TestCluster {
-    pub coordinator: CoordinatorNode,
-    pub worker: WorkerNode,
-    pub server: Server,
-    pub client: CoordinatorClient,
+    pub client: CoordinatorClient<Channel>,
+    shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl TestCluster {
@@ -92,46 +69,73 @@ impl TestCluster {
         static GLOBAL: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
         let _lock = GLOBAL.lock().unwrap();
         // Find a free port.
-        let port = free_port();
+        static NEXT_PORT: Lazy<Mutex<u16>> = Lazy::new(|| Mutex::new(50052));
+        let port = {
+            let mut lock = NEXT_PORT.lock().unwrap();
+            *lock = *lock + 1;
+            *lock - 1
+        };
         // Set configuration environment variables that will be picked up by various services in Context.
-        std::env::set_var("WORKER_0", format!("localhost:{}", port).as_str());
+        std::env::set_var("WORKER_0", format!("http://[::1]:{}", port).as_str());
         std::env::set_var("WORKER_ID", "0");
         std::env::set_var("WORKER_COUNT", "1");
         // Create an empty 1-worker cluster.
         let worker = WorkerNode::new(storage);
-        // TODO get rid of this and *actually* use multiple workers in the tests.
-        std::env::set_var("WORKER_COUNT", "10");
         let coordinator = CoordinatorNode::new(txn);
-        // Start the server.
-        let mut server = ServerBuilder::new(Arc::new(EnvBuilder::new().build()))
-            .bind("127.0.0.1", port)
-            .register_service(create_coordinator(coordinator.clone()))
-            .register_service(create_worker(worker.clone()))
-            .build()
-            .unwrap();
-        server.start();
-        // Create a client.
-        let ch = ChannelBuilder::new(Arc::new(EnvBuilder::new().build()))
-            .connect(format!("127.0.0.1:{}", port).as_str());
-        let client = CoordinatorClient::new(ch);
+        // Connect to the cluster.
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let client = protos::runtime().block_on(async move {
+            let addr = format!("[::1]:{}", port).parse().unwrap();
+            let signal = async { receiver.await.unwrap() };
+            tokio::spawn(
+                Server::builder()
+                    .add_service(CoordinatorServer::new(coordinator))
+                    .add_service(WorkerServer::new(worker))
+                    .serve_with_shutdown(addr, signal),
+            );
+            CoordinatorClient::connect(format!("http://[::1]:{}", port))
+                .await
+                .unwrap()
+        });
         Self {
-            coordinator,
-            worker,
-            server,
             client,
+            shutdown: Some(sender),
         }
     }
 
     pub fn empty() -> Self {
         Self::new(Storage::default(), 0)
     }
+
+    fn run(&mut self, sql: &str) -> String {
+        let request = SubmitRequest {
+            sql: sql.to_string(),
+            variables: Default::default(),
+        };
+        let response = self.client.submit(Request::new(request));
+        protos::runtime().block_on(async {
+            let mut stream = response.await.unwrap().into_inner();
+            let mut batches = vec![];
+            loop {
+                match stream.message().await.unwrap() {
+                    Some(page) => batches.push(bincode::deserialize(&page.record_batch).unwrap()),
+                    None => break,
+                }
+            }
+            if batches.is_empty() {
+                "EMPTY".to_string()
+            } else {
+                kernel::fixed_width(&batches)
+            }
+        })
+    }
 }
 
-fn free_port() -> u16 {
-    (50052..65535)
-        .find(|port| match TcpListener::bind(("127.0.0.1", *port)) {
-            Ok(_) => true,
-            Err(_) => false,
-        })
-        .unwrap()
+impl Drop for TestCluster {
+    fn drop(&mut self) {
+        std::mem::take(&mut self.shutdown)
+            .unwrap()
+            .send(())
+            .unwrap();
+    }
 }

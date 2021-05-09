@@ -12,19 +12,15 @@ pub const REMOTE_EXECUTION_KEY: ContextKey<Box<dyn RemoteExecution>> =
 pub type RecordStream = Box<dyn Stream<Item = RecordBatch> + Send + Unpin>;
 
 pub trait RemoteExecution: Send + Sync {
-    fn submit(&self, expr: Expr, variables: &HashMap<String, AnyArray>, txn: i64) -> RecordStream;
+    fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream;
 
-    fn broadcast(
-        &self,
-        expr: Expr,
-        variables: &HashMap<String, AnyArray>,
-        txn: i64,
-    ) -> RecordStream;
+    fn broadcast(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64)
+        -> RecordStream;
 
     fn exchange(
         &self,
         expr: Expr,
-        variables: &HashMap<String, AnyArray>,
+        variables: HashMap<String, AnyArray>,
         txn: i64,
         hash_column: String,
         hash_bucket: i32,

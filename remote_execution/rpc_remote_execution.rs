@@ -1,147 +1,191 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Mutex};
 
 use ast::Expr;
 use futures::StreamExt;
-use grpcio::{ChannelBuilder, EnvBuilder};
 use kernel::{AnyArray, RecordBatch};
 use protos::{
-    ApproxCardinalityRequest, BroadcastRequest, ColumnStatisticsRequest, ExchangeRequest, Page,
-    WorkerClient,
+    worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
+    ColumnStatisticsRequest, ExchangeRequest, Page,
 };
 use regex::Regex;
 use statistics::ColumnStatistics;
+use tonic::{
+    transport::{Channel, Endpoint},
+    Request, Status,
+};
 
-use crate::{remote_execution::RecordStream, RemoteExecution};
+use crate::{RecordStream, RemoteExecution};
 
 pub struct RpcRemoteExecution {
-    workers: Vec<WorkerClient>,
+    workers: Vec<Mutex<WorkerClient<Channel>>>,
 }
 
 impl Default for RpcRemoteExecution {
     fn default() -> Self {
-        let re = Regex::new(r"WORKER_\d+").unwrap();
-        let workers: Vec<_> = std::env::vars()
-            .filter(|(key, _)| re.is_match(&key))
-            .map(|(_, dst)| {
-                WorkerClient::new(
-                    ChannelBuilder::new(Arc::new(EnvBuilder::new().build())).connect(&dst),
-                )
-            })
-            .collect();
-        assert!(
-            workers.len() > 0,
-            "There are no environment variables starting with WORKER_"
-        );
+        let workers = protos::runtime().block_on(async {
+            let re = Regex::new(r"WORKER_\d+").unwrap();
+            let workers: Vec<_> = std::env::vars()
+                .filter(|(key, _)| re.is_match(&key))
+                .map(|(_, dst)| {
+                    Mutex::new(WorkerClient::new(
+                        Endpoint::new(dst).unwrap().connect_lazy().unwrap(),
+                    ))
+                })
+                .collect();
+            assert!(
+                workers.len() > 0,
+                "There are no environment variables starting with WORKER_"
+            );
+            workers
+        });
         Self { workers }
     }
 }
 
 impl RemoteExecution for RpcRemoteExecution {
-    fn submit(&self, expr: Expr, variables: &HashMap<String, AnyArray>, txn: i64) -> RecordStream {
-        Box::new(futures::stream::select_all(self.workers.iter().map(
-            |worker| {
-                worker
-                    .broadcast(&BroadcastRequest {
-                        expr: bincode::serialize(&expr).unwrap(),
-                        variables: variables
-                            .iter()
-                            .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
-                            .collect(),
-                        txn,
-                        listeners: 1,
-                    })
+    fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream {
+        protos::runtime().block_on(async move {
+            let mut streams = vec![];
+            for worker in &self.workers {
+                let request = BroadcastRequest {
+                    expr: bincode::serialize(&expr).unwrap(),
+                    variables: variables
+                        .iter()
+                        .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
+                        .collect(),
+                    txn,
+                    listeners: 1,
+                };
+                let response = worker
+                    .lock()
                     .unwrap()
-                    .map(unwrap_page)
-            },
-        )))
+                    .broadcast(Request::new(request))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .map(unwrap_page);
+                streams.push(response);
+            }
+            Box::new(futures::stream::select_all(streams))
+        })
     }
 
     fn broadcast(
         &self,
         expr: Expr,
-        variables: &HashMap<String, AnyArray>,
+        variables: HashMap<String, AnyArray>,
         txn: i64,
     ) -> RecordStream {
-        Box::new(futures::stream::select_all(self.workers.iter().map(
-            |worker| {
-                worker
-                    .broadcast(&BroadcastRequest {
-                        expr: bincode::serialize(&expr).unwrap(),
-                        variables: variables
-                            .iter()
-                            .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
-                            .collect(),
-                        txn,
-                        listeners: self.workers.len() as i32,
-                    })
+        protos::runtime().block_on(async move {
+            let mut streams = vec![];
+            for worker in &self.workers {
+                let request = BroadcastRequest {
+                    expr: bincode::serialize(&expr).unwrap(),
+                    variables: variables
+                        .iter()
+                        .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
+                        .collect(),
+                    txn,
+                    listeners: self.workers.len() as i32,
+                };
+                let response = worker
+                    .lock()
                     .unwrap()
-                    .map(unwrap_page)
-            },
-        )))
+                    .broadcast(Request::new(request))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .map(unwrap_page);
+                streams.push(response);
+            }
+            Box::new(futures::stream::select_all(streams))
+        })
     }
 
     fn exchange(
         &self,
         expr: Expr,
-        variables: &HashMap<String, AnyArray>,
+        variables: HashMap<String, AnyArray>,
         txn: i64,
         hash_column: String,
         hash_bucket: i32,
     ) -> RecordStream {
-        Box::new(futures::stream::select_all(self.workers.iter().map(
-            |worker| {
-                worker
-                    .exchange(&ExchangeRequest {
-                        expr: bincode::serialize(&expr).unwrap(),
-                        variables: variables
-                            .iter()
-                            .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
-                            .collect(),
-                        txn,
-                        listeners: self.workers.len() as i32,
-                        hash_column: hash_column.clone(),
-                        hash_bucket,
-                    })
+        protos::runtime().block_on(async move {
+            let mut streams = vec![];
+            for worker in &self.workers {
+                let request = ExchangeRequest {
+                    expr: bincode::serialize(&expr).unwrap(),
+                    variables: variables
+                        .iter()
+                        .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
+                        .collect(),
+                    txn,
+                    listeners: self.workers.len() as i32,
+                    hash_column: hash_column.clone(),
+                    hash_bucket,
+                };
+                let response = worker
+                    .lock()
                     .unwrap()
-                    .map(unwrap_page)
-            },
-        )))
+                    .exchange(Request::new(request))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .map(unwrap_page);
+                streams.push(response);
+            }
+            Box::new(futures::stream::select_all(streams))
+        })
     }
 
     fn approx_cardinality(&self, table_id: i64) -> f64 {
-        self.workers
-            .iter()
-            .map(|worker| {
-                worker
-                    .approx_cardinality(&ApproxCardinalityRequest { table_id })
+        protos::runtime().block_on(async move {
+            let mut total = 0.0;
+            for worker in &self.workers {
+                let request = ApproxCardinalityRequest { table_id };
+                let response = worker
+                    .lock()
                     .unwrap()
-                    .cardinality
-            })
-            .sum()
+                    .approx_cardinality(Request::new(request))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .cardinality;
+                total += response
+            }
+            total
+        })
     }
 
     fn column_statistics(&self, table_id: i64, column_name: &str) -> Option<ColumnStatistics> {
-        let mut total = None;
-        for worker in &self.workers {
-            if let Some(bytes) = worker
-                .column_statistics(&ColumnStatisticsRequest {
+        protos::runtime().block_on(async move {
+            let mut total = None;
+            for worker in &self.workers {
+                let request = ColumnStatisticsRequest {
                     table_id,
                     column_name: column_name.to_string(),
-                })
-                .unwrap()
-                .statistics
-            {
-                let part: ColumnStatistics = bincode::deserialize(&bytes).unwrap();
-                match &mut total {
-                    None => total = Some(part),
-                    Some(total) => total.merge(&part),
+                };
+                let response = worker
+                    .lock()
+                    .unwrap()
+                    .column_statistics(Request::new(request))
+                    .await
+                    .unwrap()
+                    .into_inner()
+                    .statistics;
+                if let Some(bytes) = response {
+                    let partial: ColumnStatistics = bincode::deserialize(&bytes).unwrap();
+                    match &mut total {
+                        None => total = Some(partial),
+                        Some(total) => total.merge(&partial),
+                    }
                 }
             }
-        }
-        total
+            total
+        })
     }
 }
 
-fn unwrap_page(page: grpcio::Result<Page>) -> RecordBatch {
+fn unwrap_page(page: Result<Page, Status>) -> RecordBatch {
     bincode::deserialize(&page.unwrap().record_batch).unwrap()
 }

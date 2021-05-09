@@ -9,12 +9,12 @@ use std::{
 use catalog::MetadataCatalog;
 use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::{env_var, Context, WORKER_COUNT_KEY};
-use futures::{executor::block_on, SinkExt, StreamExt};
-use grpcio::{RpcContext, ServerStreamingSink, WriteFlags};
+use futures::StreamExt;
 use kernel::AnyArray;
 use parser::{Parser, PARSER_KEY};
-use protos::{Coordinator, Page, SubmitRequest};
+use protos::{coordinator_server::Coordinator, Page, RecordStream, SubmitRequest};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use tonic::{async_trait, Request, Response, Status};
 
 #[derive(Clone)]
 pub struct CoordinatorNode {
@@ -45,14 +45,17 @@ impl Default for CoordinatorNode {
     }
 }
 
+#[async_trait]
 impl Coordinator for CoordinatorNode {
-    fn submit(
-        &mut self,
-        _ctx: RpcContext,
-        mut req: SubmitRequest,
-        mut sink: ServerStreamingSink<Page>,
-    ) {
-        let variables: HashMap<String, AnyArray> = req
+    type SubmitStream = RecordStream;
+
+    async fn submit(
+        &self,
+        request: Request<SubmitRequest>,
+    ) -> Result<Response<Self::SubmitStream>, Status> {
+        let mut request = request.into_inner();
+        let context = self.context.clone();
+        let variables: HashMap<String, AnyArray> = request
             .variables
             .drain()
             .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
@@ -62,28 +65,23 @@ impl Coordinator for CoordinatorNode {
             .iter()
             .map(|(name, value)| (name.clone(), value.data_type()))
             .collect();
-        let expr =
-            self.context[PARSER_KEY].analyze(&req.sql, ROOT_CATALOG_ID, txn, types, &self.context);
-        let expr = planner::optimize(expr, txn, &self.context);
-        let mut stream = self.context[REMOTE_EXECUTION_KEY].submit(expr, &variables, txn);
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
         rayon::spawn(move || {
-            // Send each batch of records produced by expr to the client.
+            let expr =
+                context[PARSER_KEY].analyze(&request.sql, ROOT_CATALOG_ID, txn, types, &context);
+            let expr = planner::optimize(expr, txn, &context);
+            let mut stream = context[REMOTE_EXECUTION_KEY].submit(expr, variables, txn);
             loop {
-                match block_on(stream.next()) {
-                    Some(batch) => {
-                        block_on(sink.send((
-                            Page {
-                                record_batch: bincode::serialize(&batch).unwrap(),
-                            },
-                            WriteFlags::default(),
-                        )))
-                        .unwrap();
-                    }
+                match protos::runtime().block_on(stream.next()) {
+                    Some(record_batch) => sender
+                        .blocking_send(Page {
+                            record_batch: bincode::serialize(&record_batch).unwrap(),
+                        })
+                        .unwrap(),
                     None => break,
                 }
             }
-            // Close the stream to the client.
-            block_on(sink.close()).unwrap();
         });
+        Ok(Response::new(RecordStream { receiver }))
     }
 }

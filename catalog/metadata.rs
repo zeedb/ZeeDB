@@ -5,7 +5,7 @@ use catalog_types::{
     builtin_function_options, Catalog, CATALOG_KEY, METADATA_CATALOG_ID, ROOT_CATALOG_ID,
 };
 use context::{env_var, Context, WORKER_COUNT_KEY};
-use futures::{executor::block_on, StreamExt};
+use futures::StreamExt;
 use kernel::*;
 use once_cell::sync::OnceCell;
 use parser::{Parser, PARSER_KEY};
@@ -120,8 +120,8 @@ fn select_catalog(
             &variables,
         )
     });
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), &variables, txn);
-    let batch = match block_on(stream.next()) {
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
+    let batch = match protos::runtime().block_on(stream.next()) {
         Some(first) => first,
         None => panic!(
             "No catalog {} in parent {}",
@@ -171,9 +171,9 @@ fn select_table(
         name: Some(table_name.to_string()),
         ..Default::default()
     };
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), &variables, txn);
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
     loop {
-        match block_on(stream.next()) {
+        match protos::runtime().block_on(stream.next()) {
             Some(batch) => {
                 for offset in 0..batch.len() {
                     let table_id = as_i64(&batch, 0).get(offset).unwrap();
@@ -219,9 +219,9 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
         )
     });
     let mut indexes: Vec<Index> = vec![];
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), &variables, txn);
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
     loop {
-        match block_on(stream.next()) {
+        match protos::runtime().block_on(stream.next()) {
             Some(batch) => {
                 for offset in 0..batch.len() {
                     let index_id = as_i64(&batch, 0).get(offset).unwrap();
@@ -279,30 +279,30 @@ impl RemoteExecution for BootstrapStatistics {
     fn submit(
         &self,
         _expr: Expr,
-        _variables: &HashMap<String, AnyArray>,
+        _variables: HashMap<String, AnyArray>,
         _txn: i64,
     ) -> RecordStream {
-        panic!("RemoteExecution::submit is not available in BootstrapStatistics")
+        unimplemented!()
     }
 
     fn broadcast(
         &self,
         _expr: Expr,
-        _variables: &HashMap<String, AnyArray>,
+        _variables: HashMap<String, AnyArray>,
         _txn: i64,
     ) -> RecordStream {
-        panic!("RemoteExecution::broadcast is not available in BootstrapStatistics")
+        unimplemented!()
     }
 
     fn exchange(
         &self,
         _expr: Expr,
-        _variables: &HashMap<String, AnyArray>,
+        _variables: HashMap<String, AnyArray>,
         _txn: i64,
         _hash_column: String,
         _hash_bucket: i32,
     ) -> RecordStream {
-        panic!("RemoteExecution::exchange is not available in BootstrapStatistics")
+        unimplemented!()
     }
 }
 

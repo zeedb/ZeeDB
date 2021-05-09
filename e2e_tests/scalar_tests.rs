@@ -1,6 +1,6 @@
 use ast::Value;
 use chrono::{NaiveDate, TimeZone, Utc};
-use futures::{executor::block_on, StreamExt};
+use futures::StreamExt;
 use kernel::{AnyArray, Array, RecordBatch};
 use protos::SubmitRequest;
 
@@ -626,34 +626,38 @@ fn test_casts() {
 }
 
 fn eval(sql: &str) -> Value {
-    let cluster = TestCluster::empty();
-    let mut stream = cluster
-        .client
-        .submit(&SubmitRequest {
-            sql: format!("select {}", sql),
-            variables: Default::default(),
-        })
-        .unwrap();
-    let mut batches = vec![];
-    loop {
-        match block_on(stream.next()) {
-            Some(bytes) => {
-                let batch: RecordBatch =
-                    bincode::deserialize(&bytes.unwrap().record_batch).unwrap();
-                batches.push(batch);
+    let mut cluster = TestCluster::empty();
+    protos::runtime().block_on(async move {
+        let mut stream = cluster
+            .client
+            .submit(SubmitRequest {
+                sql: format!("select {}", sql),
+                variables: Default::default(),
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        let mut batches = vec![];
+        loop {
+            match stream.next().await {
+                Some(bytes) => {
+                    let batch: RecordBatch =
+                        bincode::deserialize(&bytes.unwrap().record_batch).unwrap();
+                    batches.push(batch);
+                }
+                None => break,
             }
-            None => break,
         }
-    }
-    assert_eq!(1, batches.len(), "{}", &sql);
-    match batches[0].columns.remove(0).1 {
-        AnyArray::Bool(array) => Value::Bool(array.get(0)),
-        AnyArray::I64(array) => Value::I64(array.get(0)),
-        AnyArray::F64(array) => Value::F64(array.get(0)),
-        AnyArray::Date(array) => Value::Date(array.get(0)),
-        AnyArray::Timestamp(array) => Value::Timestamp(array.get(0)),
-        AnyArray::String(array) => Value::String(array.get(0).map(|s| s.to_string())),
-    }
+        assert_eq!(1, batches.len(), "{}", &sql);
+        match batches[0].columns.remove(0).1 {
+            AnyArray::Bool(array) => Value::Bool(array.get(0)),
+            AnyArray::I64(array) => Value::I64(array.get(0)),
+            AnyArray::F64(array) => Value::F64(array.get(0)),
+            AnyArray::Date(array) => Value::Date(array.get(0)),
+            AnyArray::Timestamp(array) => Value::Timestamp(array.get(0)),
+            AnyArray::String(array) => Value::String(array.get(0).map(|s| s.to_string())),
+        }
+    })
 }
 
 fn date(y: i32, m: u32, d: u32) -> Value {

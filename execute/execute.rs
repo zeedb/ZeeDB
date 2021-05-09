@@ -900,7 +900,7 @@ impl Node {
                     *stream = Some(RemoteQuery::new(
                         state.context[REMOTE_EXECUTION_KEY].broadcast(
                             expr,
-                            &state.variables,
+                            state.variables.clone(),
                             state.txn,
                         ),
                     ));
@@ -912,7 +912,7 @@ impl Node {
                     *stream = Some(RemoteQuery::new(
                         state.context[REMOTE_EXECUTION_KEY].exchange(
                             expr,
-                            &state.variables,
+                            state.variables.clone(),
                             state.txn,
                             hash_column.canonical_name(),
                             state.context[WORKER_ID_KEY],
