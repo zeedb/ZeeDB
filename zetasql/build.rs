@@ -2,6 +2,7 @@ fn main() {
     println!("cargo:rerun-if-changed={}", "./protos");
     tonic_build::configure()
         .build_server(false)
+        .format(option_env!("NO_RUSTFMT") != Some("1"))
         .out_dir(".")
         .compile(
             &["./protos/zetasql/local_service/local_service.proto"],

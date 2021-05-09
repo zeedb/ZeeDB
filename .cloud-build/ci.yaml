@@ -22,13 +22,11 @@ options:
     - SCCACHE_GCS_RW_MODE=READ_WRITE
     - CARGO_INCREMENTAL=0
     - CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
+    # - CARGO_TARGET_DIR=/target
+    - NO_RUSTFMT=1
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
   # volumes:
-  #   - name: cargo-index
-  #     path: /usr/local/cargo/registry/index/ 
-  #   - name: cargo-cache
-  #     path: /usr/local/cargo/registry/cache/ 
-  #   - name: cargo-db
-  #     path: /usr/local/cargo/git/db/
+  #   - name: cargo-target
+  #     path: /target

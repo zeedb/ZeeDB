@@ -1,7 +1,7 @@
 FROM debian:buster-slim
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates wget gcc g++ make && \
+    apt-get install -y --no-install-recommends ca-certificates wget gcc g++ make protobuf-compiler-grpc && \
     rm -rf /var/lib/apt/lists/*
 
 # Install rust.

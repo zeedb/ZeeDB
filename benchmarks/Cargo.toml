@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 chrono = "0.4.11"
 futures = { version = "0.3.13", features = ["executor"] }
-grpcio = { version = "0.8.2", default-features = false, features = ["prost-codec"] }
+tonic = "0.4.3"
 rand = { version = "0.8.2", features = ["small_rng"]}
 
 coordinator = { path = "../coordinator" }
