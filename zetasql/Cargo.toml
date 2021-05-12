@@ -9,10 +9,10 @@ path = "lib.rs"
 doctest = false
 
 [dependencies]
-futures = "0.3.13"
-tonic = "0.4.3"
+futures = { version = "0.3.13", features = [] }
 prost = "0.7.0"
 prost-types = "0.7.0"
+tonic = "0.4.3"
 
 [build-dependencies]
 tonic-build = "0.4.2"

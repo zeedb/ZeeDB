@@ -189,8 +189,6 @@ dependencies = [
  "kernel",
  "parser",
  "planner",
- "prost",
- "prost-types",
  "protos",
  "rand 0.8.2",
  "rayon",
@@ -692,9 +690,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.5.2"
+version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13bd41f508810a131401606d54ac32a467c97172d74ba7662562ebba5ad07fa0"
+checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
 
 [[package]]
 name = "packed_simd_2"
@@ -716,7 +714,6 @@ dependencies = [
  "context",
  "futures",
  "kernel",
- "prost",
  "prost-types",
  "protos",
  "test_fixtures",
@@ -784,7 +781,7 @@ dependencies = [
  "context",
  "kernel",
  "parser",
- "rand 0.7.3",
+ "rand 0.8.2",
  "regex",
  "remote_execution",
  "statistics",
@@ -876,7 +873,6 @@ dependencies = [
  "futures",
  "once_cell",
  "prost",
- "prost-types",
  "tokio",
  "tonic",
  "tonic-build",
@@ -1032,8 +1028,6 @@ dependencies = [
  "context",
  "futures",
  "kernel",
- "prost",
- "prost-types",
  "protos",
  "regex",
  "statistics",
@@ -1104,7 +1098,7 @@ version = "0.1.0"
 dependencies = [
  "hyperloglogplus",
  "kernel",
- "rand 0.7.3",
+ "rand 0.8.2",
  "serde",
  "twox-hash",
 ]
@@ -1441,8 +1435,6 @@ dependencies = [
  "execute",
  "futures",
  "kernel",
- "prost",
- "prost-types",
  "protos",
  "rand 0.8.2",
  "rayon",

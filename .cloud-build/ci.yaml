@@ -1,13 +1,20 @@
 steps:
-  - name: gcr.io/kaniko-project/executor
-    args:
-      - --dockerfile=.cloud-build/Dockerfile
-      - --cache=true
-      - --destination=gcr.io/$PROJECT_ID/zeedb-builder
-  - name: gcr.io/$PROJECT_ID/zeedb-builder
-    entrypoint: sh
-    args: [-c, 'cargo build -Z timings && sccache --show-stats']
+  - name: gcr.io/cloud-builders/docker
+    id: zetasql-server
     waitFor: ['-']
+    args: ['run', '-d', '--network=cloudbuild', '--name=zetasql', 'gcr.io/$PROJECT_ID/zetasql']
+  - name: gcr.io/kaniko-project/executor
+    id: zeedb-builder
+    waitFor: ['-']
+    args:
+      - --dockerfile=.cloud-build/Dockerfile.build
+      - --destination=gcr.io/$PROJECT_ID/zeedb-builder
+      - --cache=true
+  - name: gcr.io/$PROJECT_ID/zeedb-builder
+    id: test
+    waitFor: [zeedb-builder]
+    entrypoint: sh
+    args: [-c, $_TEST]
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
@@ -23,6 +30,11 @@ options:
     - CARGO_INCREMENTAL=0
     - CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
     - NO_RUSTFMT=1
+    - ZETASQL=http://zetasql:50051
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
+substitutions:
+  _TEST: |
+    cargo test -Z timings -p parser
+    sccache --show-stats

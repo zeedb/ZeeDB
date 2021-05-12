@@ -25,12 +25,12 @@ pub struct Parser {
 impl Default for Parser {
     fn default() -> Self {
         protos::runtime().block_on(async {
-            crate::server::start_server_process();
-            let client = Mutex::new(
-                ZetaSqlLocalServiceClient::connect("http://localhost:50051")
-                    .await
-                    .unwrap(),
-            );
+            let zetasql = std::env::var("ZETASQL").unwrap_or_else(|_| {
+                // TODO server process should be started from (and cleaned up by) test harness, which can also set the ZETASQL environment variable if it isn't already set.
+                crate::server::start_server_process();
+                "http://localhost:50051".to_string()
+            });
+            let client = Mutex::new(ZetaSqlLocalServiceClient::connect(zetasql).await.unwrap());
             Self { client }
         })
     }

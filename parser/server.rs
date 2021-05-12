@@ -1,13 +1,13 @@
 use std::process::Command;
 
 const SCRIPT: &str = r"
-set -e
+set -eu
 
-if [[ `docker ps --filter name=test-zetasql-server -q` ]]; then 
+if [[ `docker ps --filter name=zetasql -q` ]]; then 
     exit 0
 fi
 
-stopped=`docker ps --all --filter name=test-zetasql-server -q`
+stopped=`docker ps --all --filter name=zetasql -q`
 
 if [[ $stopped ]]; then 
     echo 'Restarting ZetaSQL server...' >&2
@@ -16,9 +16,9 @@ else
     echo 'Starting ZetaSQL server...' >&2
     docker run \
         --publish 127.0.0.1:50051:50051 \
-        --name test-zetasql-server \
+        --name zetasql \
         --detach \
-        gcr.io/analog-delight-604/zetasql-server@sha256:62325de833178537b23ae83c8bb8dce6da51112491f3e7e9f101a262533b9df7
+        gcr.io/zeedeebee/zetasql
 fi
 
 until nc -z 127.0.0.1 50051

@@ -9,8 +9,8 @@ path = "lib.rs"
 
 [dependencies]
 hyperloglogplus = "0.2.2"
-rand = "0.7.3"
+rand = { version = "0.8.2", features = ["small_rng"]}
 serde = { version = "1.0.123", features = ["derive"] }
-twox-hash = "1.6.0"
+twox-hash = { version = "1.6.0", features = [] }
 
 kernel = { path = "../kernel" }
