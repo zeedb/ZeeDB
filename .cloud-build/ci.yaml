@@ -14,7 +14,7 @@ steps:
     id: test
     waitFor: [zeedb-builder]
     entrypoint: sh
-    args: [-c, $_TEST]
+    args: [-c, 'cargo test -Z timings && sccache --show-stats']
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
@@ -34,7 +34,3 @@ options:
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
-substitutions:
-  _TEST: |
-    cargo test -Z timings -p parser
-    sccache --show-stats
