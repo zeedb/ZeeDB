@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::{net::TcpListener, sync::Mutex};
 
 use ast::Expr;
 use catalog_types::{enabled_language_features, supported_statement_kinds, CATALOG_KEY};
@@ -26,8 +26,12 @@ impl Default for Parser {
     fn default() -> Self {
         protos::runtime().block_on(async {
             let zetasql = std::env::var("ZETASQL").unwrap_or_else(|_| {
-                // TODO server process should be started from (and cleaned up by) test harness, which can also set the ZETASQL environment variable if it isn't already set.
-                crate::server::start_server_process();
+                if TcpListener::bind(("127.0.0.1", 50051)).is_ok() {
+                    println!("\x1b[0;31mEnvironment variable ZETASQL is not set and a local server was not detected at localhost:50051.\x1b[0m");
+                    println!("\x1b[0;31mIf you are running locally, run:\x1b[0m");
+                    println!("\x1b[0;31m\tdocker run --publish 127.0.0.1:50051:50051 --name zetasql --detach gcr.io/zeedeebee/zetasql\x1b[0m");
+                    panic!("Missing ZetaSQL parser/analyzer service")
+                }
                 "http://localhost:50051".to_string()
             });
             let client = Mutex::new(ZetaSqlLocalServiceClient::connect(zetasql).await.unwrap());
