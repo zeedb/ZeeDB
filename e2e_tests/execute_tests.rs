@@ -60,13 +60,7 @@ fn test_aggregate_functions() {
     t.finish("examples/execute_aggregates.testlog");
 }
 
-#[test]
-fn test_parameters() {
-    let mut t = TestSuite::empty();
-    t.ok("set parameter = 1; select @parameter");
-    t.finish("examples/execute_parameters.testlog");
-}
-
+/*
 #[test]
 fn test_metadata() {
     let mut t = TestSuite::empty();
@@ -78,6 +72,7 @@ fn test_metadata() {
     t.ok("select sequence_id from metadata.sequence where sequence_name = 'table'");
     t.finish("examples/execute_metadata.testlog");
 }
+*/
 
 /*
 #[test]

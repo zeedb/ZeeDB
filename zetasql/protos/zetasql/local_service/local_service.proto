@@ -69,10 +69,6 @@ service ZetaSqlLocalService {
   // Register a catalog at server side so that it can be reused.
   rpc RegisterCatalog(RegisterCatalogRequest) returns (RegisterResponse) {
   }
-  // Register a parse resume location
-  rpc RegisterParseResumeLocation(ParseResumeLocationProto)
-      returns (RegisterResponse) {
-  }
   // Analyze a SQL statement, return the resolved AST and an optional byte
   // position if end of input is not yet reached.
   rpc Analyze(AnalyzeRequest) returns (AnalyzeResponse) {
@@ -130,16 +126,9 @@ service ZetaSqlLocalService {
   // Cleanup a registered catalog.
   rpc UnregisterCatalog(UnregisterRequest) returns (google.protobuf.Empty) {
   }
-  // Cleanup a registered parse resume location.
-  rpc UnregisterParseResumeLocation(UnregisterRequest)
-      returns (google.protobuf.Empty) {
-  }
   // Get ZetaSQL builtin functions specified by given options.
   rpc GetBuiltinFunctions(ZetaSQLBuiltinFunctionOptionsProto)
       returns (GetBuiltinFunctionsResponse) {
-  }
-  // Add SimpleTable
-  rpc AddSimpleTable(AddSimpleTableRequest) returns (google.protobuf.Empty) {
   }
   // Gets ZetaSQL lanauge options.
   rpc GetLanguageOptions(LanguageOptionsRequest)
@@ -151,11 +140,111 @@ service ZetaSqlLocalService {
   }
 }
 
+// Defines how to construct DescriptorPool objects in the local service.
+
+// A DescriptorPool conceptually provides a mapping from a protobuf
+// message or enum full name (e.g. "zetasql.ValueProto") to an in memory
+// descriptor api appropriate to each language.
+//
+// ZetaSQL as an API generally allows multiple DescriptorPools. The main use
+// of DescriptorPools is when performing type lookups in Catalog objects.
+// For serialization, each object that must encode a proto type
+// (zetasql.ProtoTypeProto) object lists both the full name and an index
+// into a list of DescriptorPools.
+//
+// DescriptorPools themselves are usually encoded as google.protobuf.FileDescriptorSet
+// messages. Historically, a simple `repeated google.protobuf.FileDescriptorSet` was
+// used.
+//
+// However, this lead to strange issues when dealing with reentrant calls,
+// such as when using registered catalogs or PreparedExpressions.
+//
+// A DescriptorPoolListProto helps work around these issues.
+//
+// When using a DescriptorPoolListProto, the _client_ is responsible for
+// providing all DescriptorPools that may be needed to decode the request
+// _and_ response. Here is a list of all inputs and outputs that may require
+// proto encoding.
+//
+// ResolvedAST - The ResolvedAST may include some nodes that directly encode
+//               protos, such as the types used in function default values.
+//               Everything that zetasql uses _by_default_  is encoded in
+//               in the "Builtin" DescriptorPool.  Because some operations
+//               require "same-instance" equality, it is important to always
+//               provide the builtin descriptor pool for all calls.
+// Catalog:Tables - Tables may include protos (such as a column with a proto)
+//                  while it isn't necessary for the _catalog_ to provide
+//                  lookups on these types, they must still be serialized.
+// SimpleCatalog:DescriporPool - a simple catalog _may_ have a DescriptorPool
+//                               provided to add all of Message types in that
+//                               pool to the catalog. I.e. if you want to allow
+//                               `select new zetasql_test.KitchenSinkPB(...)`
+//                               the simple catalog must have a DescriptorPool
+//                               set to perform the lookup.
+// QueryParameters - these can, in theory, have proto types, and those types
+//                   might not exist in any of the above.
+// AnalyzerOptions - lots of weird things can be typed, such as system variables
+//                   hints, options (also again, QueryParameters).
+//
+// It is also worth noting that having an entry in this list, does not make a
+// given set of protos automatically available within the language generally
+// i.e. if you have some protos in QueryParameters, that does not mean you
+// can use that proto type in catalog lookups.
+//
+// Response protos will _never_ include a list of protos, the client must
+// provide all possible DescriptorPools, and must remember their order in this
+// list, as the returned responses will use index offsets from this list, in the
+// same order.
+message DescriptorPoolListProto {
+  message Builtin {}
+  message Definition {
+    oneof definition {
+      // A literal FileDescriptorSet proto which will be used to construct
+      // a DescriptorPool. This must include the full set of transitive
+      // dependencies _in_dependency_order_.
+      google.protobuf.FileDescriptorSet file_descriptor_set = 1;
+
+      // References an already registered descriptor pool. Note, this may
+      // be used to reference the builtin descriptor pool, if the registered_id
+      // is known. Registered DescriptorPools are always owned by some other
+      // object (which isn't defined here), and will become unregistered
+      // automatically when that owning object is unregistered - future
+      // references will be an error.
+      int64 registered_id = 2;
+
+      // The 'builtin' descriptor set. This is defined by an explicit set of
+      // protos used for encoding and decoding local service rpcs. Example:
+      //
+      //   zetasql.functions.DateTimestampPart
+      //
+      // The builtin DescriptorPool may be assigned a registered_id, in which
+      // case it is allowable to use `registered_id` instead of this object.
+      // It is strongly not recommended that catalogs use the builtin catalog.
+      // since its exact composition is not defined.
+      Builtin builtin = 3;
+    }
+  }
+  // A list of definitions that describe how to construct or find DescriptorPool
+  // to be used in encoding. The order is relevant, as encoding of other
+  // ProtoTypeProto (and a few other objects) will reference DescriptorPools
+  // by index in this list.
+  repeated Definition definitions = 1;
+}
+
+// Ids associated with each entry in DescriptorPoolListProto
+message DescriptorPoolIdList {
+  repeated int64 registered_ids = 1 [packed = true];
+}
+
 message PrepareRequest {
   optional string sql = 1;
   optional AnalyzerOptionsProto options = 2;
-  // Serialized descriptor pools of all types in the request.
+  // Deprecated, prefer descriptor_pool_list
   repeated google.protobuf.FileDescriptorSet file_descriptor_set = 3;
+  // This list defines how to construct the list of DescriptorPools for
+  // use during deserialization.
+  optional DescriptorPoolListProto descriptor_pool_list = 6;
+
   optional SimpleCatalogProto simple_catalog = 4;
   optional int64 registered_catalog_id = 5;
 }
@@ -169,6 +258,11 @@ message PreparedState {
   repeated string referenced_columns = 3;
   repeated string referenced_parameters = 4;
   optional int64 positional_parameter_count = 5;
+
+  // An ordered list of descriptor_pool_ids that match (in length and order)
+  // the descriptor_pool_list sent in RegisterCatalogRequest.
+  // This may be necessary in the case of a PreparedExpression.
+  optional DescriptorPoolIdList descriptor_pool_id_list = 6;
 }
 
 message PrepareResponse {
@@ -190,8 +284,12 @@ message EvaluateRequest {
 
   repeated Parameter columns = 2;
   repeated Parameter params = 3;
-  // Serialized descriptor pools of all types in the request.
+  // Deprecated, prefer descriptor_pool_list
   repeated google.protobuf.FileDescriptorSet file_descriptor_set = 4;
+  // This list defines how to construct the list of DescriptorPools for
+  // use during deserialization.
+  optional DescriptorPoolListProto descriptor_pool_list = 7;
+
   // Set if the expression is already prepared, in which case sql and
   // file_descriptor_set will be ignored.
   optional int64 prepared_expression_id = 5;
@@ -223,15 +321,16 @@ message TableFromProtoRequest {
   optional google.protobuf.FileDescriptorSet file_descriptor_set = 2;
 }
 
-message RegisteredParseResumeLocationProto {
-  optional int64 registered_id = 1;
-  optional int32 byte_position = 2;
-}
-
 message AnalyzeRequest {
   optional AnalyzerOptionsProto options = 1;
   optional SimpleCatalogProto simple_catalog = 2;
+
+  // Deprecated, prefer descriptor_pool_list
   repeated google.protobuf.FileDescriptorSet file_descriptor_set = 3;
+  // This list defines how to construct the list of DescriptorPools for
+  // use during deserialization.
+  optional DescriptorPoolListProto descriptor_pool_list = 9;
+
   // Set if using a registered catalog, in which case simple_catalog and
   // file_descriptor_set will be ignored.
   optional int64 registered_catalog_id = 4;
@@ -241,11 +340,11 @@ message AnalyzeRequest {
     string sql_statement = 5;
     // Multiple statement.
     ParseResumeLocationProto parse_resume_location = 6;
-    // Set if using a registered parse resume location.
-    RegisteredParseResumeLocationProto registered_parse_resume_location = 7;
     // Expression.
     string sql_expression = 8;
   }
+
+  reserved 7;
 }
 
 message AnalyzeResponse {
@@ -259,7 +358,12 @@ message AnalyzeResponse {
 
 message BuildSqlRequest {
   optional SimpleCatalogProto simple_catalog = 1;
+  // Deprecated, prefer descriptor_pool_list
   repeated google.protobuf.FileDescriptorSet file_descriptor_set = 2;
+  // This list defines how to construct the list of DescriptorPools for
+  // use during deserialization.
+  optional DescriptorPoolListProto descriptor_pool_list = 6;
+
   // Set if using a registered catalog, in which case simple_catalog and
   // file_descriptor_set will be ignored.
   optional int64 registered_catalog_id = 3;
@@ -337,11 +441,18 @@ message FormatSqlResponse {
 
 message RegisterCatalogRequest {
   optional SimpleCatalogProto simple_catalog = 1;
+  // Deprecated, prefer descriptor_pool_list
   repeated google.protobuf.FileDescriptorSet file_descriptor_set = 2;
+  // This list defines how to construct the list of DescriptorPools for
+  // use during deserialization.
+  optional DescriptorPoolListProto descriptor_pool_list = 3;
 }
 
 message RegisterResponse {
   optional int64 registered_id = 1;
+  // An ordered list of descriptor_pool_ids that match (in length and order)
+  // the descriptor_pool_list sent in RegisterCatalogRequest.
+  optional DescriptorPoolIdList descriptor_pool_id_list = 2;
 }
 
 message UnregisterRequest {
@@ -353,12 +464,6 @@ message GetBuiltinFunctionsResponse {
   // No file_descriptor_set returned. For now, only Datetime functions
   // have arguments of enum type which need to be added manually when
   // deserializing.
-}
-
-message AddSimpleTableRequest {
-  optional int64 registered_catalog_id = 1;
-  optional SimpleTableProto table = 2;
-  repeated google.protobuf.FileDescriptorSet file_descriptor_set = 3;
 }
 
 message LanguageOptionsRequest {

@@ -35,6 +35,7 @@ pub enum F {
     ExpDouble(Scalar),
     ExtractDateFromTimestamp(Scalar),
     FloorDouble(Scalar),
+    GetVar(Scalar),
     IsFalse(Scalar),
     IsInf(Scalar),
     IsNan(Scalar),
@@ -153,6 +154,7 @@ impl F {
             | F::ExpDouble(_)
             | F::ExtractDateFromTimestamp(_)
             | F::FloorDouble(_)
+            | F::GetVar(_)
             | F::IsFalse(_)
             | F::IsInf(_)
             | F::IsNan(_)
@@ -284,6 +286,7 @@ impl std::ops::Index<usize> for F {
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
+            | F::GetVar(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -456,6 +459,7 @@ impl std::ops::IndexMut<usize> for F {
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
+            | F::GetVar(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -879,6 +883,7 @@ impl F {
             "ZetaSQL:atanh" => unary(args, |a| F::AtanhDouble(a)),
             "ZetaSQL:atan2" => binary(args, |a, b| F::Atan2Double(a, b)),
             "system:next_val" => unary(args, |a| F::NextVal(a)),
+            "system:get_var" => unary(args, |a| F::GetVar(a)),
             other => panic!("{} is not a known function name", other),
         }
     }
@@ -913,6 +918,7 @@ impl F {
             F::ExpDouble(_) => "ExpDouble",
             F::ExtractDateFromTimestamp(_) => "ExtractDateFromTimestamp",
             F::FloorDouble(_) => "FloorDouble",
+            F::GetVar(_) => "GetVar",
             F::IsFalse(_) => "IsFalse",
             F::IsInf(_) => "IsInf",
             F::IsNan(_) => "IsNan",
@@ -1042,6 +1048,7 @@ impl F {
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
+            | F::GetVar(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -1243,6 +1250,7 @@ impl F {
             | F::DivInt64 { .. }
             | F::ExtractFromDate { .. }
             | F::ExtractFromTimestamp { .. }
+            | F::GetVar { .. }
             | F::Hash { .. }
             | F::LengthString { .. }
             | F::ModInt64 { .. }
@@ -1328,6 +1336,7 @@ impl F {
             F::ExpDouble(a) => F::ExpDouble(f(a)),
             F::ExtractDateFromTimestamp(a) => F::ExtractDateFromTimestamp(f(a)),
             F::FloorDouble(a) => F::FloorDouble(f(a)),
+            F::GetVar(a) => F::GetVar(f(a)),
             F::IsFalse(a) => F::IsFalse(f(a)),
             F::IsInf(a) => F::IsInf(f(a)),
             F::IsNan(a) => F::IsNan(f(a)),

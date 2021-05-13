@@ -1,9 +1,55 @@
-use ast::Index;
+use std::collections::HashMap;
+
+use ast::{Expr, Index};
 use catalog_types::Catalog;
 use context::Context;
+use kernel::AnyArray;
+use remote_execution::{RecordStream, RemoteExecution};
+use statistics::ColumnStatistics;
 use zetasql::{function_enums::*, *};
 
 use catalog_types::builtin_function_options;
+
+pub struct BootstrapStatistics;
+
+impl RemoteExecution for BootstrapStatistics {
+    fn approx_cardinality(&self, _table_id: i64) -> f64 {
+        1.0
+    }
+
+    fn column_statistics(&self, _table_id: i64, _column_name: &str) -> Option<ColumnStatistics> {
+        None
+    }
+
+    fn submit(
+        &self,
+        _expr: Expr,
+        _variables: HashMap<String, AnyArray>,
+        _txn: i64,
+    ) -> RecordStream {
+        unimplemented!()
+    }
+
+    fn broadcast(
+        &self,
+        _expr: Expr,
+        _variables: HashMap<String, AnyArray>,
+        _txn: i64,
+    ) -> RecordStream {
+        unimplemented!()
+    }
+
+    fn exchange(
+        &self,
+        _expr: Expr,
+        _variables: HashMap<String, AnyArray>,
+        _txn: i64,
+        _hash_column: String,
+        _hash_bucket: i32,
+    ) -> RecordStream {
+        unimplemented!()
+    }
+}
 
 #[derive(Clone)]
 pub struct BootstrapCatalog;
@@ -19,6 +65,16 @@ impl Catalog for BootstrapCatalog {
         SimpleCatalogProto {
             catalog: vec![bootstrap_metadata_catalog()],
             builtin_function_options: Some(builtin_function_options()),
+            custom_function: vec![simple_function(
+                "get_var".to_string(),
+                vec![TypeKind::TypeString],
+                TypeKind::TypeInt64,
+            )],
+            procedure: vec![simple_procedure(
+                "set_var".to_string(),
+                vec![TypeKind::TypeString, TypeKind::TypeInt64],
+                TypeKind::TypeBool,
+            )],
             ..Default::default()
         }
     }

@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 
 use ast::*;
+use catalog_types::CATALOG_KEY;
 use chrono::{NaiveDate, TimeZone, Utc};
 use context::Context;
-use parser::PARSER_KEY;
+use parser::{Parser, PARSER_KEY};
 
-use crate::unnest::unnest_dependent_joins;
+use crate::{unnest::unnest_dependent_joins, BootstrapCatalog};
 
-pub fn rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
+pub fn rewrite(expr: Expr) -> Expr {
     let expr = top_down_rewrite(expr, rewrite_ddl);
     let expr = top_down_rewrite(expr, rewrite_with);
     let expr = top_down_rewrite(expr, rewrite_scalars);
@@ -16,7 +17,7 @@ pub fn rewrite(expr: Expr, txn: i64, context: &Context) -> Expr {
     let expr = bottom_up_rewrite(expr, remove_dependent_join);
     let expr = bottom_up_rewrite(expr, optimize_join_type);
     let expr = top_down_rewrite(expr, push_down_projections);
-    let expr = top_down_rewrite(expr, |expr| rewrite_logical_rewrite(expr, txn, context));
+    let expr = top_down_rewrite(expr, rewrite_logical_rewrite);
     expr
 }
 
@@ -24,32 +25,41 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
     match expr {
         LogicalCreateDatabase { name } => {
             let mut lines = vec![];
-            lines.push(format!("set parent_catalog_id = {:?};", name.catalog_id));
+            lines.push(format!(
+                "call set_var('parent_catalog_id', {:?});",
+                name.catalog_id
+            ));
             for catalog_name in &name.path[0..name.path.len() - 1] {
-                lines.push(format!("set parent_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @parent_catalog_id);", catalog_name));
+                lines.push(format!("call set_var('parent_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('parent_catalog_id')));", catalog_name));
             }
-            lines.push("set catalog_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'catalog');".to_string());
+            lines.push("call set_var('catalog_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'catalog'));".to_string());
             lines
-                .push("set next_catalog_id = metadata.next_val(@catalog_sequence_id);".to_string());
-            lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (@parent_catalog_id, @next_catalog_id, {:?});", name.path.last().unwrap()));
+                .push("call set_var('next_catalog_id', metadata.next_val(get_var('catalog_sequence_id')));".to_string());
+            lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (get_var('parent_catalog_id'), get_var('next_catalog_id'), {:?});", name.path.last().unwrap()));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
         }
         LogicalCreateTable { name, columns } => {
             let mut lines = vec![];
-            lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+            lines.push(format!(
+                "call set_var('catalog_id', {:?});",
+                name.catalog_id
+            ));
             for catalog_name in &name.path[0..name.path.len() - 1] {
-                lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
             }
-            lines.push("set table_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'table');".to_string());
-            lines.push("set next_table_id = metadata.next_val(@table_sequence_id);".to_string());
-            lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (@catalog_id, @next_table_id, {:?});", name.path.last().unwrap()));
+            lines.push("call set_var('table_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'table'));".to_string());
+            lines.push(
+                "call set_var('next_table_id', metadata.next_val(get_var('table_sequence_id')));"
+                    .to_string(),
+            );
+            lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (get_var('catalog_id'), get_var('next_table_id'), {:?});", name.path.last().unwrap()));
             for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                 let column_type = column_type.to_string();
-                lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (@next_table_id, {:?}, {:?}, {:?});", column_id, column_name, column_type));
+                lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (get_var('next_table_id'), {:?}, {:?}, {:?});", column_id, column_name, column_type));
             }
-            lines.push("call metadata.create_table(@next_table_id);".to_string());
+            lines.push("call metadata.create_table(get_var('next_table_id'));".to_string());
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
@@ -60,23 +70,32 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             columns,
         } => {
             let mut lines = vec![];
-            lines.push(format!("set index_catalog_id = {:?};", name.catalog_id));
+            lines.push(format!(
+                "call set_var('index_catalog_id', {:?});",
+                name.catalog_id
+            ));
             for catalog_name in &name.path[0..name.path.len() - 1] {
-                lines.push(format!("set index_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @index_catalog_id);", catalog_name));
+                lines.push(format!("call set_var('index_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('index_catalog_id')));", catalog_name));
             }
-            lines.push(format!("set table_catalog_id = {:?};", table.catalog_id));
+            lines.push(format!(
+                "call set_var('table_catalog_id', {:?});",
+                table.catalog_id
+            ));
             for catalog_name in &table.path[0..table.path.len() - 1] {
-                lines.push(format!("set table_catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @table_catalog_id);", catalog_name));
+                lines.push(format!("call set_var('table_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('table_catalog_id')));", catalog_name));
             }
-            lines.push("set index_sequence_id = (select sequence_id from metadata.sequence where sequence_name = 'index');".to_string());
-            lines.push(format!("set table_id = (select table_id from metadata.table where catalog_id = @table_catalog_id and table_name = {:?});", table.path.last().unwrap()));
-            lines.push("set next_index_id = metadata.next_val(@index_sequence_id);".to_string());
-            lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (@index_catalog_id, @next_index_id, @table_id, {:?});", name.path.last().unwrap()));
+            lines.push("call set_var('index_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'index'));".to_string());
+            lines.push(format!("call set_var('table_id', (select table_id from metadata.table where catalog_id = get_var('table_catalog_id') and table_name = {:?}));", table.path.last().unwrap()));
+            lines.push(
+                "call set_var('next_index_id', metadata.next_val(get_var('index_sequence_id')));"
+                    .to_string(),
+            );
+            lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (get_var('index_catalog_id'), get_var('next_index_id'), get_var('table_id'), {:?});", name.path.last().unwrap()));
             for (index_order, column_name) in columns.iter().enumerate() {
-                lines.push(format!("set column_id = (select column_id from metadata.column where table_id = @table_id and column_name = {:?});", column_name));
-                lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (@next_index_id, @column_id, {:?});", index_order));
+                lines.push(format!("call set_var('column_id', (select column_id from metadata.column where table_id = get_var('table_id') and column_name = {:?}));", column_name));
+                lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (get_var('next_index_id'), get_var('column_id'), {:?});", index_order));
             }
-            lines.push("call metadata.create_index(@next_index_id);".to_string());
+            lines.push("call metadata.create_index(get_var('next_index_id'));".to_string());
             let sql = lines.join("\n");
             Ok(LogicalRewrite { sql })
         }
@@ -84,40 +103,55 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             let mut lines = vec![];
             match object {
                 ObjectType::Database => {
-                    lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                    lines.push(format!(
+                        "call set_var('catalog_id', {:?});",
+                        name.catalog_id
+                    ));
                     for catalog_name in &name.path[0..name.path.len()] {
-                        lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                        lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
                     }
-                    lines.push("call metadata.drop_table((select table_id from metadata.table where catalog_id = @catalog_id));".to_string());
-                    lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = @catalog_id);".to_string());
+                    lines.push("call metadata.drop_table((select table_id from metadata.table where catalog_id = get_var('catalog_id')));".to_string());
+                    lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = get_var('catalog_id'));".to_string());
                     lines.push(
-                        "delete from metadata.table where catalog_id = @catalog_id;".to_string(),
+                        "delete from metadata.table where catalog_id = get_var('catalog_id');"
+                            .to_string(),
                     );
                     lines.push(
-                        "delete from metadata.catalog where catalog_id = @catalog_id;".to_string(),
+                        "delete from metadata.catalog where catalog_id = get_var('catalog_id');"
+                            .to_string(),
                     );
                 }
                 ObjectType::Table => {
-                    lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                    lines.push(format!(
+                        "call set_var('catalog_id', {:?});",
+                        name.catalog_id
+                    ));
                     for catalog_name in &name.path[0..name.path.len() - 1] {
-                        lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                        lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
                     }
                     let table_name = name.path.last().unwrap();
-                    lines.push(format!("set table_id = (select table_id from metadata.table where table_name = {:?} and catalog_id = @catalog_id);", table_name));
-                    lines
-                        .push("delete from metadata.table where table_id = @table_id;".to_string());
-                    lines.push("call metadata.drop_table(@table_id);".to_string());
+                    lines.push(format!("call set_var('table_id', (select table_id from metadata.table where table_name = {:?} and catalog_id = get_var('catalog_id')));", table_name));
+                    lines.push(
+                        "delete from metadata.table where table_id = get_var('table_id');"
+                            .to_string(),
+                    );
+                    lines.push("call metadata.drop_table(get_var('table_id'));".to_string());
                 }
                 ObjectType::Index => {
-                    lines.push(format!("set catalog_id = {:?};", name.catalog_id));
+                    lines.push(format!(
+                        "call set_var('catalog_id', {:?});",
+                        name.catalog_id
+                    ));
                     for catalog_name in &name.path[0..name.path.len() - 1] {
-                        lines.push(format!("set catalog_id = (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = @catalog_id);", catalog_name));
+                        lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
                     }
                     let index_name = name.path.last().unwrap();
-                    lines.push(format!("set index_id = (select index_id from metadata.index where index_name = {:?} and catalog_id = @catalog_id);", index_name));
-                    lines
-                        .push("delete from metadata.index where index_id = @index_id;".to_string());
-                    lines.push("call metadata.drop_index(@index_id);".to_string());
+                    lines.push(format!("call set_var('index_id', (select index_id from metadata.index where index_name = {:?} and catalog_id = get_var('catalog_id')));", index_name));
+                    lines.push(
+                        "delete from metadata.index where index_id = get_var('index_id');"
+                            .to_string(),
+                    );
+                    lines.push("call metadata.drop_index(get_var('index_id'));".to_string());
                 }
                 ObjectType::Column => todo!(),
             };
@@ -206,10 +240,11 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Join::Mark(_, predicates) => visit_predicates(predicates),
     };
     let visit_procedure = |procedure: &mut Procedure| match procedure {
-        Procedure::CreateTable(argument)
-        | Procedure::DropTable(argument)
-        | Procedure::CreateIndex(argument)
-        | Procedure::DropIndex(argument) => visit(argument),
+        Procedure::CreateTable(x)
+        | Procedure::DropTable(x)
+        | Procedure::CreateIndex(x)
+        | Procedure::DropIndex(x) => visit(x),
+        Procedure::SetVar(x, y) => visit(x) || visit(y),
     };
     let did_rewrite = match &mut expr {
         Expr::LogicalGet { predicates, .. }
@@ -716,16 +751,22 @@ fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
     }
 }
 
-fn rewrite_logical_rewrite(expr: Expr, txn: i64, context: &Context) -> Result<Expr, Expr> {
+fn rewrite_logical_rewrite(expr: Expr) -> Result<Expr, Expr> {
     match expr {
         LogicalRewrite { sql } => {
-            let parser = &context[PARSER_KEY];
-            let expr = parser.analyze(&sql, catalog_types::ROOT_CATALOG_ID, txn, vec![], context);
-            let expr = rewrite(expr, txn, context);
+            let expr = analyze_bootstrap(&sql);
+            let expr = rewrite(expr);
             Ok(expr)
         }
         _ => Err(expr),
     }
+}
+
+fn analyze_bootstrap(sql: &str) -> Expr {
+    let mut context = Context::default();
+    context.insert(PARSER_KEY, Parser::default());
+    context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
+    context[PARSER_KEY].analyze(sql, catalog_types::ROOT_CATALOG_ID, 0, vec![], &context)
 }
 
 fn bottom_up_rewrite(mut expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {

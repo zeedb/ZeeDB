@@ -1,19 +1,15 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use ast::{Index, *};
-use catalog_types::{
-    builtin_function_options, Catalog, CATALOG_KEY, METADATA_CATALOG_ID, ROOT_CATALOG_ID,
-};
+use catalog_types::{builtin_function_options, Catalog, CATALOG_KEY};
 use context::{env_var, Context, WORKER_COUNT_KEY};
 use futures::StreamExt;
 use kernel::*;
 use once_cell::sync::OnceCell;
 use parser::{Parser, PARSER_KEY};
-use remote_execution::{RecordStream, RemoteExecution, REMOTE_EXECUTION_KEY};
-use statistics::ColumnStatistics;
+use planner::{BootstrapCatalog, BootstrapStatistics};
+use remote_execution::REMOTE_EXECUTION_KEY;
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
-
-use crate::bootstrap::*;
 
 pub struct MetadataCatalog;
 
@@ -93,13 +89,6 @@ fn select_catalog(
     txn: i64,
     context: &Context,
 ) -> CatalogWithId {
-    if parent_catalog_id == ROOT_CATALOG_ID && catalog_name == "metadata" {
-        return CatalogWithId {
-            catalog_id: METADATA_CATALOG_ID,
-            simple_catalog: bootstrap_metadata_catalog(),
-            children: HashMap::new(),
-        };
-    }
     let mut variables = HashMap::new();
     variables.insert(
         "parent_catalog_id".to_string(),
@@ -263,47 +252,6 @@ fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, AnyArra
         &context,
     );
     planner::optimize(expr, 0, &context)
-}
-
-struct BootstrapStatistics;
-
-impl RemoteExecution for BootstrapStatistics {
-    fn approx_cardinality(&self, _table_id: i64) -> f64 {
-        1.0
-    }
-
-    fn column_statistics(&self, _table_id: i64, _column_name: &str) -> Option<ColumnStatistics> {
-        None
-    }
-
-    fn submit(
-        &self,
-        _expr: Expr,
-        _variables: HashMap<String, AnyArray>,
-        _txn: i64,
-    ) -> RecordStream {
-        unimplemented!()
-    }
-
-    fn broadcast(
-        &self,
-        _expr: Expr,
-        _variables: HashMap<String, AnyArray>,
-        _txn: i64,
-    ) -> RecordStream {
-        unimplemented!()
-    }
-
-    fn exchange(
-        &self,
-        _expr: Expr,
-        _variables: HashMap<String, AnyArray>,
-        _txn: i64,
-        _hash_column: String,
-        _hash_bucket: i32,
-    ) -> RecordStream {
-        unimplemented!()
-    }
 }
 
 struct CatalogWithId {

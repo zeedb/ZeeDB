@@ -33,7 +33,6 @@ impl Converter {
             ResolvedDeleteStmtNode(q) => self.delete(q),
             ResolvedUpdateStmtNode(q) => self.update(q),
             ResolvedCreateDatabaseStmtNode(q) => self.create_database(q),
-            ResolvedSingleAssignmentStmtNode(q) => self.assign(q),
             ResolvedCallStmtNode(q) => self.call(q),
             ResolvedExplainStmtNode(q) => self.explain(q),
             other => panic!("{:?}", other),
@@ -66,6 +65,7 @@ impl Converter {
             ResolvedWithScanNode(q) => self.with(q),
             ResolvedAggregateScanBaseNode(q) => match q.node.get() {
                 ResolvedAggregateScanNode(q) => self.aggregate(q),
+                other => panic!("{:?}", other),
             },
             other => panic!("{:?}", other),
         }
@@ -778,15 +778,6 @@ impl Converter {
         }
     }
 
-    fn assign(&mut self, q: &ResolvedSingleAssignmentStmtProto) -> Expr {
-        let mut input = LogicalSingleGet;
-        LogicalAssign {
-            variable: q.variable.get().clone(),
-            value: self.expr(q.expr.get(), &mut input),
-            input: Box::new(input),
-        }
-    }
-
     fn call(&mut self, q: &ResolvedCallStmtProto) -> Expr {
         let mut input = LogicalSingleGet;
         let procedure = match q.procedure.get().name.get().as_str() {
@@ -794,6 +785,10 @@ impl Converter {
             "drop_table" => Procedure::DropTable(self.expr(&q.argument_list[0], &mut input)),
             "create_index" => Procedure::CreateIndex(self.expr(&q.argument_list[0], &mut input)),
             "drop_index" => Procedure::DropIndex(self.expr(&q.argument_list[0], &mut input)),
+            "set_var" => Procedure::SetVar(
+                self.expr(&q.argument_list[0], &mut input),
+                self.expr(&q.argument_list[1], &mut input),
+            ),
             other => panic!("{}", other),
         };
         LogicalCall {
@@ -866,8 +861,7 @@ impl Converter {
                         r#type: Some(ty), ..
                     }),
                 expr: Some(expr),
-                return_null_on_error: Some(false),
-                extended_cast: None,
+                ..
             } => (expr, ty),
             other => panic!("{:?}", other),
         };
@@ -1091,6 +1085,8 @@ fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
         ResolvedRecursiveRefScanNode(_) | ResolvedRecursiveScanNode(_) => {
             panic!("recursive queries not supported")
         }
+        ResolvedPivotScanNode(_) | ResolvedUnpivotScanNode(_) => panic!("PIVOT not supported"),
+        ResolvedGroupRowsScanNode(_) => panic!("GROUP_ROWS not supported"),
     };
     &q.column_list
 }
@@ -1098,6 +1094,7 @@ fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
 fn single_column_aggregate(q: &AnyResolvedAggregateScanBaseProto) -> &ResolvedScanProto {
     match q.node.get() {
         ResolvedAggregateScanNode(q) => q.parent.get().parent.get(),
+        ResolvedAnonymizedAggregateScanNode(_) => panic!("differential privacy not supported"),
     }
 }
 

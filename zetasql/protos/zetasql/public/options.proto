@@ -106,7 +106,7 @@ message LanguageFeatureOptions {
 // All optional features are off by default.  Some features have a negative
 // meaning, so turning them on will remove a feature or enable an error.
 enum LanguageFeature {
-  reserved 36 to 39, 45;
+  reserved 36 to 39, 45, 48;
   // CROSS-VERSION FEATURES
   //
   // These are features that can be opted into independently from versioning.
@@ -250,6 +250,10 @@ enum LanguageFeature {
   // See (broken link).
   FEATURE_ENCRYPTION = 23;
 
+  // Differentially private anonymization functions, syntax, and semantics.
+  // ((broken link)).
+  FEATURE_ANONYMIZATION = 24 [(language_feature_options).in_development = true];
+
   // Geography type support per (broken link)
   FEATURE_GEOGRAPHY = 25;
 
@@ -322,8 +326,7 @@ enum LanguageFeature {
   FEATURE_UNENFORCED_PRIMARY_KEYS = 40;
 
   // BIGNUMERIC data type. (broken link)
-  FEATURE_BIGNUMERIC_TYPE = 41
-      [(language_feature_options).in_development = true];
+  FEATURE_BIGNUMERIC_TYPE = 41;
 
   // Extended types (TYPE_EXTENDED): (broken link).
   FEATURE_EXTENDED_TYPES = 42
@@ -349,13 +352,91 @@ enum LanguageFeature {
   FEATURE_CREATE_EXTERNAL_TABLE_WITH_PARTITION_COLUMNS = 47
       [(language_feature_options).in_development = true];
 
-  // If set, it disables the NUMERIC signatures for EXP, LN, LOG, LOG10 and
-  // SQRT.
-  FEATURE_NO_ADVANCED_NUMERIC_MATH_SIGNATURES = 48
-      [(language_feature_options).in_development = true];
-
   // INTERVAL data type. (broken link)
   FEATURE_INTERVAL_TYPE = 49 [(language_feature_options).in_development = true];
+
+  // Enables tokenized search ((broken link)).
+  FEATURE_TOKENIZED_SEARCH = 51
+      [(language_feature_options).in_development = true];
+
+  // If enabled, JSON parsing fails for JSON documents containing number values
+  // that cannot fit into the range of numbers supported by uint64, int64 or
+  // double.
+  // For unsigned integers, the valid range is [0, 2^64-1]
+  // For signed integers, the valid range is [-2^63, 2^63-1].
+  // For floating point values, the valid range contains all numbers that can
+  // round-trip from string -> double -> string. The round-tripped string
+  // doesn't need to match the input string exactly, but must hold the same
+  // number value (i.e. "1e+3" -> double -> "1000" is a valid round-trip).
+  // If precision loss occurs as a result of the round-trip, the number is not
+  // considered valid (i.e. 0.142857142857142857142857142857142857 -> double ->
+  // 14285714285714285 is not valid).
+  // NOTE: FEATURE_JSON_LEGACY_PARSE does not work with
+  // FEATURE_JSON_STRICT_NUMBER_PARSING
+  FEATURE_JSON_STRICT_NUMBER_PARSING = 52 [
+    (language_feature_options).ideally_enabled = false,
+    (language_feature_options).in_development = true
+  ];
+
+  // Enables CONTAINS_SUBSTR -- an experimental function whose semantics are
+  // not yet finalized.
+  FEATURE_CONTAINS_SUBSTR = 53 [
+    (language_feature_options).ideally_enabled = false,
+    (language_feature_options).in_development = true
+  ];
+
+  // When enabled, (table) function argument names will hide column names in
+  // expression resolution and relational table function argument names will
+  // hide table names from the catalog. This changes name resolution and is
+  // a backward compatibility breaking change.
+  //
+  // Related bugs: b/118904900 (scalar arguments) b/165763119 (table arguments)
+  FEATURE_FUNCTION_ARGUMENT_NAMES_HIDE_LOCAL_NAMES = 55;
+
+  // Enables support for the following parameterized types.
+  // - STRING(L) / BYTES(L)
+  // - NUMERIC(P) / NUMERIC(P, S)
+  // - BIGNUMERIC(P) / BIGNUMERIC(P, S)
+  // See (broken link) for details.
+  FEATURE_PARAMETERIZED_TYPES = 56
+      [(language_feature_options).in_development = true];
+
+  // Enables support for CREATE TABLE LIKE
+  // Example:
+  // CREATE TABLE t1 LIKE t2
+  FEATURE_CREATE_TABLE_LIKE = 57
+      [(language_feature_options).in_development = true];
+
+  // Enable support for JSON_EXTRACT_STRING_ARRAY, JSON_VALUE_ARRAY and
+  // JSON_QUERY_ARRAY. (broken link)
+  FEATURE_JSON_ARRAY_FUNCTIONS = 58
+      [(language_feature_options).in_development = true];
+
+  // Enables explicit column list for CREATE VIEW.
+  // Example:
+  // CREATE VIEW v(a, b) AS SELECT ...
+  FEATURE_CREATE_VIEW_WITH_COLUMN_LIST = 59
+      [(language_feature_options).in_development = true];
+
+  // Enables support for CREATE TABLE CLONE
+  // Example:
+  // CREATE TABLE t1 CLONE t2
+  FEATURE_CREATE_TABLE_CLONE = 60
+      [(language_feature_options).in_development = true];
+
+  // Enables support for CLONE DATA INTO
+  // Example: CLONE DATA INTO ds.tbl;
+  FEATURE_CLONE_DATA = 61 [(language_feature_options).in_development = true];
+
+  // Enables support for ALTER COLUMN SET DATA TYPE.
+  // See (broken link) for details.
+  FEATURE_ALTER_COLUMN_SET_DATA_TYPE = 62
+      [(language_feature_options).in_development = true];
+
+  // Enables support for CREATE SNAPSHOT TABLE
+  // (broken link)
+  FEATURE_CREATE_SNAPSHOT_TABLE = 63
+      [(language_feature_options).in_development = true];
 
   // -> Add more cross-version features here.
   // -> DO NOT add more versioned features into versions that are frozen.
@@ -487,10 +568,12 @@ enum LanguageFeature {
 
   // If enabled, the analyzer will return an error when attempting to check
   // if a proto3 scalar field has been explicitly set (e.g.,
-  // proto3.has_scalar_field and EXTRACT(HAS(scalar_field) from proto3)). This
-  // is not allowed because proto3 does not generate has_ accessors for scalar
-  // fields.
-  FEATURE_V_1_3_DISALLOW_PROTO3_HAS_SCALAR_FIELD = 13003;
+  // proto3.has_scalar_field and EXTRACT(HAS(scalar_field) from proto3)).
+  // This feature is deprecated and should not be used, since proto3 now
+  // supports scalar field presence testing. Eventually we will remove this
+  // feature and the underlying code.
+  FEATURE_DEPRECATED_DISALLOW_PROTO3_HAS_SCALAR_FIELD = 13003
+      [(language_feature_options).ideally_enabled = false];
 
   // Enable array ordering (and non-equality comparisons).  This enables
   // arrays in the ORDER BY of a query, as well as in aggregate and analytic
@@ -542,8 +625,7 @@ enum LanguageFeature {
   // STRING for FN_CONCAT_STRING signature. Only types which have CAST to
   // STRING defined are allowed, and BYTES is explicitly excluded (since BYTES
   // should match FN_CONCAT_BYTES signature).
-  FEATURE_V_1_3_CONCAT_MIXED_TYPES = 13010
-      [(language_feature_options).ideally_enabled = false];
+  FEATURE_V_1_3_CONCAT_MIXED_TYPES = 13010;
 
   // Enable WITH RECURSIVE ((broken link))
   FEATURE_V_1_3_WITH_RECURSIVE = 13011
@@ -551,7 +633,7 @@ enum LanguageFeature {
 
   // Support maps in protocol buffers. ((broken link))
   FEATURE_V_1_3_PROTO_MAPS = 13012
-      [(language_feature_options).in_development = true];
+      [(language_feature_options).in_development = false];
 
   // Enables support for the ENUM_VALUE_DESCRIPTOR_PROTO() function, see
   // (broken link)
@@ -602,6 +684,79 @@ enum LanguageFeature {
   // Inline lambda function argument. (broken link)
   FEATURE_V_1_3_INLINE_LAMBDA_ARGUMENT = 13024;
 
+  // PIVOT clause ((broken link)).
+  FEATURE_V_1_3_PIVOT = 13025
+      [(language_feature_options).in_development = true];
+
+  // This flag enables propagation of annotation during query analysis. See
+  // public/types/annotation.h for the introduction of annotation framework.
+  // Engines must turn on this flag before turning on any built-in annotation
+  // feature or passing in engine defined AnnotationSpec.
+  FEATURE_V_1_3_ANNOTATION_FRAMEWORK = 13026;
+
+  // Enables collation annotation support.
+  FEATURE_V_1_3_COLLATION_SUPPORT = 13027;
+
+  // IS [NOT] DISTINCT FROM ((broken link)).
+  FEATURE_V_1_3_IS_DISTINCT = 13028;
+
+  // If true, FORMAT clause is supported in CAST().
+  // Fully implemented:
+  //   BYTES <=> STRING
+  //   DATE/DATETIME/TIME/TIMESTAMP => STRING
+  //
+  // Under development:
+  //   STRING => DATE/DATETIME/TIME/TIMESTAMP
+  //   NUMBER => STRING
+  FEATURE_V_1_3_FORMAT_IN_CAST = 13029
+      [(language_feature_options).in_development = true];
+
+  // UNPIVOT clause ((broken link)).
+  FEATURE_V_1_3_UNPIVOT = 13030
+      [(language_feature_options).in_development = true];
+
+  // If true, dml returning is supported ((broken link))
+  FEATURE_V_1_3_DML_RETURNING = 13031
+      [(language_feature_options).in_development = true];
+
+  // Enables support for the FILTER_FIELDS() function.
+  //    FILTER_FIELDS(p, <-|+><field_path>, ...)
+  // returns the proto obtained by keeping p.field_path whose
+  // sign is '+' and remove p.field_path whose sign is '-'.
+  // (broken link)
+  FEATURE_V_1_3_FILTER_FIELDS = 13032
+      [(language_feature_options).in_development = true];
+
+  // QUALIFY clause ((broken link)).
+  FEATURE_V_1_3_QUALIFY = 13033
+      [(language_feature_options).in_development = true];
+
+  // Enable support for REPEAT...UNTIL...END REPEAT statement.
+  // (broken link)
+  FEATURE_V_1_3_REPEAT = 13034
+      [(language_feature_options).in_development = true];
+
+  // Enables column DEFAULT clause in CREATE and ALTER TABLE statements.
+  // See (broken link)
+  FEATURE_V_1_3_COLUMN_DEFAULT_VALUE = 13035
+      [(language_feature_options).in_development = true];
+
+  // Enable support for FOR...IN...DO...END FOR statement.
+  // (broken link)
+  FEATURE_V_1_3_FOR_IN = 13036
+      [(language_feature_options).in_development = true];
+
+  // Enables support for initializing KLLs with weights as an additional
+  // parameter. Support for this feature in addition to the weighting
+  // functionality also requires support for named arguments as the weight
+  // argument must be named. (broken link).
+  FEATURE_KLL_WEIGHTS = 13037;
+
+  // LIKE ANY/SOME/ALL support.
+  // (broken link)
+  FEATURE_V_1_3_LIKE_ANY_SOME_ALL = 13038
+      [(language_feature_options).in_development = true];
+
   // EXPERIMENTAL FEATURES
   // These are features supported in the code that are not currently part of
   // officially supported ZetaSQL as of any version.
@@ -649,11 +804,31 @@ message ResolvedASTRewriteOptions {
 // node types to be quickly and easily available to engines without needing each
 // engine to implement support for the new node types.
 enum ResolvedASTRewrite {
-  // Make sure default value of 0 is not an AST rewrite.
+  // Make sure default value of 0 is not an resolved AST rewrite.
   REWRITE_INVALID_DO_NOT_USE = 0;
 
   // Rewrites ResolvedFlatten nodes into equivalent array scans / subqueries.
   REWRITE_FLATTEN = 1 [(rewrite_options).default_enabled = true];
+
+  // Supports rewriting ResolvedAnonymizedAggregateScan and related.
+  // See (broken link).
+  REWRITE_ANONYMIZATION = 2 [(rewrite_options).default_enabled = false];
+
+  // Rewrites proto map functions (e.g. map[KEY(key)]) with equivalent
+  // unnest/subquery expressions. This rewrite will only occur when such
+  // functions are present in a resolved AST, which requires the
+  // V_1_3_PROTO_MAPS language feature.
+  REWRITE_PROTO_MAP_FNS = 3 [(rewrite_options).default_enabled = true];
+
+  // Rewrites array function calls into equivalent SubqueryExpr.
+  REWRITE_ARRAY_FUNCTIONS_WITH_LAMBDA = 4
+      [(rewrite_options).default_enabled = true];
+
+  // Rewrites unpivot ast to equivalent scan.
+  REWRITE_UNPIVOT = 5 [(rewrite_options).default_enabled = true];
+
+  // Rewrites PIVOT scans. See (broken link).
+  REWRITE_PIVOT = 6 [(rewrite_options).default_enabled = true];
 }
 
 // This can be used to select strict name resolution mode.

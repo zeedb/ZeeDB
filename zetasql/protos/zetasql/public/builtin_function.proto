@@ -38,20 +38,21 @@ enum FunctionSignatureId {
   // other special functions (CASE).  FunctionSignatureIds are assigned
   // in ranges:
   //
-  // 0002-0999 Non-standard function calls   (NextId: 269)
-  // 1000-1099 String functions              (NextId: 1081)
-  // 1100-1199 Control flow functions        (NextId: 1104)
-  // 1200-1299 Time functions                (Fully used)
-  // 1300-1399 Math functions                (Fully used)
-  // 1400-1499 Aggregate functions           (NextId: 1489)
-  // 1500-1599 Analytic functions            (NextId: 1513)
-  // 1600-1699 Misc functions                (NextId: 1688)
-  // 1700-1799 Net functions                 (NextId: 1716)
-  // 1800-1899 More time functions           (NextId: 1845)
-  // 1900-1999 Hashing/encryption functions  (NextId: 1924)
-  // 2000-2199 Geography functions           (NextId: 2068)
-  // 2300-2499 More math functions           (NextId: 2314)
-  // 2500-2599 Array functions               (NextId: 2504)
+  // 0002-0999 Non-standard function calls    (NextId: 291)
+  // 1000-1099 String functions               (NextId: 1082)
+  // 1100-1199 Control flow functions         (NextId: 1104)
+  // 1200-1299 Time functions                 (Fully used)
+  // 1300-1399 Math functions                 (Fully used)
+  // 1400-1499 Aggregate functions            (NextId: 1490)
+  // 1500-1599 Analytic functions             (NextId: 1513)
+  // 1600-1699 Misc functions                 (NextId: 1699)
+  // 1700-1799 Net functions                  (NextId: 1716)
+  // 1800-1899 More time functions            (NextId: 1861)
+  // 1900-1999 Hashing/encryption functions   (NextId: 1928)
+  // 2000-2199 Geography functions            (NextId: 2078)
+  // 2200-2299 Anonymization functions        (NextId: 2208)
+  // 2300-2499 Numeric & more math functions  (NextId: 2316)
+  // 2500-2599 Array and proto map functions  (NextId: 2510)
 
   // enum value                       // Related function name
   // ----------                       // ---------------------
@@ -62,6 +63,13 @@ enum FunctionSignatureId {
   FN_ADD_BIGNUMERIC = 261;                 // $add
   FN_ADD_DATE_INT64 = 266;                 // $add
   FN_ADD_INT64_DATE = 267;                 // $add
+  FN_ADD_TIMESTAMP_INTERVAL = 280;         // $add
+  FN_ADD_INTERVAL_TIMESTAMP = 281;         // $add
+  FN_ADD_DATE_INTERVAL = 282;              // $add
+  FN_ADD_INTERVAL_DATE = 283;              // $add
+  FN_ADD_DATETIME_INTERVAL = 284;          // $add
+  FN_ADD_INTERVAL_DATETIME = 285;          // $add
+  FN_ADD_INTERVAL_INTERVAL = 289;          // $add
   FN_AND = 5;                              // $and
   FN_CASE_NO_VALUE = 6;                    // $case_no_value
   FN_CASE_WITH_VALUE = 7;                  // $case_with_value
@@ -113,6 +121,14 @@ enum FunctionSignatureId {
   FN_SUBTRACT_NUMERIC = 249;               // $subtract
   FN_SUBTRACT_BIGNUMERIC = 262;            // $subtract
   FN_SUBTRACT_DATE_INT64 = 268;            // $subtract
+  FN_SUBTRACT_DATE = 276;                  // $subtract
+  FN_SUBTRACT_TIMESTAMP = 277;             // $subtract
+  FN_SUBTRACT_DATETIME = 278;              // $subtract
+  FN_SUBTRACT_TIME = 279;                  // $subtract
+  FN_SUBTRACT_TIMESTAMP_INTERVAL = 286;    // $subtract
+  FN_SUBTRACT_DATE_INTERVAL = 287;         // $subtract
+  FN_SUBTRACT_DATETIME_INTERVAL = 288;     // $subtract
+  FN_SUBTRACT_INTERVAL_INTERVAL = 290;     // $subtract
 
   FN_UNARY_MINUS_INT32 = 83;        // $unary_minus
   FN_UNARY_MINUS_INT64 = 84;        // $unary_minus
@@ -120,6 +136,14 @@ enum FunctionSignatureId {
   FN_UNARY_MINUS_DOUBLE = 88;       // $unary_minus
   FN_UNARY_MINUS_NUMERIC = 252;     // $unary_minus
   FN_UNARY_MINUS_BIGNUMERIC = 265;  // $unary_minus
+  FN_UNARY_MINUS_INTERVAL = 275;    // $unary_minus
+
+  FN_DISTINCT = 269;                   // $is_distinct
+  FN_DISTINCT_INT64_UINT64 = 270;      // $is_distinct
+  FN_DISTINCT_UINT64_INT64 = 271;      // $is_distinct
+  FN_NOT_DISTINCT = 272;               // $is_not_distinct
+  FN_NOT_DISTINCT_INT64_UINT64 = 273;  // $is_not_distinct
+  FN_NOT_DISTINCT_UINT64_INT64 = 274;  // $is_not_distinct
 
   // Bitwise unary operators.
   FN_BITWISE_NOT_INT32 = 120;   // $bitwise_not
@@ -271,6 +295,7 @@ enum FunctionSignatureId {
       1079;  // regex_instr(string, string[, int64[, int64[, int64]]])
   FN_REGEXP_INSTR_BYTES =
       1080;  // regex_instr(bytes, bytes[, int64[, int64[, int64]]])
+  FN_CONTAINS_SUBSTR = 1081;  // contains_substr(any, string) -> bool
 
   // Control flow functions
   FN_IF = 1100;  // if
@@ -348,6 +373,7 @@ enum FunctionSignatureId {
   FN_EXTRACT_FROM_DATETIME = 1806;   // $extract
   FN_EXTRACT_FROM_TIME = 1807;       // $extract
   FN_EXTRACT_FROM_TIMESTAMP = 1275;  // $extract
+  FN_EXTRACT_FROM_INTERVAL = 1857;   // $extract
 
   // Signatures specific to extracting the DATE date part from a DATETIME or a
   // TIMESTAMP.
@@ -373,6 +399,12 @@ enum FunctionSignatureId {
 
   FN_LAST_DAY_DATE = 1843;      // last_day date
   FN_LAST_DAY_DATETIME = 1844;  // last_day datetime
+
+  FN_INTERVAL_CONSTRUCTOR = 1855;  // $interval
+  FN_MAKE_INTERVAL = 1856;         // make_interval
+  FN_JUSTIFY_HOURS = 1858;         // justify_hours
+  FN_JUSTIFY_DAYS = 1859;          // justify_days
+  FN_JUSTIFY_INTERVAL = 1860;      // justify_interval
 
   // Math functions
   FN_ABS_INT32 = 1300;        // abs
@@ -480,6 +512,8 @@ enum FunctionSignatureId {
   FN_LOGARITHM_DOUBLE = 1327;              // log
   FN_LOGARITHM_NUMERIC = 2312;             // log(numeric, numeric) -> numeric
   FN_LOGARITHM_BIGNUMERIC = 2313;  // log(bignumeric, bignumeric) -> bignumeric
+  FN_PARSE_NUMERIC = 2314;         // parse_numeric(string) -> numeric
+  FN_PARSE_BIGNUMERIC = 2315;      // parse_bignumeric(string) -> bignumeric
 
   FN_COS_DOUBLE = 1328;    // cos
   FN_COSH_DOUBLE = 1329;   // cosh
@@ -517,6 +551,7 @@ enum FunctionSignatureId {
   FN_SUM_DOUBLE = 1412;               // sum
   FN_SUM_NUMERIC = 1467;              // sum
   FN_SUM_BIGNUMERIC = 1478;           // sum
+  FN_SUM_INTERVAL = 1489;             // sum
   FN_BIT_AND_INT32 = 1415;            // bit_and
   FN_BIT_AND_INT64 = 1416;            // bit_and
   FN_BIT_AND_UINT32 = 1417;           // bit_and
@@ -654,13 +689,30 @@ enum FunctionSignatureId {
   FN_JSON_EXTRACT_SCALAR_JSON =
       1685;  // json_extract_scalar(json, string) -> string
   FN_JSON_EXTRACT_ARRAY =
-      1681;  // json_extract_array(string[, string]) -> array
-
-  FN_TO_JSON_STRING = 1622;   // to_json_string(any[, bool]) -> string
-  FN_JSON_QUERY = 1623;       // json_query(string, string) -> string
-  FN_JSON_QUERY_JSON = 1686;  // json_query(json, string) -> json
-  FN_JSON_VALUE = 1624;       // json_value(string, string) -> string
-  FN_JSON_VALUE_JSON = 1687;  // json_value(json, string) -> string
+      1681;  // json_extract_array(string[, string]) -> array(string)
+  FN_JSON_EXTRACT_ARRAY_JSON =
+      1691;  // json_extract_array(json[, string]) -> array(json)
+  FN_JSON_EXTRACT_STRING_ARRAY =
+      1688;  // json_extract_string_array(string[, string]) -> array(string)
+  FN_JSON_EXTRACT_STRING_ARRAY_JSON =
+      1692;  // json_extract_string_array(json[, string]) -> array(string)
+  FN_JSON_QUERY_ARRAY =
+      1693;  // json_query_array(string[, string]) -> array(string)
+  FN_JSON_QUERY_ARRAY_JSON =
+      1694;  // json_query_array(json[, string]) -> array(json)
+  FN_JSON_VALUE_ARRAY =
+      1695;  // json_value_array(string[, string]) -> array(string)
+  FN_JSON_VALUE_ARRAY_JSON =
+      1696;  // json_value_array(json[, string]) -> array(string)
+  FN_JSON_SUBSCRIPT_INT64 = 1689;   // $subscript(json,int64)-> json
+  FN_JSON_SUBSCRIPT_STRING = 1690;  // $subscript(json,string)-> json
+  FN_TO_JSON_STRING = 1622;         // to_json_string(any[, bool]) -> string
+  FN_TO_JSON = 1697;                // to_json(any[, bool]) -> json
+  FN_JSON_QUERY = 1623;             // json_query(string, string) -> string
+  FN_JSON_QUERY_JSON = 1686;        // json_query(json, string) -> json
+  FN_JSON_VALUE = 1624;             // json_value(string[, string]) -> string
+  FN_JSON_VALUE_JSON = 1687;        // json_value(json[, string]) -> string
+  FN_PARSE_JSON = 1698;             // parse_json(string) -> json
   FN_FROM_PROTO_TIMESTAMP =
       1626;  // from_proto(google.protobuf.Timestamp) -> timestamp
   FN_FROM_PROTO_DATE = 1627;  // from_proto(google.type.Date) -> date
@@ -799,6 +851,14 @@ enum FunctionSignatureId {
   FN_KMS_ENCRYPT_BYTES = 1921;      // kms.encrypt(string, bytes)
   FN_KMS_DECRYPT_STRING = 1922;     // kms.decrypt_string(string, bytes)
   FN_KMS_DECRYPT_BYTES = 1923;      // kms.decrypt_bytes(string, bytes)
+  // aead.envelope_encrypt(string, bytes, string, string)
+  FN_AEAD_ENVELOPE_ENCRYPT_STRING = 1924;
+  // aead.envelope_encrypt(string, bytes, bytes, bytes)
+  FN_AEAD_ENVELOPE_ENCRYPT_BYTES = 1925;
+  // aead.envelope_decrypt_string(string, bytes, bytes, string)
+  FN_AEAD_ENVELOPE_DECRYPT_STRING = 1926;
+  // aead.envelope_decrypt_bytes(string, bytes, bytes, bytes)
+  FN_AEAD_ENVELOPE_DECRYPT_BYTES = 1927;
 
   // ST_ family of functions (Geography related - (broken link))
   // Constructors
@@ -841,6 +901,9 @@ enum FunctionSignatureId {
   FN_ST_DIMENSION = 2032;
   FN_ST_NUM_POINTS = 2033;
   FN_ST_DUMP = 2064;
+  FN_ST_POINT_N = 2075;
+  FN_ST_START_POINT = 2076;
+  FN_ST_END_POINT = 2077;
 
   // Measures
   FN_ST_LENGTH = 2040;
@@ -856,6 +919,9 @@ enum FunctionSignatureId {
   FN_ST_GEOG_FROM_GEO_JSON = 2052;
   FN_ST_GEOG_FROM_GEO_JSON_EXT = 2068;
   FN_ST_GEOG_FROM_WKB = 2056;
+  FN_ST_GEOG_FROM_WKB_HEX = 2072;
+  FN_ST_GEOG_FROM_STRING = 2073;
+  FN_ST_GEOG_FROM_BYTES = 2074;
   FN_ST_AS_TEXT = 2053;
   FN_ST_AS_KML = 2054;
   FN_ST_AS_GEO_JSON = 2055;
@@ -875,7 +941,18 @@ enum FunctionSignatureId {
 
   FN_ST_CLUSTERDBSCAN = 2066;
 
-  // Array functions.
+  // Differentially private anonymization functions
+  // ((broken link)).
+  FN_ANON_COUNT = 2200;
+  FN_ANON_COUNT_STAR = 2201;
+  FN_ANON_SUM_INT64 = 2202;
+  FN_ANON_SUM_UINT64 = 2203;
+  FN_ANON_SUM_DOUBLE = 2204;
+  FN_ANON_SUM_NUMERIC = 2205;
+  FN_ANON_AVG_DOUBLE = 2206;
+  FN_ANON_AVG_NUMERIC = 2207;
+
+  // Array and proto map functions.
   FN_FLATTEN = 2500;  // flatten(array path) -> array
   // TODO: Move these to the array function section (2500-2599).
   FN_ARRAY_AT_OFFSET = 234;   // $array_at_offset
@@ -893,4 +970,12 @@ enum FunctionSignatureId {
   FN_ARRAY_IS_DISTINCT = 2501;      // array_is_distinct(array) -> bool
   FN_PROTO_MAP_AT_KEY = 2502;       // $proto_map_at_key
   FN_SAFE_PROTO_MAP_AT_KEY = 2503;  // $safe_proto_map_at_key
+  FN_MODIFY_MAP = 2510;             // modify_map(map [, key, value]+) -> map
+
+  FN_ARRAY_FILTER = 2504;             // ARRAY_FILTER(array, lambda) -> array
+  FN_ARRAY_FILTER_WITH_INDEX = 2505;  // ARRAY_FILTER(array, lambda) -> array
+  FN_ARRAY_TRANSFORM = 2506;          // ARRAY_TRANSFORM(array, lambda) -> array
+  FN_ARRAY_TRANSFORM_WITH_INDEX =
+      2507;                // ARRAY_TRANSFORM(array, lambda) -> array
+  FN_CONTAINS_KEY = 2508;  // contains_key(map, key) -> bool
 }

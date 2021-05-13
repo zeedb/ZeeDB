@@ -25,7 +25,7 @@ option cc_enable_arenas = true;
 option java_package = "com.google.zetasql";
 option java_outer_classname = "ZetaSQLType";
 
-// NEXT_ID: 28
+// NEXT_ID: 29
 enum TypeKind {
   // User code that switches on this enum must have a default case so
   // builds won't break if new enums get added.
@@ -73,6 +73,9 @@ enum TypeKind {
 
   // INTERVAL type is controlled by FEATURE_INTERVAL_TYPE
   TYPE_INTERVAL = 27;
+
+  // TOKENSET type is controlled by FEATURE_TOKENIZED_SEARCH
+  TYPE_TOKENSET = 28;
 }
 
 // This represents the serialized form of the zetasql::Type.
@@ -116,19 +119,21 @@ message StructTypeProto {
 }
 
 message ProtoTypeProto {
-  // The _full_ name of the proto.
+  // The _full_ name of the proto without the catalog name.
   optional string proto_name = 1;
   optional string proto_file_name = 2;
   // The index of the FileDescriptorSet in the top-level TypeProto that can be
   // used to deserialize this particular ProtoType.
   optional int32 file_descriptor_set_index = 3 [default = 0];
+  repeated string catalog_name_path = 4;
 }
 
 message EnumTypeProto {
-  // The _full_ name of the enum.
+  // The _full_ name of the enum without the catalog name.
   optional string enum_name = 1;
   optional string enum_file_name = 2;
   // The index of the FileDescriptorSet in the top-level TypeProto that can be
   // used to deserialize this particular EnumType.
   optional int32 file_descriptor_set_index = 3 [default = 0];
+  repeated string catalog_name_path = 4;
 }

@@ -12,7 +12,7 @@ pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
         ss: SearchSpace::default(),
         context,
     };
-    let mut expr = crate::rewrite::rewrite(expr, txn, context);
+    let mut expr = crate::rewrite::rewrite(expr);
     optimizer.copy_in_new(&mut expr);
     let gid = match expr {
         Leaf { gid } => GroupID(gid),

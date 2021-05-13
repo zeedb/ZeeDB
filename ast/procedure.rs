@@ -10,15 +10,20 @@ pub enum Procedure {
     DropTable(Scalar),
     CreateIndex(Scalar),
     DropIndex(Scalar),
+    SetVar(Scalar, Scalar),
 }
 
 impl Procedure {
     pub(crate) fn collect_references(&self, set: &mut HashSet<Column>) {
         match self {
-            Procedure::CreateTable(argument)
-            | Procedure::DropTable(argument)
-            | Procedure::CreateIndex(argument)
-            | Procedure::DropIndex(argument) => argument.collect_references(set),
+            Procedure::CreateTable(x)
+            | Procedure::DropTable(x)
+            | Procedure::CreateIndex(x)
+            | Procedure::DropIndex(x) => x.collect_references(set),
+            Procedure::SetVar(x, y) => {
+                x.collect_references(set);
+                y.collect_references(set);
+            }
         }
     }
 }
@@ -30,6 +35,7 @@ impl fmt::Display for Procedure {
             Procedure::DropTable(id) => write!(f, "drop_table {}", id),
             Procedure::CreateIndex(id) => write!(f, "create_index {}", id),
             Procedure::DropIndex(id) => write!(f, "drop_index {}", id),
+            Procedure::SetVar(name, value) => write!(f, "set_var {} {}", name, value),
         }
     }
 }

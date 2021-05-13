@@ -85,6 +85,9 @@ fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyAr
         F::NextVal(a) => unary(&e(a).as_i64(), |a| {
             state.context[STORAGE_KEY].lock().unwrap().next_val(a)
         }),
+        F::GetVar(a) => unary_nullable(&e(a).as_string(), |a| {
+            a.and_then(|a| state.variables[a].clone().as_i64().get(0))
+        }),
         F::Not(a) => unary(&e(a).as_bool(), |a| !a),
         F::ReverseString(a) => unary(&e(a).as_string(), |a| a.chars().rev().collect::<String>()),
         F::RoundDouble(a) => unary(&e(a).as_f64(), f64::round),
