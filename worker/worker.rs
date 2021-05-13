@@ -32,14 +32,8 @@ struct Exchange {
 
 impl Default for WorkerNode {
     fn default() -> Self {
-        Self::new(Storage::default())
-    }
-}
-
-impl WorkerNode {
-    pub fn new(storage: Storage) -> Self {
         let mut context = Context::default();
-        context.insert(STORAGE_KEY, Mutex::new(storage));
+        context.insert(STORAGE_KEY, Mutex::new(Storage::default()));
         context.insert(
             REMOTE_EXECUTION_KEY,
             Box::new(RpcRemoteExecution::default()),
@@ -51,10 +45,6 @@ impl WorkerNode {
             broadcast: Default::default(),
             exchange: Default::default(),
         }
-    }
-
-    pub fn unwrap(self) -> Storage {
-        std::mem::take(&mut self.context[STORAGE_KEY].lock().unwrap())
     }
 }
 

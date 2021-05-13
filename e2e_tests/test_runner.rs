@@ -1,70 +1,29 @@
-use std::{fmt::Write, sync::Mutex};
+use std::sync::Mutex;
 
 use coordinator::CoordinatorNode;
+use fs::File;
 use once_cell::sync::Lazy;
 use protos::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
     worker_server::WorkerServer, SubmitRequest,
 };
-use regex::Regex;
-use storage::Storage;
+use std::{
+    fs,
+    io::{Read, Write},
+};
 use tonic::{
     transport::{Channel, Server},
     Request,
 };
 use worker::WorkerNode;
 
-pub struct TestSuite {
-    log: String,
-    cluster: TestCluster,
-}
-
-impl TestSuite {
-    pub fn empty() -> Self {
-        Self {
-            log: "".to_string(),
-            cluster: TestCluster::empty(),
-        }
-    }
-
-    pub fn setup(&mut self, sql: &str) {
-        self.cluster.run(&sql);
-        writeln!(&mut self.log, "setup: {}", trim(&sql)).unwrap();
-    }
-
-    pub fn comment(&mut self, comment: &str) {
-        writeln!(&mut self.log, "# {}", &comment).unwrap();
-    }
-
-    pub fn ok(&mut self, sql: &str) {
-        let result = self.cluster.run(&sql);
-        writeln!(&mut self.log, "ok: {}\n{}\n", trim(&sql), result).unwrap();
-    }
-
-    pub fn finish(&self, output: &str) {
-        if !test_fixtures::matches_expected(output, &self.log) {
-            panic!("{}", output)
-        }
-    }
-}
-
-fn trim(sql: &str) -> String {
-    let trim = Regex::new(r"(?m)^\s+").unwrap();
-    let mut trimmed = trim.replace_all(sql, "").trim().to_string();
-    if trimmed.len() > 200 {
-        trimmed.truncate(197);
-        trimmed.push_str("...");
-    }
-    trimmed
-}
-
-pub struct TestCluster {
+pub struct TestRunner {
     pub client: CoordinatorClient<Channel>,
     shutdown: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
-impl TestCluster {
-    fn new(storage: Storage, txn: i64) -> Self {
+impl Default for TestRunner {
+    fn default() -> Self {
         // Take a global lock, so we only initialize 1 cluster at a time.
         static GLOBAL: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
         let _lock = GLOBAL.lock().unwrap();
@@ -80,19 +39,18 @@ impl TestCluster {
         std::env::set_var("WORKER_ID", "0");
         std::env::set_var("WORKER_COUNT", "1");
         // Create an empty 1-worker cluster.
-        let worker = WorkerNode::new(storage);
-        let coordinator = CoordinatorNode::new(txn);
+        let worker = WorkerNode::default();
+        let coordinator = CoordinatorNode::default();
         // Connect to the cluster.
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let client = protos::runtime().block_on(async move {
             let addr = format!("[::1]:{}", port).parse().unwrap();
             let signal = async { receiver.await.unwrap() };
-            tokio::spawn(
-                Server::builder()
-                    .add_service(CoordinatorServer::new(coordinator))
-                    .add_service(WorkerServer::new(worker))
-                    .serve_with_shutdown(addr, signal),
-            );
+            let server = Server::builder()
+                .add_service(CoordinatorServer::new(coordinator))
+                .add_service(WorkerServer::new(worker))
+                .serve_with_shutdown(addr, signal);
+            tokio::spawn(server);
             CoordinatorClient::connect(format!("http://[::1]:{}", port))
                 .await
                 .unwrap()
@@ -102,9 +60,39 @@ impl TestCluster {
             shutdown: Some(sender),
         }
     }
+}
 
-    pub fn empty() -> Self {
-        Self::new(Storage::default(), 0)
+impl TestRunner {
+    pub fn rewrite(&mut self, path: &str) -> bool {
+        let mut file = File::open(path).unwrap();
+        let mut expect = String::new();
+        file.read_to_string(&mut expect).unwrap();
+        let mut found = String::new();
+        for line in expect.lines() {
+            if line.starts_with("<") {
+                found.push_str(line);
+                found.push('\n');
+                self.run(line.strip_prefix("<").unwrap());
+            } else if line.starts_with(">") {
+                found.push_str(line);
+                found.push('\n');
+                found.push_str(&self.run(line.strip_prefix(">").unwrap()));
+                found.push('\n');
+                found.push('\n');
+            } else if line.starts_with("#") {
+                found.push_str(line);
+                found.push('\n');
+            }
+        }
+        if expect != found {
+            File::create(path)
+                .unwrap()
+                .write_all(found.as_bytes())
+                .unwrap();
+            true
+        } else {
+            false
+        }
     }
 
     fn run(&mut self, sql: &str) -> String {
@@ -131,7 +119,7 @@ impl TestCluster {
     }
 }
 
-impl Drop for TestCluster {
+impl Drop for TestRunner {
     fn drop(&mut self) {
         std::mem::take(&mut self.shutdown)
             .unwrap()

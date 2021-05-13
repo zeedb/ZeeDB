@@ -1,6 +1,0 @@
-# limit_offset
-ok: explain select customer_id from customer limit 100 offset 10
-plan                          
-Limit 100 10
-	SeqScan customer
-

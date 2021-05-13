@@ -1,6 +1,0 @@
-# order_by
-ok: explain select customer_id from customer order by modified_date
-plan                                         
-Sort customer.modified_date
-	SeqScan customer
-

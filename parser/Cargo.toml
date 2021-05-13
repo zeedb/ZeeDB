@@ -21,6 +21,3 @@ context = { path = "../context" }
 kernel = { path = "../kernel" }
 protos = { path = "../protos" }
 zetasql = { path = "../zetasql" }
-
-[dev-dependencies]
-test_fixtures = { path = "../test_fixtures" }

@@ -22,8 +22,8 @@ pub struct CoordinatorNode {
     txn: Arc<AtomicI64>,
 }
 
-impl CoordinatorNode {
-    pub fn new(txn: i64) -> Self {
+impl Default for CoordinatorNode {
+    fn default() -> Self {
         let mut context = Context::default();
         context.insert(PARSER_KEY, Parser::default());
         context.insert(CATALOG_KEY, Box::new(MetadataCatalog));
@@ -34,14 +34,8 @@ impl CoordinatorNode {
         context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
         Self {
             context: Arc::new(context),
-            txn: Arc::new(AtomicI64::new(txn)),
+            txn: Arc::new(AtomicI64::default()),
         }
-    }
-}
-
-impl Default for CoordinatorNode {
-    fn default() -> Self {
-        Self::new(0)
     }
 }
 

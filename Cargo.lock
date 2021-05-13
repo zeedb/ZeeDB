@@ -268,7 +268,6 @@ dependencies = [
  "remote_execution",
  "statistics",
  "storage",
- "test_fixtures",
  "tokio",
  "tonic",
  "worker",
@@ -715,7 +714,6 @@ dependencies = [
  "kernel",
  "prost-types",
  "protos",
- "test_fixtures",
  "time",
  "tokio",
  "tonic",
@@ -1138,10 +1136,6 @@ dependencies = [
  "remove_dir_all",
  "winapi",
 ]
-
-[[package]]
-name = "test_fixtures"
-version = "0.1.0"
 
 [[package]]
 name = "thiserror"

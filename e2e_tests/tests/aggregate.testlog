@@ -1,0 +1,114 @@
+< create table booleans (x boolean);
+< create table integers (x int64);
+< create table floats (x float64);
+< create table dates (x date);
+< create table timestamps (x timestamp);
+< create table strings (x string);
+< insert into booleans values (true), (true), (false), (null);
+< insert into integers values (1), (1), (2), (3), (null);
+< insert into floats values (1.0), (2.0), (3.0), (null);
+< insert into dates values (date '2000-01-01'), (date '2000-01-02'), (date '2000-01-03'), (null);
+< insert into timestamps values (timestamp '2000-01-01'), (timestamp '2000-01-02'), (timestamp '2000-01-03'), (null);
+< insert into strings values ('1'), ('1'), ('2'), ('3'), (null);
+# simple aggregate counts
+> select any_value(x), count(x), count(*) from integers
+$agg1 $agg2 $agg3
+NULL  4     5    
+
+> select any_value(x), count(x), count(*) from strings
+$agg1 $agg2 $agg3
+NULL  4     5    
+
+# simple aggregate boolean
+> select logical_and(x), logical_or(x), max(x), min(x) from booleans
+$agg1 $agg2 $agg3 $agg4
+false true  true  false
+
+# simple aggregate int
+> select max(x), min(x), sum(x) from integers
+$agg1 $agg2 $agg3
+3     1     7    
+
+# simple aggregate float
+> select max(x), min(x), sum(x) from floats
+$agg1 $agg2 $agg3
+3     1     6    
+
+# group by aggregate
+> select x, sum(x) from integers group by 1 order by 1
+x    $agg1
+NULL NULL 
+1    2    
+2    2    
+3    3    
+
+# simple avg
+> select avg(x) from integers
+$agg1
+1.75 
+
+# projection
+> select x from booleans group by x order by x
+x    
+NULL 
+false
+true 
+
+> select x from integers group by x order by x
+x   
+NULL
+1   
+2   
+3   
+
+> select x from dates group by x order by x
+x         
+NULL      
+2000-01-01
+2000-01-02
+2000-01-03
+
+> select x from timestamps group by x order by x
+x                  
+NULL               
+2000-01-01 00:00:00
+2000-01-02 00:00:00
+2000-01-03 00:00:00
+
+> select x from strings group by x order by x
+x   
+NULL
+1   
+2   
+3   
+
+> select booleans.x, integers.x from booleans, integers group by 1, 2 order by 1, 2
+x     x   
+NULL  NULL
+NULL  1   
+NULL  2   
+NULL  3   
+false NULL
+false 1   
+false 2   
+false 3   
+true  NULL
+true  1   
+true  2   
+true  3   
+
+> select distinct booleans.x, integers.x from booleans, integers order by 1, 2
+x     x   
+NULL  NULL
+NULL  1   
+NULL  2   
+NULL  3   
+false NULL
+false 1   
+false 2   
+false 3   
+true  NULL
+true  1   
+true  2   
+true  3   
+

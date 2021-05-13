@@ -1,4 +1,0 @@
-ok: with t as (select 1 as a, 1 as b) select a = b from t
-$col1
-true 
-

@@ -1,0 +1,33 @@
+< create table foo (id int64); create table bar (id int64);
+< insert into foo values (1), (2); insert into bar values (2), (3), (4);
+> select foo.id as foo_id, bar.id as bar_id from foo left join bar using (id)
+id id  
+2  2   
+1  NULL
+
+> select foo.id as foo_id, bar.id as bar_id from foo right join bar using (id)
+id   id
+2    2 
+NULL 3 
+NULL 4 
+
+> select foo.id as foo_id, bar.id as bar_id from foo full join bar using (id)
+id   id  
+2    2   
+NULL 3   
+NULL 4   
+1    NULL
+
+> select id from foo where id in (select id from bar)
+id
+2 
+
+> select id from foo where id not in (select id from bar)
+id
+1 
+
+> select id, exists(select id from bar where foo.id = bar.id) from foo
+id $col2
+1  false
+2  true 
+

@@ -29,5 +29,4 @@ protos = { path = "../protos" }
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
 storage = { path = "../storage" }
-test_fixtures = { path = "../test_fixtures" }
 worker = { path = "../worker" }

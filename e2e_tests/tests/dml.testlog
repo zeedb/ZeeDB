@@ -1,0 +1,34 @@
+< create table foo (id int64);
+< insert into foo values (1);
+> select * from foo;
+id
+1 
+
+< insert into foo values (1);
+< delete from foo where id = 1;
+> select * from foo;
+id
+
+< insert into foo values (1);
+< delete from foo where id = 1;
+< insert into foo values (2);
+> select * from foo;
+id
+2 
+
+< insert into foo values (1);
+< update foo set id = 2 where id = 1;
+> select * from foo;
+id
+2 
+2 
+
+< drop table foo;
+< create table foo (id int64, ok bool);
+< insert into foo (id, ok) values (1, false);
+< insert into foo (ok, id) values (true, 2);
+> select * from foo;
+id ok   
+1  false
+2  true 
+

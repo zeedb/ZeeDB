@@ -1,0 +1,5 @@
+> with foo as (select 1 as bar) select * from foo union all select * from foo
+bar
+1  
+1  
+

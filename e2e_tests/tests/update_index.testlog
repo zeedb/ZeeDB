@@ -1,0 +1,19 @@
+< create table foo (id int64);
+< create index foo_id_index on foo (id);
+< insert into foo values (0), (1), (2), (3), (4), (5), (6), (7), (8), (9), (10), (11), (12), (13), (14), (15), (16), (17), (18), (19), (20), (21), (22), (23), (24), (25), (26), (27), (28), (29), (30);
+> update foo set id = -1 where id = 30
+EMPTY
+
+> explain select * from foo where id = -1
+plan                                             
+IndexScan foo(id:-1)
+		Broadcast
+			TableFreeScan
+
+> select * from foo where id = -1
+id
+-1
+
+> select * from foo where id = 30
+id
+
