@@ -85,11 +85,19 @@ impl TestRunner {
             }
         }
         if expect != found {
-            File::create(path)
-                .unwrap()
-                .write_all(found.as_bytes())
-                .unwrap();
-            true
+            if std::env::var("REWRITE") == Ok("1".to_string()) {
+                File::create(path)
+                    .unwrap()
+                    .write_all(found.as_bytes())
+                    .unwrap();
+                false
+            } else {
+                println!(
+                    "\x1b[0;31mSet environment variables REWRITE=1 to rewrite {}\x1b[0m",
+                    path
+                );
+                true
+            }
         } else {
             false
         }
