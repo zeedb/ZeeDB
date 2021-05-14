@@ -13,20 +13,22 @@ use crate::WorkerNode;
 #[test]
 fn test_broadcast() {
     // Create an empty 1-worker cluster.
-    let port = 50051;
-    std::env::set_var("WORKER_0", format!("http://[::1]:{}", port));
+    let port = 50053;
+    std::env::set_var("WORKER_0", format!("http://127.0.0.1:{}", port));
     std::env::set_var("WORKER_ID", "0");
     std::env::set_var("WORKER_COUNT", "1");
     let worker = WorkerNode::default();
     // Connect to the cluster and run a command.
     protos::runtime().block_on(async move {
-        tokio::spawn(
+        tokio::spawn(async move {
             Server::builder()
                 .add_service(WorkerServer::new(worker))
-                .serve(format!("[::1]:{}", port).parse().unwrap()),
-        );
+                .serve(format!("127.0.0.1:{}", port).parse().unwrap())
+                .await
+                .unwrap()
+        });
         let mut client = WorkerClient::new(
-            Endpoint::new(format!("http://[::1]:{}", port))
+            Endpoint::new(format!("http://127.0.0.1:{}", port))
                 .unwrap()
                 .connect_lazy()
                 .unwrap(),

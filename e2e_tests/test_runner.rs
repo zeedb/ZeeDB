@@ -12,7 +12,7 @@ use std::{
     io::{Read, Write},
 };
 use tonic::{
-    transport::{Channel, Server},
+    transport::{Channel, Endpoint, Server},
     Request,
 };
 use worker::WorkerNode;
@@ -28,14 +28,14 @@ impl Default for TestRunner {
         static GLOBAL: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
         let _lock = GLOBAL.lock().unwrap();
         // Find a free port.
-        static NEXT_PORT: Lazy<Mutex<u16>> = Lazy::new(|| Mutex::new(50052));
+        static NEXT_PORT: Lazy<Mutex<u16>> = Lazy::new(|| Mutex::new(50054));
         let port = {
             let mut lock = NEXT_PORT.lock().unwrap();
             *lock = *lock + 1;
             *lock - 1
         };
         // Set configuration environment variables that will be picked up by various services in Context.
-        std::env::set_var("WORKER_0", format!("http://[::1]:{}", port).as_str());
+        std::env::set_var("WORKER_0", format!("http://127.0.0.1:{}", port).as_str());
         std::env::set_var("WORKER_ID", "0");
         std::env::set_var("WORKER_COUNT", "1");
         // Create an empty 1-worker cluster.
@@ -44,16 +44,22 @@ impl Default for TestRunner {
         // Connect to the cluster.
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let client = protos::runtime().block_on(async move {
-            let addr = format!("[::1]:{}", port).parse().unwrap();
+            let addr = format!("127.0.0.1:{}", port).parse().unwrap();
             let signal = async { receiver.await.unwrap() };
-            let server = Server::builder()
-                .add_service(CoordinatorServer::new(coordinator))
-                .add_service(WorkerServer::new(worker))
-                .serve_with_shutdown(addr, signal);
-            tokio::spawn(server);
-            CoordinatorClient::connect(format!("http://[::1]:{}", port))
-                .await
-                .unwrap()
+            tokio::spawn(async move {
+                Server::builder()
+                    .add_service(CoordinatorServer::new(coordinator))
+                    .add_service(WorkerServer::new(worker))
+                    .serve_with_shutdown(addr, signal)
+                    .await
+                    .unwrap()
+            });
+            CoordinatorClient::new(
+                Endpoint::new(format!("http://127.0.0.1:{}", port))
+                    .unwrap()
+                    .connect_lazy()
+                    .unwrap(),
+            )
         });
         Self {
             client,
