@@ -3,7 +3,6 @@ use std::collections::{hash_map::Entry, HashMap};
 use ast::{Index, *};
 use catalog_types::{builtin_function_options, Catalog, CATALOG_KEY};
 use context::{env_var, Context, WORKER_COUNT_KEY};
-use futures::StreamExt;
 use kernel::*;
 use once_cell::sync::OnceCell;
 use parser::{Parser, PARSER_KEY};
@@ -110,7 +109,7 @@ fn select_catalog(
         )
     });
     let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
-    let batch = match protos::runtime().block_on(stream.next()) {
+    let batch = match stream.next() {
         Some(first) => first,
         None => panic!(
             "No catalog {} in parent {}",
@@ -162,7 +161,7 @@ fn select_table(
     };
     let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
     loop {
-        match protos::runtime().block_on(stream.next()) {
+        match stream.next() {
             Some(batch) => {
                 for offset in 0..batch.len() {
                     let table_id = as_i64(&batch, 0).get(offset).unwrap();
@@ -210,7 +209,7 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
     let mut indexes: Vec<Index> = vec![];
     let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
     loop {
-        match protos::runtime().block_on(stream.next()) {
+        match stream.next() {
             Some(batch) => {
                 for offset in 0..batch.len() {
                     let index_id = as_i64(&batch, 0).get(offset).unwrap();

@@ -9,7 +9,6 @@ path = "lib.rs"
 doctest = false
 
 [dependencies]
-futures = { version = "0.3.13", features = [] }
 prost = "0.7.0"
 prost-types = "0.7.0"
 tonic = "0.4.3"

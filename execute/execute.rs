@@ -2,7 +2,6 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use ast::{Expr, Index, *};
 use context::{Context, WORKER_ID_KEY};
-use futures::{executor::block_on, StreamExt};
 use kernel::{RecordBatch, *};
 use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
 use storage::*;
@@ -905,7 +904,7 @@ impl Node {
                         ),
                     ));
                 }
-                block_on(stream.as_mut().unwrap().inner.next())
+                stream.as_mut().unwrap().inner.next()
             }
             Node::Exchange { input, stream } => {
                 if let Some((hash_column, expr)) = input.take() {
@@ -919,7 +918,7 @@ impl Node {
                         ),
                     ));
                 }
-                block_on(stream.as_mut().unwrap().inner.next())
+                stream.as_mut().unwrap().inner.next()
             }
             Node::Insert {
                 finished,

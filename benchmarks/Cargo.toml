@@ -6,7 +6,6 @@ publish = false
 
 [dependencies]
 chrono = { version = "0.4.11", features = [] }
-futures = { version = "0.3.13", features = [] }
 tonic = "0.4.3"
 rand = { version = "0.8.2", features = ["small_rng"]}
 

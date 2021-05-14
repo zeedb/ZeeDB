@@ -9,10 +9,10 @@ use std::{
 use catalog::MetadataCatalog;
 use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::{env_var, Context, WORKER_COUNT_KEY};
-use futures::StreamExt;
 use kernel::AnyArray;
 use parser::{Parser, PARSER_KEY};
 use protos::{coordinator_server::Coordinator, Page, RecordStream, SubmitRequest};
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use tonic::{async_trait, Request, Response, Status};
 
@@ -20,6 +20,7 @@ use tonic::{async_trait, Request, Response, Status};
 pub struct CoordinatorNode {
     context: Arc<Context>,
     txn: Arc<AtomicI64>,
+    pool: Arc<ThreadPool>,
 }
 
 impl Default for CoordinatorNode {
@@ -35,6 +36,13 @@ impl Default for CoordinatorNode {
         Self {
             context: Arc::new(context),
             txn: Arc::new(AtomicI64::default()),
+            pool: Arc::new(
+                ThreadPoolBuilder::new()
+                    .num_threads(context::CONCURRENT_QUERIES)
+                    .thread_name(|i| format!("coordinator-{}", i))
+                    .build()
+                    .unwrap(),
+            ),
         }
     }
 }
@@ -60,13 +68,13 @@ impl Coordinator for CoordinatorNode {
             .map(|(name, value)| (name.clone(), value.data_type()))
             .collect();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        rayon::spawn(move || {
+        self.pool.spawn(move || {
             let expr =
                 context[PARSER_KEY].analyze(&request.sql, ROOT_CATALOG_ID, txn, types, &context);
             let expr = planner::optimize(expr, txn, &context);
             let mut stream = context[REMOTE_EXECUTION_KEY].submit(expr, variables, txn);
             loop {
-                match protos::runtime().block_on(stream.next()) {
+                match stream.next() {
                     Some(record_batch) => sender
                         .blocking_send(Page {
                             record_batch: bincode::serialize(&record_batch).unwrap(),

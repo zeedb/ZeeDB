@@ -78,7 +78,6 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "coordinator",
- "futures",
  "protos",
  "rand 0.8.2",
  "tonic",
@@ -120,7 +119,6 @@ dependencies = [
  "ast",
  "catalog_types",
  "context",
- "futures",
  "kernel",
  "once_cell",
  "parser",
@@ -185,7 +183,6 @@ dependencies = [
  "catalog",
  "catalog_types",
  "context",
- "futures",
  "kernel",
  "parser",
  "planner",
@@ -249,25 +246,11 @@ dependencies = [
 name = "e2e_tests"
 version = "0.1.0"
 dependencies = [
- "ast",
  "bincode",
- "catalog",
- "catalog_types",
- "chrono",
- "context",
  "coordinator",
- "execute",
- "futures",
  "kernel",
  "once_cell",
- "parser",
- "planner",
  "protos",
- "rand 0.8.2",
- "regex",
- "remote_execution",
- "statistics",
- "storage",
  "tokio",
  "tonic",
  "worker",
@@ -282,10 +265,6 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 [[package]]
 name = "encoding"
 version = "0.1.0"
-dependencies = [
- "bincode",
- "zetasql",
-]
 
 [[package]]
 name = "execute"
@@ -295,7 +274,6 @@ dependencies = [
  "bincode",
  "chrono",
  "context",
- "futures",
  "kernel",
  "num-traits",
  "protos",
@@ -710,7 +688,6 @@ dependencies = [
  "catalog_types",
  "chrono",
  "context",
- "futures",
  "kernel",
  "prost-types",
  "protos",
@@ -779,7 +756,6 @@ dependencies = [
  "kernel",
  "parser",
  "rand 0.8.2",
- "regex",
  "remote_execution",
  "statistics",
  "zetasql",
@@ -1426,7 +1402,6 @@ dependencies = [
  "bincode",
  "context",
  "execute",
- "futures",
  "kernel",
  "protos",
  "rand 0.8.2",
@@ -1442,7 +1417,6 @@ dependencies = [
 name = "zetasql"
 version = "0.1.0"
 dependencies = [
- "futures",
  "prost",
  "prost-types",
  "tonic",

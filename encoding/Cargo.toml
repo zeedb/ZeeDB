@@ -8,5 +8,3 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-bincode = "1.2.1"
-zetasql = { path = "../zetasql" }

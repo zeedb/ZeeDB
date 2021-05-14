@@ -66,7 +66,7 @@ impl RemoteExecution for RpcRemoteExecution {
                     .map(unwrap_page);
                 streams.push(response);
             }
-            Box::new(futures::stream::select_all(streams))
+            RecordStream::new(Box::new(futures::stream::select_all(streams)))
         })
     }
 
@@ -98,7 +98,7 @@ impl RemoteExecution for RpcRemoteExecution {
                     .map(unwrap_page);
                 streams.push(response);
             }
-            Box::new(futures::stream::select_all(streams))
+            RecordStream::new(Box::new(futures::stream::select_all(streams)))
         })
     }
 
@@ -134,7 +134,7 @@ impl RemoteExecution for RpcRemoteExecution {
                     .map(unwrap_page);
                 streams.push(response);
             }
-            Box::new(futures::stream::select_all(streams))
+            RecordStream::new(Box::new(futures::stream::select_all(streams)))
         })
     }
 

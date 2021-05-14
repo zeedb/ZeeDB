@@ -10,6 +10,7 @@ use protos::{
     worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
     ColumnStatisticsRequest, ColumnStatisticsResponse, ExchangeRequest, Page, RecordStream,
 };
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
@@ -20,6 +21,7 @@ pub struct WorkerNode {
     context: Arc<Context>,
     broadcast: Arc<Mutex<HashMap<(Expr, i64), Broadcast>>>,
     exchange: Arc<Mutex<HashMap<(Expr, i64), Exchange>>>,
+    pool: Arc<ThreadPool>,
 }
 
 struct Broadcast {
@@ -44,6 +46,13 @@ impl Default for WorkerNode {
             context: Arc::new(context),
             broadcast: Default::default(),
             exchange: Default::default(),
+            pool: Arc::new(
+                ThreadPoolBuilder::new()
+                    .num_threads(context::CONCURRENT_QUERIES)
+                    .thread_name(|i| format!("coordinator-{}", i))
+                    .build()
+                    .unwrap(),
+            ),
         }
     }
 }
@@ -75,14 +84,16 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn), topic) = occupied.remove_entry();
-                    rayon::spawn(move || broadcast(expr, txn, variables, context, topic.listeners));
+                    self.pool
+                        .spawn(move || broadcast(expr, txn, variables, context, topic.listeners));
                 }
             }
             Entry::Vacant(vacant) => {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, txn) = vacant.into_key();
-                    rayon::spawn(move || broadcast(expr, txn, variables, context, vec![sender]));
+                    self.pool
+                        .spawn(move || broadcast(expr, txn, variables, context, vec![sender]));
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Broadcast {
@@ -118,7 +129,7 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn), topic) = occupied.remove_entry();
-                    rayon::spawn(move || {
+                    self.pool.spawn(move || {
                         exchange(
                             expr,
                             txn,
@@ -134,7 +145,7 @@ impl Worker for WorkerNode {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, txn) = vacant.into_key();
-                    rayon::spawn(move || {
+                    self.pool.spawn(move || {
                         exchange(
                             expr,
                             txn,
@@ -162,7 +173,7 @@ impl Worker for WorkerNode {
         let request = request.into_inner();
         let context = self.context.clone();
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        self.pool.spawn(move || {
             let cardinality = context[STORAGE_KEY]
                 .lock()
                 .unwrap()
@@ -183,7 +194,7 @@ impl Worker for WorkerNode {
         let request = request.into_inner();
         let context = self.context.clone();
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
+        self.pool.spawn(move || {
             let bytes = context[STORAGE_KEY]
                 .lock()
                 .unwrap()

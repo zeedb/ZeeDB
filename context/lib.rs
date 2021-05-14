@@ -56,3 +56,5 @@ pub const WORKER_COUNT_KEY: ContextKey<i32> = ContextKey::new("WORKER_COUNT_KEY"
 pub fn env_var(key: &str) -> i32 {
     std::env::var(key).expect(key).parse().unwrap()
 }
+
+pub const CONCURRENT_QUERIES: usize = 10;

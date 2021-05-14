@@ -9,7 +9,6 @@ path = "lib.rs"
 
 [dependencies]
 chrono = { version = "0.4.11", features = [] }
-futures = { version = "0.3.13", features = [] }
 tokio = { version = "1.5.0", features = ["rt-multi-thread"] }
 tonic = "0.4.3"
 prost-types = "0.7.0"
