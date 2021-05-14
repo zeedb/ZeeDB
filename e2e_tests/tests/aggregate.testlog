@@ -32,7 +32,7 @@ $agg1 $agg2 $agg3
 # simple aggregate float
 > select max(x), min(x), sum(x) from floats
 $agg1 $agg2 $agg3
-3     1     6    
+3.000 1.000 6.000
 
 # group by aggregate
 > select x, sum(x) from integers group by 1 order by 1
@@ -45,7 +45,7 @@ NULL NULL
 # simple avg
 > select avg(x) from integers
 $agg1
-1.75 
+1.750
 
 # projection
 > select x from booleans group by x order by x

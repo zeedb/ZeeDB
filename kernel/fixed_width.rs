@@ -60,7 +60,7 @@ fn fixed_width_column(array: &AnyArray) -> Vec<String> {
         AnyArray::F64(array) => (0..array.len())
             .map(|i| match array.get(i) {
                 None => "NULL".to_string(),
-                Some(value) => value.to_string(),
+                Some(value) => format!("{:.3}", value),
             })
             .collect(),
         AnyArray::Date(array) => (0..array.len())

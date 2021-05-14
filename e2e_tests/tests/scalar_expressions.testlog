@@ -42,7 +42,7 @@ $col1
 # test_math_f64
 > select 1.0 + 1.0
 $col1
-2    
+2.000
 
 > select 1.0 + cast(null as float64)
 $col1
@@ -50,23 +50,23 @@ NULL
 
 > select 2.0 * 3.0
 $col1
-6    
+6.000
 
 > select 2.0 * cast(null as float64)
 $col1
 NULL 
 
 > select 1.0 - 2.0
-$col1
--1   
+$col1 
+-1.000
 
 > select 1.0 - cast(null as float64)
 $col1
 NULL 
 
 > select -1.0
-$col1
--1   
+$col1 
+-1.000
 
 > select -cast(null as float64)
 $col1
@@ -74,107 +74,107 @@ NULL
 
 > select abs(-1.0)
 $col1
-1    
+1.000
 
 > select abs(cast(null as float64))
 $col1
 NULL 
 
 > select sign(-10.0)
-$col1
--1   
+$col1 
+-1.000
 
 > select sign(cast(null as float64))
 $col1
 NULL 
 
 > select round(-1.4)
-$col1
--1   
+$col1 
+-1.000
 
 > select round(-1.5)
-$col1
--2   
+$col1 
+-2.000
 
 > select round(-1.6)
-$col1
--2   
+$col1 
+-2.000
 
 > select round(cast(null as float64))
 $col1
 NULL 
 
 > select round(-1.14, 1)
-$col1
--1.1 
+$col1 
+-1.100
 
 > select round(-1.15, 1)
-$col1
--1.2 
+$col1 
+-1.200
 
 > select round(-1.16, 1)
-$col1
--1.2 
+$col1 
+-1.200
 
 > select round(cast(null as float64))
 $col1
 NULL 
 
 > select trunc(-1.4)
-$col1
--1   
+$col1 
+-1.000
 
 > select trunc(-1.5)
-$col1
--1   
+$col1 
+-1.000
 
 > select trunc(-1.6)
-$col1
--1   
+$col1 
+-1.000
 
 > select trunc(-1.14, 1)
-$col1
--1.1 
+$col1 
+-1.100
 
 > select trunc(-1.15, 1)
-$col1
--1.1 
+$col1 
+-1.100
 
 > select trunc(-1.16, 1)
-$col1
--1.1 
+$col1 
+-1.100
 
 > select trunc(cast(null as float64))
 $col1
 NULL 
 
 > select ceil(-1.4)
-$col1
--1   
+$col1 
+-1.000
 
 > select ceil(-1.5)
-$col1
--1   
+$col1 
+-1.000
 
 > select ceil(-1.6)
-$col1
--1   
+$col1 
+-1.000
 
 > select ceil(cast(null as float64))
 $col1
 NULL 
 
 > select floor(-1.4)
-$col1
--2   
+$col1 
+-2.000
 
 > select floor(-1.5)
-$col1
--2   
+$col1 
+-2.000
 
 > select floor(-1.6)
-$col1
--2   
+$col1 
+-2.000
 
 > select floor(cast(null as float64))
 $col1
@@ -182,7 +182,7 @@ NULL
 
 > select sqrt(4.0)
 $col1
-2    
+2.000
 
 > select sqrt(cast(null as float64))
 $col1
@@ -190,7 +190,7 @@ NULL
 
 > select pow(2.0, 2.0)
 $col1
-4    
+4.000
 
 > select pow(cast(null as float64), 2.0)
 $col1
@@ -202,7 +202,7 @@ NULL
 
 > select exp(0.0)
 $col1
-1    
+1.000
 
 > select exp(cast(null as float64))
 $col1
@@ -210,7 +210,7 @@ NULL
 
 > select ln(exp(0.0))
 $col1
-0    
+0.000
 
 > select ln(cast(null as float64))
 $col1
@@ -218,7 +218,7 @@ NULL
 
 > select log10(10.0)
 $col1
-1    
+1.000
 
 > select log10(cast(null as float64))
 $col1
@@ -226,7 +226,7 @@ NULL
 
 > select log(exp(0.0))
 $col1
-0    
+0.000
 
 > select log(cast(null as float64))
 $col1
@@ -234,111 +234,111 @@ NULL
 
 > select log(4.0, 2.0)
 $col1
-2    
+2.000
 
 > select log(cast(null as float64), 2.0)
 $col1
 NULL 
 
 > select cos(0.5)
-$col1             
-0.8775825618903728
+$col1
+0.878
 
 > select cos(cast(null as float64))
 $col1
 NULL 
 
 > select cosh(0.5)
-$col1             
-1.1276259652063807
+$col1
+1.128
 
 > select cosh(cast(null as float64))
 $col1
 NULL 
 
 > select acos(0.5)
-$col1             
-1.0471975511965976
+$col1
+1.047
 
 > select acos(cast(null as float64))
 $col1
 NULL 
 
 > select acosh(100.0)
-$col1            
-5.298292365610485
+$col1
+5.298
 
 > select acosh(cast(null as float64))
 $col1
 NULL 
 
 > select sin(0.5)
-$col1            
-0.479425538604203
+$col1
+0.479
 
 > select sin(cast(null as float64))
 $col1
 NULL 
 
 > select sinh(0.5)
-$col1             
-0.5210953054937474
+$col1
+0.521
 
 > select sinh(cast(null as float64))
 $col1
 NULL 
 
 > select asin(0.5)
-$col1             
-0.5235987755982988
+$col1
+0.524
 
 > select asin(cast(null as float64))
 $col1
 NULL 
 
 > select asinh(100.0)
-$col1            
-5.298342365610589
+$col1
+5.298
 
 > select asinh(cast(null as float64))
 $col1
 NULL 
 
 > select tan(0.5)
-$col1             
-0.5463024898437905
+$col1
+0.546
 
 > select tan(cast(null as float64))
 $col1
 NULL 
 
 > select tanh(0.5)
-$col1              
-0.46211715726000974
+$col1
+0.462
 
 > select tanh(cast(null as float64))
 $col1
 NULL 
 
 > select atan(0.5)
-$col1              
-0.46364760900080615
+$col1
+0.464
 
 > select atan(cast(null as float64))
 $col1
 NULL 
 
 > select atanh(0.5)
-$col1             
-0.5493061443340549
+$col1
+0.549
 
 > select atanh(cast(null as float64))
 $col1
 NULL 
 
 > select atan2(0.5, 20.0)
-$col1              
-0.02499479361892016
+$col1
+0.025
 
 > select atan2(cast(null as float64), 20.0)
 $col1
@@ -924,7 +924,7 @@ NULL
 
 > select 1.0 / 2.0
 $col1
-0.5  
+0.500
 
 > select 2 > 1
 $col1
@@ -1136,7 +1136,7 @@ NULL
 
 > select greatest(1.0, 2.0)
 $col1
-2    
+2.000
 
 > select greatest(date '2020-01-01', date '2020-01-02', null)
 $col1
@@ -1184,7 +1184,7 @@ NULL
 
 > select least(1.0, 2.0)
 $col1
-1    
+1.000
 
 > select least(date '2020-01-01', date '2020-01-02', null)
 $col1
@@ -1306,7 +1306,7 @@ true
 
 > select cast(i1 as float64) from (select 1 as i1)
 $col1
-1    
+1.000
 
 > select cast(i1 as string) from (select 1 as i1)
 $col1
@@ -1346,7 +1346,7 @@ $col1
 
 > select cast(f1 as float64) from (select '1.0' as f1)
 $col1
-1    
+1.000
 
 > select cast(d as date) from (select '2020-01-01' as d)
 $col1     
