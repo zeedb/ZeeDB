@@ -15,13 +15,13 @@ steps:
   # Run tests.
   - name: gcr.io/$PROJECT_ID/zeedb-builder
     id: test
-    waitFor: ['-']
+    waitFor: [zeedb-builder, zetasql-server]
     entrypoint: sh
     args: [-c, $_TEST]
   # Run benchmark.
   - name: gcr.io/$PROJECT_ID/zeedb-builder
     id: benchmark
-    waitFor: ['-']
+    waitFor: [zeedb-builder, zetasql-server]
     entrypoint: sh
     args: [-c, 'cargo bench -p benchmarks && sccache --show-stats']
 artifacts:
