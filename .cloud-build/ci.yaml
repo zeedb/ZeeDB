@@ -1,8 +1,5 @@
 steps:
-  - name: gcr.io/cloud-builders/docker
-    id: zetasql-server
-    waitFor: ['-']
-    args: ['run', '-d', '--network=cloudbuild', '--name=zetasql', 'gcr.io/$PROJECT_ID/zetasql']
+  # Build an image that we'll use for compiling ZeeDB.
   - name: gcr.io/kaniko-project/executor
     id: zeedb-builder
     waitFor: ['-']
@@ -10,11 +7,18 @@ steps:
       - --dockerfile=.cloud-build/Dockerfile.build
       - --destination=gcr.io/$PROJECT_ID/zeedb-builder
       - --cache=true
+  # Run ZetaSQL parser/analyzer service, which is used by our tests.
+  - name: gcr.io/cloud-builders/docker
+    id: zetasql-server
+    waitFor: ['-']
+    args: ['run', '-d', '--network=cloudbuild', '--name=zetasql', 'gcr.io/$PROJECT_ID/zetasql']
+  # Run tests.
   - name: gcr.io/$PROJECT_ID/zeedb-builder
     id: test
     waitFor: ['-']
     entrypoint: sh
     args: [-c, $_TEST]
+  # Run benchmark.
   - name: gcr.io/$PROJECT_ID/zeedb-builder
     id: benchmark
     waitFor: ['-']
