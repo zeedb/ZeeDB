@@ -109,7 +109,7 @@ impl TestRunner {
         }
     }
 
-    fn run(&mut self, sql: &str) -> String {
+    pub fn run(&mut self, sql: &str) -> String {
         let request = SubmitRequest {
             sql: sql.to_string(),
             variables: Default::default(),

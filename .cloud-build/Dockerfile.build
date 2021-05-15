@@ -5,3 +5,4 @@ RUN wget -qO- "https://github.com/zeedb/sccache/releases/download/$SCCACHE_VERSI
     chmod +x /usr/local/bin/sccache
 
 RUN cargo search
+RUN cargo install flamegraph

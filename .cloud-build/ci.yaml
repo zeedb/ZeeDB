@@ -12,13 +12,19 @@ steps:
       - --cache=true
   - name: gcr.io/$PROJECT_ID/zeedb-builder
     id: test
-    waitFor: [zeedb-builder]
+    waitFor: ['-']
     entrypoint: sh
-    args: [-c, 'cargo test -Z timings && sccache --show-stats']
+    args: [-c, $_TEST]
+  - name: gcr.io/$PROJECT_ID/zeedb-builder
+    id: benchmark
+    waitFor: ['-']
+    entrypoint: sh
+    args: [-c, 'cargo bench -p benchmarks && sccache --show-stats']
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
-    paths: ['cargo-timing.html']
+    paths:
+      - cargo-timing.html
 options:
   env:
     - RUSTC_WRAPPER=sccache
@@ -29,8 +35,24 @@ options:
     - SCCACHE_GCS_RW_MODE=READ_WRITE
     - CARGO_INCREMENTAL=0
     - CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
+    - CARGO_TARGET_DIR=/target
     - NO_RUSTFMT=1
     - ZETASQL=http://zetasql:50051
     # - SCCACHE_LOG=debug # sccache verbose logging.
     # - VERBOSE=1 # cmake verbose logging.
     # cargo argument -v or -vv enables verbose and very-verbose logging.
+substitutions:
+  _TEST: |
+    cargo test \
+      -Z timings \
+      -p ast \
+      -p coordinator \
+      -p encoding \
+      -p execute \
+      -p kernel \
+      -p parser \
+      -p statistics \
+      -p storage \
+      -p worker \
+      -p e2e_tests &&
+    sccache --show-stats

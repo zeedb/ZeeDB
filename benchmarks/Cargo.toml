@@ -4,15 +4,20 @@ version = "0.1.0"
 edition = "2018"
 publish = false
 
+[lib] 
+path = "lib.rs"
+
 [dependencies]
+
+[dev-dependencies]
 chrono = { version = "0.4.11", features = [] }
-tonic = "0.4.3"
+criterion = "0.3"
+e2e_tests = { path = "../e2e_tests" }
 rand = { version = "0.8.2", features = ["small_rng"]}
+tokio = { version = "1.5.0", features = ["rt-multi-thread"] }
+tonic = "0.4.3"
 
-coordinator = { path = "../coordinator" }
-protos = { path = "../protos" }
-worker = { path = "../worker" }
-
-[[bin]]
-name = "benchmarks"
-path = "main.rs"
+[[bench]]
+name = "example"
+path = "example.rs"
+harness = false
