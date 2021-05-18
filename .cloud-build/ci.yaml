@@ -1,18 +1,10 @@
 steps:
-  - name: gcr.io/$PROJECT_ID/zeedb-builder
-    id: build
-    waitFor: ['-']
+  - name: gcr.io/zeedeebee/zeedb-builder
     entrypoint: sh
     args: [-c, 'cargo test -Z timings --all-targets --no-run && sccache --show-stats']
-  - name: gcr.io/cloud-builders/docker
-    id: zetasql
-    waitFor: ['-']
-    args: [run, -d, --network=cloudbuild, --name=zetasql, gcr.io/$PROJECT_ID/zetasql]
-  - name: gcr.io/$PROJECT_ID/zeedb-builder
-    id: test
-    waitFor: [build, zetasql]
-    entrypoint: cargo
-    args: [test]
+  - name: gcr.io/zeedeebee/zeedb-builder
+    entrypoint: sh
+    args: [-c, 'zetasql_server & cargo test']
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
@@ -31,7 +23,8 @@ options:
     - CARGO_HOME=/cargo/cache
     - CARGO_TARGET_DIR=/cargo/target
     - NO_RUSTFMT=1
-    - ZETASQL=http://zetasql:50051
+    - ZETASQL=http://localhost:50051
+    - RUST_BACKTRACE=1
   volumes: 
     - name: cargo
       path: /cargo
