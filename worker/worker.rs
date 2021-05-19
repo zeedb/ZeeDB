@@ -5,13 +5,13 @@ use std::{
 
 use ast::Expr;
 use context::{env_var, Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
-use kernel::{AnyArray, RecordBatch};
+use kernel::{AnyArray, Exception, RecordBatch};
 use protos::{
     worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
     ColumnStatisticsRequest, ColumnStatisticsResponse, ExchangeRequest, Page, PageStream,
 };
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{Exception, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};

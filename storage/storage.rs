@@ -19,7 +19,6 @@ pub struct Storage {
     tables: Vec<Heap>,
     indexes: Vec<Art>,
     sequences: Vec<AtomicI64>,
-    // TODO store an LRU cache of statistics, but fall back to querying them from metadata schema.
     statistics: HashMap<i64, TableStatistics>,
 }
 
@@ -87,7 +86,7 @@ impl Default for Storage {
         for (sequence_id, value) in bootstrap_sequences() {
             sequences[sequence_id as usize].store(value, Ordering::Relaxed);
         }
-        // Initially there are no indexes. TODO index system tables.
+        // Initially there are no indexes.
         let indexes = vec![];
         // Bootstrap statistics.
         let mut statistics = HashMap::new();

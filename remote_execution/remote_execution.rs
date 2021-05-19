@@ -3,10 +3,8 @@ use std::collections::HashMap;
 use ast::Expr;
 use context::ContextKey;
 use futures::{Stream, StreamExt};
-use kernel::{AnyArray, RecordBatch};
+use kernel::{AnyArray, Exception, RecordBatch};
 use statistics::ColumnStatistics;
-
-use crate::Exception;
 
 pub const REMOTE_EXECUTION_KEY: ContextKey<Box<dyn RemoteExecution>> =
     ContextKey::new("REMOTE_EXECUTION");

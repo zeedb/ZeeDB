@@ -13,12 +13,13 @@ mod data_type;
 #[cfg(test)]
 mod data_type_tests;
 mod dates;
+mod exception;
 mod fixed_width;
 mod primitive_array;
 mod record_batch;
 mod string_array;
 
 pub use crate::{
-    any_array::*, array::*, array_like::*, bitmask::*, bool_array::*, data_type::*, fixed_width::*,
-    primitive_array::*, record_batch::*, string_array::*,
+    any_array::*, array::*, array_like::*, bitmask::*, bool_array::*, data_type::*,
+    exception::Exception, fixed_width::*, primitive_array::*, record_batch::*, string_array::*,
 };

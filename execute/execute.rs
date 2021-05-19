@@ -2,8 +2,8 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 use ast::{Expr, Index, *};
 use context::{Context, WORKER_ID_KEY};
-use kernel::{RecordBatch, *};
-use remote_execution::{Exception, RecordStream, REMOTE_EXECUTION_KEY};
+use kernel::{Exception, RecordBatch, *};
+use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
 use storage::*;
 
 use crate::hash_table::HashTable;

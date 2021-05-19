@@ -2,7 +2,7 @@ use std::{collections::HashMap, sync::Mutex};
 
 use ast::Expr;
 use futures::StreamExt;
-use kernel::{AnyArray, RecordBatch};
+use kernel::{AnyArray, Exception, RecordBatch};
 use protos::{
     worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
     ColumnStatisticsRequest, ExchangeRequest, Page,
@@ -14,7 +14,7 @@ use tonic::{
     Request, Status,
 };
 
-use crate::{Exception, RecordStream, RemoteExecution};
+use crate::{RecordStream, RemoteExecution};
 
 pub struct RpcRemoteExecution {
     workers: Vec<Mutex<WorkerClient<Channel>>>,

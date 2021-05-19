@@ -9,11 +9,11 @@ use std::{
 use catalog::MetadataCatalog;
 use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::{env_var, Context, WORKER_COUNT_KEY};
-use kernel::AnyArray;
+use kernel::{AnyArray, Exception};
 use parser::{Parser, PARSER_KEY};
 use protos::{coordinator_server::Coordinator, Page, PageStream, SubmitRequest};
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{Exception, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use tonic::{async_trait, Request, Response, Status};
 
 #[derive(Clone)]
