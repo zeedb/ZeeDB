@@ -13,7 +13,7 @@ use kernel::AnyArray;
 use parser::{Parser, PARSER_KEY};
 use protos::{coordinator_server::Coordinator, Page, RecordStream, SubmitRequest};
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use remote_execution::{Exception, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use tonic::{async_trait, Request, Response, Status};
 
 #[derive(Clone)]
@@ -75,12 +75,19 @@ impl Coordinator for CoordinatorNode {
             let mut stream = context[REMOTE_EXECUTION_KEY].submit(expr, variables, txn);
             loop {
                 match stream.next() {
-                    Some(record_batch) => sender
+                    Some(Ok(record_batch)) => sender
                         .blocking_send(Page {
-                            record_batch: bincode::serialize(&record_batch).unwrap(),
+                            result: Some(protos::page::Result::RecordBatch(
+                                bincode::serialize(&record_batch).unwrap(),
+                            )),
                         })
                         .unwrap(),
-                    None => break,
+                    Some(Err(Exception::SqlError(message))) => sender
+                        .blocking_send(Page {
+                            result: Some(protos::page::Result::SqlError(message)),
+                        })
+                        .unwrap(),
+                    Some(Err(Exception::End)) | None => break,
                 }
             }
         });

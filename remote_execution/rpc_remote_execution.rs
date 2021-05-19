@@ -14,7 +14,7 @@ use tonic::{
     Request, Status,
 };
 
-use crate::{RecordStream, RemoteExecution};
+use crate::{Exception, RecordStream, RemoteExecution};
 
 pub struct RpcRemoteExecution {
     workers: Vec<Mutex<WorkerClient<Channel>>>,
@@ -186,6 +186,12 @@ impl RemoteExecution for RpcRemoteExecution {
     }
 }
 
-fn unwrap_page(page: Result<Page, Status>) -> RecordBatch {
-    bincode::deserialize(&page.unwrap().record_batch).unwrap()
+fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, Exception> {
+    match page.unwrap().result.unwrap() {
+        protos::page::Result::RecordBatch(bytes) => {
+            let record_batch = bincode::deserialize(&bytes).unwrap();
+            Ok(record_batch)
+        }
+        protos::page::Result::SqlError(error) => Err(Exception::SqlError(error)),
+    }
 }

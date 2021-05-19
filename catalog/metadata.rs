@@ -110,7 +110,7 @@ fn select_catalog(
     });
     let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
     let batch = match stream.next() {
-        Some(first) => first,
+        Some(first) => first.unwrap(),
         None => panic!(
             "No catalog {} in parent {}",
             catalog_name, parent_catalog_id
@@ -163,6 +163,7 @@ fn select_table(
     loop {
         match stream.next() {
             Some(batch) => {
+                let batch = batch.unwrap();
                 for offset in 0..batch.len() {
                     let table_id = as_i64(&batch, 0).get(offset).unwrap();
                     let column_name = as_string(&batch, 1).get(offset).unwrap();
@@ -211,6 +212,7 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
     loop {
         match stream.next() {
             Some(batch) => {
+                let batch = batch.unwrap();
                 for offset in 0..batch.len() {
                     let index_id = as_i64(&batch, 0).get(offset).unwrap();
                     let column_name = as_string(&batch, 1).get(offset).unwrap();

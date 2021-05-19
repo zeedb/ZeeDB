@@ -120,7 +120,14 @@ impl TestRunner {
             let mut batches = vec![];
             loop {
                 match stream.message().await.unwrap() {
-                    Some(page) => batches.push(bincode::deserialize(&page.record_batch).unwrap()),
+                    Some(page) => match page.result.unwrap() {
+                        protos::page::Result::RecordBatch(bytes) => {
+                            batches.push(bincode::deserialize(&bytes).unwrap())
+                        }
+                        protos::page::Result::SqlError(message) => {
+                            return format!("ERROR: {}", message)
+                        }
+                    },
                     None => break,
                 }
             }

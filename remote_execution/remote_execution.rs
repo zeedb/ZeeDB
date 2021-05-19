@@ -6,21 +6,25 @@ use futures::{Stream, StreamExt};
 use kernel::{AnyArray, RecordBatch};
 use statistics::ColumnStatistics;
 
+use crate::Exception;
+
 pub const REMOTE_EXECUTION_KEY: ContextKey<Box<dyn RemoteExecution>> =
     ContextKey::new("REMOTE_EXECUTION");
 
 pub struct RecordStream {
-    inner: Box<dyn Stream<Item = RecordBatch> + Send + Unpin>,
+    inner: Box<dyn Stream<Item = Result<RecordBatch, Exception>> + Send + Unpin>,
 }
 
 impl RecordStream {
-    pub fn new(inner: Box<dyn Stream<Item = RecordBatch> + Send + Unpin>) -> Self {
+    pub fn new(
+        inner: Box<dyn Stream<Item = Result<RecordBatch, Exception>> + Send + Unpin>,
+    ) -> Self {
         Self { inner }
     }
 }
 
 impl Iterator for RecordStream {
-    type Item = RecordBatch;
+    type Item = Result<RecordBatch, Exception>;
 
     fn next(&mut self) -> Option<Self::Item> {
         protos::runtime().block_on(self.inner.next())

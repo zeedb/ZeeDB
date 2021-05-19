@@ -11,7 +11,7 @@ use protos::{
     ColumnStatisticsRequest, ColumnStatisticsResponse, ExchangeRequest, Page, RecordStream,
 };
 use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use remote_execution::{Exception, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};
@@ -219,9 +219,14 @@ fn broadcast(
 ) {
     // Send each batch of records produced by expr to each worker node in the cluster.
     for batch in execute::execute(expr, txn, &variables, &context) {
+        let result = match batch {
+            Ok(batch) => protos::page::Result::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Err(Exception::SqlError(message)) => protos::page::Result::SqlError(message),
+            Err(Exception::End) => continue,
+        };
         for sink in &listeners {
             sink.blocking_send(Page {
-                record_batch: bincode::serialize(&batch).unwrap(),
+                result: Some(result.clone()),
             })
             .unwrap();
         }
@@ -240,15 +245,30 @@ fn exchange(
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
     // Split up each batch of records produced by expr and send the splits to the worker nodes.
     for batch in execute::execute(expr, txn, &variables, &context) {
-        for (hash_bucket, batch_part) in partition(batch, &hash_column, listeners.len())
-            .iter()
-            .enumerate()
-        {
-            let (_, sink) = &listeners[hash_bucket];
-            sink.blocking_send(Page {
-                record_batch: bincode::serialize(&batch_part).unwrap(),
-            })
-            .unwrap();
+        match batch {
+            Ok(batch) => {
+                for (hash_bucket, batch_part) in partition(batch, &hash_column, listeners.len())
+                    .iter()
+                    .enumerate()
+                {
+                    let (_, sink) = &listeners[hash_bucket];
+                    sink.blocking_send(Page {
+                        result: Some(protos::page::Result::RecordBatch(
+                            bincode::serialize(&batch_part).unwrap(),
+                        )),
+                    })
+                    .unwrap();
+                }
+            }
+            Err(Exception::SqlError(message)) => {
+                for (_, sink) in &listeners {
+                    sink.blocking_send(Page {
+                        result: Some(protos::page::Result::SqlError(message.clone())),
+                    })
+                    .unwrap();
+                }
+            }
+            Err(Exception::End) => continue,
         }
     }
 }
