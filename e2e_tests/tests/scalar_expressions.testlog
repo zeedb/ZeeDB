@@ -1356,3 +1356,6 @@ $col1
 $col1              
 2020-01-01 00:00:00
 
+> select error('foo!')
+ERROR: foo!
+

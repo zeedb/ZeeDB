@@ -6,16 +6,24 @@ use storage::STORAGE_KEY;
 
 use crate::execute::QueryState;
 
-pub(crate) fn all(predicates: &Vec<Scalar>, input: &RecordBatch, state: &QueryState) -> BoolArray {
+pub(crate) fn all(
+    predicates: &Vec<Scalar>,
+    input: &RecordBatch,
+    state: &QueryState,
+) -> Result<BoolArray, Exception> {
     let mut mask = BoolArray::trues(input.len());
     for p in predicates {
-        mask = eval(p, &input, state).as_bool().and(&mask);
+        mask = eval(p, &input, state)?.as_bool().and(&mask);
     }
-    mask
+    Ok(mask)
 }
 
-pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, state: &QueryState) -> AnyArray {
-    match scalar {
+pub(crate) fn eval(
+    scalar: &Scalar,
+    input: &RecordBatch,
+    state: &QueryState,
+) -> Result<AnyArray, Exception> {
+    let a = match scalar {
         Scalar::Literal(value) => value.repeat(input.len()),
         Scalar::Column(column) => {
             let find = column.canonical_name();
@@ -26,14 +34,26 @@ pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, state: &QueryState) -> 
             assert_eq!(value.len(), 1, "@{} has length {}", name, value.len());
             value.repeat(input.len())
         }
-        Scalar::Call(function) => eval_function(function.as_ref(), input, state),
-        Scalar::Cast(scalar, data_type) => eval(scalar, input, state).cast(*data_type),
-    }
+        Scalar::Call(function) => eval_function(function.as_ref(), input, state)?,
+        Scalar::Cast(scalar, data_type) => eval(scalar, input, state)?.cast(*data_type),
+    };
+    Ok(a)
 }
 
-fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyArray {
-    let e = |a| eval(a, input, state);
-    match function {
+fn eval_function(
+    function: &F,
+    input: &RecordBatch,
+    state: &QueryState,
+) -> Result<AnyArray, Exception> {
+    let e = |scalar| eval(scalar, input, state);
+    let es = |scalars: &Vec<Scalar>| {
+        let mut arrays = vec![];
+        for scalar in scalars {
+            arrays.push(eval(scalar, input, state)?)
+        }
+        Ok(arrays)
+    };
+    let a = match function {
         F::CurrentDate | F::CurrentTimestamp => panic!(
             "{} should have been eliminated in the rewrite phase",
             function.name()
@@ -42,248 +62,264 @@ fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyAr
             .repeat(input.len())
             .as_any(),
         F::Coalesce(varargs) => {
-            let mut tail = e(varargs.last().unwrap());
+            let mut tail = e(varargs.last().unwrap())?;
             for head in &varargs[..varargs.len() - 1] {
-                tail = e(head).coalesce(&tail);
+                tail = e(head)?.coalesce(&tail);
             }
             tail
         }
         F::ConcatString(varargs) => {
-            StringArray::concat(varargs.iter().map(|a| e(a).as_string()).collect()).as_any()
+            let mut strings = vec![];
+            for arg in varargs {
+                strings.push(e(arg)?.as_string())
+            }
+            StringArray::concat(strings).as_any()
         }
-        F::Hash(varargs) => AnyArray::I64(I64Array::hash_all(&varargs.iter().map(e).collect())),
-        F::Greatest(varargs) => AnyArray::greatest(varargs.iter().map(e).collect()),
-        F::Least(varargs) => AnyArray::least(varargs.iter().map(e).collect()),
-        F::AbsDouble(a) => unary(&e(a).as_f64(), f64::abs),
-        F::AbsInt64(a) => unary(&e(a).as_i64(), i64::abs),
-        F::AcosDouble(a) => unary(&e(a).as_f64(), f64::acos),
-        F::AcoshDouble(a) => unary(&e(a).as_f64(), f64::acosh),
-        F::AsinDouble(a) => unary(&e(a).as_f64(), f64::asin),
-        F::AsinhDouble(a) => unary(&e(a).as_f64(), f64::asinh),
-        F::AtanDouble(a) => unary(&e(a).as_f64(), f64::atan),
-        F::AtanhDouble(a) => unary(&e(a).as_f64(), f64::atanh),
-        F::ByteLengthString(a) => unary(&e(a).as_string(), |a| a.len() as i64),
-        F::CeilDouble(a) => unary(&e(a).as_f64(), f64::ceil),
-        F::CharLengthString(a) => unary(&e(a).as_string(), |a| a.chars().count() as i64),
-        F::ChrString(a) => unary(&e(a).as_i64(), chr),
-        F::CosDouble(a) => unary(&e(a).as_f64(), f64::cos),
-        F::CoshDouble(a) => unary(&e(a).as_f64(), f64::cosh),
-        F::DateFromTimestamp(a) => unary(&e(a).as_timestamp(), date_from_timestamp),
-        F::DateFromUnixDate(a) => unary(&e(a).as_i64(), date_from_unix_date),
-        F::DecimalLogarithmDouble(a) => unary(&e(a).as_f64(), f64::log10),
-        F::ExpDouble(a) => unary(&e(a).as_f64(), f64::exp),
-        F::ExtractDateFromTimestamp(a) => unary(&e(a).as_timestamp(), date_from_timestamp),
-        F::FloorDouble(a) => unary(&e(a).as_f64(), f64::floor),
-        F::IsEmpty(a) => unary(&e(a).as_i64(), |a| {
+        F::Hash(varargs) => AnyArray::I64(I64Array::hash_all(&es(varargs)?)),
+        F::Greatest(varargs) => AnyArray::greatest(es(varargs)?),
+        F::Least(varargs) => AnyArray::least(es(varargs)?),
+        F::AbsDouble(a) => unary(&e(a)?.as_f64(), f64::abs),
+        F::AbsInt64(a) => unary(&e(a)?.as_i64(), i64::abs),
+        F::AcosDouble(a) => unary(&e(a)?.as_f64(), f64::acos),
+        F::AcoshDouble(a) => unary(&e(a)?.as_f64(), f64::acosh),
+        F::AsinDouble(a) => unary(&e(a)?.as_f64(), f64::asin),
+        F::AsinhDouble(a) => unary(&e(a)?.as_f64(), f64::asinh),
+        F::AtanDouble(a) => unary(&e(a)?.as_f64(), f64::atan),
+        F::AtanhDouble(a) => unary(&e(a)?.as_f64(), f64::atanh),
+        F::ByteLengthString(a) => unary(&e(a)?.as_string(), |a| a.len() as i64),
+        F::CeilDouble(a) => unary(&e(a)?.as_f64(), f64::ceil),
+        F::CharLengthString(a) => unary(&e(a)?.as_string(), |a| a.chars().count() as i64),
+        F::ChrString(a) => unary(&e(a)?.as_i64(), chr),
+        F::CosDouble(a) => unary(&e(a)?.as_f64(), f64::cos),
+        F::CoshDouble(a) => unary(&e(a)?.as_f64(), f64::cosh),
+        F::DateFromTimestamp(a) => unary(&e(a)?.as_timestamp(), date_from_timestamp),
+        F::DateFromUnixDate(a) => unary(&e(a)?.as_i64(), date_from_unix_date),
+        F::DecimalLogarithmDouble(a) => unary(&e(a)?.as_f64(), f64::log10),
+        F::Error(a) => {
+            let message = e(a)?.as_string().get(0).clone().unwrap_or("").to_string();
+            return Err(Exception::SqlError(message));
+        }
+        F::ExpDouble(a) => unary(&e(a)?.as_f64(), f64::exp),
+        F::ExtractDateFromTimestamp(a) => unary(&e(a)?.as_timestamp(), date_from_timestamp),
+        F::FloorDouble(a) => unary(&e(a)?.as_f64(), f64::floor),
+        F::IsEmpty(a) => unary(&e(a)?.as_i64(), |a| {
             state.context[STORAGE_KEY]
                 .lock()
                 .unwrap()
                 .table(a)
                 .is_empty()
         }),
-        F::IsFalse(a) => unary_nullable(&e(a).as_bool(), |a| Some(a == Some(false))),
-        F::IsInf(a) => unary(&e(a).as_f64(), f64::is_infinite),
-        F::IsNan(a) => unary(&e(a).as_f64(), f64::is_nan),
-        F::IsNull(a) => e(a).is_null().as_any(),
-        F::IsTrue(a) => unary_nullable(&e(a).as_bool(), |a| Some(a == Some(true))),
-        F::LengthString(a) => unary(&e(a).as_string(), |a| a.chars().count() as i64),
-        F::LowerString(a) => unary(&e(a).as_string(), |a| a.to_lowercase()),
-        F::NaturalLogarithmDouble(a) => unary(&e(a).as_f64(), f64::ln),
-        F::NextVal(a) => unary(&e(a).as_i64(), |a| {
+        F::IsFalse(a) => unary_nullable(&e(a)?.as_bool(), |a| Some(a == Some(false))),
+        F::IsInf(a) => unary(&e(a)?.as_f64(), f64::is_infinite),
+        F::IsNan(a) => unary(&e(a)?.as_f64(), f64::is_nan),
+        F::IsNull(a) => e(a)?.is_null().as_any(),
+        F::IsTrue(a) => unary_nullable(&e(a)?.as_bool(), |a| Some(a == Some(true))),
+        F::LengthString(a) => unary(&e(a)?.as_string(), |a| a.chars().count() as i64),
+        F::LowerString(a) => unary(&e(a)?.as_string(), |a| a.to_lowercase()),
+        F::NaturalLogarithmDouble(a) => unary(&e(a)?.as_f64(), f64::ln),
+        F::NextVal(a) => unary(&e(a)?.as_i64(), |a| {
             state.context[STORAGE_KEY].lock().unwrap().next_val(a)
         }),
-        F::GetVar(a) => unary_nullable(&e(a).as_string(), |a| {
+        F::GetVar(a) => unary_nullable(&e(a)?.as_string(), |a| {
             a.and_then(|a| state.variables[a].clone().as_i64().get(0))
         }),
-        F::Not(a) => unary(&e(a).as_bool(), |a| !a),
-        F::ReverseString(a) => unary(&e(a).as_string(), |a| a.chars().rev().collect::<String>()),
-        F::RoundDouble(a) => unary(&e(a).as_f64(), f64::round),
-        F::SignDouble(a) => unary(&e(a).as_f64(), f64::signum),
-        F::SignInt64(a) => unary(&e(a).as_i64(), i64::signum),
-        F::SinDouble(a) => unary(&e(a).as_f64(), f64::sin),
-        F::SinhDouble(a) => unary(&e(a).as_f64(), f64::sinh),
-        F::SqrtDouble(a) => unary(&e(a).as_f64(), f64::sqrt),
-        F::StringFromDate(a) => unary(&e(a).as_date(), string_from_date),
-        F::StringFromTimestamp(a) => unary(&e(a).as_timestamp(), string_from_timestamp),
-        F::TanDouble(a) => unary(&e(a).as_f64(), f64::tan),
-        F::TanhDouble(a) => unary(&e(a).as_f64(), f64::tanh),
-        F::TimestampFromDate(a) => unary(&e(a).as_date(), timestamp_from_date),
-        F::TimestampFromString(a) => unary(&e(a).as_string(), timestamp_from_string),
-        F::TimestampFromUnixMicrosInt64(a) => unary(&e(a).as_i64(), timestamp),
-        F::TruncDouble(a) => unary(&e(a).as_f64(), f64::trunc),
-        F::UnaryMinusDouble(a) => unary(&e(a).as_f64(), |a| -a),
-        F::UnaryMinusInt64(a) => unary(&e(a).as_i64(), |a| -a),
-        F::UnixDate(a) => unary(&e(a).as_date(), |a| a as i64),
-        F::UnixMicrosFromTimestamp(a) => unary(&e(a).as_timestamp(), |a| a),
-        F::UpperString(a) => unary(&e(a).as_string(), |a| a.to_uppercase()),
+        F::Not(a) => unary(&e(a)?.as_bool(), |a| !a),
+        F::ReverseString(a) => unary(&e(a)?.as_string(), |a| a.chars().rev().collect::<String>()),
+        F::RoundDouble(a) => unary(&e(a)?.as_f64(), f64::round),
+        F::SignDouble(a) => unary(&e(a)?.as_f64(), f64::signum),
+        F::SignInt64(a) => unary(&e(a)?.as_i64(), i64::signum),
+        F::SinDouble(a) => unary(&e(a)?.as_f64(), f64::sin),
+        F::SinhDouble(a) => unary(&e(a)?.as_f64(), f64::sinh),
+        F::SqrtDouble(a) => unary(&e(a)?.as_f64(), f64::sqrt),
+        F::StringFromDate(a) => unary(&e(a)?.as_date(), string_from_date),
+        F::StringFromTimestamp(a) => unary(&e(a)?.as_timestamp(), string_from_timestamp),
+        F::TanDouble(a) => unary(&e(a)?.as_f64(), f64::tan),
+        F::TanhDouble(a) => unary(&e(a)?.as_f64(), f64::tanh),
+        F::TimestampFromDate(a) => unary(&e(a)?.as_date(), timestamp_from_date),
+        F::TimestampFromString(a) => unary(&e(a)?.as_string(), timestamp_from_string),
+        F::TimestampFromUnixMicrosInt64(a) => unary(&e(a)?.as_i64(), timestamp),
+        F::TruncDouble(a) => unary(&e(a)?.as_f64(), f64::trunc),
+        F::UnaryMinusDouble(a) => unary(&e(a)?.as_f64(), |a| -a),
+        F::UnaryMinusInt64(a) => unary(&e(a)?.as_i64(), |a| -a),
+        F::UnixDate(a) => unary(&e(a)?.as_date(), |a| a as i64),
+        F::UnixMicrosFromTimestamp(a) => unary(&e(a)?.as_timestamp(), |a| a),
+        F::UpperString(a) => unary(&e(a)?.as_string(), |a| a.to_uppercase()),
         F::DateTruncDate(a, date_part) => {
-            unary(&e(a).as_date(), |a| date_trunc(date(a), *date_part))
+            unary(&e(a)?.as_date(), |a| date_trunc(date(a), *date_part))
         }
         F::ExtractFromDate(a, date_part) => {
-            unary(&e(a).as_date(), |a| extract_from_date(date(a), *date_part))
+            unary(&e(a)?.as_date(), |a| extract_from_date(date(a), *date_part))
         }
-        F::ExtractFromTimestamp(a, date_part) => unary(&e(a).as_timestamp(), |a| {
+        F::ExtractFromTimestamp(a, date_part) => unary(&e(a)?.as_timestamp(), |a| {
             extract_from_timestamp(timestamp(a), *date_part)
         }),
-        F::TimestampTrunc(a, date_part) => unary(&e(a).as_timestamp(), |a| {
+        F::TimestampTrunc(a, date_part) => unary(&e(a)?.as_timestamp(), |a| {
             timestamp_trunc(timestamp(a), *date_part)
         }),
-        F::In(a, varargs) => e(a)
-            .equal_any(varargs.iter().map(|a| e(a)).collect())
-            .as_any(),
-        F::AddDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a + b),
-        F::AddInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a + b),
-        F::And(a, b) => e(a).as_bool().and(&e(b).as_bool()).as_any(),
-        F::Atan2Double(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a.atan2(b)),
-        F::DivideDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a / b),
-        F::DivInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a / b),
-        F::EndsWithString(a, b) => {
-            binary(&e(a).as_string(), &e(b).as_string(), |a, b| a.ends_with(b))
-        }
-        F::Equal(a, b) => e(a).equal(&e(b)).as_any(),
-        F::FormatDate(a, b) => binary(&e(a).as_string(), &e(b).as_date(), |a, b| format_date(a, b)),
-        F::FormatTimestamp(a, b) => binary(&e(a).as_string(), &e(b).as_timestamp(), |a, b| {
+        F::In(a, varargs) => e(a)?.equal_any(es(varargs)?).as_any(),
+        F::AddDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), |a, b| a + b),
+        F::AddInt64(a, b) => binary(&e(a)?.as_i64(), &e(b)?.as_i64(), |a, b| a + b),
+        F::And(a, b) => e(a)?.as_bool().and(&e(b)?.as_bool()).as_any(),
+        F::Atan2Double(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), |a, b| a.atan2(b)),
+        F::DivideDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), |a, b| a / b),
+        F::DivInt64(a, b) => binary(&e(a)?.as_i64(), &e(b)?.as_i64(), |a, b| a / b),
+        F::EndsWithString(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
+            a.ends_with(b)
+        }),
+        F::Equal(a, b) => e(a)?.equal(&e(b)?).as_any(),
+        F::FormatDate(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_date(), |a, b| {
+            format_date(a, b)
+        }),
+        F::FormatTimestamp(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_timestamp(), |a, b| {
             format_timestamp(a, b)
         }),
-        F::Greater(a, b) => e(a).greater(&e(b)).as_any(),
-        F::GreaterOrEqual(a, b) => e(a).greater_equal(&e(b)).as_any(),
-        F::Ifnull(a, b) => e(a).coalesce(&e(b)),
-        F::Is(a, b) => e(a).is(&e(b)).as_any(),
-        F::LeftString(a, b) => binary(&e(a).as_string(), &e(b).as_i64(), |a, b| {
+        F::Greater(a, b) => e(a)?.greater(&e(b)?).as_any(),
+        F::GreaterOrEqual(a, b) => e(a)?.greater_equal(&e(b)?).as_any(),
+        F::Ifnull(a, b) => e(a)?.coalesce(&e(b)?),
+        F::Is(a, b) => e(a)?.is(&e(b)?).as_any(),
+        F::LeftString(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_i64(), |a, b| {
             a.chars().take(b as usize).collect::<String>()
         }),
-        F::Less(a, b) => e(a).less(&e(b)).as_any(),
-        F::LessOrEqual(a, b) => e(a).less_equal(&e(b)).as_any(),
-        F::LogarithmDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a.log(b)),
-        F::LtrimString(a, None) => unary(&e(a).as_string(), |a| a.trim_start()),
-        F::LtrimString(a, Some(b)) => binary(&e(a).as_string(), &e(b).as_string(), ltrim),
-        F::ModInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a % b),
-        F::MultiplyDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a * b),
-        F::MultiplyInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a * b),
-        F::NotEqual(a, b) => e(a).not_equal(&e(b)).as_any(),
-        F::Nullif(a, b) => e(a).null_if(&e(b)),
-        F::Or(a, b) => e(a).as_bool().or(&e(b).as_bool()).as_any(),
-        F::ParseDate(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+        F::Less(a, b) => e(a)?.less(&e(b)?).as_any(),
+        F::LessOrEqual(a, b) => e(a)?.less_equal(&e(b)?).as_any(),
+        F::LogarithmDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), |a, b| a.log(b)),
+        F::LtrimString(a, None) => unary(&e(a)?.as_string(), |a| a.trim_start()),
+        F::LtrimString(a, Some(b)) => binary(&e(a)?.as_string(), &e(b)?.as_string(), ltrim),
+        F::ModInt64(a, b) => binary(&e(a)?.as_i64(), &e(b)?.as_i64(), |a, b| a % b),
+        F::MultiplyDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), |a, b| a * b),
+        F::MultiplyInt64(a, b) => binary(&e(a)?.as_i64(), &e(b)?.as_i64(), |a, b| a * b),
+        F::NotEqual(a, b) => e(a)?.not_equal(&e(b)?).as_any(),
+        F::Nullif(a, b) => e(a)?.null_if(&e(b)?),
+        F::Or(a, b) => e(a)?.as_bool().or(&e(b)?.as_bool()).as_any(),
+        F::ParseDate(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
             parse_date(a, b)
         }),
-        F::ParseTimestamp(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+        F::ParseTimestamp(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
             parse_timestamp(a, b)
         }),
-        F::PowDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), f64::powf),
-        F::RegexpContainsString(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+        F::PowDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), f64::powf),
+        F::RegexpContainsString(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
             regexp_contains(a, b)
         }),
         F::RegexpExtractString(a, b) => {
-            binary_nullable(&e(a).as_string(), &e(b).as_string(), |a, b| match (a, b) {
-                (Some(a), Some(b)) => regexp_extract(a, b),
-                _ => None,
+            binary_nullable(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
+                match (a, b) {
+                    (Some(a), Some(b)) => regexp_extract(a, b),
+                    _ => None,
+                }
             })
         }
-        F::RepeatString(a, b) => binary(&e(a).as_string(), &e(b).as_i64(), |a, b| {
+        F::RepeatString(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_i64(), |a, b| {
             a.repeat(b as usize)
         }),
-        F::RightString(a, b) => binary(&e(a).as_string(), &e(b).as_i64(), right),
-        F::RoundWithDigitsDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_i64(), round),
-        F::RtrimString(a, None) => unary(&e(a).as_string(), |a| a.trim_end()),
-        F::RtrimString(a, Some(b)) => binary(&e(a).as_string(), &e(b).as_string(), rtrim),
-        F::StartsWithString(a, b) => binary(&e(a).as_string(), &e(b).as_string(), |a, b| {
+        F::RightString(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_i64(), right),
+        F::RoundWithDigitsDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_i64(), round),
+        F::RtrimString(a, None) => unary(&e(a)?.as_string(), |a| a.trim_end()),
+        F::RtrimString(a, Some(b)) => binary(&e(a)?.as_string(), &e(b)?.as_string(), rtrim),
+        F::StartsWithString(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
             a.starts_with(b)
         }),
-        F::StringLike(a, b) => binary(&e(a).as_string(), &e(b).as_string(), like),
-        F::StrposString(a, b) => {
-            binary_nullable(&e(a).as_string(), &e(b).as_string(), |a, b| match (a, b) {
+        F::StringLike(a, b) => binary(&e(a)?.as_string(), &e(b)?.as_string(), like),
+        F::StrposString(a, b) => binary_nullable(&e(a)?.as_string(), &e(b)?.as_string(), |a, b| {
+            match (a, b) {
                 (Some(a), Some(b)) => strpos(a, b),
                 _ => None,
-            })
-        }
-        F::SubtractDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_f64(), |a, b| a - b),
-        F::SubtractInt64(a, b) => binary(&e(a).as_i64(), &e(b).as_i64(), |a, b| a - b),
-        F::TrimString(a, None) => unary(&e(a).as_string(), &str::trim),
-        F::TrimString(a, Some(b)) => binary(&e(a).as_string(), &e(b).as_string(), trim),
-        F::TruncWithDigitsDouble(a, b) => binary(&e(a).as_f64(), &e(b).as_i64(), trunc),
-        F::DateAddDate(a, b, date_part) => binary(&e(a).as_date(), &e(b).as_i64(), |a, b| {
+            }
+        }),
+        F::SubtractDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_f64(), |a, b| a - b),
+        F::SubtractInt64(a, b) => binary(&e(a)?.as_i64(), &e(b)?.as_i64(), |a, b| a - b),
+        F::TrimString(a, None) => unary(&e(a)?.as_string(), &str::trim),
+        F::TrimString(a, Some(b)) => binary(&e(a)?.as_string(), &e(b)?.as_string(), trim),
+        F::TruncWithDigitsDouble(a, b) => binary(&e(a)?.as_f64(), &e(b)?.as_i64(), trunc),
+        F::DateAddDate(a, b, date_part) => binary(&e(a)?.as_date(), &e(b)?.as_i64(), |a, b| {
             date_add(date(a), b, *date_part)
         }),
-        F::DateDiffDate(a, b, date_part) => binary(&e(a).as_date(), &e(b).as_date(), |a, b| {
+        F::DateDiffDate(a, b, date_part) => binary(&e(a)?.as_date(), &e(b)?.as_date(), |a, b| {
             date_diff(date(a), date(b), *date_part)
         }),
-        F::DateSubDate(a, b, date_part) => binary(&e(a).as_date(), &e(b).as_i64(), |a, b| {
+        F::DateSubDate(a, b, date_part) => binary(&e(a)?.as_date(), &e(b)?.as_i64(), |a, b| {
             date_sub(date(a), b, *date_part)
         }),
-        F::TimestampAdd(a, b, date_part) => binary(&e(a).as_timestamp(), &e(b).as_i64(), |a, b| {
-            timestamp_add(timestamp(a), b, *date_part)
-        }),
+        F::TimestampAdd(a, b, date_part) => {
+            binary(&e(a)?.as_timestamp(), &e(b)?.as_i64(), |a, b| {
+                timestamp_add(timestamp(a), b, *date_part)
+            })
+        }
         F::TimestampDiff(a, b, date_part) => {
-            binary(&e(a).as_timestamp(), &e(b).as_timestamp(), |a, b| {
+            binary(&e(a)?.as_timestamp(), &e(b)?.as_timestamp(), |a, b| {
                 timestamp_diff(timestamp(a), timestamp(b), *date_part)
             })
         }
-        F::TimestampSub(a, b, date_part) => binary(&e(a).as_timestamp(), &e(b).as_i64(), |a, b| {
-            timestamp_sub(timestamp(a), b, *date_part)
-        }),
+        F::TimestampSub(a, b, date_part) => {
+            binary(&e(a)?.as_timestamp(), &e(b)?.as_i64(), |a, b| {
+                timestamp_sub(timestamp(a), b, *date_part)
+            })
+        }
         F::Between(a, b, c) => {
-            let a = e(a);
-            let b = e(b);
-            let c = e(c);
+            let a = e(a)?;
+            let b = e(b)?;
+            let c = e(c)?;
             let left = a.greater_equal(&b);
             let right = a.less_equal(&c);
             left.and(&right).as_any()
         }
-        F::DateFromYearMonthDay(a, b, c) => {
-            ternary(&e(a).as_i64(), &e(b).as_i64(), &e(c).as_i64(), |a, b, c| {
-                date_from_ymd(a, b, c)
-            })
-        }
-        F::If(a, b, c) => e(a).as_bool().blend(&e(b), &e(c)),
+        F::DateFromYearMonthDay(a, b, c) => ternary(
+            &e(a)?.as_i64(),
+            &e(b)?.as_i64(),
+            &e(c)?.as_i64(),
+            |a, b, c| date_from_ymd(a, b, c),
+        ),
+        F::If(a, b, c) => e(a)?.as_bool().blend(&e(b)?, &e(c)?),
         F::LpadString(a, b, c) => ternary(
-            &e(a).as_string(),
-            &e(b).as_i64(),
-            &e(c).as_string(),
+            &e(a)?.as_string(),
+            &e(b)?.as_i64(),
+            &e(c)?.as_string(),
             |a, b, c| lpad(a, b, c),
         ),
         F::RegexpReplaceString(a, b, c) => ternary(
-            &e(a).as_string(),
-            &e(b).as_string(),
-            &e(c).as_string(),
+            &e(a)?.as_string(),
+            &e(b)?.as_string(),
+            &e(c)?.as_string(),
             |a, b, c| regexp_replace(a, b, c),
         ),
         F::ReplaceString(a, b, c) => ternary(
-            &e(a).as_string(),
-            &e(b).as_string(),
-            &e(c).as_string(),
+            &e(a)?.as_string(),
+            &e(b)?.as_string(),
+            &e(c)?.as_string(),
             |a, b, c| a.replace(b, c),
         ),
         F::RpadString(a, b, c) => ternary(
-            &e(a).as_string(),
-            &e(b).as_i64(),
-            &e(c).as_string(),
+            &e(a)?.as_string(),
+            &e(b)?.as_i64(),
+            &e(c)?.as_string(),
             |a, b, c| rpad(a, b, c),
         ),
-        F::SubstrString(a, b, None) => binary(&e(a).as_string(), &e(b).as_i64(), |a, b| {
+        F::SubstrString(a, b, None) => binary(&e(a)?.as_string(), &e(b)?.as_i64(), |a, b| {
             substr(a, b, i64::MAX)
         }),
         F::SubstrString(a, b, Some(c)) => ternary(
-            &e(a).as_string(),
-            &e(b).as_i64(),
-            &e(c).as_i64(),
+            &e(a)?.as_string(),
+            &e(b)?.as_i64(),
+            &e(c)?.as_i64(),
             |a, b, c| substr(a, b, c),
         ),
         F::CaseNoValue(cases, default) => {
-            let mut acc = e(default);
+            let mut acc = e(default)?;
             for (test, value) in cases.iter().rev() {
-                acc = e(test).as_bool().blend(&e(value), &acc);
+                acc = e(test)?.as_bool().blend(&e(value)?, &acc);
             }
             acc
         }
         F::CaseWithValue(head, cases, default) => {
-            let mut acc = e(default);
-            let expect = e(head);
+            let mut acc = e(default)?;
+            let expect = e(head)?;
             for (found, value) in cases.iter().rev() {
-                acc = expect.equal(&e(found)).blend(&e(value), &acc);
+                acc = expect.equal(&e(found)?).blend(&e(value)?, &acc);
             }
             acc
         }
-    }
+    };
+    Ok(a)
 }
 
 // Math functions.

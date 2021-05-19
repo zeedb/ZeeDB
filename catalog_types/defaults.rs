@@ -196,6 +196,7 @@ pub fn enabled_functions() -> Vec<i32> {
         FunctionSignatureId::FnLogicalAnd as i32, // logical_and
         FunctionSignatureId::FnLogicalOr as i32,  // logical_or
         FunctionSignatureId::FnRand as i32,       // rand() -> double
+        FunctionSignatureId::FnError as i32,      // error
         // Aggregate functions
         FunctionSignatureId::FnCountStar as i32,
         FunctionSignatureId::FnAnyValue as i32,

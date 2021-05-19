@@ -7,15 +7,15 @@ pub fn hash_join(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
-) -> RecordBatch {
+) -> Result<RecordBatch, Exception> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let matched = input.compress(&mask);
     if let Some(unmatched_left) = keep_unmatched_left {
         let matched_indexes = left_index.compress(&mask);
@@ -28,9 +28,9 @@ pub fn hash_join(
         let unmatched_right = right.compress(&unmatched_mask);
         let unmatched_left = RecordBatch::nulls(left.build().schema(), unmatched_right.len());
         let unmatched = RecordBatch::zip(unmatched_left, unmatched_right);
-        RecordBatch::cat(vec![matched, unmatched]).unwrap()
+        Ok(RecordBatch::cat(vec![matched, unmatched]).unwrap())
     } else {
-        matched
+        Ok(matched)
     }
 }
 
@@ -38,45 +38,45 @@ pub fn hash_join_semi(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let right_index_mask = right_index.compress(&mask);
-    right.gather(&right_index_mask)
+    Ok(right.gather(&right_index_mask))
 }
 
 pub fn hash_join_anti(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let matched_indexes = right_index.compress(&mask);
     let mut unmatched_mask = BoolArray::trues(right.len());
     BoolArray::falses(matched_indexes.len()).scatter(&matched_indexes, &mut unmatched_mask);
-    right.compress(&unmatched_mask)
+    Ok(right.compress(&unmatched_mask))
 }
 
 pub fn hash_join_single(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     if right_index.conflict(&mask, right.len()) {
         panic!("Scalar subquery produced more than one element");
     }
@@ -88,7 +88,7 @@ pub fn hash_join_single(
     let left_nulls = RecordBatch::nulls(left.build().schema(), right_unmatched.len());
     let unmatched = RecordBatch::zip(left_nulls, right_unmatched);
     assert!(matched.len() + unmatched.len() >= right.len());
-    RecordBatch::cat(vec![matched, unmatched]).unwrap()
+    Ok(RecordBatch::cat(vec![matched, unmatched]).unwrap())
 }
 
 pub fn hash_join_mark(
@@ -96,40 +96,40 @@ pub fn hash_join_mark(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let matched_indexes = right_index.compress(&mask);
     let mut matched_mask = BoolArray::falses(right.len());
     BoolArray::trues(matched_indexes.len()).scatter(&matched_indexes, &mut matched_mask);
     let right_column =
         RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(matched_mask))]);
-    RecordBatch::zip(right.clone(), right_column)
+    Ok(RecordBatch::zip(right.clone(), right_column))
 }
 
 pub fn unmatched_tuples(
     left: &RecordBatch,
     unmatched_left: &BoolArray,
     right: &Vec<(String, DataType)>,
-) -> RecordBatch {
+) -> Result<RecordBatch, Exception> {
     let unmatched_left = left.compress(unmatched_left);
     let unmatched_right = RecordBatch::nulls(right.clone(), unmatched_left.len());
-    RecordBatch::zip(unmatched_left, unmatched_right)
+    Ok(RecordBatch::zip(unmatched_left, unmatched_right))
 }
 
 pub fn nested_loop(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
-) -> RecordBatch {
+) -> Result<RecordBatch, Exception> {
     let input = cross_product(left, right);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let matched = input.compress(&mask);
     let mut result = vec![matched];
     if let Some(unmatched_left) = keep_unmatched_left {
@@ -142,38 +142,38 @@ pub fn nested_loop(
         let left_nulls = RecordBatch::nulls(left.schema(), right_unmatched.len());
         result.push(RecordBatch::zip(left_nulls, right_unmatched));
     }
-    RecordBatch::cat(result).unwrap()
+    Ok(RecordBatch::cat(result).unwrap())
 }
 
 pub fn nested_loop_semi(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let input = cross_product(left, right);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let right_mask = mask.any(right.len());
-    right.compress(&right_mask)
+    Ok(right.compress(&right_mask))
 }
 
 pub fn nested_loop_anti(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let input = cross_product(left, right);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let right_mask = mask.none(right.len());
-    right.compress(&right_mask)
+    Ok(right.compress(&right_mask))
 }
 
 pub fn nested_loop_single(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let head = cross_product(left, &right);
-    let mask = filter(&head);
+    let mask = filter(&head)?;
     let count = mask.count(right.len());
     if count.greater_scalar(Some(1)).any(1).get(0).unwrap() {
         panic!("Scalar subquery produced more than one element");
@@ -184,20 +184,20 @@ pub fn nested_loop_single(
     let left_nulls = RecordBatch::nulls(left.schema(), right_unmatched.len());
     let unmatched = RecordBatch::zip(left_nulls, right_unmatched);
     assert!(matched.len() + unmatched.len() >= right.len());
-    RecordBatch::cat(vec![matched, unmatched]).unwrap()
+    Ok(RecordBatch::cat(vec![matched, unmatched]).unwrap())
 }
 
 pub fn nested_loop_mark(
     mark: &Column,
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> BoolArray,
-) -> RecordBatch {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+) -> Result<RecordBatch, Exception> {
     let input = cross_product(left, right);
-    let mask = filter(&input);
+    let mask = filter(&input)?;
     let right_mask = mask.any(right.len());
     let right_column = RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(right_mask))]);
-    RecordBatch::zip(right.clone(), right_column)
+    Ok(RecordBatch::zip(right.clone(), right_column))
 }
 
 fn cross_product(left: &RecordBatch, right: &RecordBatch) -> RecordBatch {

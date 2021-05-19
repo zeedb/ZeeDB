@@ -32,6 +32,7 @@ pub enum F {
     DateFromTimestamp(Scalar),
     DateFromUnixDate(Scalar),
     DecimalLogarithmDouble(Scalar),
+    Error(Scalar),
     ExpDouble(Scalar),
     ExtractDateFromTimestamp(Scalar),
     FloorDouble(Scalar),
@@ -152,6 +153,7 @@ impl F {
             | F::DateFromTimestamp(_)
             | F::DateFromUnixDate(_)
             | F::DecimalLogarithmDouble(_)
+            | F::Error(_)
             | F::ExpDouble(_)
             | F::ExtractDateFromTimestamp(_)
             | F::FloorDouble(_)
@@ -285,6 +287,7 @@ impl std::ops::Index<usize> for F {
             | F::DateFromTimestamp(a)
             | F::DateFromUnixDate(a)
             | F::DecimalLogarithmDouble(a)
+            | F::Error(a)
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
@@ -459,6 +462,7 @@ impl std::ops::IndexMut<usize> for F {
             | F::DateFromTimestamp(a)
             | F::DateFromUnixDate(a)
             | F::DecimalLogarithmDouble(a)
+            | F::Error(a)
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
@@ -886,6 +890,7 @@ impl F {
             "ZetaSQL:atan" => unary(args, |a| F::AtanDouble(a)),
             "ZetaSQL:atanh" => unary(args, |a| F::AtanhDouble(a)),
             "ZetaSQL:atan2" => binary(args, |a, b| F::Atan2Double(a, b)),
+            "ZetaSQL:error" => unary(args, |a| F::Error(a)),
             "system:next_val" => unary(args, |a| F::NextVal(a)),
             "system:get_var" => unary(args, |a| F::GetVar(a)),
             "system:is_empty" => unary(args, |a| F::IsEmpty(a)),
@@ -920,6 +925,7 @@ impl F {
             F::DateFromTimestamp(_) => "DateFromTimestamp",
             F::DateFromUnixDate(_) => "DateFromUnixDate",
             F::DecimalLogarithmDouble(_) => "DecimalLogarithmDouble",
+            F::Error(_) => "ExpDouble",
             F::ExpDouble(_) => "ExpDouble",
             F::ExtractDateFromTimestamp(_) => "ExtractDateFromTimestamp",
             F::FloorDouble(_) => "FloorDouble",
@@ -1051,6 +1057,7 @@ impl F {
             | F::DateFromTimestamp(a)
             | F::DateFromUnixDate(a)
             | F::DecimalLogarithmDouble(a)
+            | F::Error(a)
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
@@ -1191,6 +1198,7 @@ impl F {
             | F::Between { .. }
             | F::EndsWithString { .. }
             | F::Equal { .. }
+            | F::Error { .. }
             | F::Greater { .. }
             | F::GreaterOrEqual { .. }
             | F::In { .. }
@@ -1341,6 +1349,7 @@ impl F {
             F::DateFromTimestamp(a) => F::DateFromTimestamp(f(a)),
             F::DateFromUnixDate(a) => F::DateFromUnixDate(f(a)),
             F::DecimalLogarithmDouble(a) => F::DecimalLogarithmDouble(f(a)),
+            F::Error(a) => F::Error(f(a)),
             F::ExpDouble(a) => F::ExpDouble(f(a)),
             F::ExtractDateFromTimestamp(a) => F::ExtractDateFromTimestamp(f(a)),
             F::FloorDouble(a) => F::FloorDouble(f(a)),

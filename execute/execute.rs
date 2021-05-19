@@ -430,7 +430,7 @@ impl Node {
                     .map(|c| (c.name.clone(), c.canonical_name()))
                     .collect();
                 let input = page.select(&select_names).rename(&query_names);
-                let boolean = crate::eval::all(predicates, &input, state);
+                let boolean = crate::eval::all(predicates, &input, state)?;
                 Ok(input.compress(&boolean))
             }
             Node::IndexScan {
@@ -444,11 +444,11 @@ impl Node {
             } => {
                 // Evaluate lookup scalars.
                 let input = input.next(state)?;
-                let columns: Vec<AnyArray> = lookup
+                let columns: Result<Vec<_>, _> = lookup
                     .iter()
                     .map(|scalar| crate::eval::eval(scalar, &input, state))
                     .collect();
-                let keys = crate::index::byte_key_prefix(columns.iter().map(|c| c).collect());
+                let keys = crate::index::byte_key_prefix(columns?.iter().map(|c| c).collect());
                 // Look up scalars in the index.
                 let sorted_tids = {
                     let storage = state.context[STORAGE_KEY].lock().unwrap();
@@ -514,12 +514,12 @@ impl Node {
                 if *include_existing {
                     output = RecordBatch::zip(output, input);
                 }
-                let boolean = crate::eval::all(predicates, &output, state);
+                let boolean = crate::eval::all(predicates, &output, state)?;
                 Ok(output.compress(&boolean))
             }
             Node::Filter { predicates, input } => {
                 let input = input.next(state)?;
-                let boolean = crate::eval::all(predicates, &input, state);
+                let boolean = crate::eval::all(predicates, &input, state)?;
                 Ok(input.compress(&boolean))
             }
             Node::Out { projects, input } => {
@@ -546,7 +546,7 @@ impl Node {
                 for (scalar, column) in projects {
                     columns.push((
                         column.canonical_name(),
-                        crate::eval::eval(scalar, &input, state),
+                        crate::eval::eval(scalar, &input, state)?,
                     ));
                 }
                 Ok(RecordBatch::new(columns))
@@ -572,21 +572,21 @@ impl Node {
                     Ok(right) => {
                         let filter =
                             |input: &RecordBatch| crate::eval::all(predicates, input, state);
-                        Ok(crate::join::nested_loop(
+                        crate::join::nested_loop(
                             build_left.as_ref().unwrap(),
                             &right,
                             filter,
                             unmatched_left.as_mut(),
                             true,
-                        ))
+                        )
                     }
                     Err(Exception::End) => match unmatched_left.take() {
                         // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
-                        Some(unmatched_left) => Ok(crate::join::unmatched_tuples(
+                        Some(unmatched_left) => crate::join::unmatched_tuples(
                             build_left.as_ref().unwrap(),
                             &unmatched_left,
                             &right_schema,
-                        )),
+                        ),
                         // The second time we receive 'Empty' from the right side, we are truly finished.
                         None => Err(Exception::End),
                     },
@@ -611,42 +611,38 @@ impl Node {
                     |input: &RecordBatch| crate::eval::all(join.predicates(), input, state);
                 // Join a batch of rows to the left (build) side.
                 match &join {
-                    Join::Inner(_) => Ok(crate::join::nested_loop(
+                    Join::Inner(_) => crate::join::nested_loop(
                         build_left.as_ref().unwrap(),
                         &right,
                         filter,
                         None,
                         false,
-                    )),
-                    Join::Right(_) => Ok(crate::join::nested_loop(
+                    ),
+                    Join::Right(_) => crate::join::nested_loop(
                         build_left.as_ref().unwrap(),
                         &right,
                         filter,
                         None,
                         true,
-                    )),
+                    ),
                     Join::Outer(_) => panic!("outer joins are handled separately"),
-                    Join::Semi(_) => Ok(crate::join::nested_loop_semi(
+                    Join::Semi(_) => {
+                        crate::join::nested_loop_semi(build_left.as_ref().unwrap(), &right, filter)
+                    }
+                    Join::Anti(_) => {
+                        crate::join::nested_loop_anti(build_left.as_ref().unwrap(), &right, filter)
+                    }
+                    Join::Single(_) => crate::join::nested_loop_single(
                         build_left.as_ref().unwrap(),
                         &right,
                         filter,
-                    )),
-                    Join::Anti(_) => Ok(crate::join::nested_loop_anti(
-                        build_left.as_ref().unwrap(),
-                        &right,
-                        filter,
-                    )),
-                    Join::Single(_) => Ok(crate::join::nested_loop_single(
-                        build_left.as_ref().unwrap(),
-                        &right,
-                        filter,
-                    )),
-                    Join::Mark(mark, _) => Ok(crate::join::nested_loop_mark(
+                    ),
+                    Join::Mark(mark, _) => crate::join::nested_loop_mark(
                         mark,
                         build_left.as_ref().unwrap(),
                         &right,
                         filter,
-                    )),
+                    ),
                 }
             }
             Node::HashJoin {
@@ -682,22 +678,22 @@ impl Node {
                             };
                         let filter =
                             |input: &RecordBatch| crate::eval::all(predicates, input, state);
-                        Ok(crate::join::hash_join(
+                        crate::join::hash_join(
                             build_left.as_ref().unwrap(),
                             &right,
                             &partition_right,
                             filter,
                             Some(unmatched_left.as_mut().unwrap()),
                             true,
-                        ))
+                        )
                     }
                     Err(Exception::End) => match unmatched_left.take() {
                         // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
-                        Some(unmatched_left) => Ok(crate::join::unmatched_tuples(
+                        Some(unmatched_left) => crate::join::unmatched_tuples(
                             build_left.as_ref().unwrap().build(),
                             &unmatched_left,
                             &right_schema,
-                        )),
+                        ),
                         // The second time we receive 'Empty' from the right side, we are truly finished.
                         None => Err(Exception::End),
                     },
@@ -734,48 +730,48 @@ impl Node {
                     |input: &RecordBatch| crate::eval::all(join.predicates(), input, state);
                 // Join a batch of rows to the left (build) side.
                 match &join {
-                    Join::Inner(_) => Ok(crate::join::hash_join(
+                    Join::Inner(_) => crate::join::hash_join(
                         build_left.as_ref().unwrap(),
                         &right,
                         &partition_right,
                         filter,
                         None,
                         false,
-                    )),
-                    Join::Right(_) => Ok(crate::join::hash_join(
+                    ),
+                    Join::Right(_) => crate::join::hash_join(
                         build_left.as_ref().unwrap(),
                         &right,
                         &partition_right,
                         filter,
                         None,
                         true,
-                    )),
+                    ),
                     Join::Outer(_) => panic!("outer joins are handled separately"),
-                    Join::Semi(_) => Ok(crate::join::hash_join_semi(
+                    Join::Semi(_) => crate::join::hash_join_semi(
                         build_left.as_ref().unwrap(),
                         &right,
                         &partition_right,
                         filter,
-                    )),
-                    Join::Anti(_) => Ok(crate::join::hash_join_anti(
+                    ),
+                    Join::Anti(_) => crate::join::hash_join_anti(
                         build_left.as_ref().unwrap(),
                         &right,
                         &partition_right,
                         filter,
-                    )),
-                    Join::Single(_) => Ok(crate::join::hash_join_single(
+                    ),
+                    Join::Single(_) => crate::join::hash_join_single(
                         build_left.as_ref().unwrap(),
                         &right,
                         &partition_right,
                         filter,
-                    )),
-                    Join::Mark(mark, _) => Ok(crate::join::hash_join_mark(
+                    ),
+                    Join::Mark(mark, _) => crate::join::hash_join_mark(
                         mark,
                         build_left.as_ref().unwrap(),
                         &right,
                         &partition_right,
                         filter,
-                    )),
+                    ),
                 }
             }
             Node::CreateTempTable {
@@ -996,7 +992,7 @@ impl Node {
                 for i in 0..columns.len() {
                     let mut builder = vec![];
                     for value in &values[i] {
-                        let value = crate::eval::eval(value, &input, state);
+                        let value = crate::eval::eval(value, &input, state)?;
                         if value.len() != 1 {
                             panic!("input to values produced {} rows", value.len());
                         }
@@ -1057,7 +1053,7 @@ impl Node {
                 input,
             } => {
                 let input = input.next(state)?;
-                let value = crate::eval::eval(value, &input, state);
+                let value = crate::eval::eval(value, &input, state)?;
                 state.variables.insert(variable.clone(), value);
                 Err(Exception::End)
             }
@@ -1065,7 +1061,7 @@ impl Node {
                 let input = input.next(state)?;
                 match procedure {
                     Procedure::CreateTable(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64();
+                        let ids = crate::eval::eval(id, &input, state)?.as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.context[STORAGE_KEY].lock().unwrap().create_table(id);
@@ -1073,7 +1069,7 @@ impl Node {
                         }
                     }
                     Procedure::DropTable(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64();
+                        let ids = crate::eval::eval(id, &input, state)?.as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.context[STORAGE_KEY].lock().unwrap().drop_table(id);
@@ -1081,7 +1077,7 @@ impl Node {
                         }
                     }
                     Procedure::CreateIndex(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64();
+                        let ids = crate::eval::eval(id, &input, state)?.as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.context[STORAGE_KEY].lock().unwrap().create_index(id);
@@ -1089,7 +1085,7 @@ impl Node {
                         }
                     }
                     Procedure::DropIndex(id) => {
-                        let ids = crate::eval::eval(id, &input, state).as_i64();
+                        let ids = crate::eval::eval(id, &input, state)?.as_i64();
                         for i in 0..ids.len() {
                             if let Some(id) = ids.get(i) {
                                 state.context[STORAGE_KEY].lock().unwrap().drop_index(id);
@@ -1097,16 +1093,16 @@ impl Node {
                         }
                     }
                     Procedure::SetVar(name, value) => {
-                        let name = crate::eval::eval(name, &input, state)
+                        let name = crate::eval::eval(name, &input, state)?
                             .as_string()
                             .get(0)
                             .unwrap()
                             .to_string();
-                        let value = crate::eval::eval(value, &input, state);
+                        let value = crate::eval::eval(value, &input, state)?;
                         state.variables.insert(name, value);
                     }
                     Procedure::Assert(test, description) => {
-                        let test = crate::eval::eval(test, &input, state)
+                        let test = crate::eval::eval(test, &input, state)?
                             .as_bool()
                             .get(0)
                             .unwrap_or(false);
