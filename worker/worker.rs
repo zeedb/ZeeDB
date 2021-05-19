@@ -8,7 +8,7 @@ use context::{env_var, Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
 use kernel::{AnyArray, RecordBatch};
 use protos::{
     worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
-    ColumnStatisticsRequest, ColumnStatisticsResponse, ExchangeRequest, Page, RecordStream,
+    ColumnStatisticsRequest, ColumnStatisticsResponse, ExchangeRequest, Page, PageStream,
 };
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{Exception, RpcRemoteExecution, REMOTE_EXECUTION_KEY};
@@ -59,9 +59,9 @@ impl Default for WorkerNode {
 
 #[async_trait]
 impl Worker for WorkerNode {
-    type BroadcastStream = RecordStream;
+    type BroadcastStream = PageStream;
 
-    type ExchangeStream = RecordStream;
+    type ExchangeStream = PageStream;
 
     async fn broadcast(
         &self,
@@ -102,7 +102,7 @@ impl Worker for WorkerNode {
                 }
             }
         };
-        Ok(Response::new(RecordStream { receiver }))
+        Ok(Response::new(PageStream { receiver }))
     }
 
     async fn exchange(
@@ -163,7 +163,7 @@ impl Worker for WorkerNode {
                 }
             }
         };
-        Ok(Response::new(RecordStream { receiver }))
+        Ok(Response::new(PageStream { receiver }))
     }
 
     async fn approx_cardinality(

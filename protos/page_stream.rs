@@ -6,12 +6,11 @@ use tonic::Status;
 
 use crate::Page;
 
-// TODO name conflicts with other RecordStream.
-pub struct RecordStream {
+pub struct PageStream {
     pub receiver: Receiver<Page>,
 }
 
-impl Stream for RecordStream {
+impl Stream for PageStream {
     type Item = Result<Page, Status>;
 
     fn poll_next(
