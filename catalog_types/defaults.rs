@@ -67,6 +67,7 @@ pub fn supported_statement_kinds() -> Vec<i32> {
         ResolvedNodeKind::ResolvedCallStmt as i32,
         ResolvedNodeKind::ResolvedAggregateHavingModifier as i32,
         ResolvedNodeKind::ResolvedExplainStmt as i32,
+        ResolvedNodeKind::ResolvedAssertStmt as i32,
     ]
 }
 

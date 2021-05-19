@@ -97,6 +97,10 @@ impl Heap {
         }
         Ok(())
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.pages.is_empty()
+    }
 }
 
 impl std::fmt::Debug for Heap {

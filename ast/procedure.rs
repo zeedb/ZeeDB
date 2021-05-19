@@ -11,6 +11,7 @@ pub enum Procedure {
     CreateIndex(Scalar),
     DropIndex(Scalar),
     SetVar(Scalar, Scalar),
+    Assert(Scalar, String),
 }
 
 impl Procedure {
@@ -19,7 +20,8 @@ impl Procedure {
             Procedure::CreateTable(x)
             | Procedure::DropTable(x)
             | Procedure::CreateIndex(x)
-            | Procedure::DropIndex(x) => x.collect_references(set),
+            | Procedure::DropIndex(x)
+            | Procedure::Assert(x, _) => x.collect_references(set),
             Procedure::SetVar(x, y) => {
                 x.collect_references(set);
                 y.collect_references(set);
@@ -36,6 +38,7 @@ impl fmt::Display for Procedure {
             Procedure::CreateIndex(id) => write!(f, "create_index {}", id),
             Procedure::DropIndex(id) => write!(f, "drop_index {}", id),
             Procedure::SetVar(name, value) => write!(f, "set_var {} {}", name, value),
+            Procedure::Assert(test, description) => write!(f, "assert {} {}", test, description),
         }
     }
 }

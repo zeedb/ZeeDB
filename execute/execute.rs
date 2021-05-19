@@ -1083,6 +1083,15 @@ impl Node {
                         let value = crate::eval::eval(value, &input, state);
                         state.variables.insert(name, value);
                     }
+                    Procedure::Assert(test, description) => {
+                        let test = crate::eval::eval(test, &input, state)
+                            .as_bool()
+                            .get(0)
+                            .unwrap_or(false);
+                        if !test {
+                            panic!("{}", description)
+                        }
+                    }
                 };
                 None
             }

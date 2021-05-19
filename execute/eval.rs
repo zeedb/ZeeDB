@@ -74,6 +74,13 @@ fn eval_function(function: &F, input: &RecordBatch, state: &QueryState) -> AnyAr
         F::ExpDouble(a) => unary(&e(a).as_f64(), f64::exp),
         F::ExtractDateFromTimestamp(a) => unary(&e(a).as_timestamp(), date_from_timestamp),
         F::FloorDouble(a) => unary(&e(a).as_f64(), f64::floor),
+        F::IsEmpty(a) => unary(&e(a).as_i64(), |a| {
+            state.context[STORAGE_KEY]
+                .lock()
+                .unwrap()
+                .table(a)
+                .is_empty()
+        }),
         F::IsFalse(a) => unary_nullable(&e(a).as_bool(), |a| Some(a == Some(false))),
         F::IsInf(a) => unary(&e(a).as_f64(), f64::is_infinite),
         F::IsNan(a) => unary(&e(a).as_f64(), f64::is_nan),

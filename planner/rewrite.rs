@@ -95,6 +95,9 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 lines.push(format!("call set_var('column_id', (select column_id from metadata.column where table_id = get_var('table_id') and column_name = {:?}));", column_name));
                 lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (get_var('next_index_id'), get_var('column_id'), {:?});", index_order));
             }
+            lines.push(
+                format!("assert (select metadata.is_empty(get_var('table_id'))) as 'Cannot create index because table {} is not empty.';", table.path.last().unwrap().escape_debug()),
+            );
             lines.push("call metadata.create_index(get_var('next_index_id'));".to_string());
             let sql = lines.join("\n");
             Ok(LogicalRewrite { sql })
@@ -243,7 +246,8 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         Procedure::CreateTable(x)
         | Procedure::DropTable(x)
         | Procedure::CreateIndex(x)
-        | Procedure::DropIndex(x) => visit(x),
+        | Procedure::DropIndex(x)
+        | Procedure::Assert(x, _) => visit(x),
         Procedure::SetVar(x, y) => visit(x) || visit(y),
     };
     let did_rewrite = match &mut expr {

@@ -167,11 +167,18 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
 }
 
 fn metadata_custom_functions() -> Vec<FunctionProto> {
-    vec![simple_function(
-        "next_val".to_string(),
-        vec![TypeKind::TypeInt64],
-        TypeKind::TypeInt64,
-    )]
+    vec![
+        simple_function(
+            "next_val".to_string(),
+            vec![TypeKind::TypeInt64],
+            TypeKind::TypeInt64,
+        ),
+        simple_function(
+            "is_empty".to_string(),
+            vec![TypeKind::TypeInt64],
+            TypeKind::TypeBool,
+        ),
+    ]
 }
 
 fn metadata_procedures() -> Vec<ProcedureProto> {

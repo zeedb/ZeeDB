@@ -35,6 +35,7 @@ impl Converter {
             ResolvedCreateDatabaseStmtNode(q) => self.create_database(q),
             ResolvedCallStmtNode(q) => self.call(q),
             ResolvedExplainStmtNode(q) => self.explain(q),
+            ResolvedAssertStmtNode(q) => self.assert(q),
             other => panic!("{:?}", other),
         }
     }
@@ -800,6 +801,19 @@ impl Converter {
     fn explain(&mut self, q: &ResolvedExplainStmtProto) -> Expr {
         LogicalExplain {
             input: Box::new(self.any_stmt(q.statement.get())),
+        }
+    }
+
+    fn assert(&mut self, q: &ResolvedAssertStmtProto) -> Expr {
+        let mut input = Expr::LogicalSingleGet;
+        LogicalCall {
+            procedure: Procedure::Assert(
+                self.expr(q.expression.get(), &mut input),
+                q.description
+                    .clone()
+                    .unwrap_or("Assert failed.".to_string()),
+            ),
+            input: Box::new(input),
         }
     }
 

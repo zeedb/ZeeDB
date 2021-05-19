@@ -36,6 +36,7 @@ pub enum F {
     ExtractDateFromTimestamp(Scalar),
     FloorDouble(Scalar),
     GetVar(Scalar),
+    IsEmpty(Scalar),
     IsFalse(Scalar),
     IsInf(Scalar),
     IsNan(Scalar),
@@ -155,6 +156,7 @@ impl F {
             | F::ExtractDateFromTimestamp(_)
             | F::FloorDouble(_)
             | F::GetVar(_)
+            | F::IsEmpty(_)
             | F::IsFalse(_)
             | F::IsInf(_)
             | F::IsNan(_)
@@ -287,6 +289,7 @@ impl std::ops::Index<usize> for F {
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
             | F::GetVar(a)
+            | F::IsEmpty(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -460,6 +463,7 @@ impl std::ops::IndexMut<usize> for F {
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
             | F::GetVar(a)
+            | F::IsEmpty(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -884,6 +888,7 @@ impl F {
             "ZetaSQL:atan2" => binary(args, |a, b| F::Atan2Double(a, b)),
             "system:next_val" => unary(args, |a| F::NextVal(a)),
             "system:get_var" => unary(args, |a| F::GetVar(a)),
+            "system:is_empty" => unary(args, |a| F::IsEmpty(a)),
             other => panic!("{} is not a known function name", other),
         }
     }
@@ -919,6 +924,7 @@ impl F {
             F::ExtractDateFromTimestamp(_) => "ExtractDateFromTimestamp",
             F::FloorDouble(_) => "FloorDouble",
             F::GetVar(_) => "GetVar",
+            F::IsEmpty(_) => "IsEmpty",
             F::IsFalse(_) => "IsFalse",
             F::IsInf(_) => "IsInf",
             F::IsNan(_) => "IsNan",
@@ -1049,6 +1055,7 @@ impl F {
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
             | F::GetVar(a)
+            | F::IsEmpty(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -1188,6 +1195,7 @@ impl F {
             | F::GreaterOrEqual { .. }
             | F::In { .. }
             | F::Is { .. }
+            | F::IsEmpty { .. }
             | F::IsFalse { .. }
             | F::IsInf { .. }
             | F::IsNan { .. }
@@ -1337,6 +1345,7 @@ impl F {
             F::ExtractDateFromTimestamp(a) => F::ExtractDateFromTimestamp(f(a)),
             F::FloorDouble(a) => F::FloorDouble(f(a)),
             F::GetVar(a) => F::GetVar(f(a)),
+            F::IsEmpty(a) => F::IsEmpty(f(a)),
             F::IsFalse(a) => F::IsFalse(f(a)),
             F::IsInf(a) => F::IsInf(f(a)),
             F::IsNan(a) => F::IsNan(f(a)),
