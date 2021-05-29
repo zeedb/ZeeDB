@@ -351,7 +351,7 @@ fn test_regexp_replace() {
         ),
     ];
     for (value, regexp, replacement, expect) in cases {
-        let found = regexp_replace(value, regexp, replacement);
+        let found = regexp_replace(value, regexp, replacement).unwrap().unwrap();
         assert_eq!(
             expect, found,
             "regexp_replace({}, {}, {})",

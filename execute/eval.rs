@@ -293,13 +293,11 @@ fn eval_function(
                 .as_string()
                 .tri_map(&e(b)?.as_i64(), &e(c)?.as_string(), |a, b, c| lpad(a, b, c))
         }
-        F::RegexpReplaceString(a, b, c) => {
-            e(a)?
-                .as_string()
-                .tri_map(&e(b)?.as_string(), &e(c)?.as_string(), |a, b, c| {
-                    regexp_replace(a, b, c)
-                })
-        }
+        F::RegexpReplaceString(a, b, c) => e(a)?.as_string().tri_map(
+            &e(b)?.as_string(),
+            &e(c)?.as_string(),
+            |a: &str, b: &str, c: &str| regexp_replace(a, b, c),
+        ),
         F::ReplaceString(a, b, c) => e(a)?.as_string().tri_map(
             &e(b)?.as_string(),
             &e(c)?.as_string(),
@@ -460,7 +458,18 @@ fn regexp_contains(value: &str, regexp: &str) -> bool {
     Regex::new(regexp).expect(regexp).is_match(value)
 }
 
-pub(crate) fn regexp_replace(value: &str, regexp: &str, replacement: &str) -> String {
+pub(crate) fn regexp_replace(
+    value: &str,
+    regexp: &str,
+    replacement: &str,
+) -> Result<Option<String>, Exception> {
+    let regexp = match Regex::new(regexp) {
+        Ok(regexp) => regexp,
+        Err(err) => return Err(Exception::SqlError(err.to_string())),
+    };
+    if let Some(err) = check_replacement(replacement) {
+        return Err(err);
+    }
     let rewrite = |captures: &Captures| -> String {
         let mut buffer = String::new();
         let mut i = 0;
@@ -489,10 +498,38 @@ pub(crate) fn regexp_replace(value: &str, regexp: &str, replacement: &str) -> St
         }
         buffer
     };
-    Regex::new(regexp)
-        .expect(regexp)
-        .replace_all(value, rewrite)
-        .to_string()
+    Ok(Some(regexp.replace_all(value, rewrite).to_string()))
+}
+
+fn check_replacement(replacement: &str) -> Option<Exception> {
+    let mut i = 0;
+    let chars: Vec<_> = replacement.chars().collect();
+    while i < chars.len() {
+        while i < chars.len() && chars[i] != '\\' {
+            i += 1;
+        }
+        if i < chars.len() {
+            i += 1;
+            if i < chars.len() {
+                let c = chars[i];
+                if let Some(_) = c.to_digit(10) {
+                    // Nothing to do
+                } else if c == '\\' {
+                    // Nothing to do
+                } else {
+                    return Some(Exception::SqlError(
+                        "Invalid REGEXP_REPLACE pattern".to_string(),
+                    ));
+                }
+                i += 1;
+            } else {
+                return Some(Exception::SqlError(
+                    "REGEXP_REPLACE pattern ends with \\".to_string(),
+                ));
+            }
+        }
+    }
+    None
 }
 
 pub(crate) fn like(value: &str, pattern: &str) -> bool {

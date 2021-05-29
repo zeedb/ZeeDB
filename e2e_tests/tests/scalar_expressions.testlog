@@ -535,6 +535,12 @@ foo
 $col1           
 (h1)Heading(/h1)
 
+> select regexp_replace('foo', r'(foo)', '\\bar')
+ERROR: Invalid REGEXP_REPLACE pattern
+
+> select regexp_replace('foo', r'(foo)', 'bar\\')
+ERROR: REGEXP_REPLACE pattern ends with \
+
 > select lpad('foo', 6)
 $col1 
    foo
