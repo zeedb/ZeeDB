@@ -144,7 +144,9 @@ fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
             ),
             (
                 "sequence_name".to_string(),
-                AnyArray::String(StringArray::from_values(vec!["catalog", "table", "index"])),
+                AnyArray::String(StringArray::from_str_values(vec![
+                    "catalog", "table", "index",
+                ])),
             ),
         ]),
     )]

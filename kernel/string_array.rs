@@ -35,7 +35,7 @@ impl StringArray {
         for i in 0..arrays[0].len() {
             let mut valid = true;
             for j in 0..arrays.len() {
-                if let Some(next) = arrays[j].get(i) {
+                if let Some(next) = arrays[j].get_str(i) {
                     builder.buffer.push_str(next);
                 } else {
                     valid = false;
@@ -45,6 +45,43 @@ impl StringArray {
             builder.offsets.push(builder.buffer.len() as i32);
         }
         builder
+    }
+
+    pub fn from_str_values(values: Vec<&str>) -> Self {
+        let mut into = Self::default();
+        for value in values {
+            into.push_str(Some(value));
+        }
+        into
+    }
+
+    pub fn from_str_options(values: Vec<Option<&str>>) -> Self {
+        let mut into = Self::default();
+        for value in values {
+            into.push_str(value);
+        }
+        into
+    }
+
+    pub fn get_str(&self, index: usize) -> Option<&str> {
+        if self.is_valid.get(index) {
+            let begin = self.offsets[index] as usize;
+            let end = self.offsets[index + 1] as usize;
+            Some(&self.buffer[begin..end])
+        } else {
+            None
+        }
+    }
+
+    pub fn push_str(&mut self, value: Option<&str>) {
+        if let Some(value) = value {
+            self.buffer.push_str(value);
+            self.is_valid.push(true);
+            self.offsets.push(self.buffer.len() as i32);
+        } else {
+            self.is_valid.push(false);
+            self.offsets.push(self.buffer.len() as i32);
+        }
     }
 
     pub fn byte_len(&self) -> usize {
@@ -99,23 +136,23 @@ impl StringArray {
     // Casts.
 
     pub fn cast_bool(&self) -> BoolArray {
-        cast_operator!(self, value, value.parse::<bool>().unwrap(), BoolArray)
+        cast_from_string!(self, value, value.parse::<bool>().unwrap(), BoolArray)
     }
 
     pub fn cast_i64(&self) -> I64Array {
-        cast_operator!(self, value, value.parse::<i64>().unwrap(), I64Array)
+        cast_from_string!(self, value, value.parse::<i64>().unwrap(), I64Array)
     }
 
     pub fn cast_f64(&self) -> F64Array {
-        cast_operator!(self, value, value.parse::<f64>().unwrap(), F64Array)
+        cast_from_string!(self, value, value.parse::<f64>().unwrap(), F64Array)
     }
 
     pub fn cast_date(&self) -> DateArray {
-        cast_operator!(self, value, crate::dates::parse_date(value), DateArray)
+        cast_from_string!(self, value, crate::dates::parse_date(value), DateArray)
     }
 
     pub fn cast_timestamp(&self) -> TimestampArray {
-        cast_operator!(
+        cast_from_string!(
             self,
             value,
             crate::dates::parse_timestamp(value),
@@ -124,16 +161,18 @@ impl StringArray {
     }
 }
 
-impl<'a> Array<'a> for StringArray {
-    type Element = &'a str;
-
-    fn new() -> Self {
+impl Default for StringArray {
+    fn default() -> Self {
         Self {
             buffer: String::new(),
             offsets: vec![0],
             is_valid: Bitmask::new(),
         }
     }
+}
+
+impl Array for StringArray {
+    type Element = String;
 
     fn with_capacity(capacity: usize) -> Self {
         const STRING_LEN_ESTIMATE: usize = 10;
@@ -158,11 +197,11 @@ impl<'a> Array<'a> for StringArray {
         self.offsets.len() - 1
     }
 
-    fn get(&'a self, index: usize) -> Option<Self::Element> {
+    fn get(&self, index: usize) -> Option<Self::Element> {
         if self.is_valid.get(index) {
             let begin = self.offsets[index] as usize;
             let end = self.offsets[index + 1] as usize;
-            Some(&self.buffer[begin..end])
+            Some(self.buffer[begin..end].to_string())
         } else {
             None
         }
@@ -196,7 +235,7 @@ impl<'a> Array<'a> for StringArray {
 
     fn push(&mut self, value: Option<Self::Element>) {
         if let Some(value) = value {
-            self.buffer.push_str(value);
+            self.buffer.push_str(value.as_str());
             self.is_valid.push(true);
             self.offsets.push(self.buffer.len() as i32);
         } else {

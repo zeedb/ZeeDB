@@ -70,3 +70,29 @@ macro_rules! cast_operator {
         result
     }};
 }
+
+macro_rules! cast_from_string {
+    ($self:ident, $value:ident, $cast:expr, $T:ident) => {{
+        let mut result = $T::with_capacity($self.len());
+        for i in 0..$self.len() {
+            match $self.get_str(i) {
+                Some($value) => result.push(Some($cast)),
+                None => result.push(None),
+            }
+        }
+        result
+    }};
+}
+
+macro_rules! cast_to_string {
+    ($self:ident, $value:ident, $cast:expr, $T:ident) => {{
+        let mut result = $T::with_capacity($self.len());
+        for i in 0..$self.len() {
+            match $self.get(i) {
+                Some($value) => result.push_str(Some($cast)),
+                None => result.push_str(None),
+            }
+        }
+        result
+    }};
+}

@@ -471,7 +471,7 @@ impl Node {
                     .bitmap_scan(&sorted_tids);
                 /// Returns a slice of the first n tids that have page-id pid.
                 fn rids(tids: &[i64], pid: usize) -> I32Array {
-                    let mut rids = I32Array::new();
+                    let mut rids = I32Array::default();
                     for tid in tids {
                         if *tid as usize / PAGE_SIZE > pid {
                             break;
@@ -1120,9 +1120,7 @@ impl Node {
                     *finished = true;
                     Ok(RecordBatch::new(vec![(
                         "plan".to_string(),
-                        AnyArray::String(StringArray::from_values(vec![input
-                            .to_string()
-                            .as_str()])),
+                        AnyArray::String(StringArray::from_values(vec![input.to_string()])),
                     )]))
                 }
             }

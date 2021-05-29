@@ -47,7 +47,7 @@ impl Value {
                 AnyArray::Timestamp(TimestampArray::from_options(vec![*value].repeat(len)))
             }
             Value::String(value) => AnyArray::String(
-                StringArray::from_options(vec![value.as_ref().map(|s| s.as_str())]).repeat(len),
+                StringArray::from_str_options(vec![value.as_ref().map(|s| s.as_str())]).repeat(len),
             ),
             Value::EnumValue(_) => panic!("Enum values have no array representation"),
         }

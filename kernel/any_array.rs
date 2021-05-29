@@ -95,12 +95,12 @@ impl AnyArray {
     // Constructors.
     pub fn new(data_type: DataType) -> Self {
         match data_type {
-            DataType::Bool => AnyArray::Bool(BoolArray::new()),
-            DataType::I64 => AnyArray::I64(I64Array::new()),
-            DataType::F64 => AnyArray::F64(F64Array::new()),
-            DataType::Date => AnyArray::Date(DateArray::new()),
-            DataType::Timestamp => AnyArray::Timestamp(TimestampArray::new()),
-            DataType::String => AnyArray::String(StringArray::new()),
+            DataType::Bool => AnyArray::Bool(BoolArray::default()),
+            DataType::I64 => AnyArray::I64(I64Array::default()),
+            DataType::F64 => AnyArray::F64(F64Array::default()),
+            DataType::Date => AnyArray::Date(DateArray::default()),
+            DataType::Timestamp => AnyArray::Timestamp(TimestampArray::default()),
+            DataType::String => AnyArray::String(StringArray::default()),
         }
     }
 

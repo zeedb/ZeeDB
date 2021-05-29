@@ -278,7 +278,7 @@ impl BoolArray {
     }
 
     pub fn cast_string(&self) -> StringArray {
-        cast_operator!(
+        cast_to_string!(
             self,
             value,
             if value { "true" } else { "false" },
@@ -287,15 +287,17 @@ impl BoolArray {
     }
 }
 
-impl<'a> Array<'a> for BoolArray {
-    type Element = bool;
-
-    fn new() -> Self {
+impl Default for BoolArray {
+    fn default() -> Self {
         Self {
             values: Bitmask::new(),
             is_valid: Bitmask::new(),
         }
     }
+}
+
+impl Array for BoolArray {
+    type Element = bool;
 
     fn with_capacity(capacity: usize) -> Self {
         Self {
@@ -315,7 +317,7 @@ impl<'a> Array<'a> for BoolArray {
         self.values.len()
     }
 
-    fn get(&'a self, index: usize) -> Option<bool> {
+    fn get(&self, index: usize) -> Option<bool> {
         if self.is_valid.get(index) {
             Some(self.values.get(index))
         } else {

@@ -37,7 +37,7 @@ fn test_fixed_types() {
         ),
     ]);
     let mut offset = 0;
-    let mut tids = I64Array::new();
+    let mut tids = I64Array::default();
     page.insert(&input, 1000, &mut tids, &mut offset);
     assert_eq!(1, offset);
     assert_eq!(
@@ -49,7 +49,7 @@ true    1     1.100   1970-01-02 1970-01-01 00:00:00 1000  9223372036854775807
         format!("{:?}", page).trim()
     );
     let mut offset = 0;
-    let mut tids = I64Array::new();
+    let mut tids = I64Array::default();
     page.insert(&input, 2000, &mut tids, &mut offset);
     assert_eq!(1, offset);
     assert_eq!(
@@ -79,11 +79,14 @@ fn test_var_types() {
         ),
         (
             "string".to_string(),
-            AnyArray::String(StringArray::from_options(vec![Some("foo"), Some("bar")])),
+            AnyArray::String(StringArray::from_str_options(vec![
+                Some("foo"),
+                Some("bar"),
+            ])),
         ),
     ]);
     let mut offset = 0;
-    let mut tids = I64Array::new();
+    let mut tids = I64Array::default();
     page.insert(&input, 1000, &mut tids, &mut offset);
     assert_eq!(2, offset);
     assert_eq!(
@@ -96,7 +99,7 @@ int64 string $xmin $xmax
         format!("{:?}", page).trim()
     );
     let mut offset = 0;
-    let mut tids = I64Array::new();
+    let mut tids = I64Array::default();
     page.insert(&input, 2000, &mut tids, &mut offset);
     assert_eq!(2, offset);
     assert_eq!(
@@ -132,7 +135,7 @@ fn test_insert_delete() {
         ),
     ]);
     let mut offset = 0;
-    let mut tids = I64Array::new();
+    let mut tids = I64Array::default();
     page.insert(&input, 1000, &mut tids, &mut offset);
     assert_eq!(2, offset);
     assert!(page.delete(1, 2000));
@@ -154,18 +157,17 @@ fn test_expand_string_pool() {
     let strings: Vec<String> = (0..PAGE_SIZE)
         .map(|i| format!("1234567890-{}", i))
         .collect();
-    let strs: Vec<&str> = strings.iter().map(|s| s.as_str()).collect();
     let input = RecordBatch::new(vec![(
         "a".to_string(),
-        AnyArray::String(StringArray::from_values(strs)),
+        AnyArray::String(StringArray::from_values(strings.clone())),
     )]);
     let mut offset = 0;
-    let mut tids = I64Array::new();
+    let mut tids = I64Array::default();
     page.insert(&input, 1000, &mut tids, &mut offset);
     let batch = page.select(&page.star());
     if let (_, AnyArray::String(column)) = &batch.columns[0] {
         for i in 0..PAGE_SIZE {
-            assert_eq!(Some(strings[i].as_str()), column.get(i));
+            assert_eq!(Some(strings[i].as_str()), column.get_str(i));
         }
     } else {
         panic!("column 0 is not a string")

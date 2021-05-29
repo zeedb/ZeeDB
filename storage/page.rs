@@ -207,7 +207,7 @@ impl Data {
                 for i in 0..(end - start) {
                     let src = offset + i;
                     let dst = start + i;
-                    if let Some(value) = from.get(src) {
+                    if let Some(value) = from.get_str(src) {
                         buffer.push_str(value);
                         offsets[dst + 1] = buffer.len() as i32;
                         set_bit(is_valid, dst);

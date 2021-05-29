@@ -29,15 +29,17 @@ pub struct TimestampArray {
 
 macro_rules! impl_array {
     ($T:ty, $V:ident, $t:ty) => {
-        impl<'a> Array<'a> for $T {
-            type Element = $t;
-
-            fn new() -> Self {
+        impl Default for $T {
+            fn default() -> Self {
                 Self {
                     values: Vec::new(),
                     is_valid: Bitmask::new(),
                 }
             }
+        }
+
+        impl Array for $T {
+            type Element = $t;
 
             fn with_capacity(capacity: usize) -> Self {
                 Self {
@@ -57,7 +59,7 @@ macro_rules! impl_array {
                 self.values.len()
             }
 
-            fn get(&'a self, index: usize) -> Option<Self::Element> {
+            fn get(&self, index: usize) -> Option<Self::Element> {
                 if self.is_valid.get(index) {
                     Some(self.values[index])
                 } else {
@@ -162,7 +164,7 @@ impl I64Array {
     }
 
     pub fn cast_string(&self) -> StringArray {
-        cast_operator!(self, value, value.to_string().as_str(), StringArray)
+        cast_operator!(self, value, value.to_string(), StringArray)
     }
 
     pub fn as_any(self) -> AnyArray {
@@ -180,7 +182,7 @@ impl F64Array {
     }
 
     pub fn cast_string(&self) -> StringArray {
-        cast_operator!(self, value, value.to_string().as_str(), StringArray)
+        cast_operator!(self, value, value.to_string(), StringArray)
     }
 
     pub fn as_any(self) -> AnyArray {
@@ -202,7 +204,7 @@ impl DateArray {
         cast_operator!(
             self,
             value,
-            crate::dates::date(value).format("%F").to_string().as_str(),
+            crate::dates::date(value).format("%F").to_string(),
             StringArray
         )
     }
@@ -226,10 +228,7 @@ impl TimestampArray {
         cast_operator!(
             self,
             value,
-            crate::dates::timestamp(value)
-                .format("%+")
-                .to_string()
-                .as_str(),
+            crate::dates::timestamp(value).format("%+").to_string(),
             StringArray
         )
     }

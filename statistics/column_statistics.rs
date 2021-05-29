@@ -162,7 +162,7 @@ impl<T: Hash + Ord + Default + Clone> TypedColumnStatistics<T> {
         self.count_distinct.cache
     }
 
-    fn insert<'a, A: Array<'a>>(&mut self, array: &'a A, lens: impl Fn(A::Element) -> Option<T>) {
+    fn insert<A: Array>(&mut self, array: &A, lens: impl Fn(A::Element) -> Option<T>) {
         for i in 0..array.len() {
             if let Some(value) = array.get(i) {
                 if let Some(mapped) = lens(value) {

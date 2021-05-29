@@ -95,7 +95,7 @@ fn select_catalog(
     );
     variables.insert(
         "catalog_name".to_string(),
-        AnyArray::String(StringArray::from_values(vec![catalog_name])),
+        AnyArray::String(StringArray::from_str_values(vec![catalog_name])),
     );
     static Q: OnceCell<Expr> = OnceCell::new();
     let q = Q.get_or_init(|| {
@@ -141,7 +141,7 @@ fn select_table(
     );
     variables.insert(
         "table_name".to_string(),
-        AnyArray::String(StringArray::from_values(vec![table_name])),
+        AnyArray::String(StringArray::from_str_values(vec![table_name])),
     );
     static Q: OnceCell<Expr> = OnceCell::new();
     let q = Q.get_or_init(|| {
@@ -166,8 +166,8 @@ fn select_table(
                 let batch = batch.unwrap();
                 for offset in 0..batch.len() {
                     let table_id = as_i64(&batch, 0).get(offset).unwrap();
-                    let column_name = as_string(&batch, 1).get(offset).unwrap();
-                    let column_type = as_string(&batch, 2).get(offset).unwrap();
+                    let column_name = as_string(&batch, 1).get_str(offset).unwrap();
+                    let column_type = as_string(&batch, 2).get_str(offset).unwrap();
                     table.serialization_id = Some(table_id);
                     table.column.push(SimpleColumnProto {
                         name: Some(column_name.to_string()),

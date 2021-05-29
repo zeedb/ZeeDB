@@ -8,15 +8,17 @@ macro_rules! array_like {
             is_valid: Bitmask,
         }
 
-        impl $T {
-            // Constructors.
-
-            pub fn new() -> Self {
+        impl Default for $T {
+            fn default() -> Self {
                 Self {
                     values: vec![],
                     is_valid: Bitmask::new(),
                 }
             }
+        }
+
+        impl $T {
+            // Constructors.
 
             pub fn with_capacity(capacity: usize) -> Self {
                 Self {
@@ -33,7 +35,7 @@ macro_rules! array_like {
             }
 
             pub fn from_values(values: Vec<$t>) -> Self {
-                let mut into = Self::new();
+                let mut into = Self::default();
                 for value in values {
                     into.push(Some(value));
                 }
@@ -41,7 +43,7 @@ macro_rules! array_like {
             }
 
             pub fn from_options(values: Vec<Option<$t>>) -> Self {
-                let mut into = Self::new();
+                let mut into = Self::default();
                 for value in values {
                     into.push(value);
                 }
@@ -93,7 +95,7 @@ macro_rules! array_like {
             pub fn compress(&self, mask: &BoolArray) -> Self {
                 assert_eq!(self.len(), mask.len());
 
-                let mut into = Self::new();
+                let mut into = Self::default();
                 for i in 0..self.len() {
                     if mask.get(i) == Some(true) {
                         into.push(self.get(i));

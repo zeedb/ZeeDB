@@ -6,6 +6,7 @@ use crate::{Scalar, Value};
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
 #[serde(from = "i32", into = "i32")]
 pub enum DatePart {
+    Nanosecond,
     Microsecond,
     Millisecond,
     Second,
@@ -37,7 +38,7 @@ impl DatePart {
                 9 => DatePart::Second,
                 10 => DatePart::Millisecond,
                 11 => DatePart::Microsecond,
-                12 => panic!("NANOSECOND part is not supported"),
+                12 => DatePart::Nanosecond,
                 13 => panic!("DATE part is not supported"),
                 14 => DatePart::Week(Weekday::Sun),
                 15 => panic!("DATETIME part is not supported"),
@@ -61,6 +62,7 @@ impl DatePart {
 impl From<i32> for DatePart {
     fn from(i: i32) -> Self {
         match i {
+            0 => DatePart::Nanosecond,
             1 => DatePart::Microsecond,
             2 => DatePart::Millisecond,
             3 => DatePart::Second,
@@ -88,6 +90,7 @@ impl From<i32> for DatePart {
 impl Into<i32> for DatePart {
     fn into(self) -> i32 {
         match self {
+            DatePart::Nanosecond => 0,
             DatePart::Microsecond => 1,
             DatePart::Millisecond => 2,
             DatePart::Second => 3,

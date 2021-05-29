@@ -312,7 +312,7 @@ impl Acc {
                 }
             }
             (Acc::Max(Value::String(value)), AnyArray::String(column)) => {
-                if let Some(next) = column.get(tuple as usize) {
+                if let Some(next) = column.get_str(tuple as usize) {
                     if let Some(prev) = value {
                         *value = Some(next.min(prev).to_string())
                     } else {
@@ -351,7 +351,7 @@ impl Acc {
                 }
             }
             (Acc::Min(Value::String(value)), AnyArray::String(column)) => {
-                if let Some(next) = column.get(tuple as usize) {
+                if let Some(next) = column.get_str(tuple as usize) {
                     if let Some(prev) = value {
                         *value = Some(next.min(prev).to_string())
                     } else {
@@ -398,7 +398,7 @@ impl Acc {
                     (Value::Timestamp(value), AnyArray::Timestamp(builder)) => builder.push(*value),
                     (Value::String(value), AnyArray::String(builder)) => {
                         if let Some(value) = value {
-                            builder.push(Some(&value));
+                            builder.push_str(Some(&value));
                         } else {
                             builder.push(None);
                         }

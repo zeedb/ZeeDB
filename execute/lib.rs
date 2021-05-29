@@ -8,5 +8,6 @@ mod hash_table;
 mod hash_table_tests;
 mod index;
 mod join;
+mod map;
 
 pub use crate::execute::execute;

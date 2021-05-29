@@ -32,7 +32,7 @@ fn test_gather_scatter_f64() {
 
 #[test]
 fn test_gather_scatter_string() {
-    let from = StringArray::from_options(vec![Some("true"), Some("false"), None]);
+    let from = StringArray::from_str_options(vec![Some("true"), Some("false"), None]);
     let mut into = StringArray::nulls(10);
     let indexes = I32Array::from_values(vec![1, 4, 9]);
     from.scatter(&indexes, &mut into);

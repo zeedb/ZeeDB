@@ -813,6 +813,9 @@ $col1
 $col1
 NULL 
 
+> select extract(nanosecond from timestamp '2008-12-25')
+ERROR: extract(NANOSECOND from _) is not supported
+
 > select extract(microsecond from timestamp '2008-12-25')
 $col1
 0    
