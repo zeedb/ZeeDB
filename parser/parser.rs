@@ -64,7 +64,7 @@ impl Parser {
         txn: i64,
         mut variables: Vec<(String, DataType)>,
         context: &Context,
-    ) -> Expr {
+    ) -> Result<Expr, String> {
         // Extract table names from script.
         let table_names = protos::runtime().block_on(async move {
             self.client
@@ -114,15 +114,16 @@ impl Parser {
                 })),
                 ..Default::default()
             };
-            let response = protos::runtime().block_on(async move {
+            let response = match protos::runtime().block_on(async move {
                 self.client
                     .lock()
                     .unwrap()
                     .analyze(Request::new(request))
                     .await
-                    .unwrap()
-                    .into_inner()
-            });
+            }) {
+                Ok(response) => response.into_inner(),
+                Err(status) => return Err(status.message().to_string()),
+            };
             let expr = match response.result.unwrap() {
                 ResolvedStatement(stmt) => convert(catalog_id, &stmt),
                 ResolvedExpression(_) => {
@@ -145,9 +146,9 @@ impl Parser {
             // If we've parsed the entire expression, return.
             if offset as usize == sql.as_bytes().len() {
                 if exprs.len() == 1 {
-                    return exprs.pop().unwrap();
+                    return Ok(exprs.pop().unwrap());
                 } else {
-                    return Expr::LogicalScript { statements: exprs };
+                    return Ok(Expr::LogicalScript { statements: exprs });
                 }
             }
         }

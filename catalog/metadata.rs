@@ -245,13 +245,15 @@ fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, AnyArra
         .iter()
         .map(|(name, value)| (name.clone(), value.data_type()))
         .collect();
-    let expr = context[PARSER_KEY].analyze(
-        query,
-        catalog_types::ROOT_CATALOG_ID,
-        0,
-        variables,
-        &context,
-    );
+    let expr = context[PARSER_KEY]
+        .analyze(
+            query,
+            catalog_types::ROOT_CATALOG_ID,
+            0,
+            variables,
+            &context,
+        )
+        .unwrap();
     planner::optimize(expr, 0, &context)
 }
 

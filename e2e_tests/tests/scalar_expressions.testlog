@@ -1368,3 +1368,7 @@ $col1
 > select error('foo!')
 ERROR: foo!
 
+# Wrong number of args
+> select abs()
+ERROR: No matching signature for function ABS with no arguments. Supported signatures: ABS(INT64); ABS(DOUBLE)
+

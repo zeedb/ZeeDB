@@ -770,7 +770,9 @@ fn analyze_bootstrap(sql: &str) -> Expr {
     let mut context = Context::default();
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
-    context[PARSER_KEY].analyze(sql, catalog_types::ROOT_CATALOG_ID, 0, vec![], &context)
+    context[PARSER_KEY]
+        .analyze(sql, catalog_types::ROOT_CATALOG_ID, 0, vec![], &context)
+        .unwrap()
 }
 
 fn bottom_up_rewrite(mut expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {

@@ -69,8 +69,23 @@ impl Coordinator for CoordinatorNode {
             .collect();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         self.pool.spawn(move || {
-            let expr =
-                context[PARSER_KEY].analyze(&request.sql, ROOT_CATALOG_ID, txn, types, &context);
+            let expr = match context[PARSER_KEY].analyze(
+                &request.sql,
+                ROOT_CATALOG_ID,
+                txn,
+                types,
+                &context,
+            ) {
+                Ok(expr) => expr,
+                Err(message) => {
+                    sender
+                        .blocking_send(Page {
+                            result: Some(protos::page::Result::SqlError(message)),
+                        })
+                        .unwrap();
+                    return;
+                }
+            };
             let expr = planner::optimize(expr, txn, &context);
             let mut stream = context[REMOTE_EXECUTION_KEY].submit(expr, variables, txn);
             loop {
