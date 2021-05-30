@@ -37,7 +37,7 @@ message ExchangeRequest {
 message Page {
   oneof result {
     bytes record_batch = 1;
-    string sql_error = 2;
+    string error = 2;
   }
 }
 

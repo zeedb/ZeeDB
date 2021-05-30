@@ -80,7 +80,7 @@ impl Coordinator for CoordinatorNode {
                 Err(message) => {
                     sender
                         .blocking_send(Page {
-                            result: Some(protos::page::Result::SqlError(message)),
+                            result: Some(protos::page::Result::Error(message)),
                         })
                         .unwrap();
                     return;
@@ -97,9 +97,9 @@ impl Coordinator for CoordinatorNode {
                             )),
                         })
                         .unwrap(),
-                    Some(Err(Exception::SqlError(message))) => sender
+                    Some(Err(Exception::Error(message))) => sender
                         .blocking_send(Page {
-                            result: Some(protos::page::Result::SqlError(message)),
+                            result: Some(protos::page::Result::Error(message)),
                         })
                         .unwrap(),
                     Some(Err(Exception::End)) | None => break,

@@ -1,5 +1,5 @@
 #[derive(Debug)]
 pub enum Exception {
-    SqlError(String),
+    Error(String),
     End,
 }

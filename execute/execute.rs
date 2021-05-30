@@ -1107,7 +1107,7 @@ impl Node {
                             .get(0)
                             .unwrap_or(false);
                         if !test {
-                            return Err(Exception::SqlError(description.clone()));
+                            return Err(Exception::Error(description.clone()));
                         }
                     }
                 };

@@ -97,7 +97,7 @@ fn eval_function(
         F::DecimalLogarithmDouble(a) => e(a)?.as_f64().map(f64::log10),
         F::Error(a) => {
             let message = e(a)?.as_string().get(0).clone().unwrap_or("".to_string());
-            return Err(Exception::SqlError(message));
+            return Err(Exception::Error(message));
         }
         F::ExpDouble(a) => e(a)?.as_f64().map(f64::exp),
         F::ExtractDateFromTimestamp(a) => e(a)?.as_timestamp().map(date_from_timestamp),
@@ -465,7 +465,7 @@ pub(crate) fn regexp_replace(
 ) -> Result<Option<String>, Exception> {
     let regexp = match Regex::new(regexp) {
         Ok(regexp) => regexp,
-        Err(err) => return Err(Exception::SqlError(err.to_string())),
+        Err(err) => return Err(Exception::Error(err.to_string())),
     };
     if let Some(err) = check_replacement(replacement) {
         return Err(err);
@@ -517,13 +517,13 @@ fn check_replacement(replacement: &str) -> Option<Exception> {
                 } else if c == '\\' {
                     // Nothing to do
                 } else {
-                    return Some(Exception::SqlError(
+                    return Some(Exception::Error(
                         "Invalid REGEXP_REPLACE pattern".to_string(),
                     ));
                 }
                 i += 1;
             } else {
-                return Some(Exception::SqlError(
+                return Some(Exception::Error(
                     "REGEXP_REPLACE pattern ends with \\".to_string(),
                 ));
             }
@@ -657,7 +657,7 @@ fn timestamp_trunc(
     if let Some(ts) = ts {
         let part = match date_part {
             DatePart::Nanosecond => {
-                return Err(Exception::SqlError(
+                return Err(Exception::Error(
                     "timestamp_trunc(_, NANOSECOND) is not supported".to_string(),
                 ))
             }
@@ -734,7 +734,7 @@ fn extract_from_timestamp(
     if let Some(ts) = ts {
         let part = match date_part {
             DatePart::Nanosecond => {
-                return Err(Exception::SqlError(
+                return Err(Exception::Error(
                     "extract(NANOSECOND from _) is not supported".to_string(),
                 ))
             }
@@ -844,7 +844,7 @@ fn timestamp_sub(
 fn timestamp_duration(amount: i64, date_part: DatePart) -> Result<Duration, Exception> {
     Ok(match date_part {
         DatePart::Nanosecond => {
-            return Err(Exception::SqlError(
+            return Err(Exception::Error(
                 "timestamp_add/subtract(_, NANOSECOND) is not supported".to_string(),
             ))
         }
@@ -877,7 +877,7 @@ fn timestamp_diff(
         (Some(later), Some(earlier)) => {
             let diff = match date_part {
                 DatePart::Nanosecond => {
-                    return Err(Exception::SqlError(
+                    return Err(Exception::Error(
                         "timestamp_diff(_, NANOSECOND) is not supported".to_string(),
                     ))
                 }

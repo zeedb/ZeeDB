@@ -221,7 +221,7 @@ fn broadcast(
     for batch in execute::execute(expr, txn, &variables, &context) {
         let result = match batch {
             Ok(batch) => protos::page::Result::RecordBatch(bincode::serialize(&batch).unwrap()),
-            Err(Exception::SqlError(message)) => protos::page::Result::SqlError(message),
+            Err(Exception::Error(message)) => protos::page::Result::Error(message),
             Err(Exception::End) => continue,
         };
         for sink in &listeners {
@@ -260,10 +260,10 @@ fn exchange(
                     .unwrap();
                 }
             }
-            Err(Exception::SqlError(message)) => {
+            Err(Exception::Error(message)) => {
                 for (_, sink) in &listeners {
                     sink.blocking_send(Page {
-                        result: Some(protos::page::Result::SqlError(message.clone())),
+                        result: Some(protos::page::Result::Error(message.clone())),
                     })
                     .unwrap();
                 }

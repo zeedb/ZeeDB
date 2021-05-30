@@ -124,7 +124,7 @@ impl TestRunner {
                         protos::page::Result::RecordBatch(bytes) => {
                             batches.push(bincode::deserialize(&bytes).unwrap())
                         }
-                        protos::page::Result::SqlError(message) => {
+                        protos::page::Result::Error(message) => {
                             return format!("ERROR: {}", message)
                         }
                     },

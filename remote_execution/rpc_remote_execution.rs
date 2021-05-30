@@ -192,6 +192,6 @@ fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, Exception> {
             let record_batch = bincode::deserialize(&bytes).unwrap();
             Ok(record_batch)
         }
-        protos::page::Result::SqlError(error) => Err(Exception::SqlError(error)),
+        protos::page::Result::Error(error) => Err(Exception::Error(error)),
     }
 }
