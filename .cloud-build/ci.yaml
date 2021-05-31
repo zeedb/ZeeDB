@@ -1,15 +1,23 @@
 steps:
   - name: gcr.io/zeedeebee/zeedb-builder
     entrypoint: sh
-    args: [-c, 'cargo test -Z timings --all-targets --no-run && sccache --show-stats']
+    args: [-c, 'cargo test -Z timings --no-run && sccache --show-stats && cp cargo-timing.html cargo-timing-test.html']
   - name: gcr.io/zeedeebee/zeedb-builder
     entrypoint: sh
     args: [-c, 'zetasql_server & cargo test']
+  - name: gcr.io/zeedeebee/zeedb-builder
+    entrypoint: sh
+    args: [-c, 'cargo bench -Z timings --no-run && sccache --show-stats && cp cargo-timing.html cargo-timing-bench.html']
+  - name: gcr.io/zeedeebee/zeedb-builder
+    entrypoint: sh
+    args: [-c, 'zetasql_server & cargo bench -Z timings -p benchmarks && tar -zcf benchmarks.tar.gz /cargo/target/criterion']
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
     paths:
-      - cargo-timing.html
+      - cargo-timing-test.html
+      - cargo-timing-bench.html
+      - benchmarks.tar.gz
 options:
   env:
     - RUSTC_WRAPPER=sccache
@@ -23,7 +31,6 @@ options:
     - CARGO_HOME=/cargo/cache
     - CARGO_TARGET_DIR=/cargo/target
     - NO_RUSTFMT=1
-    - ZETASQL=http://localhost:50051
     - RUST_BACKTRACE=1
   volumes: 
     - name: cargo

@@ -8,7 +8,8 @@ use context::{env_var, Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
 use kernel::{AnyArray, Exception, RecordBatch};
 use protos::{
     worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
-    ColumnStatisticsRequest, ColumnStatisticsResponse, ExchangeRequest, Page, PageStream,
+    CheckRequest, CheckResponse, ColumnStatisticsRequest, ColumnStatisticsResponse,
+    ExchangeRequest, Page, PageStream,
 };
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
@@ -62,6 +63,10 @@ impl Worker for WorkerNode {
     type BroadcastStream = PageStream;
 
     type ExchangeStream = PageStream;
+
+    async fn check(&self, _: Request<CheckRequest>) -> Result<Response<CheckResponse>, Status> {
+        Ok(Response::new(CheckResponse {}))
+    }
 
     async fn broadcast(
         &self,

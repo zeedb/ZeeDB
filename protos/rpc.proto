@@ -3,6 +3,7 @@ syntax = "proto2";
 package rpc;
 
 service Coordinator {
+  rpc Check (CheckRequest) returns (CheckResponse) {}
   rpc Submit (SubmitRequest) returns (stream Page) {}
 }
 
@@ -12,11 +13,15 @@ message SubmitRequest {
 }
 
 service Worker {
+  rpc Check (CheckRequest) returns (CheckResponse) {}
   rpc Broadcast (BroadcastRequest) returns (stream Page) {}
   rpc Exchange (ExchangeRequest) returns (stream Page) {}
   rpc ApproxCardinality (ApproxCardinalityRequest) returns (ApproxCardinalityResponse) {}
   rpc ColumnStatistics (ColumnStatisticsRequest) returns (ColumnStatisticsResponse) {}
 }
+
+message CheckRequest {}
+message CheckResponse {}
 
 message BroadcastRequest {
   required bytes expr = 1;

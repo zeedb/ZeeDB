@@ -1,11 +1,11 @@
-use std::sync::Mutex;
+use std::{sync::Mutex, time::Duration};
 
 use coordinator::CoordinatorNode;
 use fs::File;
 use once_cell::sync::Lazy;
 use protos::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, SubmitRequest,
+    worker_server::WorkerServer, CheckRequest, SubmitRequest,
 };
 use std::{
     fs,
@@ -54,12 +54,19 @@ impl Default for TestRunner {
                     .await
                     .unwrap()
             });
-            CoordinatorClient::new(
+            let mut client = CoordinatorClient::new(
                 Endpoint::new(format!("http://127.0.0.1:{}", port))
                     .unwrap()
                     .connect_lazy()
                     .unwrap(),
-            )
+            );
+            for _ in 0..10usize {
+                match client.check(CheckRequest {}).await {
+                    Ok(_) => return client,
+                    Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                }
+            }
+            panic!("Coordinator failed to start on port {}", port)
         });
         Self {
             client,

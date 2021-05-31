@@ -11,7 +11,9 @@ use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::{env_var, Context, WORKER_COUNT_KEY};
 use kernel::{AnyArray, Exception};
 use parser::{Parser, PARSER_KEY};
-use protos::{coordinator_server::Coordinator, Page, PageStream, SubmitRequest};
+use protos::{
+    coordinator_server::Coordinator, CheckRequest, CheckResponse, Page, PageStream, SubmitRequest,
+};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use tonic::{async_trait, Request, Response, Status};
@@ -50,6 +52,10 @@ impl Default for CoordinatorNode {
 #[async_trait]
 impl Coordinator for CoordinatorNode {
     type SubmitStream = PageStream;
+
+    async fn check(&self, _: Request<CheckRequest>) -> Result<Response<CheckResponse>, Status> {
+        Ok(Response::new(CheckResponse {}))
+    }
 
     async fn submit(
         &self,
