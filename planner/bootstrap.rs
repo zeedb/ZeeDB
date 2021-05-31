@@ -65,16 +65,50 @@ impl Catalog for BootstrapCatalog {
         SimpleCatalogProto {
             catalog: vec![bootstrap_metadata_catalog()],
             builtin_function_options: Some(builtin_function_options()),
-            custom_function: vec![simple_function(
-                "get_var".to_string(),
-                vec![TypeKind::TypeString],
-                TypeKind::TypeInt64,
-            )],
-            procedure: vec![simple_procedure(
-                "set_var".to_string(),
-                vec![TypeKind::TypeString, TypeKind::TypeInt64],
-                TypeKind::TypeBool,
-            )],
+            custom_function: vec![
+                simple_function(
+                    "get_var".to_string(),
+                    vec![TypeKind::TypeString],
+                    TypeKind::TypeInt64,
+                ),
+                simple_function(
+                    "next_val".to_string(),
+                    vec![TypeKind::TypeInt64],
+                    TypeKind::TypeInt64,
+                ),
+                simple_function(
+                    "is_empty".to_string(),
+                    vec![TypeKind::TypeInt64],
+                    TypeKind::TypeBool,
+                ),
+            ],
+            procedure: vec![
+                simple_procedure(
+                    "set_var".to_string(),
+                    vec![TypeKind::TypeString, TypeKind::TypeInt64],
+                    TypeKind::TypeBool,
+                ),
+                simple_procedure(
+                    "create_table".to_string(),
+                    vec![TypeKind::TypeInt64],
+                    TypeKind::TypeBool,
+                ),
+                simple_procedure(
+                    "drop_table".to_string(),
+                    vec![TypeKind::TypeInt64],
+                    TypeKind::TypeBool,
+                ),
+                simple_procedure(
+                    "create_index".to_string(),
+                    vec![TypeKind::TypeInt64],
+                    TypeKind::TypeBool,
+                ),
+                simple_procedure(
+                    "drop_index".to_string(),
+                    vec![TypeKind::TypeInt64],
+                    TypeKind::TypeBool,
+                ),
+            ],
             ..Default::default()
         }
     }
@@ -159,51 +193,8 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
                 ],
             ),
         ],
-        custom_function: metadata_custom_functions(),
-        procedure: metadata_procedures(),
-        // builtin_function_options: Some(builtin_function_options()),
         ..Default::default()
     }
-}
-
-fn metadata_custom_functions() -> Vec<FunctionProto> {
-    vec![
-        simple_function(
-            "next_val".to_string(),
-            vec![TypeKind::TypeInt64],
-            TypeKind::TypeInt64,
-        ),
-        simple_function(
-            "is_empty".to_string(),
-            vec![TypeKind::TypeInt64],
-            TypeKind::TypeBool,
-        ),
-    ]
-}
-
-fn metadata_procedures() -> Vec<ProcedureProto> {
-    vec![
-        simple_procedure(
-            "create_table".to_string(),
-            vec![TypeKind::TypeInt64],
-            TypeKind::TypeBool,
-        ),
-        simple_procedure(
-            "drop_table".to_string(),
-            vec![TypeKind::TypeInt64],
-            TypeKind::TypeBool,
-        ),
-        simple_procedure(
-            "create_index".to_string(),
-            vec![TypeKind::TypeInt64],
-            TypeKind::TypeBool,
-        ),
-        simple_procedure(
-            "drop_index".to_string(),
-            vec![TypeKind::TypeInt64],
-            TypeKind::TypeBool,
-        ),
-    ]
 }
 
 fn simple_function(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {

@@ -33,8 +33,10 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 lines.push(format!("call set_var('parent_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('parent_catalog_id')));", catalog_name));
             }
             lines.push("call set_var('catalog_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'catalog'));".to_string());
-            lines
-                .push("call set_var('next_catalog_id', metadata.next_val(get_var('catalog_sequence_id')));".to_string());
+            lines.push(
+                "call set_var('next_catalog_id', next_val(get_var('catalog_sequence_id')));"
+                    .to_string(),
+            );
             lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (get_var('parent_catalog_id'), get_var('next_catalog_id'), {:?});", name.path.last().unwrap()));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
@@ -51,7 +53,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             }
             lines.push("call set_var('table_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'table'));".to_string());
             lines.push(
-                "call set_var('next_table_id', metadata.next_val(get_var('table_sequence_id')));"
+                "call set_var('next_table_id', next_val(get_var('table_sequence_id')));"
                     .to_string(),
             );
             lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (get_var('catalog_id'), get_var('next_table_id'), {:?});", name.path.last().unwrap()));
@@ -59,7 +61,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 let column_type = column_type.to_string();
                 lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (get_var('next_table_id'), {:?}, {:?}, {:?});", column_id, column_name, column_type));
             }
-            lines.push("call metadata.create_table(get_var('next_table_id'));".to_string());
+            lines.push("call create_table(get_var('next_table_id'));".to_string());
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
@@ -87,7 +89,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             lines.push("call set_var('index_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'index'));".to_string());
             lines.push(format!("call set_var('table_id', (select table_id from metadata.table where catalog_id = get_var('table_catalog_id') and table_name = {:?}));", table.path.last().unwrap()));
             lines.push(
-                "call set_var('next_index_id', metadata.next_val(get_var('index_sequence_id')));"
+                "call set_var('next_index_id', next_val(get_var('index_sequence_id')));"
                     .to_string(),
             );
             lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (get_var('index_catalog_id'), get_var('next_index_id'), get_var('table_id'), {:?});", name.path.last().unwrap()));
@@ -96,9 +98,9 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (get_var('next_index_id'), get_var('column_id'), {:?});", index_order));
             }
             lines.push(
-                format!("assert (select metadata.is_empty(get_var('table_id'))) as 'Cannot create index because table {} is not empty.';", table.path.last().unwrap().escape_debug()),
+                format!("assert (select is_empty(get_var('table_id'))) as 'Cannot create index because table {} is not empty.';", table.path.last().unwrap().escape_debug()),
             );
-            lines.push("call metadata.create_index(get_var('next_index_id'));".to_string());
+            lines.push("call create_index(get_var('next_index_id'));".to_string());
             let sql = lines.join("\n");
             Ok(LogicalRewrite { sql })
         }
@@ -113,7 +115,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                     for catalog_name in &name.path[0..name.path.len()] {
                         lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
                     }
-                    lines.push("call metadata.drop_table((select table_id from metadata.table where catalog_id = get_var('catalog_id')));".to_string());
+                    lines.push("call drop_table((select table_id from metadata.table where catalog_id = get_var('catalog_id')));".to_string());
                     lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = get_var('catalog_id'));".to_string());
                     lines.push(
                         "delete from metadata.table where catalog_id = get_var('catalog_id');"
@@ -138,7 +140,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                         "delete from metadata.table where table_id = get_var('table_id');"
                             .to_string(),
                     );
-                    lines.push("call metadata.drop_table(get_var('table_id'));".to_string());
+                    lines.push("call drop_table(get_var('table_id'));".to_string());
                 }
                 ObjectType::Index => {
                     lines.push(format!(
@@ -154,7 +156,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                         "delete from metadata.index where index_id = get_var('index_id');"
                             .to_string(),
                     );
-                    lines.push("call metadata.drop_index(get_var('index_id'));".to_string());
+                    lines.push("call drop_index(get_var('index_id'));".to_string());
                 }
                 ObjectType::Column => todo!(),
             };
