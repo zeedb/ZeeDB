@@ -14,7 +14,7 @@ steps:
   - name: gcr.io/cloud-builders/gsutil
     id: 'Restore Benchmarks Timing'
     entrypoint: sh
-    args: [-c, 'gsutil cp gs://zeedb-build-cache/criterion-${_RELEASE}.zip criterion.zip && unzip criterion.zip -d / || true']
+    args: [-c, 'gsutil cp gs://zeedb-build-cache/criterion-main-${_RELEASE}.zip criterion.zip && unzip criterion.zip -d / || true']
   - name: gcr.io/zeedeebee/zeedb-builder
     id: 'Run Benchmarks'
     entrypoint: sh
@@ -22,7 +22,7 @@ steps:
   - name: gcr.io/cloud-builders/gsutil
     id: 'Save Benchmarks Timing'
     entrypoint: sh
-    args: [-c, "find /cargo/target/criterion -name '*.json' | zip criterion.zip -@ && gsutil cp criterion.zip gs://zeedb-build-cache/criterion-${_DEVELOP}.zip"]
+    args: [-c, "find /cargo/target/criterion -name '*.json' | zip criterion.zip -@ && gsutil cp criterion.zip 'gs://zeedb-build-cache/criterion-${BRANCH_NAME}-${_DEVELOP}.zip'"]
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
