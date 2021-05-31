@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use protos::{
+use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
     worker_server::WorkerServer, SubmitRequest,
 };
@@ -22,7 +22,7 @@ fn test_submit() {
     let worker = WorkerNode::default();
     let coordinator = CoordinatorNode::default();
     // Connect to the cluster and run a command.
-    protos::runtime().block_on(async move {
+    rpc::runtime().block_on(async move {
         tokio::spawn(async move {
             Server::builder()
                 .add_service(WorkerServer::new(worker))

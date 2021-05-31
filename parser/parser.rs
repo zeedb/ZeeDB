@@ -24,7 +24,7 @@ pub struct Parser {
 
 impl Default for Parser {
     fn default() -> Self {
-        protos::runtime().block_on(async {
+        rpc::runtime().block_on(async {
             let zetasql = std::env::var("ZETASQL").unwrap_or_else(|_| {
                 if TcpListener::bind(("127.0.0.1", 50051)).is_ok() {
                     println!("\x1b[0;31mEnvironment variable ZETASQL is not set and a local server was not detected at localhost:50051.\x1b[0m");
@@ -42,7 +42,7 @@ impl Default for Parser {
 
 impl Parser {
     pub fn format(&self, sql: &str) -> String {
-        protos::runtime().block_on(async {
+        rpc::runtime().block_on(async {
             self.client
                 .lock()
                 .unwrap()
@@ -66,7 +66,7 @@ impl Parser {
         context: &Context,
     ) -> Result<Expr, String> {
         // Extract table names from script.
-        let table_names = protos::runtime().block_on(async move {
+        let table_names = rpc::runtime().block_on(async move {
             self.client
                 .lock()
                 .unwrap()
@@ -114,7 +114,7 @@ impl Parser {
                 })),
                 ..Default::default()
             };
-            let response = match protos::runtime().block_on(async move {
+            let response = match rpc::runtime().block_on(async move {
                 self.client
                     .lock()
                     .unwrap()

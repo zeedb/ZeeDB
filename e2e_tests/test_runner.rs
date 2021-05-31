@@ -3,7 +3,7 @@ use std::{net::TcpListener, sync::Mutex, time::Duration};
 use coordinator::CoordinatorNode;
 use fs::File;
 use once_cell::sync::Lazy;
-use protos::{
+use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
     worker_server::WorkerServer, CheckRequest, SubmitRequest,
 };
@@ -38,7 +38,7 @@ impl Default for TestRunner {
         let coordinator = CoordinatorNode::default();
         // Connect to the cluster.
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        let client = protos::runtime().block_on(async move {
+        let client = rpc::runtime().block_on(async move {
             let addr = format!("127.0.0.1:{}", port).parse().unwrap();
             let signal = async { receiver.await.unwrap() };
             tokio::spawn(async move {
@@ -117,18 +117,16 @@ impl TestRunner {
             variables: Default::default(),
         };
         let response = self.client.submit(Request::new(request));
-        protos::runtime().block_on(async {
+        rpc::runtime().block_on(async {
             let mut stream = response.await.unwrap().into_inner();
             let mut batches = vec![];
             loop {
                 match stream.message().await.unwrap() {
                     Some(page) => match page.result.unwrap() {
-                        protos::page::Result::RecordBatch(bytes) => {
+                        rpc::page::Result::RecordBatch(bytes) => {
                             batches.push(bincode::deserialize(&bytes).unwrap())
                         }
-                        protos::page::Result::Error(message) => {
-                            return format!("ERROR: {}", message)
-                        }
+                        rpc::page::Result::Error(message) => return format!("ERROR: {}", message),
                     },
                     None => break,
                 }

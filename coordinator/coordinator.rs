@@ -11,11 +11,11 @@ use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::{env_var, Context, WORKER_COUNT_KEY};
 use kernel::{AnyArray, Exception};
 use parser::{Parser, PARSER_KEY};
-use protos::{
-    coordinator_server::Coordinator, CheckRequest, CheckResponse, Page, PageStream, SubmitRequest,
-};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use rpc::{
+    coordinator_server::Coordinator, CheckRequest, CheckResponse, Page, PageStream, SubmitRequest,
+};
 use tonic::{async_trait, Request, Response, Status};
 
 #[derive(Clone)]
@@ -86,7 +86,7 @@ impl Coordinator for CoordinatorNode {
                 Err(message) => {
                     sender
                         .blocking_send(Page {
-                            result: Some(protos::page::Result::Error(message)),
+                            result: Some(rpc::page::Result::Error(message)),
                         })
                         .unwrap();
                     return;
@@ -98,14 +98,14 @@ impl Coordinator for CoordinatorNode {
                 match stream.next() {
                     Some(Ok(record_batch)) => sender
                         .blocking_send(Page {
-                            result: Some(protos::page::Result::RecordBatch(
+                            result: Some(rpc::page::Result::RecordBatch(
                                 bincode::serialize(&record_batch).unwrap(),
                             )),
                         })
                         .unwrap(),
                     Some(Err(Exception::Error(message))) => sender
                         .blocking_send(Page {
-                            result: Some(protos::page::Result::Error(message)),
+                            result: Some(rpc::page::Result::Error(message)),
                         })
                         .unwrap(),
                     Some(Err(Exception::End)) | None => break,

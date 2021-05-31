@@ -25,7 +25,7 @@ impl Iterator for RecordStream {
     type Item = Result<RecordBatch, Exception>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        protos::runtime().block_on(self.inner.next())
+        rpc::runtime().block_on(self.inner.next())
     }
 }
 

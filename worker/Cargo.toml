@@ -17,7 +17,7 @@ ast = { path = "../ast" }
 context = { path = "../context" }
 execute = { path = "../execute" }
 kernel = { path = "../kernel" }
-protos = { path = "../protos" }
+rpc = { path = "../rpc" }
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
 storage = { path = "../storage" }

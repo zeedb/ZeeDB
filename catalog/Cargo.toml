@@ -17,7 +17,7 @@ context = { path = "../context" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
-protos = { path = "../protos" }
+rpc = { path = "../rpc" }
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
 zetasql = { path = "../zetasql" }

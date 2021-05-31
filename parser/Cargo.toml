@@ -18,5 +18,5 @@ ast = { path = "../ast" }
 catalog_types = { path = "../catalog_types" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
-protos = { path = "../protos" }
+rpc = { path = "../rpc" }
 zetasql = { path = "../zetasql" }

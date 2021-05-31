@@ -17,5 +17,5 @@ regex = "1.4.2"
 ast = { path = "../ast" }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
-protos = { path = "../protos" }
+rpc = { path = "../rpc" }
 statistics = { path = "../statistics" }

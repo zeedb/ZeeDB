@@ -14,5 +14,5 @@ tonic = "0.4.3"
 
 coordinator = { path = "../coordinator" }
 kernel = { path = "../kernel" }
-protos = { path = "../protos" }
+rpc = { path = "../rpc" }
 worker = { path = "../worker" }

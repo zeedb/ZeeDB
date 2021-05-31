@@ -12,7 +12,7 @@ members = [
     "kernel",
     "parser",
     "planner",
-    "protos",
+    "rpc",
     "remote_execution",
     "statistics",
     "storage",

@@ -6,13 +6,13 @@ use std::{
 use ast::Expr;
 use context::{env_var, Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
 use kernel::{AnyArray, Exception, RecordBatch};
-use protos::{
+use rayon::{ThreadPool, ThreadPoolBuilder};
+use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
+use rpc::{
     worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
     CheckRequest, CheckResponse, ColumnStatisticsRequest, ColumnStatisticsResponse,
     ExchangeRequest, Page, PageStream,
 };
-use rayon::{ThreadPool, ThreadPoolBuilder};
-use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};
@@ -225,8 +225,8 @@ fn broadcast(
     // Send each batch of records produced by expr to each worker node in the cluster.
     for batch in execute::execute(expr, txn, &variables, &context) {
         let result = match batch {
-            Ok(batch) => protos::page::Result::RecordBatch(bincode::serialize(&batch).unwrap()),
-            Err(Exception::Error(message)) => protos::page::Result::Error(message),
+            Ok(batch) => rpc::page::Result::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Err(Exception::Error(message)) => rpc::page::Result::Error(message),
             Err(Exception::End) => continue,
         };
         for sink in &listeners {
@@ -258,7 +258,7 @@ fn exchange(
                 {
                     let (_, sink) = &listeners[hash_bucket];
                     sink.blocking_send(Page {
-                        result: Some(protos::page::Result::RecordBatch(
+                        result: Some(rpc::page::Result::RecordBatch(
                             bincode::serialize(&batch_part).unwrap(),
                         )),
                     })
@@ -268,7 +268,7 @@ fn exchange(
             Err(Exception::Error(message)) => {
                 for (_, sink) in &listeners {
                     sink.blocking_send(Page {
-                        result: Some(protos::page::Result::Error(message.clone())),
+                        result: Some(rpc::page::Result::Error(message.clone())),
                     })
                     .unwrap();
                 }

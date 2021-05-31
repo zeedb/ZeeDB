@@ -161,8 +161,8 @@ dependencies = [
  "once_cell",
  "parser",
  "planner",
- "protos",
  "remote_execution",
+ "rpc",
  "statistics",
  "tokio",
  "zetasql",
@@ -235,10 +235,10 @@ dependencies = [
  "kernel",
  "parser",
  "planner",
- "protos",
  "rand 0.8.2",
  "rayon",
  "remote_execution",
+ "rpc",
  "statistics",
  "tokio",
  "tonic",
@@ -357,7 +357,7 @@ dependencies = [
  "coordinator",
  "kernel",
  "once_cell",
- "protos",
+ "rpc",
  "tokio",
  "tonic",
  "worker",
@@ -383,10 +383,10 @@ dependencies = [
  "context",
  "kernel",
  "num-traits",
- "protos",
  "rand 0.8.2",
  "regex",
  "remote_execution",
+ "rpc",
  "statistics",
  "storage",
  "tokio",
@@ -827,7 +827,7 @@ dependencies = [
  "context",
  "kernel",
  "prost-types",
- "protos",
+ "rpc",
  "time",
  "tokio",
  "tonic",
@@ -1005,18 +1005,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "protos"
-version = "0.1.0"
-dependencies = [
- "futures",
- "once_cell",
- "prost",
- "tokio",
- "tonic",
- "tonic-build",
-]
-
-[[package]]
 name = "quote"
 version = "1.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1175,8 +1163,8 @@ dependencies = [
  "context",
  "futures",
  "kernel",
- "protos",
  "regex",
+ "rpc",
  "statistics",
  "tokio",
  "tonic",
@@ -1189,6 +1177,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3acd125665422973a33ac9d3dd2df85edad0f4ae9b00dafb1a05e43a9f5ef8e7"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "rpc"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "once_cell",
+ "prost",
+ "tokio",
+ "tonic",
+ "tonic-build",
 ]
 
 [[package]]
@@ -1746,10 +1746,10 @@ dependencies = [
  "context",
  "execute",
  "kernel",
- "protos",
  "rand 0.8.2",
  "rayon",
  "remote_execution",
+ "rpc",
  "statistics",
  "storage",
  "tokio",

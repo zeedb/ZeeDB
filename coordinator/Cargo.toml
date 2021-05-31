@@ -19,7 +19,7 @@ catalog_types = { path = "../catalog_types" }
 context = { path = "../context" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
-protos = { path = "../protos" }
+rpc = { path = "../rpc" }
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }
 kernel = { path = "../kernel" }

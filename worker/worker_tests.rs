@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use ast::*;
 use kernel::DataType;
-use protos::{worker_client::WorkerClient, worker_server::WorkerServer, BroadcastRequest};
+use rpc::{worker_client::WorkerClient, worker_server::WorkerServer, BroadcastRequest};
 use tonic::{
     transport::{Endpoint, Server},
     Request,
@@ -19,7 +19,7 @@ fn test_broadcast() {
     std::env::set_var("WORKER_COUNT", "1");
     let worker = WorkerNode::default();
     // Connect to the cluster and run a command.
-    protos::runtime().block_on(async move {
+    rpc::runtime().block_on(async move {
         tokio::spawn(async move {
             Server::builder()
                 .add_service(WorkerServer::new(worker))

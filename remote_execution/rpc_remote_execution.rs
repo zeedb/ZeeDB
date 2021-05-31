@@ -3,11 +3,11 @@ use std::{collections::HashMap, sync::Mutex};
 use ast::Expr;
 use futures::StreamExt;
 use kernel::{AnyArray, Exception, RecordBatch};
-use protos::{
+use regex::Regex;
+use rpc::{
     worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
     ColumnStatisticsRequest, ExchangeRequest, Page,
 };
-use regex::Regex;
 use statistics::ColumnStatistics;
 use tonic::{
     transport::{Channel, Endpoint},
@@ -22,7 +22,7 @@ pub struct RpcRemoteExecution {
 
 impl Default for RpcRemoteExecution {
     fn default() -> Self {
-        let workers = protos::runtime().block_on(async {
+        let workers = rpc::runtime().block_on(async {
             let re = Regex::new(r"WORKER_\d+").unwrap();
             let workers: Vec<_> = std::env::vars()
                 .filter(|(key, _)| re.is_match(&key))
@@ -44,7 +44,7 @@ impl Default for RpcRemoteExecution {
 
 impl RemoteExecution for RpcRemoteExecution {
     fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream {
-        protos::runtime().block_on(async move {
+        rpc::runtime().block_on(async move {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = BroadcastRequest {
@@ -76,7 +76,7 @@ impl RemoteExecution for RpcRemoteExecution {
         variables: HashMap<String, AnyArray>,
         txn: i64,
     ) -> RecordStream {
-        protos::runtime().block_on(async move {
+        rpc::runtime().block_on(async move {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = BroadcastRequest {
@@ -110,7 +110,7 @@ impl RemoteExecution for RpcRemoteExecution {
         hash_column: String,
         hash_bucket: i32,
     ) -> RecordStream {
-        protos::runtime().block_on(async move {
+        rpc::runtime().block_on(async move {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = ExchangeRequest {
@@ -139,7 +139,7 @@ impl RemoteExecution for RpcRemoteExecution {
     }
 
     fn approx_cardinality(&self, table_id: i64) -> f64 {
-        protos::runtime().block_on(async move {
+        rpc::runtime().block_on(async move {
             let mut total = 0.0;
             for worker in &self.workers {
                 let request = ApproxCardinalityRequest { table_id };
@@ -158,7 +158,7 @@ impl RemoteExecution for RpcRemoteExecution {
     }
 
     fn column_statistics(&self, table_id: i64, column_name: &str) -> Option<ColumnStatistics> {
-        protos::runtime().block_on(async move {
+        rpc::runtime().block_on(async move {
             let mut total = None;
             for worker in &self.workers {
                 let request = ColumnStatisticsRequest {
@@ -188,10 +188,10 @@ impl RemoteExecution for RpcRemoteExecution {
 
 fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, Exception> {
     match page.unwrap().result.unwrap() {
-        protos::page::Result::RecordBatch(bytes) => {
+        rpc::page::Result::RecordBatch(bytes) => {
             let record_batch = bincode::deserialize(&bytes).unwrap();
             Ok(record_batch)
         }
-        protos::page::Result::Error(error) => Err(Exception::Error(error)),
+        rpc::page::Result::Error(error) => Err(Exception::Error(error)),
     }
 }
