@@ -5,7 +5,6 @@ edition = "2018"
 publish = false
 
 [lib] 
-bench = true # Ensures `cargo build --benches` builds this module and its dependencies.
 path = "lib.rs"
 
 [dependencies]

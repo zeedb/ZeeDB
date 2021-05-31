@@ -1,16 +1,28 @@
 steps:
   - name: gcr.io/zeedeebee/zeedb-builder
+    id: 'Build Tests'
     entrypoint: sh
     args: [-c, 'cargo test -Z timings --no-run && sccache --show-stats && cp cargo-timing.html cargo-timing-test.html']
   - name: gcr.io/zeedeebee/zeedb-builder
+    id: 'Run Tests'
     entrypoint: sh
     args: [-c, 'zetasql_server & cargo test']
   - name: gcr.io/zeedeebee/zeedb-builder
+    id: 'Build Benchmarks'
     entrypoint: sh
     args: [-c, 'cargo bench -Z timings --no-run && sccache --show-stats && cp cargo-timing.html cargo-timing-bench.html']
+  - name: gcr.io/cloud-builders/gsutil
+    id: 'Restore Benchmarks Timing'
+    entrypoint: sh
+    args: [-c, 'gsutil cp gs://zeedb-build-cache/criterion-${_RELEASE}.zip /cargo/target/criterion.zip && unzip /cargo/target/criterion.zip || true']
   - name: gcr.io/zeedeebee/zeedb-builder
+    id: 'Run Benchmarks'
     entrypoint: sh
     args: [-c, 'zetasql_server & cargo bench -Z timings -p benchmarks && tar -zcf benchmarks.tar.gz /cargo/target/criterion']
+  - name: gcr.io/cloud-builders/gsutil
+    id: 'Save Benchmarks Timing'
+    entrypoint: sh
+    args: [-c, "find /cargo/target/criterion -name '*.json' | zip /cargo/target/criterion.zip -@ && gsutil cp /cargo/target/criterion.zip gs://zeedb-build-cache/criterion-${_DEVELOP}.zip"]
 artifacts:
   objects:
     location: gs://zeedb-build-artifacts
@@ -18,6 +30,9 @@ artifacts:
       - cargo-timing-test.html
       - cargo-timing-bench.html
       - benchmarks.tar.gz
+substitutions: 
+  _RELEASE: '1'
+  _DEVELOP: '1'
 options:
   env:
     - RUSTC_WRAPPER=sccache
