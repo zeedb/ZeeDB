@@ -1,4 +1,4 @@
-use std::{sync::Mutex, time::Duration};
+use std::{net::TcpListener, sync::Mutex, time::Duration};
 
 use coordinator::CoordinatorNode;
 use fs::File;
@@ -28,12 +28,7 @@ impl Default for TestRunner {
         static GLOBAL: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
         let _lock = GLOBAL.lock().unwrap();
         // Find a free port.
-        static NEXT_PORT: Lazy<Mutex<u16>> = Lazy::new(|| Mutex::new(50054));
-        let port = {
-            let mut lock = NEXT_PORT.lock().unwrap();
-            *lock = *lock + 1;
-            *lock - 1
-        };
+        let port = free_port();
         // Set configuration environment variables that will be picked up by various services in Context.
         std::env::set_var("WORKER_0", format!("http://127.0.0.1:{}", port).as_str());
         std::env::set_var("WORKER_ID", "0");
@@ -154,4 +149,15 @@ impl Drop for TestRunner {
             .send(())
             .unwrap();
     }
+}
+
+fn free_port() -> u16 {
+    const MIN: u16 = 50100;
+    const MAX: u16 = 51100;
+    for port in MIN..MAX {
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+    panic!("Could not find a free port between {} and {}", MIN, MAX)
 }
