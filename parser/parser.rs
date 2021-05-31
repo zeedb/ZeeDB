@@ -1,4 +1,4 @@
-use std::{net::TcpListener, sync::Mutex};
+use std::{net::TcpListener, sync::Mutex, time::Duration};
 
 use ast::Expr;
 use catalog_types::{enabled_language_features, supported_statement_kinds, CATALOG_KEY};
@@ -34,8 +34,16 @@ impl Default for Parser {
                 }
                 "http://localhost:50051".to_string()
             });
-            let client = Mutex::new(ZetaSqlLocalServiceClient::connect(zetasql).await.unwrap());
-            Self { client }
+            let mut client = ZetaSqlLocalServiceClient::connect(zetasql.clone()).await.unwrap();
+            for _ in 0..10usize {
+                match client.format_sql(FormatSqlRequest { 
+                    sql: Some("select 1".to_string())
+                }).await {
+                    Ok(_) => return Self { client: Mutex::new(client) },
+                    Err(_) => std::thread::sleep(Duration::from_millis(1)),
+                }
+            }
+            panic!("Failed to connect to ZetaSQL parser services at {}", &zetasql)
         })
     }
 }
