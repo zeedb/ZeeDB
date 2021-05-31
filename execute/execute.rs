@@ -6,7 +6,7 @@ use kernel::{Exception, RecordBatch, *};
 use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
 use storage::*;
 
-use crate::hash_table::HashTable;
+use crate::{hash_table::HashTable, index::PackedBytes};
 
 pub fn execute<'a>(
     expr: Expr,
@@ -442,80 +442,36 @@ impl Node {
                 table,
                 input,
             } => {
-                // Evaluate lookup scalars.
                 let input = input.next(state)?;
-                let columns: Result<Vec<_>, _> = lookup
-                    .iter()
-                    .map(|scalar| crate::eval::eval(scalar, &input, state))
-                    .collect();
-                let keys = crate::index::byte_key_prefix(columns?.iter().map(|c| c).collect());
-                // Look up scalars in the index.
-                let sorted_tids = {
-                    let storage = state.context[STORAGE_KEY].lock().unwrap();
-                    let mut tids = vec![];
-                    let art = storage.index(index.index_id);
-                    for i in 0..keys.len() {
-                        let start = keys.get(i);
-                        let end = crate::index::upper_bound(start);
-                        let next = art.range(start..end.as_slice());
-                        tids.extend(next);
-                    }
-                    tids.sort();
-                    tids
-                };
-                // Select pages that contain tids.
+                // Perform a bitmap scan on the left side of the join.
+                let keys = evaluate_index_keys(lookup, &input, state)?;
+                let sorted_tids = lookup_index_tids(keys, index, state);
                 let matching_pages = state.context[STORAGE_KEY]
                     .lock()
                     .unwrap()
                     .table(table.id)
                     .bitmap_scan(&sorted_tids);
-                /// Returns a slice of the first n tids that have page-id pid.
-                fn rids(tids: &[i64], pid: usize) -> I32Array {
-                    let mut rids = I32Array::default();
-                    for tid in tids {
-                        if *tid as usize / PAGE_SIZE > pid {
-                            break;
-                        }
-                        let rid = *tid as usize % PAGE_SIZE;
-                        rids.push(Some(rid as i32));
-                    }
-                    rids
-                }
-                // Perform a bitmap scan on each page.
-                let select_names = projects.iter().map(|c| c.name.clone()).collect();
+                let filtered_pages =
+                    filter_pages_using_tids(projects, &sorted_tids, matching_pages);
+                // Combine the filtered pages.
                 let query_names = projects
                     .iter()
                     .map(|c| (c.name.clone(), c.canonical_name()))
                     .collect();
-                let mut i = 0;
-                let mut j = 0;
-                let mut filtered_pages = vec![];
-                while i < sorted_tids.len() && j < matching_pages.len() {
-                    let pid = sorted_tids[i] as usize / PAGE_SIZE;
-                    if pid < j {
-                        // Go to the next tid.
-                        i += 1
-                    } else if j < pid {
-                        // Go to the next page.
-                        j += 1
-                    } else {
-                        // Filter the current page.
-                        let rids = rids(&sorted_tids[i..], pid);
-                        let page = matching_pages[j].select(&select_names).gather(&rids);
-                        filtered_pages.push(page);
-                        // Go to the next page.
-                        j += 1
-                    }
-                }
-                // Combine the filtered pages.
                 let mut output = RecordBatch::cat(filtered_pages)
                     .ok_or(Exception::End)?
                     .rename(&query_names);
+                // If requested, retain the right side of the join.
                 if *include_existing {
+                    // TODO this assumes the join is 1-to-1, which is not always the case.
                     output = RecordBatch::zip(output, input);
                 }
-                let boolean = crate::eval::all(predicates, &output, state)?;
-                Ok(output.compress(&boolean))
+                // Apply remaining predicates.
+                if !predicates.is_empty() {
+                    let boolean = crate::eval::all(predicates, &output, state)?;
+                    output = output.compress(&boolean);
+                }
+                Ok(output)
             }
             Node::Filter { predicates, input } => {
                 let input = input.next(state)?;
@@ -1284,4 +1240,73 @@ fn build(input: &mut Node, state: &mut QueryState) -> Result<RecordBatch, Except
             Err(exn) => return Err(exn),
         }
     }
+}
+
+fn evaluate_index_keys(
+    lookup: &Vec<Scalar>,
+    input: &RecordBatch,
+    state: &QueryState,
+) -> Result<PackedBytes, Exception> {
+    let columns: Result<Vec<_>, _> = lookup
+        .iter()
+        .map(|scalar| crate::eval::eval(scalar, &input, state))
+        .collect();
+    let keys = crate::index::byte_key_prefix(columns?.iter().map(|c| c).collect());
+    Ok(keys)
+}
+
+fn lookup_index_tids(keys: PackedBytes, index: &Index, state: &QueryState) -> Vec<i64> {
+    let storage = state.context[STORAGE_KEY].lock().unwrap();
+    let mut tids = vec![];
+    let art = storage.index(index.index_id);
+    for i in 0..keys.len() {
+        let start = keys.get(i);
+        let end = crate::index::upper_bound(start);
+        let next = art.range(start..end.as_slice());
+        tids.extend(next);
+    }
+    tids.sort();
+    tids
+}
+
+fn filter_pages_using_tids(
+    projects: &Vec<Column>,
+    sorted_tids: &Vec<i64>,
+    matching_pages: Vec<Arc<Page>>,
+) -> Vec<RecordBatch> {
+    let select_names = projects.iter().map(|c| c.name.clone()).collect();
+    let mut i = 0;
+    let mut j = 0;
+    let mut filtered_pages = vec![];
+    while i < sorted_tids.len() && j < matching_pages.len() {
+        let pid = sorted_tids[i] as usize / PAGE_SIZE;
+        if pid < j {
+            // Go to the next tid.
+            i += 1
+        } else if j < pid {
+            // Go to the next page.
+            j += 1
+        } else {
+            // Filter the current page.
+            let rids = rids(&sorted_tids[i..], pid);
+            let page = matching_pages[j].select(&select_names).gather(&rids);
+            filtered_pages.push(page);
+            // Go to the next page.
+            j += 1
+        }
+    }
+    filtered_pages
+}
+
+/// Returns a slice of the first n tids that have page-id pid.
+fn rids(tids: &[i64], pid: usize) -> I32Array {
+    let mut rids = I32Array::default();
+    for tid in tids {
+        if *tid as usize / PAGE_SIZE > pid {
+            break;
+        }
+        let rid = *tid as usize % PAGE_SIZE;
+        rids.push(Some(rid as i32));
+    }
+    rids
 }
