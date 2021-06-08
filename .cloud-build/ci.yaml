@@ -29,6 +29,7 @@ artifacts:
     paths:
       - cargo-timing-test.html
       - cargo-timing-bench.html
+      - coverage.tar.gz
       - benchmarks.tar.gz
 substitutions: 
   _RELEASE: '1'
@@ -42,9 +43,8 @@ substitutions:
     set -eux
     zetasql_server &
     RUSTFLAGS="-Z instrument-coverage" cargo test
-    mkdir coverage
-    grcov . --binary-path /cargo/target/debug/ -s . -t lcov --branch --ignore-not-existing --ignore "*cargo*" -o coverage/lcov.info
-    curl -s https://codecov.io/bash | bash
+    grcov . --binary-path /cargo/target/debug/ -s . -t html --branch --ignore-not-existing -o ./coverage
+    tar -zcf coverage.tar.gz ./coverage
   _BUILD_BENCHMARKS: |
     set -eux
     cargo bench -Z timings --no-run
@@ -64,19 +64,12 @@ options:
     - SCCACHE_GCS_OAUTH_URL=http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/697461006037@cloudbuild.gserviceaccount.com/token
     - SCCACHE_GCS_RW_MODE=READ_WRITE
     - CARGO_INCREMENTAL=0
-    - CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu
     - CARGO_HOME=/cargo/cache
     - CARGO_TARGET_DIR=/cargo/target
     - NO_RUSTFMT=1
     - RUST_BACKTRACE=1
     - LLVM_PROFILE_FILE=coverage-%p-%m.profraw
-  secretEnv: 
-    - CODECOV_TOKEN
   volumes: 
     - name: cargo
       path: /cargo
   machineType: E2_HIGHCPU_8
-availableSecrets:
-  secretManager:
-    - versionName: projects/697461006037/secrets/CODECOV_TOKEN/versions/latest
-      env: CODECOV_TOKEN
