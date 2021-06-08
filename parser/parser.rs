@@ -65,6 +65,34 @@ impl Parser {
         })
     }
 
+    pub fn split(&self, sql: &str) -> Vec<String> {
+        rpc::runtime().block_on(async move {
+            let mut statements = vec![];
+            let mut offset = 0usize;
+            while offset < sql.len() {
+                let request = ExtractTableNamesFromNextStatementRequest {
+                    parse_resume_location: ParseResumeLocationProto {
+                        input: Some(sql.to_string()),
+                        byte_position: Some(offset as i32),
+                        ..Default::default()
+                    },
+                    options: Some(language_options()),
+                };
+                let response = self.client
+                    .lock()
+                    .unwrap()
+                    .extract_table_names_from_next_statement(request)
+                    .await
+                    .unwrap()
+                    .into_inner();
+                let next_offset = response.resume_byte_position.unwrap() as usize;
+                statements.push(sql[offset..next_offset].to_string());
+                offset = next_offset;
+            }
+            statements
+        })
+    }
+
     pub fn analyze(
         &self,
         sql: &str,
