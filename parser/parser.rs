@@ -28,7 +28,8 @@ impl Default for Parser {
             let zetasql = std::env::var("ZETASQL").unwrap_or_else(|_| {
                 if TcpListener::bind(("127.0.0.1", 50051)).is_ok() {
                     println!("\x1b[0;31mEnvironment variable ZETASQL is not set and a local server was not detected at localhost:50051.\x1b[0m");
-                    println!("\x1b[0;31mIf you are running locally, run:\x1b[0m");
+                    println!("\x1b[0;31mIf you are running on CI or in the linux devcontainer, run zetasql_server &\x1b[0m");
+                    println!("\x1b[0;31mIf you are running on a non-linux system, run:\x1b[0m");
                     println!("\x1b[0;31m\tdocker run --publish 127.0.0.1:50051:50051 --name zetasql --detach gcr.io/zeedeebee/zetasql\x1b[0m");
                     panic!("Missing ZetaSQL parser/analyzer service")
                 }
