@@ -53,7 +53,8 @@ substitutions:
   _RUN_BENCHMARKS: |
     set -eux
     zetasql_server & 
-    cargo bench -Z timings -p benchmarks
+    cargo bench --bench example
+    cargo bench --bench example -- --profile-time=5
     tar -zcf benchmarks.tar.gz /cargo/target/criterion
 options:
   env:

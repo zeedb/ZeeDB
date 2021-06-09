@@ -1,7 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use e2e_tests::TestRunner;
+use pprof::criterion::{Output, PProfProfiler};
 
-fn criterion_benchmark(c: &mut Criterion) {
+fn bench(c: &mut Criterion) {
     c.bench_function("insert into test values (i)", |b| {
         let mut t = TestRunner::default();
         t.run("create table test (i int64)");
@@ -43,8 +44,12 @@ fn criterion_benchmark(c: &mut Criterion) {
     );
 }
 
-criterion_group!(benches, criterion_benchmark);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().with_profiler(PProfProfiler::new(500, Output::Flamegraph(None)));
+    targets = bench
+}
 criterion_main!(benches);
 
 // cargo install flamegraph
-// sudo cargo flamegraph -p benchmarks --bench example -o benchmarks/profiles/example.svg
+// cargo flamegraph -p benchmarks --bench example -o benchmarks/profiles/example.svg
