@@ -50,7 +50,7 @@ impl Default for WorkerNode {
             pool: Arc::new(
                 ThreadPoolBuilder::new()
                     .num_threads(context::CONCURRENT_QUERIES)
-                    .thread_name(|i| format!("coordinator-{}", i))
+                    .thread_name(|i| format!("worker-{}", i))
                     .build()
                     .unwrap(),
             ),
