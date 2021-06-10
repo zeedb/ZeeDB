@@ -2,6 +2,7 @@ use std::{net::TcpListener, sync::Mutex, time::Duration};
 
 use coordinator::CoordinatorNode;
 use fs::File;
+use kernel::AnyArray;
 use once_cell::sync::Lazy;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
@@ -80,11 +81,11 @@ impl TestRunner {
             if line.starts_with("<") {
                 found.push_str(line);
                 found.push('\n');
-                self.run(line.strip_prefix("<").unwrap());
+                self.run(line.strip_prefix("<").unwrap(), vec![]);
             } else if line.starts_with(">") {
                 found.push_str(line);
                 found.push('\n');
-                found.push_str(&self.run(line.strip_prefix(">").unwrap()));
+                found.push_str(&self.run(line.strip_prefix(">").unwrap(), vec![]));
                 found.push('\n');
                 found.push('\n');
             } else if line.starts_with("#") {
@@ -111,10 +112,13 @@ impl TestRunner {
         }
     }
 
-    pub fn run(&mut self, sql: &str) -> String {
+    pub fn run(&mut self, sql: &str, variables: Vec<(String, AnyArray)>) -> String {
         let request = SubmitRequest {
             sql: sql.to_string(),
-            variables: Default::default(),
+            variables: variables
+                .iter()
+                .map(|(k, v)| (k.clone(), bincode::serialize(v).unwrap()))
+                .collect(),
         };
         let response = self.client.submit(Request::new(request));
         rpc::runtime().block_on(async {

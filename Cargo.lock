@@ -140,6 +140,7 @@ dependencies = [
  "chrono",
  "criterion",
  "e2e_tests",
+ "kernel",
  "pprof",
  "rand 0.8.2",
  "tokio",
