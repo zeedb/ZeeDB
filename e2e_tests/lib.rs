@@ -4,6 +4,8 @@ pub use test_runner::TestRunner;
 
 #[cfg(test)]
 mod tests {
+    use kernel::{Array, I64Array};
+
     use crate::test_runner::TestRunner;
 
     #[test]
@@ -84,5 +86,16 @@ mod tests {
     #[test]
     fn test_with() {
         assert!(!TestRunner::default().rewrite("tests/with.testlog"));
+    }
+
+    #[test]
+    fn test_variables() {
+        assert_eq!(
+            "$col1\n1    ".to_string(),
+            TestRunner::default().run(
+                "select @var",
+                vec![("var".to_string(), I64Array::from_values(vec![1]).as_any())]
+            )
+        );
     }
 }
