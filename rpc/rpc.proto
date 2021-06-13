@@ -40,8 +40,7 @@ message ExchangeRequest {
 }
 
 message Page {
-  // TODO rename this so enum doesn't clash with Result
-  oneof result {
+  oneof part {
     bytes record_batch = 1;
     string error = 2;
     Trace trace = 3;

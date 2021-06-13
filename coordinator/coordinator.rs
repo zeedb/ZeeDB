@@ -14,8 +14,8 @@ use parser::{Parser, PARSER_KEY};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
-    coordinator_server::Coordinator, CheckRequest, CheckResponse, Page, PageStream, SubmitRequest,
-    Trace,
+    coordinator_server::Coordinator, page::Part, CheckRequest, CheckResponse, Page, PageStream,
+    SubmitRequest, Trace,
 };
 use tonic::{async_trait, Request, Response, Status};
 
@@ -87,7 +87,7 @@ impl Coordinator for CoordinatorNode {
                 Err(message) => {
                     sender
                         .blocking_send(Page {
-                            result: Some(rpc::page::Result::Error(message)),
+                            part: Some(Part::Error(message)),
                         })
                         .unwrap();
                     return;
@@ -99,19 +99,19 @@ impl Coordinator for CoordinatorNode {
                 match stream.next() {
                     Some(Ok(record_batch)) => sender
                         .blocking_send(Page {
-                            result: Some(rpc::page::Result::RecordBatch(
+                            part: Some(Part::RecordBatch(
                                 bincode::serialize(&record_batch).unwrap(),
                             )),
                         })
                         .unwrap(),
                     Some(Err(Exception::Error(message))) => sender
                         .blocking_send(Page {
-                            result: Some(rpc::page::Result::Error(message)),
+                            part: Some(Part::Error(message)),
                         })
                         .unwrap(),
                     Some(Err(Exception::Trace(events))) => sender
                         .blocking_send(Page {
-                            result: Some(rpc::page::Result::Trace(Trace { events })),
+                            part: Some(Part::Trace(Trace { events })),
                         })
                         .unwrap(),
                     Some(Err(Exception::End)) | None => break,

@@ -5,7 +5,7 @@ use fs::File;
 use kernel::AnyArray;
 use once_cell::sync::Lazy;
 use rpc::{
-    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
+    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer, page::Part,
     worker_server::WorkerServer, CheckRequest, SubmitRequest,
 };
 use std::{
@@ -126,14 +126,14 @@ impl TestRunner {
             let mut batches = vec![];
             loop {
                 match stream.message().await.unwrap() {
-                    Some(page) => match page.result.unwrap() {
-                        rpc::page::Result::RecordBatch(bytes) => {
+                    Some(page) => match page.part.unwrap() {
+                        Part::RecordBatch(bytes) => {
                             batches.push(bincode::deserialize(&bytes).unwrap())
                         }
-                        rpc::page::Result::Trace(_) => {
+                        Part::Trace(_) => {
                             // Nothing to do.
                         }
-                        rpc::page::Result::Error(message) => return format!("ERROR: {}", message),
+                        Part::Error(message) => return format!("ERROR: {}", message),
                     },
                     None => break,
                 }

@@ -9,9 +9,9 @@ use kernel::{AnyArray, Exception, RecordBatch};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
-    worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
-    CheckRequest, CheckResponse, ColumnStatisticsRequest, ColumnStatisticsResponse,
-    ExchangeRequest, Page, PageStream, Trace,
+    page::Part, worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse,
+    BroadcastRequest, CheckRequest, CheckResponse, ColumnStatisticsRequest,
+    ColumnStatisticsResponse, ExchangeRequest, Page, PageStream, Trace,
 };
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
@@ -225,14 +225,14 @@ fn broadcast(
     // Send each batch of records produced by expr to each worker node in the cluster.
     for batch in execute::execute(expr, txn, &variables, &context) {
         let result = match batch {
-            Ok(batch) => rpc::page::Result::RecordBatch(bincode::serialize(&batch).unwrap()),
-            Err(Exception::Error(message)) => rpc::page::Result::Error(message),
-            Err(Exception::Trace(events)) => rpc::page::Result::Trace(Trace { events }),
+            Ok(batch) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Err(Exception::Error(message)) => Part::Error(message),
+            Err(Exception::Trace(events)) => Part::Trace(Trace { events }),
             Err(Exception::End) => continue,
         };
         for sink in &listeners {
             sink.blocking_send(Page {
-                result: Some(result.clone()),
+                part: Some(result.clone()),
             })
             .unwrap();
         }
@@ -259,9 +259,7 @@ fn exchange(
                 {
                     let (_, sink) = &listeners[hash_bucket];
                     sink.blocking_send(Page {
-                        result: Some(rpc::page::Result::RecordBatch(
-                            bincode::serialize(&batch_part).unwrap(),
-                        )),
+                        part: Some(Part::RecordBatch(bincode::serialize(&batch_part).unwrap())),
                     })
                     .unwrap();
                 }
@@ -269,7 +267,7 @@ fn exchange(
             Err(Exception::Error(message)) => {
                 for (_, sink) in &listeners {
                     sink.blocking_send(Page {
-                        result: Some(rpc::page::Result::Error(message.clone())),
+                        part: Some(Part::Error(message.clone())),
                     })
                     .unwrap();
                 }
@@ -277,7 +275,7 @@ fn exchange(
             Err(Exception::Trace(events)) => {
                 for (_, sink) in &listeners {
                     sink.blocking_send(Page {
-                        result: Some(rpc::page::Result::Trace(Trace {
+                        part: Some(Part::Trace(Trace {
                             events: events.clone(),
                         })),
                     })

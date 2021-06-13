@@ -5,7 +5,7 @@ use futures::StreamExt;
 use kernel::{AnyArray, Exception, RecordBatch};
 use regex::Regex;
 use rpc::{
-    worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
+    page::Part, worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
     ColumnStatisticsRequest, ExchangeRequest, Page, Trace,
 };
 use statistics::ColumnStatistics;
@@ -187,12 +187,12 @@ impl RemoteExecution for RpcRemoteExecution {
 }
 
 fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, Exception> {
-    match page.unwrap().result.unwrap() {
-        rpc::page::Result::RecordBatch(bytes) => {
+    match page.unwrap().part.unwrap() {
+        Part::RecordBatch(bytes) => {
             let record_batch = bincode::deserialize(&bytes).unwrap();
             Ok(record_batch)
         }
-        rpc::page::Result::Error(error) => Err(Exception::Error(error)),
-        rpc::page::Result::Trace(Trace { events }) => Err(Exception::Trace(events)),
+        Part::Error(error) => Err(Exception::Error(error)),
+        Part::Trace(Trace { events }) => Err(Exception::Trace(events)),
     }
 }
