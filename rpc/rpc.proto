@@ -5,12 +5,25 @@ package rpc;
 service Coordinator {
   rpc Check (CheckRequest) returns (CheckResponse) {}
   rpc Submit (SubmitRequest) returns (stream Page) {}
+  rpc Trace(TraceRequest) returns (TraceResponse) {}
 }
 
 message SubmitRequest {
   required string sql = 1;
   map<string, bytes> variables = 2;
 }
+
+message TraceRequest {
+  repeated TraceEvent events = 1;
+}
+
+message TraceEvent {
+  required string name = 1;
+  required uint64 begin = 2;
+  required uint64 end = 3;
+}
+
+message TraceResponse {}
 
 service Worker {
   rpc Check (CheckRequest) returns (CheckResponse) {}
@@ -43,18 +56,7 @@ message Page {
   oneof part {
     bytes record_batch = 1;
     string error = 2;
-    Trace trace = 3;
   }
-}
-
-message Trace {
-  repeated TraceEvent events = 1;
-}
-
-message TraceEvent {
-  required string name = 1;
-  required uint64 begin = 2;
-  required uint64 end = 3;
 }
 
 message ApproxCardinalityRequest {

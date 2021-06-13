@@ -31,6 +31,7 @@ impl Default for TestRunner {
         // Find a free port.
         let port = free_port();
         // Set configuration environment variables that will be picked up by various services in Context.
+        std::env::set_var("COORDINATOR", format!("http://127.0.0.1:{}", port).as_str());
         std::env::set_var("WORKER_0", format!("http://127.0.0.1:{}", port).as_str());
         std::env::set_var("WORKER_ID", "0");
         std::env::set_var("WORKER_COUNT", "1");
@@ -129,9 +130,6 @@ impl TestRunner {
                     Some(page) => match page.part.unwrap() {
                         Part::RecordBatch(bytes) => {
                             batches.push(bincode::deserialize(&bytes).unwrap())
-                        }
-                        Part::Trace(_) => {
-                            // Nothing to do.
                         }
                         Part::Error(message) => return format!("ERROR: {}", message),
                     },

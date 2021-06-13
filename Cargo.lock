@@ -805,7 +805,6 @@ name = "kernel"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "rpc",
  "serde",
  "twox-hash",
  "zetasql",
@@ -1106,6 +1105,7 @@ dependencies = [
  "parser",
  "rand 0.8.2",
  "remote_execution",
+ "rpc",
  "statistics",
  "zetasql",
 ]

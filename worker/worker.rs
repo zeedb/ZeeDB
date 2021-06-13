@@ -11,7 +11,7 @@ use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
     page::Part, worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse,
     BroadcastRequest, CheckRequest, CheckResponse, ColumnStatisticsRequest,
-    ColumnStatisticsResponse, ExchangeRequest, Page, PageStream, Trace,
+    ColumnStatisticsResponse, ExchangeRequest, Page, PageStream,
 };
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
@@ -228,7 +228,6 @@ fn broadcast(
         let result = match query.next() {
             Ok(batch) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
             Err(Exception::Error(message)) => Part::Error(message),
-            Err(Exception::Trace(events)) => Part::Trace(Trace { events }),
             Err(Exception::End) => break,
         };
         for sink in &listeners {
@@ -238,6 +237,8 @@ fn broadcast(
             .unwrap();
         }
     }
+    // Send trace events to coordinator.
+    context[REMOTE_EXECUTION_KEY].trace(query.trace_events());
 }
 
 fn exchange(
@@ -274,19 +275,11 @@ fn exchange(
                     .unwrap();
                 }
             }
-            Err(Exception::Trace(events)) => {
-                for (_, sink) in &listeners {
-                    sink.blocking_send(Page {
-                        part: Some(Part::Trace(Trace {
-                            events: events.clone(),
-                        })),
-                    })
-                    .unwrap();
-                }
-            }
             Err(Exception::End) => break,
         }
     }
+    // Send trace events to coordinator.
+    context[REMOTE_EXECUTION_KEY].trace(query.trace_events());
 }
 
 fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<RecordBatch> {

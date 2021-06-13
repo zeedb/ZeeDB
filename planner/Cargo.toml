@@ -8,14 +8,14 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-chrono = { version = "0.4.11", features = [] }
-rand = { version = "0.8.2", features = ["small_rng"]}
-
 ast = { path = "../ast" }
 catalog_types = { path = "../catalog_types" }
+chrono = { version = "0.4.11", features = [] }
 context = { path = "../context" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }
+rand = { version = "0.8.2", features = ["small_rng"]}
 remote_execution = { path = "../remote_execution" }
+rpc = { path = "../rpc" }
 statistics = { path = "../statistics" }
 zetasql = { path = "../zetasql" }

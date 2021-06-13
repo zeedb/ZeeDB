@@ -5,8 +5,9 @@ use futures::StreamExt;
 use kernel::{AnyArray, Exception, RecordBatch};
 use regex::Regex;
 use rpc::{
-    page::Part, worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
-    ColumnStatisticsRequest, ExchangeRequest, Page, Trace,
+    coordinator_client::CoordinatorClient, page::Part, worker_client::WorkerClient,
+    ApproxCardinalityRequest, BroadcastRequest, ColumnStatisticsRequest, ExchangeRequest, Page,
+    TraceEvent, TraceRequest,
 };
 use statistics::ColumnStatistics;
 use tonic::{
@@ -17,12 +18,19 @@ use tonic::{
 use crate::{RecordStream, RemoteExecution};
 
 pub struct RpcRemoteExecution {
+    coordinator: Mutex<CoordinatorClient<Channel>>,
     workers: Vec<Mutex<WorkerClient<Channel>>>,
 }
 
 impl Default for RpcRemoteExecution {
     fn default() -> Self {
-        let workers = rpc::runtime().block_on(async {
+        rpc::runtime().block_on(async {
+            let coordinator = Mutex::new(CoordinatorClient::new(
+                Endpoint::new(std::env::var("COORDINATOR").unwrap())
+                    .unwrap()
+                    .connect_lazy()
+                    .unwrap(),
+            ));
             let re = Regex::new(r"WORKER_\d+").unwrap();
             let workers: Vec<_> = std::env::vars()
                 .filter(|(key, _)| re.is_match(&key))
@@ -36,9 +44,11 @@ impl Default for RpcRemoteExecution {
                 workers.len() > 0,
                 "There are no environment variables starting with WORKER_"
             );
-            workers
-        });
-        Self { workers }
+            Self {
+                coordinator,
+                workers,
+            }
+        })
     }
 }
 
@@ -68,6 +78,17 @@ impl RemoteExecution for RpcRemoteExecution {
             }
             RecordStream::new(Box::new(futures::stream::select_all(streams)))
         })
+    }
+
+    fn trace(&self, events: Vec<TraceEvent>) {
+        rpc::runtime().block_on(async move {
+            self.coordinator
+                .lock()
+                .unwrap()
+                .trace(TraceRequest { events })
+                .await
+                .unwrap()
+        });
     }
 
     fn broadcast(
@@ -193,6 +214,5 @@ fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, Exception> {
             Ok(record_batch)
         }
         Part::Error(error) => Err(Exception::Error(error)),
-        Part::Trace(Trace { events }) => Err(Exception::Trace(events)),
     }
 }

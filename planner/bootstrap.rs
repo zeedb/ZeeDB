@@ -5,6 +5,7 @@ use catalog_types::Catalog;
 use context::Context;
 use kernel::AnyArray;
 use remote_execution::{RecordStream, RemoteExecution};
+use rpc::TraceEvent;
 use statistics::ColumnStatistics;
 use zetasql::{function_enums::*, *};
 
@@ -28,6 +29,10 @@ impl RemoteExecution for BootstrapStatistics {
         _txn: i64,
     ) -> RecordStream {
         unimplemented!()
+    }
+
+    fn trace(&self, _events: Vec<TraceEvent>) {
+        todo!()
     }
 
     fn broadcast(

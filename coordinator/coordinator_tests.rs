@@ -16,6 +16,7 @@ use crate::CoordinatorNode;
 fn test_submit() {
     // Create an empty 1-worker cluster.
     let port = 50052;
+    std::env::set_var("COORDINATOR", format!("http://127.0.0.1:{}", port));
     std::env::set_var("WORKER_0", format!("http://127.0.0.1:{}", port));
     std::env::set_var("WORKER_ID", "0");
     std::env::set_var("WORKER_COUNT", "1");

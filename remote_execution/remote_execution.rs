@@ -4,6 +4,7 @@ use ast::Expr;
 use context::ContextKey;
 use futures::{Stream, StreamExt};
 use kernel::{AnyArray, Exception, RecordBatch};
+use rpc::TraceEvent;
 use statistics::ColumnStatistics;
 
 pub const REMOTE_EXECUTION_KEY: ContextKey<Box<dyn RemoteExecution>> =
@@ -31,6 +32,8 @@ impl Iterator for RecordStream {
 
 pub trait RemoteExecution: Send + Sync {
     fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream;
+
+    fn trace(&self, events: Vec<TraceEvent>);
 
     fn broadcast(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64)
         -> RecordStream;
