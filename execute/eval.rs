@@ -4,7 +4,7 @@ use kernel::*;
 use regex::{Captures, Regex};
 use storage::STORAGE_KEY;
 
-use crate::{execute::QueryState, map::ArrayExt};
+use crate::{map::ArrayExt, tracing::QueryState};
 
 pub(crate) fn all(
     predicates: &Vec<Scalar>,

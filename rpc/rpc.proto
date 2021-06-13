@@ -46,6 +46,16 @@ message Page {
   }
 }
 
+message Trace {
+  repeated TraceEvent events = 1;
+}
+
+message TraceEvent {
+  required string name = 1;
+  required uint64 begin = 2;
+  required uint64 end = 3;
+}
+
 message ApproxCardinalityRequest {
   required int64 table_id = 1;
 }

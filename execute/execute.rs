@@ -6,7 +6,7 @@ use kernel::{Exception, RecordBatch, *};
 use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
 use storage::*;
 
-use crate::{hash_table::HashTable, index::PackedBytes};
+use crate::{hash_table::HashTable, index::PackedBytes, tracing::QueryState};
 
 pub fn execute<'a>(
     expr: Expr,
@@ -16,27 +16,13 @@ pub fn execute<'a>(
 ) -> RunningQuery<'a> {
     RunningQuery {
         input: Node::compile(expr, txn, context),
-        state: QueryState {
-            txn,
-            variables: variables.clone(),
-            context,
-            temp_tables: Storage::default(),
-            temp_table_ids: HashMap::new(),
-        },
+        state: QueryState::new(txn, variables.clone(), context),
     }
 }
 
 pub struct RunningQuery<'a> {
     state: QueryState<'a>,
     input: Node,
-}
-
-pub(crate) struct QueryState<'a> {
-    pub txn: i64,
-    pub variables: HashMap<String, AnyArray>,
-    pub context: &'a Context,
-    pub temp_tables: Storage,
-    pub temp_table_ids: HashMap<String, i64>,
 }
 
 #[derive(Debug)]
@@ -400,6 +386,7 @@ impl Node {
 
 impl Node {
     fn next(&mut self, state: &mut QueryState) -> Result<RecordBatch, Exception> {
+        state.begin(self.name());
         match self {
             Node::TableFreeScan { empty } => {
                 if *empty {
@@ -1080,6 +1067,34 @@ impl Node {
                     )]))
                 }
             }
+        }
+    }
+
+    pub fn name(&self) -> &'static str {
+        match self {
+            Node::TableFreeScan { .. } => "TableFreeScan",
+            Node::SeqScan { .. } => "SeqScan",
+            Node::IndexScan { .. } => "IndexScan",
+            Node::Filter { .. } => "Filter",
+            Node::Out { .. } => "Out",
+            Node::Map { .. } => "Map",
+            Node::NestedLoop { .. } => "NestedLoop",
+            Node::HashJoin { .. } => "HashJoin",
+            Node::CreateTempTable { .. } => "CreateTempTable",
+            Node::GetTempTable { .. } => "GetTempTable",
+            Node::Aggregate { .. } => "Aggregate",
+            Node::Limit { .. } => "Limit",
+            Node::Sort { .. } => "Sort",
+            Node::Union { .. } => "Union",
+            Node::Broadcast { .. } => "Broadcast",
+            Node::Exchange { .. } => "Exchange",
+            Node::Insert { .. } => "Insert",
+            Node::Values { .. } => "Values",
+            Node::Delete { .. } => "Delete",
+            Node::Script { .. } => "Script",
+            Node::Assign { .. } => "Assign",
+            Node::Call { .. } => "Call",
+            Node::Explain { .. } => "Explain",
         }
     }
 }

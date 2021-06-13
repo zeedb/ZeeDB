@@ -9,5 +9,6 @@ mod hash_table_tests;
 mod index;
 mod join;
 mod map;
+mod tracing;
 
 pub use crate::execute::execute;
