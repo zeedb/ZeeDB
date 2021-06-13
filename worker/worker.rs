@@ -11,7 +11,7 @@ use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
     worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse, BroadcastRequest,
     CheckRequest, CheckResponse, ColumnStatisticsRequest, ColumnStatisticsResponse,
-    ExchangeRequest, Page, PageStream,
+    ExchangeRequest, Page, PageStream, Trace,
 };
 use storage::{Storage, STORAGE_KEY};
 use tokio::sync::mpsc::Sender;
@@ -227,6 +227,7 @@ fn broadcast(
         let result = match batch {
             Ok(batch) => rpc::page::Result::RecordBatch(bincode::serialize(&batch).unwrap()),
             Err(Exception::Error(message)) => rpc::page::Result::Error(message),
+            Err(Exception::Trace(events)) => rpc::page::Result::Trace(Trace { events }),
             Err(Exception::End) => continue,
         };
         for sink in &listeners {
@@ -269,6 +270,16 @@ fn exchange(
                 for (_, sink) in &listeners {
                     sink.blocking_send(Page {
                         result: Some(rpc::page::Result::Error(message.clone())),
+                    })
+                    .unwrap();
+                }
+            }
+            Err(Exception::Trace(events)) => {
+                for (_, sink) in &listeners {
+                    sink.blocking_send(Page {
+                        result: Some(rpc::page::Result::Trace(Trace {
+                            events: events.clone(),
+                        })),
                     })
                     .unwrap();
                 }

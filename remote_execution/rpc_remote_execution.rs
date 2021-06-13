@@ -6,7 +6,7 @@ use kernel::{AnyArray, Exception, RecordBatch};
 use regex::Regex;
 use rpc::{
     worker_client::WorkerClient, ApproxCardinalityRequest, BroadcastRequest,
-    ColumnStatisticsRequest, ExchangeRequest, Page,
+    ColumnStatisticsRequest, ExchangeRequest, Page, Trace,
 };
 use statistics::ColumnStatistics;
 use tonic::{
@@ -193,5 +193,6 @@ fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, Exception> {
             Ok(record_batch)
         }
         rpc::page::Result::Error(error) => Err(Exception::Error(error)),
+        rpc::page::Result::Trace(Trace { events }) => Err(Exception::Trace(events)),
     }
 }

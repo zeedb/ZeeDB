@@ -130,6 +130,9 @@ impl TestRunner {
                         rpc::page::Result::RecordBatch(bytes) => {
                             batches.push(bincode::deserialize(&bytes).unwrap())
                         }
+                        rpc::page::Result::Trace(_) => {
+                            // Nothing to do.
+                        }
                         rpc::page::Result::Error(message) => return format!("ERROR: {}", message),
                     },
                     None => break,

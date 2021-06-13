@@ -8,7 +8,8 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-serde = { version = "1.0.123", features = ["derive"] }
-zetasql = { path = "../zetasql" }
 chrono = { version = "0.4.11", features = [] }
+rpc = { path = "../rpc" }
+serde = { version = "1.0.123", features = ["derive"] }
 twox-hash = { version = "1.6.0", features = [] }
+zetasql = { path = "../zetasql" }

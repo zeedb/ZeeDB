@@ -15,6 +15,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
     coordinator_server::Coordinator, CheckRequest, CheckResponse, Page, PageStream, SubmitRequest,
+    Trace,
 };
 use tonic::{async_trait, Request, Response, Status};
 
@@ -106,6 +107,11 @@ impl Coordinator for CoordinatorNode {
                     Some(Err(Exception::Error(message))) => sender
                         .blocking_send(Page {
                             result: Some(rpc::page::Result::Error(message)),
+                        })
+                        .unwrap(),
+                    Some(Err(Exception::Trace(events))) => sender
+                        .blocking_send(Page {
+                            result: Some(rpc::page::Result::Trace(Trace { events })),
                         })
                         .unwrap(),
                     Some(Err(Exception::End)) | None => break,
