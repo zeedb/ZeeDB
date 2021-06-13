@@ -13,7 +13,6 @@ use std::{
 
 use context::Context;
 use kernel::AnyArray;
-use rpc::TraceEvent;
 use storage::Storage;
 
 pub struct QueryState<'a> {
@@ -61,17 +60,6 @@ impl<'a> QueryState<'a> {
             start_time: self.start_time,
             end,
         }
-    }
-
-    pub fn trace_events(&self) -> Vec<TraceEvent> {
-        self.trace_events
-            .iter()
-            .map(|span| TraceEvent {
-                name: span.name.clone(),
-                begin: span.begin,
-                end: span.end.load(Ordering::Relaxed),
-            })
-            .collect()
     }
 }
 

@@ -1,9 +1,14 @@
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt::Debug,
+    sync::{atomic::Ordering, Arc},
+};
 
 use ast::{Expr, Index, *};
 use context::{Context, WORKER_ID_KEY};
 use kernel::{Exception, RecordBatch, *};
 use remote_execution::{RecordStream, REMOTE_EXECUTION_KEY};
+use rpc::TraceEvent;
 use storage::*;
 
 use crate::{hash_table::HashTable, index::PackedBytes, tracing::QueryState};
@@ -155,15 +160,21 @@ struct RemoteQuery {
     inner: RecordStream,
 }
 
-impl<'a> Iterator for RunningQuery<'a> {
-    type Item = Result<RecordBatch, Exception>;
+impl<'a> RunningQuery<'a> {
+    pub fn next(&mut self) -> Result<RecordBatch, Exception> {
+        self.input.next(&mut self.state)
+    }
 
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.input.next(&mut self.state) {
-            Ok(next) => Some(Ok(next)),
-            Err(Exception::End) => None,
-            Err(exn) => Some(Err(exn)),
-        }
+    pub fn trace_events(&self) -> Vec<TraceEvent> {
+        self.state
+            .trace_events
+            .iter()
+            .map(|span| TraceEvent {
+                name: span.name.clone(),
+                begin: span.begin,
+                end: span.end.load(Ordering::Relaxed),
+            })
+            .collect()
     }
 }
 

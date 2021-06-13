@@ -223,12 +223,13 @@ fn broadcast(
     listeners: Vec<Sender<Page>>,
 ) {
     // Send each batch of records produced by expr to each worker node in the cluster.
-    for batch in execute::execute(expr, txn, &variables, &context) {
-        let result = match batch {
+    let mut query = execute::execute(expr, txn, &variables, &context);
+    loop {
+        let result = match query.next() {
             Ok(batch) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
             Err(Exception::Error(message)) => Part::Error(message),
             Err(Exception::Trace(events)) => Part::Trace(Trace { events }),
-            Err(Exception::End) => continue,
+            Err(Exception::End) => break,
         };
         for sink in &listeners {
             sink.blocking_send(Page {
@@ -250,8 +251,9 @@ fn exchange(
     // Order listeners by bucket.
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
     // Split up each batch of records produced by expr and send the splits to the worker nodes.
-    for batch in execute::execute(expr, txn, &variables, &context) {
-        match batch {
+    let mut query = execute::execute(expr, txn, &variables, &context);
+    loop {
+        match query.next() {
             Ok(batch) => {
                 for (hash_bucket, batch_part) in partition(batch, &hash_column, listeners.len())
                     .iter()
@@ -282,7 +284,7 @@ fn exchange(
                     .unwrap();
                 }
             }
-            Err(Exception::End) => continue,
+            Err(Exception::End) => break,
         }
     }
 }
