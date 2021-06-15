@@ -112,10 +112,12 @@ enum Node {
         right: Box<Node>,
     },
     Broadcast {
+        stage: i32,
         input: Option<Expr>,
         stream: Option<RemoteQuery>,
     },
     Exchange {
+        stage: i32,
         input: Option<(Column, Expr)>,
         stream: Option<RemoteQuery>,
     },
@@ -302,14 +304,28 @@ impl Node {
                 left: Box::new(Node::compile(*left, txn, context)),
                 right: Box::new(Node::compile(*right, txn, context)),
             },
-            Broadcast { input } => Node::Broadcast {
-                input: Some(*input),
-                stream: None,
-            },
-            Exchange { hash_column, input } => Node::Exchange {
-                input: Some((hash_column.unwrap(), *input)),
-                stream: None,
-            },
+            Broadcast { input, stage } => {
+                assert!(stage >= 0);
+
+                Node::Broadcast {
+                    input: Some(*input),
+                    stream: None,
+                    stage,
+                }
+            }
+            Exchange {
+                hash_column,
+                input,
+                stage,
+            } => {
+                assert!(stage >= 0);
+
+                Node::Exchange {
+                    input: Some((hash_column.unwrap(), *input)),
+                    stream: None,
+                    stage,
+                }
+            }
             Insert {
                 table,
                 indexes,
@@ -854,13 +870,18 @@ impl Node {
                 Err(Exception::End) => right.next(state),
                 Err(exn) => Err(exn),
             },
-            Node::Broadcast { input, stream } => {
+            Node::Broadcast {
+                input,
+                stream,
+                stage,
+            } => {
                 if let Some(expr) = input.take() {
                     *stream = Some(RemoteQuery::new(
                         state.context[REMOTE_EXECUTION_KEY].broadcast(
                             expr,
                             state.variables.clone(),
                             state.txn,
+                            *stage,
                         ),
                     ));
                 }
@@ -871,13 +892,18 @@ impl Node {
                     .next()
                     .unwrap_or(Err(Exception::End))
             }
-            Node::Exchange { input, stream } => {
+            Node::Exchange {
+                input,
+                stream,
+                stage,
+            } => {
                 if let Some((hash_column, expr)) = input.take() {
                     *stream = Some(RemoteQuery::new(
                         state.context[REMOTE_EXECUTION_KEY].exchange(
                             expr,
                             state.variables.clone(),
                             state.txn,
+                            *stage,
                             hash_column.canonical_name(),
                             state.context[WORKER_ID_KEY],
                         ),

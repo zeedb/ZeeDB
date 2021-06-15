@@ -58,12 +58,13 @@ impl RemoteExecution for RpcRemoteExecution {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = BroadcastRequest {
+                    txn,
+                    stage: 0,
                     expr: bincode::serialize(&expr).unwrap(),
                     variables: variables
                         .iter()
                         .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
                         .collect(),
-                    txn,
                     listeners: 1,
                 };
                 let response = worker
@@ -80,12 +81,17 @@ impl RemoteExecution for RpcRemoteExecution {
         })
     }
 
-    fn trace(&self, events: Vec<TraceEvent>) {
+    fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32) {
         rpc::runtime().block_on(async move {
             self.coordinator
                 .lock()
                 .unwrap()
-                .trace(TraceRequest { events })
+                .trace(TraceRequest {
+                    txn,
+                    stage,
+                    worker,
+                    events,
+                })
                 .await
                 .unwrap()
         });
@@ -96,17 +102,19 @@ impl RemoteExecution for RpcRemoteExecution {
         expr: Expr,
         variables: HashMap<String, AnyArray>,
         txn: i64,
+        stage: i32,
     ) -> RecordStream {
         rpc::runtime().block_on(async move {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = BroadcastRequest {
+                    txn,
+                    stage,
                     expr: bincode::serialize(&expr).unwrap(),
                     variables: variables
                         .iter()
                         .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
                         .collect(),
-                    txn,
                     listeners: self.workers.len() as i32,
                 };
                 let response = worker
@@ -128,6 +136,7 @@ impl RemoteExecution for RpcRemoteExecution {
         expr: Expr,
         variables: HashMap<String, AnyArray>,
         txn: i64,
+        stage: i32,
         hash_column: String,
         hash_bucket: i32,
     ) -> RecordStream {
@@ -135,12 +144,13 @@ impl RemoteExecution for RpcRemoteExecution {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = ExchangeRequest {
+                    txn,
+                    stage,
                     expr: bincode::serialize(&expr).unwrap(),
                     variables: variables
                         .iter()
                         .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
                         .collect(),
-                    txn,
                     listeners: self.workers.len() as i32,
                     hash_column: hash_column.clone(),
                     hash_bucket,

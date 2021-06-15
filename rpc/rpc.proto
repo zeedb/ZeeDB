@@ -14,7 +14,10 @@ message SubmitRequest {
 }
 
 message TraceRequest {
-  repeated TraceEvent events = 1;
+  required int64 txn = 1;
+  required int32 stage = 2;
+  required int32 worker = 3;
+  repeated TraceEvent events = 4;
 }
 
 message TraceEvent {
@@ -37,19 +40,21 @@ message CheckRequest {}
 message CheckResponse {}
 
 message BroadcastRequest {
-  required bytes expr = 1;
-  map<string, bytes> variables = 2;
-  required int64 txn = 3;
-  required int32 listeners = 4;
+  required int64 txn = 1;
+  required int32 stage = 2;
+  required bytes expr = 3;
+  map<string, bytes> variables = 4;
+  required int32 listeners = 5;
 }
 
 message ExchangeRequest {
-  required bytes expr = 1;
-  map<string, bytes> variables = 2;
-  required int64 txn = 3;
-  required int32 listeners = 4;
-  required string hash_column = 5;
-  required int32 hash_bucket = 6;
+  required int64 txn = 1;
+  required int32 stage = 2;
+  required bytes expr = 3;
+  map<string, bytes> variables = 4;
+  required int32 listeners = 5;
+  required string hash_column = 6;
+  required int32 hash_bucket = 7;
 }
 
 message Page {

@@ -20,8 +20,8 @@ use tonic::{async_trait, Request, Response, Status};
 #[derive(Clone)]
 pub struct WorkerNode {
     context: Arc<Context>,
-    broadcast: Arc<Mutex<HashMap<(Expr, i64), Broadcast>>>,
-    exchange: Arc<Mutex<HashMap<(Expr, i64), Exchange>>>,
+    broadcast: Arc<Mutex<HashMap<(Expr, i64, i32), Broadcast>>>,
+    exchange: Arc<Mutex<HashMap<(Expr, i64, i32), Exchange>>>,
     pool: Arc<ThreadPool>,
 }
 
@@ -82,23 +82,30 @@ impl Worker for WorkerNode {
         let listeners = request.listeners as usize;
         let context = self.context.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        match self.broadcast.lock().unwrap().entry((expr, request.txn)) {
+        match self
+            .broadcast
+            .lock()
+            .unwrap()
+            .entry((expr, request.txn, request.stage))
+        {
             Entry::Occupied(mut occupied) => {
                 // Add a new listener to the existing list of listeners.
                 occupied.get_mut().listeners.push(sender);
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
-                    let ((expr, txn), topic) = occupied.remove_entry();
-                    self.pool
-                        .spawn(move || broadcast(expr, txn, variables, context, topic.listeners));
+                    let ((expr, txn, stage), topic) = occupied.remove_entry();
+                    self.pool.spawn(move || {
+                        broadcast(expr, txn, stage, variables, context, topic.listeners)
+                    });
                 }
             }
             Entry::Vacant(vacant) => {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
-                    let (expr, txn) = vacant.into_key();
-                    self.pool
-                        .spawn(move || broadcast(expr, txn, variables, context, vec![sender]));
+                    let (expr, txn, stage) = vacant.into_key();
+                    self.pool.spawn(move || {
+                        broadcast(expr, txn, stage, variables, context, vec![sender])
+                    });
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Broadcast {
@@ -124,7 +131,12 @@ impl Worker for WorkerNode {
         let listeners = request.listeners as usize;
         let context = self.context.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        match self.exchange.lock().unwrap().entry((expr, request.txn)) {
+        match self
+            .exchange
+            .lock()
+            .unwrap()
+            .entry((expr, request.txn, request.stage))
+        {
             Entry::Occupied(mut occupied) => {
                 // Add a new listener to the existing list of listeners.
                 occupied
@@ -133,11 +145,12 @@ impl Worker for WorkerNode {
                     .push((request.hash_bucket, sender));
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
-                    let ((expr, txn), topic) = occupied.remove_entry();
+                    let ((expr, txn, stage), topic) = occupied.remove_entry();
                     self.pool.spawn(move || {
                         exchange(
                             expr,
                             txn,
+                            stage,
                             variables,
                             context,
                             request.hash_column,
@@ -149,11 +162,12 @@ impl Worker for WorkerNode {
             Entry::Vacant(vacant) => {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
-                    let (expr, txn) = vacant.into_key();
+                    let (expr, txn, stage) = vacant.into_key();
                     self.pool.spawn(move || {
                         exchange(
                             expr,
                             txn,
+                            stage,
                             variables,
                             context,
                             request.hash_column,
@@ -218,6 +232,7 @@ impl Worker for WorkerNode {
 fn broadcast(
     expr: Expr,
     txn: i64,
+    stage: i32,
     variables: HashMap<String, AnyArray>,
     context: Arc<Context>,
     listeners: Vec<Sender<Page>>,
@@ -238,12 +253,13 @@ fn broadcast(
         }
     }
     // Send trace events to coordinator.
-    context[REMOTE_EXECUTION_KEY].trace(query.trace_events());
+    context[REMOTE_EXECUTION_KEY].trace(query.trace_events(), txn, stage, context[WORKER_ID_KEY]);
 }
 
 fn exchange(
     expr: Expr,
     txn: i64,
+    stage: i32,
     variables: HashMap<String, AnyArray>,
     context: Arc<Context>,
     hash_column: String,
@@ -279,7 +295,7 @@ fn exchange(
         }
     }
     // Send trace events to coordinator.
-    context[REMOTE_EXECUTION_KEY].trace(query.trace_events());
+    context[REMOTE_EXECUTION_KEY].trace(query.trace_events(), txn, stage, context[WORKER_ID_KEY]);
 }
 
 fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<RecordBatch> {

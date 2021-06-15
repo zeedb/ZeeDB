@@ -198,13 +198,15 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::Broadcast { input } => {
+            Expr::Broadcast { input, .. } => {
                 write!(f, "{}", self.name())?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::Exchange { hash_column, input } => {
+            Expr::Exchange {
+                hash_column, input, ..
+            } => {
                 write!(
                     f,
                     "{} {}",

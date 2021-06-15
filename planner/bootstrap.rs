@@ -31,7 +31,7 @@ impl RemoteExecution for BootstrapStatistics {
         unimplemented!()
     }
 
-    fn trace(&self, _events: Vec<TraceEvent>) {
+    fn trace(&self, _events: Vec<TraceEvent>, _txn: i64, _stage: i32, _worker: i32) {
         todo!()
     }
 
@@ -40,6 +40,7 @@ impl RemoteExecution for BootstrapStatistics {
         _expr: Expr,
         _variables: HashMap<String, AnyArray>,
         _txn: i64,
+        _stage: i32,
     ) -> RecordStream {
         unimplemented!()
     }
@@ -49,6 +50,7 @@ impl RemoteExecution for BootstrapStatistics {
         _expr: Expr,
         _variables: HashMap<String, AnyArray>,
         _txn: i64,
+        _stage: i32,
         _hash_column: String,
         _hash_bucket: i32,
     ) -> RecordStream {

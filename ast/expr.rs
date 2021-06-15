@@ -228,10 +228,12 @@ pub enum Expr {
     },
     /// Broadcast broadcasts the build side of a join to every node.
     Broadcast {
+        stage: i32,
         input: Box<Expr>,
     },
     /// Exchange shuffles data during joins and aggregations.
     Exchange {
+        stage: i32,
         /// hash_column is initially unset during the optimization phase, to reduce the size of the search space, then added before compilation.
         hash_column: Option<Column>,
         input: Box<Expr>,

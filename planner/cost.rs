@@ -84,7 +84,7 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
             let n = opt.ss[parent].props.cardinality.max(1.0);
             n * n.log2() * SORT
         }
-        Broadcast { input } => {
+        Broadcast { input, .. } => {
             let n = opt.ss[leaf(input)].props.cardinality;
             let workers = opt.context[WORKER_COUNT_KEY] as f64;
             n * EXCHANGE * workers

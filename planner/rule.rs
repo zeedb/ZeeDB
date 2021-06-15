@@ -319,11 +319,13 @@ impl Rule {
             }
             Rule::InsertBroadcast => {
                 return single(Broadcast {
+                    stage: -1,
                     input: Box::new(bind),
                 })
             }
             Rule::InsertExchange => {
                 return single(Exchange {
+                    stage: -1,
                     hash_column: None,
                     input: Box::new(bind),
                 });

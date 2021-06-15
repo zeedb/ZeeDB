@@ -33,16 +33,22 @@ impl Iterator for RecordStream {
 pub trait RemoteExecution: Send + Sync {
     fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream;
 
-    fn trace(&self, events: Vec<TraceEvent>);
+    fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32);
 
-    fn broadcast(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64)
-        -> RecordStream;
+    fn broadcast(
+        &self,
+        expr: Expr,
+        variables: HashMap<String, AnyArray>,
+        txn: i64,
+        stage: i32,
+    ) -> RecordStream;
 
     fn exchange(
         &self,
         expr: Expr,
         variables: HashMap<String, AnyArray>,
         txn: i64,
+        stage: i32,
         hash_column: String,
         hash_bucket: i32,
     ) -> RecordStream;

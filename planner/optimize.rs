@@ -19,8 +19,10 @@ pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
         _ => panic!("copy_in_new did not replace expr with Leaf"),
     };
     optimizer.optimize_group(gid, PhysicalProp::None);
-    let expr = optimizer.winner(gid, PhysicalProp::None);
-    crate::distribution::set_hash_columns(expr)
+    let mut expr = optimizer.winner(gid, PhysicalProp::None);
+    crate::distribution::set_hash_columns(&mut expr);
+    crate::distribution::set_stages(&mut expr);
+    expr
 }
 
 // Our implementation of tasks differs from Columbia/Cascades:
