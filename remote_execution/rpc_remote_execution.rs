@@ -52,20 +52,27 @@ impl Default for RpcRemoteExecution {
     }
 }
 
-impl RemoteExecution for RpcRemoteExecution {
-    fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream {
+impl RpcRemoteExecution {
+    fn broadcast_or_submit(
+        &self,
+        expr: Expr,
+        variables: HashMap<String, AnyArray>,
+        listeners: i32,
+        txn: i64,
+        stage: i32,
+    ) -> RecordStream {
         rpc::runtime().block_on(async move {
             let mut streams = vec![];
             for worker in &self.workers {
                 let request = BroadcastRequest {
                     txn,
-                    stage: 0,
+                    stage,
                     expr: bincode::serialize(&expr).unwrap(),
                     variables: variables
                         .iter()
                         .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
                         .collect(),
-                    listeners: 1,
+                    listeners,
                 };
                 let response = worker
                     .lock()
@@ -79,6 +86,12 @@ impl RemoteExecution for RpcRemoteExecution {
             }
             RecordStream::new(Box::new(futures::stream::select_all(streams)))
         })
+    }
+}
+
+impl RemoteExecution for RpcRemoteExecution {
+    fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream {
+        self.broadcast_or_submit(expr, variables, 1, txn, 0)
     }
 
     fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32) {
@@ -104,31 +117,7 @@ impl RemoteExecution for RpcRemoteExecution {
         txn: i64,
         stage: i32,
     ) -> RecordStream {
-        rpc::runtime().block_on(async move {
-            let mut streams = vec![];
-            for worker in &self.workers {
-                let request = BroadcastRequest {
-                    txn,
-                    stage,
-                    expr: bincode::serialize(&expr).unwrap(),
-                    variables: variables
-                        .iter()
-                        .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
-                        .collect(),
-                    listeners: self.workers.len() as i32,
-                };
-                let response = worker
-                    .lock()
-                    .unwrap()
-                    .broadcast(Request::new(request))
-                    .await
-                    .unwrap()
-                    .into_inner()
-                    .map(unwrap_page);
-                streams.push(response);
-            }
-            RecordStream::new(Box::new(futures::stream::select_all(streams)))
-        })
+        self.broadcast_or_submit(expr, variables, self.workers.len() as i32, txn, stage)
     }
 
     fn exchange(

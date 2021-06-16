@@ -2,10 +2,10 @@ use std::{net::TcpListener, sync::Mutex, time::Duration};
 
 use coordinator::CoordinatorNode;
 use fs::File;
-use kernel::AnyArray;
+use kernel::{AnyArray, RecordBatch};
 use once_cell::sync::Lazy;
 use rpc::{
-    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer, page::Part,
+    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
     worker_server::WorkerServer, CheckRequest, SubmitRequest,
 };
 use std::{
@@ -123,23 +123,13 @@ impl TestRunner {
         };
         let response = self.client.submit(Request::new(request));
         rpc::runtime().block_on(async {
-            let mut stream = response.await.unwrap().into_inner();
-            let mut batches = vec![];
-            loop {
-                match stream.message().await.unwrap() {
-                    Some(page) => match page.part.unwrap() {
-                        Part::RecordBatch(bytes) => {
-                            batches.push(bincode::deserialize(&bytes).unwrap())
-                        }
-                        Part::Error(message) => return format!("ERROR: {}", message),
-                    },
-                    None => break,
+            match response.await {
+                Ok(response) => {
+                    let batch: RecordBatch =
+                        bincode::deserialize(&response.into_inner().record_batch).unwrap();
+                    kernel::fixed_width(&vec![batch])
                 }
-            }
-            if batches.is_empty() {
-                "EMPTY".to_string()
-            } else {
-                kernel::fixed_width(&batches)
+                Err(status) => format!("ERROR: {}", status.message()),
             }
         })
     }

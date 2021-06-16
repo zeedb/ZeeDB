@@ -17,6 +17,8 @@ mod exception;
 mod fixed_width;
 mod primitive_array;
 mod record_batch;
+#[cfg(test)]
+mod record_batch_tests;
 mod string_array;
 
 pub use crate::{

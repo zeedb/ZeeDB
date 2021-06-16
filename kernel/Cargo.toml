@@ -12,3 +12,6 @@ chrono = { version = "0.4.11", features = [] }
 serde = { version = "1.0.123", features = ["derive"] }
 twox-hash = { version = "1.6.0", features = [] }
 zetasql = { path = "../zetasql" }
+
+[dev-dependencies]
+bincode = "1.3.1"

@@ -3,6 +3,7 @@ use crate::{
     AnyArray, Array, RecordBatch,
 };
 
+// TODO does this still need to be Vec?
 pub fn fixed_width(batches: &Vec<RecordBatch>) -> String {
     let header: Vec<Vec<String>> = batches[0]
         .columns

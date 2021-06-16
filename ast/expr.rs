@@ -767,6 +767,140 @@ impl Expr {
             self[i].subst(map)
         }
     }
+
+    pub fn schema(&self) -> Vec<(String, DataType)> {
+        use Expr::*;
+
+        fn dummy_schema() -> Vec<(String, DataType)> {
+            vec![("$dummy".to_string(), DataType::Bool)]
+        }
+
+        match self {
+            TableFreeScan { .. } => dummy_schema(),
+            Filter { input, .. }
+            | Limit { input, .. }
+            | Sort { input, .. }
+            | Union { left: input, .. }
+            | Broadcast { input, .. }
+            | Exchange { input, .. }
+            | Delete { input, .. } => input.schema(),
+            SeqScan { projects, .. } => projects
+                .iter()
+                .map(|c| (c.canonical_name(), c.data_type))
+                .collect(),
+            Out { projects, .. } => projects
+                .iter()
+                .map(|c| (c.name.clone(), c.data_type))
+                .collect(),
+            IndexScan {
+                include_existing,
+                projects,
+                input,
+                ..
+            } => {
+                let mut fields: Vec<_> = projects
+                    .iter()
+                    .map(|c| (c.canonical_name(), c.data_type))
+                    .collect();
+                if *include_existing {
+                    fields.extend_from_slice(&input.schema());
+                }
+                fields
+            }
+            Map {
+                include_existing,
+                projects,
+                input,
+            } => {
+                let mut fields: Vec<_> = projects
+                    .iter()
+                    .map(|(_, c)| (c.canonical_name(), c.data_type))
+                    .collect();
+                if *include_existing {
+                    fields.extend_from_slice(&input.schema());
+                }
+                fields
+            }
+            NestedLoop {
+                join, left, right, ..
+            } => {
+                let mut fields = vec![];
+                fields.extend_from_slice(&left.schema());
+                fields.extend_from_slice(&right.schema());
+                if let Join::Mark(column, _) = join {
+                    fields.push((column.canonical_name(), column.data_type))
+                }
+                fields
+            }
+            HashJoin {
+                join, left, right, ..
+            } => {
+                let mut fields = vec![];
+                fields.extend_from_slice(&left.schema());
+                fields.extend_from_slice(&right.schema());
+                if let Join::Mark(column, _) = join {
+                    fields.push((column.canonical_name(), column.data_type))
+                }
+                fields
+            }
+            GetTempTable { columns, .. } => columns
+                .iter()
+                .map(|column| (column.canonical_name(), column.data_type))
+                .collect(),
+            Aggregate {
+                group_by,
+                aggregate,
+                ..
+            } => {
+                let mut fields = vec![];
+                for column in group_by {
+                    fields.push((column.canonical_name(), column.data_type));
+                }
+                for a in aggregate {
+                    fields.push((a.output.canonical_name(), a.output.data_type));
+                }
+                fields
+            }
+            Values { columns, .. } => columns
+                .iter()
+                .map(|column| (column.canonical_name(), column.data_type))
+                .collect(),
+            Script { statements, .. } => statements.last().unwrap().schema(),
+            Explain { .. } => vec![("plan".to_string(), DataType::String)],
+            CreateTempTable { .. } | Insert { .. } | Assign { .. } | Call { .. } => dummy_schema(),
+            Leaf { .. }
+            | LogicalSingleGet { .. }
+            | LogicalGet { .. }
+            | LogicalFilter { .. }
+            | LogicalOut { .. }
+            | LogicalMap { .. }
+            | LogicalJoin { .. }
+            | LogicalDependentJoin { .. }
+            | LogicalWith { .. }
+            | LogicalCreateTempTable { .. }
+            | LogicalGetWith { .. }
+            | LogicalAggregate { .. }
+            | LogicalLimit { .. }
+            | LogicalSort { .. }
+            | LogicalUnion { .. }
+            | LogicalInsert { .. }
+            | LogicalValues { .. }
+            | LogicalUpdate { .. }
+            | LogicalDelete { .. }
+            | LogicalCreateDatabase { .. }
+            | LogicalCreateTable { .. }
+            | LogicalCreateIndex { .. }
+            | LogicalDrop { .. }
+            | LogicalScript { .. }
+            | LogicalAssign { .. }
+            | LogicalCall { .. }
+            | LogicalExplain { .. }
+            | LogicalRewrite { .. } => panic!(
+                "schema() is not implemented for logical operator {}",
+                self.name()
+            ),
+        }
+    }
 }
 
 impl std::ops::Index<usize> for Expr {

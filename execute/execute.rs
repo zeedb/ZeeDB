@@ -229,7 +229,7 @@ impl Node {
                 input: Box::new(Node::compile(*input, txn, context)),
             },
             NestedLoop { join, left, right } => {
-                let right_schema = schema(right.as_ref());
+                let right_schema = right.schema();
                 Node::NestedLoop {
                     join,
                     left: Box::new(Node::compile(*left, txn, context)),
@@ -247,7 +247,7 @@ impl Node {
                 right,
                 ..
             } => {
-                let right_schema = schema(right.as_ref());
+                let right_schema = right.schema();
                 let left = Box::new(Node::compile(*left, txn, context));
                 let right = Box::new(Node::compile(*right, txn, context));
                 Node::HashJoin {
@@ -1153,134 +1153,6 @@ fn dummy_row() -> RecordBatch {
         "$dummy".to_string(),
         AnyArray::Bool(BoolArray::from_values(vec![false])),
     )])
-}
-
-fn dummy_schema() -> Vec<(String, DataType)> {
-    vec![("$dummy".to_string(), DataType::Bool)]
-}
-
-fn schema(expr: &Expr) -> Vec<(String, DataType)> {
-    match expr {
-        TableFreeScan { .. } => dummy_schema(),
-        Filter { input, .. }
-        | Limit { input, .. }
-        | Sort { input, .. }
-        | Union { left: input, .. }
-        | Broadcast { input, .. }
-        | Exchange { input, .. }
-        | Delete { input, .. } => schema(&*input),
-        SeqScan { projects, .. } | Out { projects, .. } => projects
-            .iter()
-            .map(|c| (c.canonical_name(), c.data_type))
-            .collect(),
-        IndexScan {
-            include_existing,
-            projects,
-            input,
-            ..
-        } => {
-            let mut fields: Vec<_> = projects
-                .iter()
-                .map(|c| (c.canonical_name(), c.data_type))
-                .collect();
-            if *include_existing {
-                fields.extend_from_slice(&schema(&*input));
-            }
-            fields
-        }
-        Map {
-            include_existing,
-            projects,
-            input,
-        } => {
-            let mut fields: Vec<_> = projects
-                .iter()
-                .map(|(_, c)| (c.canonical_name(), c.data_type))
-                .collect();
-            if *include_existing {
-                fields.extend_from_slice(&schema(&*input));
-            }
-            fields
-        }
-        NestedLoop {
-            join, left, right, ..
-        } => {
-            let mut fields = vec![];
-            fields.extend_from_slice(&schema(&*left));
-            fields.extend_from_slice(&schema(&*right));
-            if let Join::Mark(column, _) = join {
-                fields.push((column.canonical_name(), column.data_type))
-            }
-            fields
-        }
-        HashJoin {
-            join, left, right, ..
-        } => {
-            let mut fields = vec![];
-            fields.extend_from_slice(&schema(&*left));
-            fields.extend_from_slice(&schema(&*right));
-            if let Join::Mark(column, _) = join {
-                fields.push((column.canonical_name(), column.data_type))
-            }
-            fields
-        }
-        GetTempTable { columns, .. } => columns
-            .iter()
-            .map(|column| (column.canonical_name(), column.data_type))
-            .collect(),
-        Aggregate {
-            group_by,
-            aggregate,
-            ..
-        } => {
-            let mut fields = vec![];
-            for column in group_by {
-                fields.push((column.canonical_name(), column.data_type));
-            }
-            for a in aggregate {
-                fields.push((a.output.canonical_name(), a.output.data_type));
-            }
-            fields
-        }
-        Values { columns, .. } => columns
-            .iter()
-            .map(|column| (column.canonical_name(), column.data_type))
-            .collect(),
-        Script { statements, .. } => schema(statements.last().unwrap()),
-        Explain { .. } => vec![("plan".to_string(), DataType::String)],
-        CreateTempTable { .. } | Insert { .. } | Assign { .. } | Call { .. } => dummy_schema(),
-        Leaf { .. }
-        | LogicalSingleGet { .. }
-        | LogicalGet { .. }
-        | LogicalFilter { .. }
-        | LogicalOut { .. }
-        | LogicalMap { .. }
-        | LogicalJoin { .. }
-        | LogicalDependentJoin { .. }
-        | LogicalWith { .. }
-        | LogicalCreateTempTable { .. }
-        | LogicalGetWith { .. }
-        | LogicalAggregate { .. }
-        | LogicalLimit { .. }
-        | LogicalSort { .. }
-        | LogicalUnion { .. }
-        | LogicalInsert { .. }
-        | LogicalValues { .. }
-        | LogicalUpdate { .. }
-        | LogicalDelete { .. }
-        | LogicalCreateDatabase { .. }
-        | LogicalCreateTable { .. }
-        | LogicalCreateIndex { .. }
-        | LogicalDrop { .. }
-        | LogicalScript { .. }
-        | LogicalAssign { .. }
-        | LogicalCall { .. }
-        | LogicalExplain { .. }
-        | LogicalRewrite { .. } => panic!(
-            "schema is not implemented for logical operator {}",
-            expr.name()
-        ),
-    }
 }
 
 fn build(input: &mut Node, state: &mut QueryState) -> Result<RecordBatch, Exception> {
