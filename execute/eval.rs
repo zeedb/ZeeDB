@@ -116,9 +116,6 @@ fn eval_function(
         F::LengthString(a) => e(a)?.as_string().map(|a: &str| a.chars().count() as i64),
         F::LowerString(a) => e(a)?.as_string().map(|a: &str| a.to_lowercase()),
         F::NaturalLogarithmDouble(a) => e(a)?.as_f64().map(f64::ln),
-        F::NextVal(a) => e(a)?
-            .as_i64()
-            .map(|a| state.context[STORAGE_KEY].lock().unwrap().next_val(a)),
         F::GetVar(a) => e(a)?
             .as_string()
             .map(|a: Option<&str>| Ok(a.and_then(|a| state.variables[a].clone().as_i64().get(0)))),

@@ -162,7 +162,7 @@ impl Parser {
                 Err(status) => return Err(status.message().to_string()),
             };
             let expr = match response.result.unwrap() {
-                ResolvedStatement(stmt) => convert(catalog_id, variables, &stmt),
+                ResolvedStatement(stmt) => convert(catalog_id, variables, &stmt, context),
                 ResolvedExpression(_) => {
                     panic!("expected statement but found expression")
                 }

@@ -23,7 +23,7 @@ pub fn rewrite(expr: Expr) -> Expr {
 
 fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
     match expr {
-        LogicalCreateDatabase { name } => {
+        LogicalCreateDatabase { name, reserved_id } => {
             let mut lines = vec![];
             lines.push(format!(
                 "call set_var('parent_catalog_id', {:?});",
@@ -32,17 +32,20 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             for catalog_name in &name.path[0..name.path.len() - 1] {
                 lines.push(format!("call set_var('parent_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('parent_catalog_id')));", catalog_name));
             }
-            lines.push("call set_var('catalog_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'catalog'));".to_string());
-            lines.push(
-                "call set_var('next_catalog_id', next_val(get_var('catalog_sequence_id')));"
-                    .to_string(),
-            );
+            lines.push(format!(
+                "call set_var('next_catalog_id', {:?});",
+                reserved_id
+            ));
             lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (get_var('parent_catalog_id'), get_var('next_catalog_id'), {:?});", name.path.last().unwrap()));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
         }
-        LogicalCreateTable { name, columns } => {
+        LogicalCreateTable {
+            name,
+            columns,
+            reserved_id,
+        } => {
             let mut lines = vec![];
             lines.push(format!(
                 "call set_var('catalog_id', {:?});",
@@ -51,11 +54,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             for catalog_name in &name.path[0..name.path.len() - 1] {
                 lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
             }
-            lines.push("call set_var('table_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'table'));".to_string());
-            lines.push(
-                "call set_var('next_table_id', next_val(get_var('table_sequence_id')));"
-                    .to_string(),
-            );
+            lines.push(format!("call set_var('next_table_id', {:?});", reserved_id));
             lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (get_var('catalog_id'), get_var('next_table_id'), {:?});", name.path.last().unwrap()));
             for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                 let column_type = column_type.to_string();
@@ -70,6 +69,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             name,
             table,
             columns,
+            reserved_id,
         } => {
             let mut lines = vec![];
             lines.push(format!(
@@ -86,12 +86,8 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             for catalog_name in &table.path[0..table.path.len() - 1] {
                 lines.push(format!("call set_var('table_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('table_catalog_id')));", catalog_name));
             }
-            lines.push("call set_var('index_sequence_id', (select sequence_id from metadata.sequence where sequence_name = 'index'));".to_string());
             lines.push(format!("call set_var('table_id', (select table_id from metadata.table where catalog_id = get_var('table_catalog_id') and table_name = {:?}));", table.path.last().unwrap()));
-            lines.push(
-                "call set_var('next_index_id', next_val(get_var('index_sequence_id')));"
-                    .to_string(),
-            );
+            lines.push(format!("call set_var('next_index_id', {:?});", reserved_id));
             lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (get_var('index_catalog_id'), get_var('next_index_id'), get_var('table_id'), {:?});", name.path.last().unwrap()));
             for (index_order, column_name) in columns.iter().enumerate() {
                 lines.push(format!("call set_var('column_id', (select column_id from metadata.column where table_id = get_var('table_id') and column_name = {:?}));", column_name));

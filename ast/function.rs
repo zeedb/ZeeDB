@@ -46,7 +46,6 @@ pub enum F {
     LengthString(Scalar),
     LowerString(Scalar),
     NaturalLogarithmDouble(Scalar),
-    NextVal(Scalar),
     Not(Scalar),
     ReverseString(Scalar),
     RoundDouble(Scalar),
@@ -167,7 +166,6 @@ impl F {
             | F::LengthString(_)
             | F::LowerString(_)
             | F::NaturalLogarithmDouble(_)
-            | F::NextVal(_)
             | F::Not(_)
             | F::ReverseString(_)
             | F::RoundDouble(_)
@@ -301,7 +299,6 @@ impl std::ops::Index<usize> for F {
             | F::LengthString(a)
             | F::LowerString(a)
             | F::NaturalLogarithmDouble(a)
-            | F::NextVal(a)
             | F::Not(a)
             | F::ReverseString(a)
             | F::RoundDouble(a)
@@ -476,7 +473,6 @@ impl std::ops::IndexMut<usize> for F {
             | F::LengthString(a)
             | F::LowerString(a)
             | F::NaturalLogarithmDouble(a)
-            | F::NextVal(a)
             | F::Not(a)
             | F::ReverseString(a)
             | F::RoundDouble(a)
@@ -891,7 +887,6 @@ impl F {
             "ZetaSQL:atanh" => unary(args, |a| F::AtanhDouble(a)),
             "ZetaSQL:atan2" => binary(args, |a, b| F::Atan2Double(a, b)),
             "ZetaSQL:error" => unary(args, |a| F::Error(a)),
-            "system:next_val" => unary(args, |a| F::NextVal(a)),
             "system:get_var" => unary(args, |a| F::GetVar(a)),
             "system:is_empty" => unary(args, |a| F::IsEmpty(a)),
             other => panic!("{} is not a known function name", other),
@@ -939,7 +934,6 @@ impl F {
             F::LengthString(_) => "LengthString",
             F::LowerString(_) => "LowerString",
             F::NaturalLogarithmDouble(_) => "NaturalLogarithmDouble",
-            F::NextVal(_) => "NextVal",
             F::Not(_) => "Not",
             F::ReverseString(_) => "ReverseString",
             F::RoundDouble(_) => "RoundDouble",
@@ -1071,7 +1065,6 @@ impl F {
             | F::LengthString(a)
             | F::LowerString(a)
             | F::NaturalLogarithmDouble(a)
-            | F::NextVal(a)
             | F::Not(a)
             | F::ReverseString(a)
             | F::RoundDouble(a)
@@ -1271,7 +1264,6 @@ impl F {
             | F::LengthString { .. }
             | F::ModInt64 { .. }
             | F::MultiplyInt64 { .. }
-            | F::NextVal { .. }
             | F::SignInt64 { .. }
             | F::StrposString { .. }
             | F::SubtractInt64 { .. }
@@ -1363,7 +1355,6 @@ impl F {
             F::LengthString(a) => F::LengthString(f(a)),
             F::LowerString(a) => F::LowerString(f(a)),
             F::NaturalLogarithmDouble(a) => F::NaturalLogarithmDouble(f(a)),
-            F::NextVal(a) => F::NextVal(f(a)),
             F::Not(a) => F::Not(f(a)),
             F::ReverseString(a) => F::ReverseString(f(a)),
             F::RoundDouble(a) => F::RoundDouble(f(a)),

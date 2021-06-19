@@ -1,24 +1,30 @@
 use std::{borrow::Borrow, collections::HashMap};
 
 use ast::*;
+use context::Context;
 use kernel::*;
 use zetasql::{
     any_resolved_aggregate_scan_base_proto::Node::*, any_resolved_create_statement_proto::Node::*,
     any_resolved_create_table_stmt_base_proto::Node::*, any_resolved_expr_proto::Node::*,
     any_resolved_function_call_base_proto::Node::*,
     any_resolved_non_scalar_function_call_base_proto::Node::*, any_resolved_scan_proto::Node::*,
-    any_resolved_statement_proto::Node::*, value_proto::Value::*, *,
+    any_resolved_statement_proto::Node::*, resolved_create_statement_enums::CreateScope,
+    value_proto::Value::*, *,
 };
+
+use crate::SEQUENCES_KEY;
 
 pub fn convert<'a>(
     catalog_id: i64,
     variables: &'a HashMap<String, Value>,
     q: &AnyResolvedStatementProto,
+    context: &Context,
 ) -> Expr {
     Converter {
         catalog_id,
         variables,
         known_columns: HashMap::new(),
+        context,
     }
     .any_stmt(q)
 }
@@ -26,6 +32,7 @@ pub fn convert<'a>(
 struct Converter<'a> {
     catalog_id: i64,
     variables: &'a HashMap<String, Value>,
+    context: &'a Context,
     known_columns: HashMap<i64, Column>,
 }
 
@@ -567,6 +574,7 @@ impl<'a> Converter<'a> {
             name,
             table,
             columns,
+            reserved_id: self.context[SEQUENCES_KEY].next_index_id(),
         }
     }
 
@@ -583,7 +591,11 @@ impl<'a> Converter<'a> {
             path: q.parent.get().name_path.clone(),
         };
         let columns = self.column_definitions(&q.column_definition_list);
-        LogicalCreateTable { name, columns }
+        LogicalCreateTable {
+            name,
+            columns,
+            reserved_id: self.context[SEQUENCES_KEY].next_table_id(),
+        }
     }
 
     fn column_definitions(
@@ -782,6 +794,7 @@ impl<'a> Converter<'a> {
                 catalog_id: self.catalog_id,
                 path: q.name_path.clone(),
             },
+            reserved_id: self.context[SEQUENCES_KEY].next_catalog_id(),
         }
     }
 

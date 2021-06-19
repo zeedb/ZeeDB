@@ -259,10 +259,10 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)
             }
-            Expr::LogicalCreateDatabase { name } => {
+            Expr::LogicalCreateDatabase { name, .. } => {
                 write!(f, "{} {}", self.name(), name.path.join("."))
             }
-            Expr::LogicalCreateTable { name, columns } => {
+            Expr::LogicalCreateTable { name, columns, .. } => {
                 write!(f, "{} {}", self.name(), name)?;
                 for (name, data_type) in columns {
                     write!(f, " {}:{}", name, data_type)?;
@@ -273,6 +273,7 @@ impl IndentPrint for Expr {
                 name,
                 table,
                 columns,
+                ..
             } => write!(
                 f,
                 "{} {} {} {}",

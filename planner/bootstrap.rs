@@ -74,11 +74,6 @@ impl Catalog for BootstrapCatalog {
                     TypeKind::TypeInt64,
                 ),
                 simple_function(
-                    "next_val".to_string(),
-                    vec![TypeKind::TypeInt64],
-                    TypeKind::TypeInt64,
-                ),
-                simple_function(
                     "is_empty".to_string(),
                     vec![TypeKind::TypeInt64],
                     TypeKind::TypeBool,
@@ -185,13 +180,6 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
                     column("index_id", TypeKind::TypeInt64),
                     column("column_id", TypeKind::TypeInt64),
                     column("index_order", TypeKind::TypeInt64),
-                ],
-            ),
-            table(
-                "sequence",
-                vec![
-                    column("sequence_id", TypeKind::TypeInt64),
-                    column("sequence_name", TypeKind::TypeString),
                 ],
             ),
         ],

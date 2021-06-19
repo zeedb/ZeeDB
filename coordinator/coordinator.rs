@@ -8,10 +8,10 @@ use std::{
 
 use ast::Value;
 use catalog::MetadataCatalog;
-use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
+use catalog_types::CATALOG_KEY;
 use context::{env_var, Context, ContextKey, WORKER_COUNT_KEY};
-use kernel::{AnyArray, Exception, RecordBatch};
-use parser::{Parser, PARSER_KEY};
+use kernel::{Exception, RecordBatch};
+use parser::{Parser, Sequences, PARSER_KEY, SEQUENCES_KEY};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
@@ -40,6 +40,7 @@ impl Default for CoordinatorNode {
         );
         context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
         context.insert(TRACES_KEY, Mutex::new(HashMap::default()));
+        context.insert(SEQUENCES_KEY, Sequences::default());
         Self {
             context: Arc::new(context),
             txn: Arc::new(AtomicI64::default()),

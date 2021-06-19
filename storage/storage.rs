@@ -1,14 +1,7 @@
-use std::{
-    collections::HashMap,
-    fmt,
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        Mutex,
-    },
-};
+use std::{collections::HashMap, fmt, sync::Mutex};
 
 use context::ContextKey;
-use kernel::{AnyArray, Array, DataType, I64Array, RecordBatch, StringArray};
+use kernel::DataType;
 use statistics::TableStatistics;
 
 use crate::{art::Art, heap::*};
@@ -18,7 +11,6 @@ pub const STORAGE_KEY: ContextKey<Mutex<Storage>> = ContextKey::new("STORAGE");
 pub struct Storage {
     tables: Vec<Heap>,
     indexes: Vec<Art>,
-    sequences: Vec<AtomicI64>,
     statistics: HashMap<i64, TableStatistics>,
 }
 
@@ -57,10 +49,6 @@ impl Storage {
         self.indexes[id as usize].truncate()
     }
 
-    pub fn next_val(&self, id: i64) -> i64 {
-        self.sequences[id as usize].fetch_add(1, Ordering::Relaxed)
-    }
-
     pub fn statistics(&self, id: i64) -> Option<&TableStatistics> {
         self.statistics.get(&id)
     }
@@ -75,17 +63,6 @@ impl Default for Storage {
         // First 100 tables are reserved for system use.
         let mut tables = Vec::with_capacity(0);
         tables.resize_with(100, Heap::empty);
-        // First 100 sequences are reserved for system use.
-        let mut sequences = Vec::with_capacity(0);
-        sequences.resize_with(100, || AtomicI64::new(0));
-        // Bootstrap tables.
-        for (table_id, values) in bootstrap_tables() {
-            tables[table_id as usize].insert(&values, 0);
-        }
-        // Bootstrap sequences.
-        for (sequence_id, value) in bootstrap_sequences() {
-            sequences[sequence_id as usize].store(value, Ordering::Relaxed);
-        }
         // Initially there are no indexes.
         let indexes = vec![];
         // Bootstrap statistics.
@@ -100,7 +77,6 @@ impl Default for Storage {
         Self {
             tables,
             indexes,
-            sequences,
             statistics,
         }
     }
@@ -124,36 +100,9 @@ impl Clone for Storage {
         Self {
             tables: self.tables.clone(),
             indexes: self.indexes.clone(),
-            sequences: self
-                .sequences
-                .iter()
-                .map(|i| AtomicI64::new(i.load(Ordering::Relaxed)))
-                .collect(),
             statistics: self.statistics.clone(),
         }
     }
-}
-
-fn bootstrap_tables() -> Vec<(i64, RecordBatch)> {
-    vec![(
-        5,
-        RecordBatch::new(vec![
-            (
-                "sequence_id".to_string(),
-                AnyArray::I64(I64Array::from_values(vec![0, 1, 2])),
-            ),
-            (
-                "sequence_name".to_string(),
-                AnyArray::String(StringArray::from_str_values(vec![
-                    "catalog", "table", "index",
-                ])),
-            ),
-        ]),
-    )]
-}
-
-fn bootstrap_sequences() -> Vec<(i64, i64)> {
-    vec![(0, 100), (1, 100), (2, 100)]
 }
 
 fn bootstrap_statistics() -> Vec<(i64, Vec<(&'static str, DataType)>)> {
@@ -198,13 +147,6 @@ fn bootstrap_statistics() -> Vec<(i64, Vec<(&'static str, DataType)>)> {
                 ("index_id", DataType::I64),
                 ("column_id", DataType::I64),
                 ("index_order", DataType::I64),
-            ],
-        ),
-        (
-            5, // sequence
-            vec![
-                ("sequence_id", DataType::I64),
-                ("sequence_name", DataType::String),
             ],
         ),
     ]
