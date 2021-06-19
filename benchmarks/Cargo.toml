@@ -17,7 +17,7 @@ e2e_tests = { path = "../e2e_tests" }
 kernel = { path = "../kernel" }
 pprof = { version = "0.4.3", features = ["flamegraph", "criterion"]}
 rand = { version = "0.8.2", features = ["small_rng"]}
-tokio = { version = "1.5.0", features = ["rt-multi-thread"] }
+tokio = { version = "1.7.1", features = ["rt-multi-thread"] }
 tonic = "0.4.3"
 
 [[bench]]
