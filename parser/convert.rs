@@ -628,7 +628,7 @@ impl<'a> Converter<'a> {
         if let Some(scan) = &q.query {
             LogicalInsert {
                 table,
-                input: Box::new(self.insert_scan(q, scan)),
+                input: Box::new(self.any_resolved_scan(scan)),
                 columns: (0..q.query_output_column_list.len())
                     .map(|i| {
                         (
@@ -655,23 +655,6 @@ impl<'a> Converter<'a> {
         self.register_columns(q);
 
         Table::from(q)
-    }
-
-    fn insert_scan(&mut self, q: &ResolvedInsertStmtProto, scan: &AnyResolvedScanProto) -> Expr {
-        let input = self.any_resolved_scan(scan);
-        let projects = (0..q.query_output_column_list.len())
-            .map(|i| {
-                (
-                    Scalar::Column(self.column(&q.query_output_column_list[i])),
-                    self.column(&q.insert_column_list[i]),
-                )
-            })
-            .collect();
-        LogicalMap {
-            include_existing: false,
-            projects,
-            input: Box::new(input),
-        }
     }
 
     fn rows(&mut self, q: &ResolvedInsertStmtProto) -> Expr {

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use ast::*;
 use catalog_types::CATALOG_KEY;
@@ -22,24 +22,18 @@ pub fn rewrite(expr: Expr) -> Expr {
 }
 
 fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
+    fn catalog_id_query(name: &Name) -> String {
+        let mut catalog_id = format!("{}", name.catalog_id);
+        for catalog_name in &name.path[0..name.path.len() - 1] {
+            catalog_id = format!("(select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = {})", catalog_name, catalog_id);
+        }
+        catalog_id
+    }
     match expr {
         LogicalCreateDatabase { name, reserved_id } => {
-            let mut lines = vec![];
-            lines.push(format!(
-                "call set_var('parent_catalog_id', {:?});",
-                name.catalog_id
-            ));
-            for catalog_name in &name.path[0..name.path.len() - 1] {
-                lines.push(format!("call set_var('parent_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('parent_catalog_id')));", catalog_name));
-            }
-            lines.push(format!(
-                "call set_var('next_catalog_id', {:?});",
-                reserved_id
-            ));
-            lines.push(format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) values (get_var('parent_catalog_id'), get_var('next_catalog_id'), {:?});", name.path.last().unwrap()));
-            Ok(LogicalRewrite {
-                sql: lines.join("\n"),
-            })
+            let parent_catalog_id = catalog_id_query(&name);
+            let catalog_name = format!("{:?}", name.path.last().unwrap());
+            Ok(LogicalRewrite { sql: format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) select {}, {}, {}", parent_catalog_id, reserved_id, catalog_name) })
         }
         LogicalCreateTable {
             name,
@@ -47,20 +41,17 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             reserved_id,
         } => {
             let mut lines = vec![];
+            let catalog_id = catalog_id_query(&name);
+            let table_name = format!("{:?}", name.path.last().unwrap());
             lines.push(format!(
-                "call set_var('catalog_id', {:?});",
-                name.catalog_id
+                "insert into metadata.table (catalog_id, table_id, table_name) select {}, {}, {};",
+                catalog_id, reserved_id, table_name
             ));
-            for catalog_name in &name.path[0..name.path.len() - 1] {
-                lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
-            }
-            lines.push(format!("call set_var('next_table_id', {:?});", reserved_id));
-            lines.push(format!("insert into metadata.table (catalog_id, table_id, table_name) values (get_var('catalog_id'), get_var('next_table_id'), {:?});", name.path.last().unwrap()));
             for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                 let column_type = column_type.to_string();
-                lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) values (get_var('next_table_id'), {:?}, {:?}, {:?});", column_id, column_name, column_type));
+                lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) select {}, {}, {:?}, {:?};", reserved_id, column_id, column_name, column_type));
             }
-            lines.push("call create_table(get_var('next_table_id'));".to_string());
+            lines.push(format!("call create_table({});", reserved_id));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
