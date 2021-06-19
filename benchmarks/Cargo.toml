@@ -10,6 +10,7 @@ path = "lib.rs"
 [dependencies]
 
 [dev-dependencies]
+ast = { path = "../ast" }
 chrono = { version = "0.4.11", features = [] }
 criterion = "0.3"
 e2e_tests = { path = "../e2e_tests" }

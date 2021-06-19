@@ -59,6 +59,7 @@ dependencies = [
  "bincode",
  "chrono",
  "kernel",
+ "rpc",
  "serde",
  "zetasql",
 ]
@@ -137,6 +138,7 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 name = "benchmarks"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "chrono",
  "criterion",
  "e2e_tests",
@@ -436,6 +438,7 @@ dependencies = [
 name = "e2e_tests"
 version = "0.1.0"
 dependencies = [
+ "ast",
  "bincode",
  "coordinator",
  "kernel",

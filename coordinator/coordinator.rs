@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use ast::Value;
 use catalog::MetadataCatalog;
 use catalog_types::{CATALOG_KEY, ROOT_CATALOG_ID};
 use context::{env_var, Context, ContextKey, WORKER_COUNT_KEY};
@@ -66,9 +67,23 @@ impl Coordinator for CoordinatorNode {
         let request = request.into_inner();
         let txn = self.txn.fetch_add(1, Ordering::Relaxed);
         let context = self.context.clone();
+        let variables = request
+            .variables
+            .iter()
+            .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter)))
+            .collect();
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        self.pool
-            .spawn(move || sender.send(submit(request, txn, &context)).unwrap());
+        self.pool.spawn(move || {
+            sender
+                .send(submit(
+                    request.sql,
+                    catalog_types::ROOT_CATALOG_ID,
+                    variables,
+                    txn,
+                    &context,
+                ))
+                .unwrap()
+        });
         let response = receiver.await.unwrap()?;
         Ok(Response::new(response))
     }
@@ -89,21 +104,13 @@ impl Coordinator for CoordinatorNode {
 }
 
 fn submit(
-    mut request: SubmitRequest,
+    sql: String,
+    catalog_id: i64,
+    variables: HashMap<String, Value>,
     txn: i64,
     context: &Context,
 ) -> Result<SubmitResponse, Status> {
-    let variables: HashMap<String, AnyArray> = request
-        .variables
-        .drain()
-        .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
-        .collect();
-    let types = variables
-        .iter()
-        .map(|(name, value)| (name.clone(), value.data_type()))
-        .collect();
-    let expr = match context[PARSER_KEY].analyze(&request.sql, ROOT_CATALOG_ID, txn, types, context)
-    {
+    let expr = match context[PARSER_KEY].analyze(&sql, catalog_id, txn, &variables, &context) {
         Ok(expr) => expr,
         Err(message) => {
             return Err(Status::invalid_argument(message));
@@ -111,7 +118,7 @@ fn submit(
     };
     let expr = planner::optimize(expr, txn, context);
     let schema = expr.schema();
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(expr, variables, txn);
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(expr, txn);
     let mut batches = vec![];
     loop {
         match stream.next() {

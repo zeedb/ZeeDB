@@ -78,7 +78,6 @@ pub(crate) fn compute_logical_props(
         | LogicalCreateTempTable { .. }
         | LogicalCreateIndex { .. }
         | LogicalDrop { .. }
-        | LogicalAssign { .. }
         | LogicalCall { .. }
         | LogicalRewrite { .. } => LogicalProps {
             cardinality: 0.0,
@@ -105,7 +104,6 @@ pub(crate) fn compute_logical_props(
         | Values { .. }
         | Delete { .. }
         | Script { .. }
-        | Assign { .. }
         | Call { .. }
         | Explain { .. } => panic!("{} is a physical operator", mexpr.expr.name()),
     }
@@ -276,10 +274,6 @@ fn selectivity(scalar: &Scalar, input: &LogicalProps) -> Option<f64> {
             | ColumnStatistics::Date(_)
             | ColumnStatistics::Timestamp(_) => panic!("Bad bool value {}", column),
         },
-        Scalar::Parameter(_, _) => {
-            // We don't know anything about parameters.
-            None
-        }
         Scalar::Call(function) => match function.as_ref() {
             // WHERE column1 = column2
             F::Equal(Scalar::Column(column1), Scalar::Column(column2))

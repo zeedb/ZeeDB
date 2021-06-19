@@ -31,7 +31,7 @@ impl Iterator for RecordStream {
 }
 
 pub trait RemoteExecution: Send + Sync {
-    fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream;
+    fn submit(&self, expr: Expr, txn: i64) -> RecordStream;
 
     fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32);
 

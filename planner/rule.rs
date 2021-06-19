@@ -34,7 +34,6 @@ pub(crate) enum Rule {
     LogicalInsertToInsert,
     LogicalValuesToValues,
     LogicalDeleteToDelete,
-    LogicalAssignToAssign,
     LogicalCallToCall,
     LogicalExplainToExplain,
     LogicalScriptToScript,
@@ -64,7 +63,6 @@ impl Rule {
             | Rule::LogicalInsertToInsert
             | Rule::LogicalValuesToValues
             | Rule::LogicalDeleteToDelete
-            | Rule::LogicalAssignToAssign
             | Rule::LogicalScriptToScript => true,
             _ => false,
         }
@@ -117,7 +115,6 @@ impl Rule {
             | (Rule::LogicalInsertToInsert, LogicalInsert { .. })
             | (Rule::LogicalValuesToValues, LogicalValues { .. })
             | (Rule::LogicalDeleteToDelete, LogicalDelete { .. })
-            | (Rule::LogicalAssignToAssign, LogicalAssign { .. })
             | (Rule::LogicalCallToCall, LogicalCall { .. })
             | (Rule::LogicalExplainToExplain, LogicalExplain { .. })
             | (Rule::LogicalScriptToScript, LogicalScript { .. })
@@ -150,7 +147,6 @@ impl Rule {
             | Rule::LogicalInsertToInsert
             | Rule::LogicalValuesToValues
             | Rule::LogicalDeleteToDelete
-            | Rule::LogicalAssignToAssign
             | Rule::LogicalCallToCall
             | Rule::LogicalExplainToExplain
             | Rule::LogicalScriptToScript => required == PhysicalProp::None,
@@ -530,20 +526,6 @@ impl Rule {
                     return single(Delete { table, tid, input });
                 }
             }
-            Rule::LogicalAssignToAssign => {
-                if let LogicalAssign {
-                    variable,
-                    value,
-                    input,
-                } = bind
-                {
-                    return single(Assign {
-                        variable,
-                        value,
-                        input,
-                    });
-                }
-            }
             Rule::LogicalCallToCall => {
                 if let LogicalCall { procedure, input } = bind {
                     return single(Call { procedure, input });
@@ -588,7 +570,6 @@ impl Rule {
             Rule::LogicalInsertToInsert,
             Rule::LogicalValuesToValues,
             Rule::LogicalDeleteToDelete,
-            Rule::LogicalAssignToAssign,
             Rule::LogicalCallToCall,
             Rule::LogicalExplainToExplain,
             Rule::LogicalScriptToScript,

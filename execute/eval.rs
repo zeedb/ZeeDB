@@ -29,11 +29,6 @@ pub(crate) fn eval(
             let find = column.canonical_name();
             input.find(&find).expect(&find).clone()
         }
-        Scalar::Parameter(name, _) => {
-            let value: &AnyArray = state.variables.get(name).as_ref().expect(name);
-            assert_eq!(value.len(), 1, "@{} has length {}", name, value.len());
-            value.repeat(input.len())
-        }
         Scalar::Call(function) => eval_function(function.as_ref(), input, state)?,
         Scalar::Cast(scalar, data_type) => eval(scalar, input, state)?.cast(*data_type),
     };

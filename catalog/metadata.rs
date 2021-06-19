@@ -91,24 +91,21 @@ fn select_catalog(
     let mut variables = HashMap::new();
     variables.insert(
         "parent_catalog_id".to_string(),
-        AnyArray::I64(I64Array::from_values(vec![parent_catalog_id])),
+        Value::I64(Some(parent_catalog_id)),
     );
     variables.insert(
         "catalog_name".to_string(),
-        AnyArray::String(StringArray::from_str_values(vec![catalog_name])),
+        Value::String(Some(catalog_name.to_string())),
     );
-    static Q: OnceCell<Expr> = OnceCell::new();
-    let q = Q.get_or_init(|| {
-        plan_using_bootstrap_catalog(
-            "
+    let q = plan_using_bootstrap_catalog(
+        "
     select catalog_id 
     from metadata.catalog
     where parent_catalog_id = @parent_catalog_id
     and catalog_name = @catalog_name",
-            &variables,
-        )
-    });
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
+        &variables,
+    );
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), txn);
     let batch = match stream.next() {
         Some(first) => first.unwrap(),
         None => panic!(
@@ -135,31 +132,25 @@ fn select_table(
     context: &Context,
 ) -> SimpleTableProto {
     let mut variables = HashMap::new();
-    variables.insert(
-        "catalog_id".to_string(),
-        AnyArray::I64(I64Array::from_values(vec![catalog_id])),
-    );
+    variables.insert("catalog_id".to_string(), Value::I64(Some(catalog_id)));
     variables.insert(
         "table_name".to_string(),
-        AnyArray::String(StringArray::from_str_values(vec![table_name])),
+        Value::String(Some(table_name.to_string())),
     );
-    static Q: OnceCell<Expr> = OnceCell::new();
-    let q = Q.get_or_init(|| {
-        plan_using_bootstrap_catalog(
-            "
+    let q = plan_using_bootstrap_catalog(
+        "
             select table_id, column_name, column_type
             from metadata.table
             join metadata.column using (table_id) 
             where catalog_id = @catalog_id and table_name = @table_name
             order by column_id",
-            &variables,
-        )
-    });
+        &variables,
+    );
     let mut table = SimpleTableProto {
         name: Some(table_name.to_string()),
         ..Default::default()
     };
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), txn);
     loop {
         match stream.next() {
             Some(batch) => {
@@ -190,25 +181,19 @@ fn select_table(
 
 fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
     let mut variables = HashMap::new();
-    variables.insert(
-        "table_id".to_string(),
-        AnyArray::I64(I64Array::from_values(vec![table_id])),
-    );
-    static Q: OnceCell<Expr> = OnceCell::new();
-    let q = Q.get_or_init(|| {
-        plan_using_bootstrap_catalog(
-            "
+    variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
+    let q = plan_using_bootstrap_catalog(
+        "
             select index_id, column_name
             from metadata.index
             join metadata.index_column using (index_id)
             join metadata.column using (table_id, column_id)
             where table_id = @table_id
             order by index_id, index_order",
-            &variables,
-        )
-    });
+        &variables,
+    );
     let mut indexes: Vec<Index> = vec![];
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), variables, txn);
+    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), txn);
     loop {
         match stream.next() {
             Some(batch) => {
@@ -234,17 +219,13 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
     indexes
 }
 
-fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, AnyArray>) -> Expr {
+fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, Value>) -> Expr {
     let mut context = Context::default();
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
     context.insert(REMOTE_EXECUTION_KEY, Box::new(BootstrapStatistics));
     context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
-    // context.insert(REMOTE_EXECUTION_KEY, RemoteExecution::default());
-    let variables = variables
-        .iter()
-        .map(|(name, value)| (name.clone(), value.data_type()))
-        .collect();
+
     let expr = context[PARSER_KEY]
         .analyze(
             query,

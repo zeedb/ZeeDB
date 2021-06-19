@@ -1,5 +1,4 @@
-
-use kernel::{Array, I64Array};
+use ast::Value;
 
 use crate::test_runner::TestRunner;
 
@@ -89,7 +88,7 @@ fn test_variables() {
         "$col1\n1    ".to_string(),
         TestRunner::default().run(
             "select @var",
-            vec![("var".to_string(), I64Array::from_values(vec![1]).as_any())]
+            vec![("var".to_string(), Value::I64(Some(1)))]
         )
     );
 }

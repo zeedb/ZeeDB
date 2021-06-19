@@ -90,8 +90,8 @@ impl RpcRemoteExecution {
 }
 
 impl RemoteExecution for RpcRemoteExecution {
-    fn submit(&self, expr: Expr, variables: HashMap<String, AnyArray>, txn: i64) -> RecordStream {
-        self.broadcast_or_submit(expr, variables, 1, txn, 0)
+    fn submit(&self, expr: Expr, txn: i64) -> RecordStream {
+        self.broadcast_or_submit(expr, HashMap::new(), 1, txn, 0)
     }
 
     fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32) {

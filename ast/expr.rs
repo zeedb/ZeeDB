@@ -142,11 +142,6 @@ pub enum Expr {
     LogicalScript {
         statements: Vec<Expr>,
     },
-    LogicalAssign {
-        variable: String,
-        value: Scalar,
-        input: Box<Expr>,
-    },
     LogicalCall {
         procedure: Procedure,
         input: Box<Expr>,
@@ -258,11 +253,6 @@ pub enum Expr {
     Script {
         statements: Vec<Expr>,
     },
-    Assign {
-        variable: String,
-        value: Scalar,
-        input: Box<Expr>,
-    },
     Call {
         procedure: Procedure,
         input: Box<Expr>,
@@ -299,7 +289,6 @@ impl Expr {
             | Expr::LogicalDrop { .. }
             | Expr::LogicalRewrite { .. }
             | Expr::LogicalScript { .. }
-            | Expr::LogicalAssign { .. }
             | Expr::LogicalCall { .. }
             | Expr::LogicalExplain { .. } => true,
             Expr::Leaf { .. }
@@ -323,7 +312,6 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
-            | Expr::Assign { .. }
             | Expr::Call { .. }
             | Expr::Explain { .. } => false,
         }
@@ -369,8 +357,6 @@ impl Expr {
             | Expr::Delete { .. }
             | Expr::LogicalCreateTempTable { .. }
             | Expr::CreateTempTable { .. }
-            | Expr::LogicalAssign { .. }
-            | Expr::Assign { .. }
             | Expr::LogicalCall { .. }
             | Expr::Call { .. }
             | Expr::LogicalExplain { .. }
@@ -437,7 +423,6 @@ impl Expr {
                 right: input,
                 ..
             }
-            | Expr::LogicalAssign { input, .. }
             | Expr::LogicalCall { input, .. }
             | Expr::LogicalExplain { input, .. } => input.attributes(),
             Expr::LogicalJoin {
@@ -523,7 +508,6 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
-            | Expr::Assign { .. }
             | Expr::Call { .. }
             | Expr::Explain { .. } => panic!(
                 "attributes is not implemented for physical operator {}",
@@ -588,9 +572,6 @@ impl Expr {
                     }
                 }
             }
-            Expr::LogicalAssign { value, .. } => {
-                value.collect_references(set);
-            }
             Expr::LogicalCall { procedure, .. } => procedure.collect_references(set),
             Expr::LogicalSingleGet { .. }
             | Expr::Leaf { .. }
@@ -628,7 +609,6 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
-            | Expr::Assign { .. }
             | Expr::Call { .. }
             | Expr::Explain { .. } => unimplemented!(
                 "references is not implemented for physical operator {}",
@@ -732,7 +712,6 @@ impl Expr {
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. }
             | Expr::LogicalScript { .. }
-            | Expr::LogicalAssign { .. }
             | Expr::LogicalCall { .. }
             | Expr::LogicalExplain { .. }
             | Expr::LogicalRewrite { .. } => {}
@@ -756,7 +735,6 @@ impl Expr {
             | Expr::Values { .. }
             | Expr::Delete { .. }
             | Expr::Script { .. }
-            | Expr::Assign { .. }
             | Expr::Call { .. }
             | Expr::Explain { .. } => panic!(
                 "subst is not implemented for physical operator {}",
@@ -867,7 +845,7 @@ impl Expr {
                 .collect(),
             Script { statements, .. } => statements.last().unwrap().schema(),
             Explain { .. } => vec![("plan".to_string(), DataType::String)],
-            CreateTempTable { .. } | Insert { .. } | Assign { .. } | Call { .. } => dummy_schema(),
+            CreateTempTable { .. } | Insert { .. } | Call { .. } => dummy_schema(),
             Leaf { .. }
             | LogicalSingleGet { .. }
             | LogicalGet { .. }
@@ -892,7 +870,6 @@ impl Expr {
             | LogicalCreateIndex { .. }
             | LogicalDrop { .. }
             | LogicalScript { .. }
-            | LogicalAssign { .. }
             | LogicalCall { .. }
             | LogicalExplain { .. }
             | LogicalRewrite { .. } => panic!(
@@ -947,8 +924,6 @@ impl std::ops::Index<usize> for Expr {
             | Expr::Delete { input, .. }
             | Expr::LogicalCreateTempTable { input, .. }
             | Expr::CreateTempTable { input, .. }
-            | Expr::LogicalAssign { input, .. }
-            | Expr::Assign { input, .. }
             | Expr::LogicalCall { input, .. }
             | Expr::Call { input, .. }
             | Expr::LogicalExplain { input, .. }
@@ -1015,8 +990,6 @@ impl std::ops::IndexMut<usize> for Expr {
             | Expr::Delete { input, .. }
             | Expr::LogicalCreateTempTable { input, .. }
             | Expr::CreateTempTable { input, .. }
-            | Expr::LogicalAssign { input, .. }
-            | Expr::Assign { input, .. }
             | Expr::LogicalCall { input, .. }
             | Expr::Call { input, .. }
             | Expr::LogicalExplain { input, .. }

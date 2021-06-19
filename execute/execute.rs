@@ -143,11 +143,6 @@ enum Node {
         offset: usize,
         statements: Vec<Node>,
     },
-    Assign {
-        variable: String,
-        value: Scalar,
-        input: Box<Node>,
-    },
     Call {
         procedure: Procedure,
         input: Box<Node>,
@@ -362,15 +357,6 @@ impl Node {
                     statements: compiled,
                 }
             }
-            Assign {
-                variable,
-                value,
-                input,
-            } => Node::Assign {
-                variable,
-                value,
-                input: Box::new(Node::compile(*input, txn, context)),
-            },
             Call { procedure, input } => Node::Call {
                 procedure,
                 input: Box::new(Node::compile(*input, txn, context)),
@@ -404,7 +390,6 @@ impl Node {
             | LogicalDrop { .. }
             | LogicalScript { .. }
             | LogicalRewrite { .. }
-            | LogicalAssign { .. }
             | LogicalCall { .. }
             | LogicalExplain { .. } => panic!("logical operation"),
         }
@@ -1027,16 +1012,6 @@ impl Node {
                 }
                 Err(Exception::End)
             }
-            Node::Assign {
-                variable,
-                value,
-                input,
-            } => {
-                let input = input.next(state)?;
-                let value = crate::eval::eval(value, &input, state)?;
-                state.variables.insert(variable.clone(), value);
-                Err(Exception::End)
-            }
             Node::Call { procedure, input } => {
                 let input = input.next(state)?;
                 match procedure {
@@ -1129,7 +1104,6 @@ impl Node {
             Node::Values { .. } => "Values",
             Node::Delete { .. } => "Delete",
             Node::Script { .. } => "Script",
-            Node::Assign { .. } => "Assign",
             Node::Call { .. } => "Call",
             Node::Explain { .. } => "Explain",
         }

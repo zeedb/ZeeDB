@@ -10,20 +10,26 @@ use zetasql::{
     any_resolved_statement_proto::Node::*, value_proto::Value::*, *,
 };
 
-pub fn convert(catalog_id: i64, q: &AnyResolvedStatementProto) -> Expr {
+pub fn convert<'a>(
+    catalog_id: i64,
+    variables: &'a HashMap<String, Value>,
+    q: &AnyResolvedStatementProto,
+) -> Expr {
     Converter {
         catalog_id,
+        variables,
         known_columns: HashMap::new(),
     }
     .any_stmt(q)
 }
 
-struct Converter {
+struct Converter<'a> {
     catalog_id: i64,
+    variables: &'a HashMap<String, Value>,
     known_columns: HashMap<i64, Column>,
 }
 
-impl Converter {
+impl<'a> Converter<'a> {
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
         match q.node.get() {
             ResolvedQueryStmtNode(q) => self.query(q),
@@ -883,10 +889,7 @@ impl Converter {
     }
 
     fn parameter(&mut self, x: &ResolvedParameterProto) -> Scalar {
-        Scalar::Parameter(
-            x.name.get().clone(),
-            DataType::from(x.parent.get().r#type.get()),
-        )
+        Scalar::Literal(self.variables[x.name.get()].clone())
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {

@@ -1,16 +1,19 @@
-use std::{net::TcpListener, sync::Mutex, time::Duration};
-
-use coordinator::CoordinatorNode;
-use fs::File;
-use kernel::{AnyArray, RecordBatch};
-use once_cell::sync::Lazy;
-use rpc::{
-    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, CheckRequest, SubmitRequest,
-};
 use std::{
     fs,
     io::{Read, Write},
+    net::TcpListener,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
+
+use ast::Value;
+use coordinator::CoordinatorNode;
+use fs::File;
+use kernel::RecordBatch;
+use once_cell::sync::Lazy;
+use rpc::{
+    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
+    worker_server::WorkerServer, CheckRequest, SubmitRequest, TraceRequest,
 };
 use tonic::{
     transport::{Channel, Endpoint, Server},
@@ -113,26 +116,46 @@ impl TestRunner {
         }
     }
 
-    pub fn run(&mut self, sql: &str, variables: Vec<(String, AnyArray)>) -> String {
+    pub fn run(&mut self, sql: &str, variables: Vec<(String, Value)>) -> String {
         let request = SubmitRequest {
             sql: sql.to_string(),
             variables: variables
                 .iter()
-                .map(|(k, v)| (k.clone(), bincode::serialize(v).unwrap()))
+                .map(|(k, v)| (k.clone(), v.into_proto()))
                 .collect(),
         };
-        let response = self.client.submit(Request::new(request));
-        rpc::runtime().block_on(async {
-            match response.await {
-                Ok(response) => {
-                    let batch: RecordBatch =
-                        bincode::deserialize(&response.into_inner().record_batch).unwrap();
-                    kernel::fixed_width(&vec![batch])
-                }
-                Err(status) => format!("ERROR: {}", status.message()),
+        match rpc::runtime().block_on(self.client.submit(Request::new(request))) {
+            Ok(response) => {
+                let batch: RecordBatch =
+                    bincode::deserialize(&response.into_inner().record_batch).unwrap();
+                kernel::fixed_width(&vec![batch])
             }
-        })
+            Err(status) => format!("ERROR: {}", status.message()),
+        }
     }
+
+    pub fn benchmark(&mut self, sql: &str, variables: Vec<(String, Value)>) -> TestBenchmark {
+        let request = SubmitRequest {
+            sql: sql.to_string(),
+            variables: variables
+                .iter()
+                .map(|(k, v)| (k.clone(), v.into_proto()))
+                .collect(),
+        };
+        let start = Instant::now();
+        let trace = rpc::runtime()
+            .block_on(self.client.submit(Request::new(request)))
+            .unwrap()
+            .into_inner()
+            .trace;
+        let elapsed = Instant::now().duration_since(start);
+        TestBenchmark { elapsed, trace }
+    }
+}
+
+pub struct TestBenchmark {
+    pub elapsed: Duration,
+    pub trace: Vec<TraceRequest>,
 }
 
 impl Drop for TestRunner {

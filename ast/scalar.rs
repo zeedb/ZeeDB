@@ -9,7 +9,6 @@ use crate::{Column, Value, F};
 pub enum Scalar {
     Literal(Value),
     Column(Column),
-    Parameter(String, DataType),
     Call(Box<F>),
     Cast(Box<Scalar>, DataType),
 }
@@ -19,7 +18,6 @@ impl Scalar {
         match self {
             Scalar::Literal(value) => value.data_type().clone(),
             Scalar::Column(column) => column.data_type.clone(),
-            Scalar::Parameter(_, data_type) => data_type.clone(),
             Scalar::Call(function) => function.returns().clone(),
             Scalar::Cast(_, data_type) => data_type.clone(),
         }
@@ -27,7 +25,7 @@ impl Scalar {
 
     pub fn len(&self) -> usize {
         match self {
-            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => 0,
+            Scalar::Literal(_) | Scalar::Column(_) => 0,
             Scalar::Call(f) => f.len(),
             Scalar::Cast(_, _) => 1,
         }
@@ -41,7 +39,7 @@ impl Scalar {
 
     pub(crate) fn collect_references(&self, free: &mut HashSet<Column>) {
         match self {
-            Scalar::Literal(_) | Scalar::Parameter(_, _) => {}
+            Scalar::Literal(_) => {}
             Scalar::Column(column) => {
                 free.insert(column.clone());
             }
@@ -87,7 +85,7 @@ impl std::ops::Index<usize> for Scalar {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!("{}", index),
+            Scalar::Literal(_) | Scalar::Column(_) => panic!("{}", index),
             Scalar::Call(f) => &f[index],
             Scalar::Cast(x, _) => {
                 if index == 0 {
@@ -103,7 +101,7 @@ impl std::ops::Index<usize> for Scalar {
 impl std::ops::IndexMut<usize> for Scalar {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            Scalar::Literal(_) | Scalar::Column(_) | Scalar::Parameter(_, _) => panic!("{}", index),
+            Scalar::Literal(_) | Scalar::Column(_) => panic!("{}", index),
             Scalar::Call(f) => &mut f[index],
             Scalar::Cast(x, _) => {
                 if index == 0 {

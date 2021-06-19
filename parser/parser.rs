@@ -1,9 +1,8 @@
-use std::{net::TcpListener, sync::Mutex, time::Duration};
+use std::{collections::HashMap, net::TcpListener, sync::Mutex, time::Duration};
 
-use ast::Expr;
+use ast::{Expr, Value};
 use catalog_types::{enabled_language_features, supported_statement_kinds, CATALOG_KEY};
 use context::{Context, ContextKey};
-use kernel::*;
 use tonic::{transport::Channel, Request};
 use zetasql::{
     analyze_request::Target::ParseResumeLocation,
@@ -37,7 +36,7 @@ impl Default for Parser {
             });
             let mut client = ZetaSqlLocalServiceClient::connect(zetasql.clone()).await.unwrap();
             for _ in 0..10usize {
-                match client.format_sql(FormatSqlRequest { 
+                match client.format_sql(FormatSqlRequest {
                     sql: Some("select 1".to_string())
                 }).await {
                     Ok(_) => return Self { client: Mutex::new(client) },
@@ -79,7 +78,8 @@ impl Parser {
                     },
                     options: Some(language_options()),
                 };
-                let response = self.client
+                let response = self
+                    .client
                     .lock()
                     .unwrap()
                     .extract_table_names_from_next_statement(request)
@@ -99,7 +99,7 @@ impl Parser {
         sql: &str,
         catalog_id: i64,
         txn: i64,
-        mut variables: Vec<(String, DataType)>,
+        variables: &HashMap<String, Value>,
         context: &Context,
     ) -> Result<Expr, String> {
         // Extract table names from script.
@@ -137,9 +137,9 @@ impl Parser {
                     prune_unused_columns: Some(true),
                     query_parameters: variables
                         .iter()
-                        .map(|(name, data_type)| QueryParameterProto {
+                        .map(|(name, value)| QueryParameterProto {
                             name: Some(name.clone()),
-                            r#type: Some(data_type.to_proto()),
+                            r#type: Some(value.data_type().to_proto()),
                         })
                         .collect(),
                     ..Default::default()
@@ -162,21 +162,11 @@ impl Parser {
                 Err(status) => return Err(status.message().to_string()),
             };
             let expr = match response.result.unwrap() {
-                ResolvedStatement(stmt) => convert(catalog_id, &stmt),
+                ResolvedStatement(stmt) => convert(catalog_id, variables, &stmt),
                 ResolvedExpression(_) => {
                     panic!("expected statement but found expression")
                 }
             };
-            // If we detected a SET _ = _ statement, add it to the query scope.
-            if let Expr::LogicalAssign {
-                variable, value, ..
-            } = &expr
-            {
-                if let Some(i) = variables.iter().position(|(name, _)| name == variable) {
-                    variables.remove(i);
-                }
-                variables.push((variable.clone(), value.data_type()))
-            }
             // Add expr to list and prepare to continue parsing.
             offset = response.resume_byte_position.unwrap();
             exprs.push(expr);

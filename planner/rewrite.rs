@@ -258,7 +258,6 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Expr::LogicalDependentJoin { predicates, .. } => visit_predicates(predicates),
         Expr::LogicalMap { projects, .. } => visit_projects(projects),
         Expr::LogicalJoin { join, .. } => visit_join(join),
-        Expr::LogicalAssign { value, .. } => visit(value),
         Expr::LogicalCall { procedure, .. } => visit_procedure(procedure),
         Expr::Leaf { .. }
         | Expr::LogicalSingleGet { .. }
@@ -301,7 +300,6 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Expr::Values { .. }
         | Expr::Delete { .. }
         | Expr::Script { .. }
-        | Expr::Assign { .. }
         | Expr::Call { .. }
         | Expr::Explain { .. } => panic!(
             "rewrite_scalars is not implemented for physical operator {}",
@@ -773,7 +771,13 @@ fn analyze_bootstrap(sql: &str) -> Expr {
     context.insert(PARSER_KEY, Parser::default());
     context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
     context[PARSER_KEY]
-        .analyze(sql, catalog_types::ROOT_CATALOG_ID, 0, vec![], &context)
+        .analyze(
+            sql,
+            catalog_types::ROOT_CATALOG_ID,
+            0,
+            &HashMap::new(),
+            &context,
+        )
         .unwrap()
 }
 

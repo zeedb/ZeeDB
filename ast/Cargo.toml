@@ -11,6 +11,7 @@ path = "lib.rs"
 chrono = { version = "0.4.11", features = [] }
 serde = { version = "1.0.123", features = ["derive"] }
 kernel = { path = "../kernel" }
+rpc = { path = "../rpc" }
 zetasql = { path = "../zetasql" }
 
 [dev-dependencies]

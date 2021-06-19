@@ -1,5 +1,6 @@
 use chrono::*;
 use kernel::*;
+use rpc::{parameter::Any, Parameter};
 use serde::{Deserialize, Serialize};
 use std::{fmt, hash};
 
@@ -23,6 +24,54 @@ impl Value {
             AnyArray::Date(array) => Value::Date(array.get(0)),
             AnyArray::Timestamp(array) => Value::Timestamp(array.get(0)),
             AnyArray::String(array) => Value::String(array.get(0).map(|s| s.to_string())),
+        }
+    }
+
+    pub fn from_proto(parameter: &Parameter) -> Self {
+        fn maybe<T>(value: T, is_null: bool) -> Option<T> {
+            if is_null {
+                None
+            } else {
+                Some(value)
+            }
+        }
+        match parameter.any.clone().unwrap() {
+            Any::Bool(value) => Value::Bool(maybe(value, parameter.is_null)),
+            Any::I64(value) => Value::I64(maybe(value, parameter.is_null)),
+            Any::F64(value) => Value::F64(maybe(value, parameter.is_null)),
+            Any::Date(value) => Value::Date(maybe(value, parameter.is_null)),
+            Any::Timestamp(value) => Value::Timestamp(maybe(value, parameter.is_null)),
+            Any::String(value) => Value::String(maybe(value, parameter.is_null)),
+        }
+    }
+
+    pub fn into_proto(&self) -> Parameter {
+        match self {
+            Value::Bool(value) => Parameter {
+                is_null: value.is_none(),
+                any: Some(Any::Bool(value.unwrap_or_default())),
+            },
+            Value::I64(value) => Parameter {
+                is_null: value.is_none(),
+                any: Some(Any::I64(value.unwrap_or_default())),
+            },
+            Value::F64(value) => Parameter {
+                is_null: value.is_none(),
+                any: Some(Any::F64(value.unwrap_or_default())),
+            },
+            Value::Date(value) => Parameter {
+                is_null: value.is_none(),
+                any: Some(Any::Date(value.unwrap_or_default())),
+            },
+            Value::Timestamp(value) => Parameter {
+                is_null: value.is_none(),
+                any: Some(Any::Timestamp(value.unwrap_or_default())),
+            },
+            Value::String(value) => Parameter {
+                is_null: value.is_none(),
+                any: Some(Any::String(value.clone().unwrap_or("".to_string()))),
+            },
+            Value::EnumValue(_) => unimplemented!(),
         }
     }
 

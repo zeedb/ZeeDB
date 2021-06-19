@@ -10,7 +10,19 @@ service Coordinator {
 
 message SubmitRequest {
   required string sql = 1;
-  map<string, bytes> variables = 2;
+  map<string, Parameter> variables = 2;
+}
+
+message Parameter {
+  required bool is_null = 1;
+  oneof any {
+    bool bool = 2;
+    int64 i64 = 3;
+    double f64 = 4;
+    int32 date = 5;
+    int64 timestamp = 6;
+    string string = 7;
+  }
 }
 
 message SubmitResponse {

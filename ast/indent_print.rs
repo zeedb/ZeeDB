@@ -326,20 +326,6 @@ impl IndentPrint for Expr {
                 }
                 Ok(())
             }
-            Expr::LogicalAssign {
-                variable,
-                value,
-                input,
-            }
-            | Expr::Assign {
-                variable,
-                value,
-                input,
-            } => {
-                write!(f, "{} {} {}", self.name(), variable, value)?;
-                newline(f, indent)?;
-                input.indent_print(f, indent + 1)
-            }
             Expr::LogicalCall {
                 procedure, input, ..
             }
@@ -386,7 +372,6 @@ impl Expr {
             Expr::LogicalCreateIndex { .. } => "LogicalCreateIndex",
             Expr::LogicalDrop { .. } => "LogicalDrop",
             Expr::LogicalScript { .. } => "LogicalScript",
-            Expr::LogicalAssign { .. } => "LogicalAssign",
             Expr::LogicalCall { .. } => "LogicalCall",
             Expr::LogicalExplain { .. } => "LogicalExplain",
             Expr::LogicalRewrite { .. } => "LogicalRewrite",
@@ -410,7 +395,6 @@ impl Expr {
             Expr::Values { .. } => "Values",
             Expr::Delete { .. } => "Delete",
             Expr::Script { .. } => "Script",
-            Expr::Assign { .. } => "Assign",
             Expr::Call { .. } => "Call",
             Expr::Explain { .. } => "Explain",
         }
@@ -443,7 +427,6 @@ impl Display for Scalar {
         match self {
             Scalar::Literal(value) => write!(f, "{}", value),
             Scalar::Column(column) => write!(f, "{}", column),
-            Scalar::Parameter(name, _) => write!(f, "@{}", name),
             Scalar::Call(function) => {
                 if function.arguments().is_empty() {
                     write!(f, "({})", function.name())

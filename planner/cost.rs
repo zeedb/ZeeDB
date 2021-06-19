@@ -29,7 +29,6 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
         | Union { .. }
         | Values { .. }
         | Script { .. }
-        | Assign { .. }
         | Call { .. }
         | Explain { .. } => 0.0,
         SeqScan { table, .. } => {
@@ -122,7 +121,6 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
         | LogicalDrop { .. }
         | LogicalRewrite { .. }
         | LogicalScript { .. }
-        | LogicalAssign { .. }
         | LogicalCall { .. }
         | LogicalExplain { .. } => panic!("logical operator {}", &opt.ss[mid].expr),
     }

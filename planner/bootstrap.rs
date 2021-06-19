@@ -22,12 +22,7 @@ impl RemoteExecution for BootstrapStatistics {
         None
     }
 
-    fn submit(
-        &self,
-        _expr: Expr,
-        _variables: HashMap<String, AnyArray>,
-        _txn: i64,
-    ) -> RecordStream {
+    fn submit(&self, _expr: Expr, _txn: i64) -> RecordStream {
         unimplemented!()
     }
 
