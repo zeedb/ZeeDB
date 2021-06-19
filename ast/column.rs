@@ -54,10 +54,34 @@ impl Column {
 
     pub fn canonical_name(&self) -> String {
         if let Some(table) = &self.table_name {
-            format!("{}.{}#{:#x}", table, self.name, self.id)
+            format!("{}.{}#{:#x}", table, self.escape_name(), self.id)
         } else {
-            format!("{}#{:#x}", self.name, self.id)
+            format!("{}#{:#x}", self.escape_name(), self.id)
         }
+    }
+
+    pub fn parse_canonical_name(name: &str) -> String {
+        let i = match name.find('.') {
+            Some(i) => {
+                if name.as_bytes().get(i + 1) == Some(&('.' as u8)) {
+                    0
+                } else {
+                    i + 1
+                }
+            }
+            _ => 0,
+        };
+        let j = name.find('#').unwrap();
+        let name = &name[i..j];
+        Self::unescape_name(name)
+    }
+
+    fn escape_name(&self) -> String {
+        self.name.replace('.', "..")
+    }
+
+    fn unescape_name(name: &str) -> String {
+        name.replace("..", ".")
     }
 }
 
