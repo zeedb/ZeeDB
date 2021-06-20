@@ -556,10 +556,7 @@ impl<'a> Converter<'a> {
             catalog_id: self.catalog_id,
             path: q.parent.get().name_path.clone(),
         };
-        let table = Name {
-            catalog_id: self.catalog_id,
-            path: q.table_name_path.clone(),
-        };
+        let table = Table::from(q.table_scan.get());
         if q.is_unique == Some(true) {
             panic!("unique index is not supported")
         }

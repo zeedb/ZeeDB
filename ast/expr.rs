@@ -133,7 +133,7 @@ pub enum Expr {
     // LogicalCreateIndex implements the CREATE INDEX operation.
     LogicalCreateIndex {
         name: Name,
-        table: Name,
+        table: Table,
         columns: Vec<String>,
         reserved_id: i64,
     },

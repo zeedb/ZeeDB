@@ -63,31 +63,17 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             reserved_id,
         } => {
             let mut lines = vec![];
-            lines.push(format!(
-                "call set_var('index_catalog_id', {:?});",
-                name.catalog_id
-            ));
-            for catalog_name in &name.path[0..name.path.len() - 1] {
-                lines.push(format!("call set_var('index_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('index_catalog_id')));", catalog_name));
-            }
-            lines.push(format!(
-                "call set_var('table_catalog_id', {:?});",
-                table.catalog_id
-            ));
-            for catalog_name in &table.path[0..table.path.len() - 1] {
-                lines.push(format!("call set_var('table_catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('table_catalog_id')));", catalog_name));
-            }
-            lines.push(format!("call set_var('table_id', (select table_id from metadata.table where catalog_id = get_var('table_catalog_id') and table_name = {:?}));", table.path.last().unwrap()));
-            lines.push(format!("call set_var('next_index_id', {:?});", reserved_id));
-            lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values (get_var('index_catalog_id'), get_var('next_index_id'), get_var('table_id'), {:?});", name.path.last().unwrap()));
+            let catalog_id = catalog_id_query(&name);
+            lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values ({}, {}, {}, {:?});", catalog_id, reserved_id, table.id, name.path.last().unwrap()));
             for (index_order, column_name) in columns.iter().enumerate() {
-                lines.push(format!("call set_var('column_id', (select column_id from metadata.column where table_id = get_var('table_id') and column_name = {:?}));", column_name));
-                lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) values (get_var('next_index_id'), get_var('column_id'), {:?});", index_order));
+                let column_id = format!("(select column_id from metadata.column where table_id = {} and column_name = {:?})", table.id, column_name);
+                lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) select {}, {}, {:?};", reserved_id, column_id, index_order));
             }
+            // TODO why does moving this up cause a crash?
             lines.push(
-                format!("assert (select is_empty(get_var('table_id'))) as 'Cannot create index because table {} is not empty.';", table.path.last().unwrap().escape_debug()),
+                format!("assert (select is_empty({})) as 'Cannot create index because table {} is not empty.';", table.id, table.name),
             );
-            lines.push("call create_index(get_var('next_index_id'));".to_string());
+            lines.push(format!("call create_index({});", reserved_id));
             let sql = lines.join("\n");
             Ok(LogicalRewrite { sql })
         }
