@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-
 use ast::{Expr, Index};
 use catalog_types::Catalog;
 use context::Context;
-use kernel::AnyArray;
 use remote_execution::{RecordStream, RemoteExecution};
 use rpc::TraceEvent;
 use statistics::ColumnStatistics;
@@ -30,20 +27,13 @@ impl RemoteExecution for BootstrapStatistics {
         todo!()
     }
 
-    fn broadcast(
-        &self,
-        _expr: Expr,
-        _variables: HashMap<String, AnyArray>,
-        _txn: i64,
-        _stage: i32,
-    ) -> RecordStream {
+    fn broadcast(&self, _expr: Expr, _txn: i64, _stage: i32) -> RecordStream {
         unimplemented!()
     }
 
     fn exchange(
         &self,
         _expr: Expr,
-        _variables: HashMap<String, AnyArray>,
         _txn: i64,
         _stage: i32,
         _hash_column: String,

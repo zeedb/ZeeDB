@@ -4,7 +4,6 @@ use ast::{Index, *};
 use catalog_types::{builtin_function_options, Catalog, CATALOG_KEY};
 use context::{env_var, Context, WORKER_COUNT_KEY};
 use kernel::*;
-use once_cell::sync::OnceCell;
 use parser::{Parser, PARSER_KEY};
 use planner::{BootstrapCatalog, BootstrapStatistics};
 use remote_execution::REMOTE_EXECUTION_KEY;

@@ -5,7 +5,7 @@ use std::{
 
 use ast::Expr;
 use context::{env_var, Context, WORKER_COUNT_KEY, WORKER_ID_KEY};
-use kernel::{AnyArray, Exception, RecordBatch};
+use kernel::{Exception, RecordBatch};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use remote_execution::{RpcRemoteExecution, REMOTE_EXECUTION_KEY};
 use rpc::{
@@ -72,13 +72,8 @@ impl Worker for WorkerNode {
         &self,
         request: Request<BroadcastRequest>,
     ) -> Result<Response<Self::BroadcastStream>, Status> {
-        let mut request = request.into_inner();
+        let request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
-        let variables: HashMap<String, AnyArray> = request
-            .variables
-            .drain()
-            .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
-            .collect();
         let listeners = request.listeners as usize;
         let context = self.context.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
@@ -94,18 +89,16 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, txn, stage), topic) = occupied.remove_entry();
-                    self.pool.spawn(move || {
-                        broadcast(expr, txn, stage, variables, context, topic.listeners)
-                    });
+                    self.pool
+                        .spawn(move || broadcast(expr, txn, stage, context, topic.listeners));
                 }
             }
             Entry::Vacant(vacant) => {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, txn, stage) = vacant.into_key();
-                    self.pool.spawn(move || {
-                        broadcast(expr, txn, stage, variables, context, vec![sender])
-                    });
+                    self.pool
+                        .spawn(move || broadcast(expr, txn, stage, context, vec![sender]));
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Broadcast {
@@ -121,13 +114,8 @@ impl Worker for WorkerNode {
         &self,
         request: Request<ExchangeRequest>,
     ) -> Result<Response<Self::ExchangeStream>, Status> {
-        let mut request = request.into_inner();
+        let request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
-        let variables: HashMap<String, AnyArray> = request
-            .variables
-            .drain()
-            .map(|(name, value)| (name, bincode::deserialize(&value).unwrap()))
-            .collect();
         let listeners = request.listeners as usize;
         let context = self.context.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
@@ -151,7 +139,6 @@ impl Worker for WorkerNode {
                             expr,
                             txn,
                             stage,
-                            variables,
                             context,
                             request.hash_column,
                             topic.listeners,
@@ -168,7 +155,6 @@ impl Worker for WorkerNode {
                             expr,
                             txn,
                             stage,
-                            variables,
                             context,
                             request.hash_column,
                             vec![(request.hash_bucket, sender)],
@@ -233,12 +219,11 @@ fn broadcast(
     expr: Expr,
     txn: i64,
     stage: i32,
-    variables: HashMap<String, AnyArray>,
     context: Arc<Context>,
     listeners: Vec<Sender<Page>>,
 ) {
     // Send each batch of records produced by expr to each worker node in the cluster.
-    let mut query = execute::execute(expr, txn, &variables, &context);
+    let mut query = execute::execute(expr, txn, &context);
     loop {
         let result = match query.next() {
             Ok(batch) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
@@ -260,7 +245,6 @@ fn exchange(
     expr: Expr,
     txn: i64,
     stage: i32,
-    variables: HashMap<String, AnyArray>,
     context: Arc<Context>,
     hash_column: String,
     mut listeners: Vec<(i32, Sender<Page>)>,
@@ -268,7 +252,7 @@ fn exchange(
     // Order listeners by bucket.
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
     // Split up each batch of records produced by expr and send the splits to the worker nodes.
-    let mut query = execute::execute(expr, txn, &variables, &context);
+    let mut query = execute::execute(expr, txn, &context);
     loop {
         match query.next() {
             Ok(batch) => {

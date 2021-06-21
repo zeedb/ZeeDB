@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use ast::*;
 use kernel::DataType;
 use rpc::{worker_client::WorkerClient, worker_server::WorkerServer, BroadcastRequest};
@@ -46,7 +44,6 @@ fn test_broadcast() {
         let _response = client
             .broadcast(Request::new(BroadcastRequest {
                 expr: bincode::serialize(&expr).unwrap(),
-                variables: HashMap::new(),
                 txn: 0,
                 stage: 0,
                 listeners: 1,

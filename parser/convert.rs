@@ -8,8 +8,7 @@ use zetasql::{
     any_resolved_create_table_stmt_base_proto::Node::*, any_resolved_expr_proto::Node::*,
     any_resolved_function_call_base_proto::Node::*,
     any_resolved_non_scalar_function_call_base_proto::Node::*, any_resolved_scan_proto::Node::*,
-    any_resolved_statement_proto::Node::*, resolved_create_statement_enums::CreateScope,
-    value_proto::Value::*, *,
+    any_resolved_statement_proto::Node::*, value_proto::Value::*, *,
 };
 
 use crate::SEQUENCES_KEY;

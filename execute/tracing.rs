@@ -12,12 +12,10 @@ use std::{
 };
 
 use context::Context;
-use kernel::AnyArray;
 use storage::Storage;
 
 pub struct QueryState<'a> {
     pub txn: i64,
-    pub variables: HashMap<String, AnyArray>,
     pub context: &'a Context,
     pub temp_tables: Storage,
     pub temp_table_ids: HashMap<String, i64>,
@@ -37,10 +35,9 @@ pub struct TraceSpan {
 }
 
 impl<'a> QueryState<'a> {
-    pub fn new(txn: i64, variables: HashMap<String, AnyArray>, context: &'a Context) -> Self {
+    pub fn new(txn: i64, context: &'a Context) -> Self {
         Self {
             txn,
-            variables,
             context,
             temp_tables: Default::default(),
             temp_table_ids: Default::default(),

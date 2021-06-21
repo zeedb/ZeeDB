@@ -1,5 +1,4 @@
 use std::{
-    collections::HashMap,
     fmt::Debug,
     sync::{atomic::Ordering, Arc},
 };
@@ -13,15 +12,10 @@ use storage::*;
 
 use crate::{hash_table::HashTable, index::PackedBytes, tracing::QueryState};
 
-pub fn execute<'a>(
-    expr: Expr,
-    txn: i64,
-    variables: &HashMap<String, AnyArray>,
-    context: &'a Context,
-) -> RunningQuery<'a> {
+pub fn execute<'a>(expr: Expr, txn: i64, context: &'a Context) -> RunningQuery<'a> {
     RunningQuery {
         input: Node::compile(expr, txn, context),
-        state: QueryState::new(txn, variables.clone(), context),
+        state: QueryState::new(txn, context),
     }
 }
 
@@ -862,12 +856,7 @@ impl Node {
             } => {
                 if let Some(expr) = input.take() {
                     *stream = Some(RemoteQuery::new(
-                        state.context[REMOTE_EXECUTION_KEY].broadcast(
-                            expr,
-                            state.variables.clone(),
-                            state.txn,
-                            *stage,
-                        ),
+                        state.context[REMOTE_EXECUTION_KEY].broadcast(expr, state.txn, *stage),
                     ));
                 }
                 stream
@@ -886,7 +875,6 @@ impl Node {
                     *stream = Some(RemoteQuery::new(
                         state.context[REMOTE_EXECUTION_KEY].exchange(
                             expr,
-                            state.variables.clone(),
                             state.txn,
                             *stage,
                             hash_column.canonical_name(),

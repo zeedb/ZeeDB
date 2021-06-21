@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::sync::Mutex;
 
 use ast::Expr;
 use futures::StreamExt;
-use kernel::{AnyArray, Exception, RecordBatch};
+use kernel::{Exception, RecordBatch};
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, page::Part, worker_client::WorkerClient,
@@ -56,7 +56,6 @@ impl RpcRemoteExecution {
     fn broadcast_or_submit(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
         listeners: i32,
         txn: i64,
         stage: i32,
@@ -68,10 +67,6 @@ impl RpcRemoteExecution {
                     txn,
                     stage,
                     expr: bincode::serialize(&expr).unwrap(),
-                    variables: variables
-                        .iter()
-                        .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
-                        .collect(),
                     listeners,
                 };
                 let response = worker
@@ -91,7 +86,7 @@ impl RpcRemoteExecution {
 
 impl RemoteExecution for RpcRemoteExecution {
     fn submit(&self, expr: Expr, txn: i64) -> RecordStream {
-        self.broadcast_or_submit(expr, HashMap::new(), 1, txn, 0)
+        self.broadcast_or_submit(expr, 1, txn, 0)
     }
 
     fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32) {
@@ -110,20 +105,13 @@ impl RemoteExecution for RpcRemoteExecution {
         });
     }
 
-    fn broadcast(
-        &self,
-        expr: Expr,
-        variables: HashMap<String, AnyArray>,
-        txn: i64,
-        stage: i32,
-    ) -> RecordStream {
-        self.broadcast_or_submit(expr, variables, self.workers.len() as i32, txn, stage)
+    fn broadcast(&self, expr: Expr, txn: i64, stage: i32) -> RecordStream {
+        self.broadcast_or_submit(expr, self.workers.len() as i32, txn, stage)
     }
 
     fn exchange(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
         txn: i64,
         stage: i32,
         hash_column: String,
@@ -136,10 +124,6 @@ impl RemoteExecution for RpcRemoteExecution {
                     txn,
                     stage,
                     expr: bincode::serialize(&expr).unwrap(),
-                    variables: variables
-                        .iter()
-                        .map(|(name, value)| (name.clone(), bincode::serialize(value).unwrap()))
-                        .collect(),
                     listeners: self.workers.len() as i32,
                     hash_column: hash_column.clone(),
                     hash_bucket,

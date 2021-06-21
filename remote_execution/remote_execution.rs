@@ -1,9 +1,7 @@
-use std::collections::HashMap;
-
 use ast::Expr;
 use context::ContextKey;
 use futures::{Stream, StreamExt};
-use kernel::{AnyArray, Exception, RecordBatch};
+use kernel::{Exception, RecordBatch};
 use rpc::TraceEvent;
 use statistics::ColumnStatistics;
 
@@ -35,18 +33,11 @@ pub trait RemoteExecution: Send + Sync {
 
     fn trace(&self, events: Vec<TraceEvent>, txn: i64, stage: i32, worker: i32);
 
-    fn broadcast(
-        &self,
-        expr: Expr,
-        variables: HashMap<String, AnyArray>,
-        txn: i64,
-        stage: i32,
-    ) -> RecordStream;
+    fn broadcast(&self, expr: Expr, txn: i64, stage: i32) -> RecordStream;
 
     fn exchange(
         &self,
         expr: Expr,
-        variables: HashMap<String, AnyArray>,
         txn: i64,
         stage: i32,
         hash_column: String,
