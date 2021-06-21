@@ -7,7 +7,7 @@ id
 < insert into foo values (1);
 < delete from foo where id = 1;
 > select * from foo;
-id
+EMPTY
 
 < insert into foo values (1);
 < delete from foo where id = 1;

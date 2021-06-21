@@ -9,19 +9,19 @@ id
 < drop table foo;
 < create table foo (id int64);
 > select * from foo;
-id
+EMPTY
 
 # create index
 > create index foo_id_index on foo (id);
-$dummy
+EMPTY
 
 # drop index
 > drop index foo_id;
-$dummy
+EMPTY
 
 # create database
 > create database foo;
-$dummy
+EMPTY
 
 # create table
 < create table foo.bar (id int64);
@@ -35,5 +35,5 @@ id
 < create database foo;
 < create table foo.bar (id int64); create table foo.doh (id int64);
 > select * from foo.bar union all select * from foo.doh;
-id
+EMPTY
 

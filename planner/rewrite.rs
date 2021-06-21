@@ -81,55 +81,31 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             let mut lines = vec![];
             match object {
                 ObjectType::Database => {
+                    let parent_catalog_id = catalog_id_query(&name);
                     lines.push(format!(
-                        "call set_var('catalog_id', {:?});",
-                        name.catalog_id
+                        "delete from metadata.catalog where parent_catalog_id = {} and catalog_name = {:?};",
+                        parent_catalog_id,
+                        name.path.last().unwrap()
                     ));
-                    for catalog_name in &name.path[0..name.path.len()] {
-                        lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
-                    }
-                    lines.push("call drop_table((select table_id from metadata.table where catalog_id = get_var('catalog_id')));".to_string());
-                    lines.push("delete from metadata.column where table_id in (select table_id from metadata.table where catalog_id = get_var('catalog_id'));".to_string());
-                    lines.push(
-                        "delete from metadata.table where catalog_id = get_var('catalog_id');"
-                            .to_string(),
-                    );
-                    lines.push(
-                        "delete from metadata.catalog where catalog_id = get_var('catalog_id');"
-                            .to_string(),
-                    );
+                    // TODO delete tables and indexes once no more transactions are using them.
                 }
                 ObjectType::Table => {
+                    let catalog_id = catalog_id_query(&name);
                     lines.push(format!(
-                        "call set_var('catalog_id', {:?});",
-                        name.catalog_id
+                        "delete from metadata.table where catalog_id = {} and table_name = {:?};",
+                        catalog_id,
+                        name.path.last().unwrap()
                     ));
-                    for catalog_name in &name.path[0..name.path.len() - 1] {
-                        lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
-                    }
-                    let table_name = name.path.last().unwrap();
-                    lines.push(format!("call set_var('table_id', (select table_id from metadata.table where table_name = {:?} and catalog_id = get_var('catalog_id')));", table_name));
-                    lines.push(
-                        "delete from metadata.table where table_id = get_var('table_id');"
-                            .to_string(),
-                    );
-                    lines.push("call drop_table(get_var('table_id'));".to_string());
+                    // TODO delete table and indexes once no more transactions are using them.
                 }
                 ObjectType::Index => {
+                    let catalog_id = catalog_id_query(&name);
                     lines.push(format!(
-                        "call set_var('catalog_id', {:?});",
-                        name.catalog_id
+                        "delete from metadata.index where catalog_id = {} and index_name = {:?};",
+                        catalog_id,
+                        name.path.last().unwrap()
                     ));
-                    for catalog_name in &name.path[0..name.path.len() - 1] {
-                        lines.push(format!("call set_var('catalog_id', (select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = get_var('catalog_id')));", catalog_name));
-                    }
-                    let index_name = name.path.last().unwrap();
-                    lines.push(format!("call set_var('index_id', (select index_id from metadata.index where index_name = {:?} and catalog_id = get_var('catalog_id')));", index_name));
-                    lines.push(
-                        "delete from metadata.index where index_id = get_var('index_id');"
-                            .to_string(),
-                    );
-                    lines.push("call drop_index(get_var('index_id'));".to_string());
+                    // TODO delete index once no more transactions are using it.
                 }
                 ObjectType::Column => todo!(),
             };

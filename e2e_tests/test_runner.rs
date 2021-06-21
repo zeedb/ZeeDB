@@ -128,7 +128,11 @@ impl TestRunner {
             Ok(response) => {
                 let batch: RecordBatch =
                     bincode::deserialize(&response.into_inner().record_batch).unwrap();
-                kernel::fixed_width(&vec![batch])
+                if batch.len() == 0 {
+                    "EMPTY".to_string()
+                } else {
+                    kernel::fixed_width(&vec![batch])
+                }
             }
             Err(status) => format!("ERROR: {}", status.message()),
         }
