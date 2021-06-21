@@ -785,10 +785,6 @@ impl<'a> Converter<'a> {
             "drop_table" => Procedure::DropTable(self.expr(&q.argument_list[0], &mut input)),
             "create_index" => Procedure::CreateIndex(self.expr(&q.argument_list[0], &mut input)),
             "drop_index" => Procedure::DropIndex(self.expr(&q.argument_list[0], &mut input)),
-            "set_var" => Procedure::SetVar(
-                self.expr(&q.argument_list[0], &mut input),
-                self.expr(&q.argument_list[1], &mut input),
-            ),
             other => panic!("{}", other),
         };
         LogicalCall {

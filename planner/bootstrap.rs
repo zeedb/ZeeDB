@@ -67,24 +67,12 @@ impl Catalog for BootstrapCatalog {
         SimpleCatalogProto {
             catalog: vec![bootstrap_metadata_catalog()],
             builtin_function_options: Some(builtin_function_options()),
-            custom_function: vec![
-                simple_function(
-                    "get_var".to_string(),
-                    vec![TypeKind::TypeString],
-                    TypeKind::TypeInt64,
-                ),
-                simple_function(
-                    "is_empty".to_string(),
-                    vec![TypeKind::TypeInt64],
-                    TypeKind::TypeBool,
-                ),
-            ],
+            custom_function: vec![simple_function(
+                "is_empty".to_string(),
+                vec![TypeKind::TypeInt64],
+                TypeKind::TypeBool,
+            )],
             procedure: vec![
-                simple_procedure(
-                    "set_var".to_string(),
-                    vec![TypeKind::TypeString, TypeKind::TypeInt64],
-                    TypeKind::TypeBool,
-                ),
                 simple_procedure(
                     "create_table".to_string(),
                     vec![TypeKind::TypeInt64],

@@ -116,9 +116,6 @@ fn eval_function(
         F::LengthString(a) => e(a)?.as_string().map(|a: &str| a.chars().count() as i64),
         F::LowerString(a) => e(a)?.as_string().map(|a: &str| a.to_lowercase()),
         F::NaturalLogarithmDouble(a) => e(a)?.as_f64().map(f64::ln),
-        F::GetVar(a) => e(a)?
-            .as_string()
-            .map(|a: Option<&str>| Ok(a.and_then(|a| state.variables[a].clone().as_i64().get(0)))),
         F::Not(a) => e(a)?.as_bool().map(|a: bool| !a),
         F::ReverseString(a) => e(a)?
             .as_string()

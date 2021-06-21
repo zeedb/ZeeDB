@@ -1047,15 +1047,6 @@ impl Node {
                             }
                         }
                     }
-                    Procedure::SetVar(name, value) => {
-                        let name = crate::eval::eval(name, &input, state)?
-                            .as_string()
-                            .get(0)
-                            .unwrap()
-                            .to_string();
-                        let value = crate::eval::eval(value, &input, state)?;
-                        state.variables.insert(name, value);
-                    }
                     Procedure::Assert(test, description) => {
                         let test = crate::eval::eval(test, &input, state)?
                             .as_bool()

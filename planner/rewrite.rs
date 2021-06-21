@@ -199,7 +199,6 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Procedure::CreateIndex(x)
         | Procedure::DropIndex(x)
         | Procedure::Assert(x, _) => visit(x),
-        Procedure::SetVar(x, y) => visit(x) || visit(y),
     };
     let did_rewrite = match &mut expr {
         Expr::LogicalGet { predicates, .. }
