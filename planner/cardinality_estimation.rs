@@ -4,7 +4,6 @@ use std::{
 };
 
 use ast::*;
-use remote_execution::RemoteExecution;
 use statistics::{ColumnStatistics, NotNan};
 
 use crate::search_space::*;
@@ -17,11 +16,7 @@ pub struct LogicalProps {
     pub columns: HashMap<Column, Option<ColumnStatistics>>,
 }
 
-pub(crate) fn compute_logical_props(
-    mid: MultiExprID,
-    statistics: &dyn RemoteExecution,
-    ss: &SearchSpace,
-) -> LogicalProps {
+pub(crate) fn compute_logical_props(mid: MultiExprID, ss: &SearchSpace) -> LogicalProps {
     let mexpr = &ss[mid];
     match &mexpr.expr {
         LogicalSingleGet => LogicalProps {
@@ -32,7 +27,7 @@ pub(crate) fn compute_logical_props(
             predicates,
             projects,
             table,
-        } => filter(predicates, &scan(projects, table, statistics)),
+        } => filter(predicates, &scan(projects, table)),
         LogicalFilter { predicates, input } => filter(predicates, &ss[leaf(input)].props),
         LogicalOut { projects, input } => project(projects, &ss[leaf(input)].props),
         LogicalMap {
@@ -109,10 +104,10 @@ pub(crate) fn compute_logical_props(
     }
 }
 
-fn scan(projects: &Vec<Column>, table: &Table, statistics: &dyn RemoteExecution) -> LogicalProps {
-    let stats = |c: &Column| statistics.column_statistics(c.table_id?, &c.name);
+fn scan(projects: &Vec<Column>, table: &Table) -> LogicalProps {
+    let stats = |c: &Column| statistics::column_statistics(c.table_id?, &c.name);
     LogicalProps {
-        cardinality: statistics.approx_cardinality(table.id),
+        cardinality: statistics::approx_cardinality(table.id),
         columns: projects.iter().map(|c| (c.clone(), stats(c))).collect(),
     }
 }

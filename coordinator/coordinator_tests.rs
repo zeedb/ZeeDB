@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use catalog::ROOT_CATALOG_ID;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
     worker_server::WorkerServer, SubmitRequest,
@@ -42,6 +43,8 @@ fn test_submit() {
             .submit(Request::new(SubmitRequest {
                 sql: "select 1".to_string(),
                 variables: HashMap::new(),
+                catalog_id: ROOT_CATALOG_ID,
+                txn: None,
             }))
             .await
             .unwrap()

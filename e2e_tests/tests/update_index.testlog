@@ -23,6 +23,3 @@ EMPTY
 id
 1 
 
-> create index bar_id_index on bar (id);
-ERROR: Cannot create index because table bar is not empty.
-

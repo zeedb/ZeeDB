@@ -19,5 +19,5 @@ pub use crate::{
     byte_key::*,
     heap::Heap,
     page::{Page, PAGE_SIZE},
-    storage::{Storage, STORAGE_KEY},
+    storage::Storage,
 };

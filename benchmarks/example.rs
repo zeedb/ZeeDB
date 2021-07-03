@@ -9,7 +9,7 @@ fn bench(c: &mut Criterion) {
         let mut i = 0;
         let mut timing = vec![];
         b.iter(|| {
-            timing.push(t.benchmark(
+            timing.push(t.run(
                 "insert into test values (@i)",
                 vec![("i".to_string(), Value::I64(Some(i)))],
             ));

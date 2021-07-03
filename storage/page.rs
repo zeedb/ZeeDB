@@ -269,12 +269,14 @@ impl Page {
                         let tids: Vec<i64> = (start..end).collect();
                         AnyArray::I64(I64Array::from_values(tids))
                     }
-                    find => self
-                        .columns
-                        .iter()
-                        .find(|(name, _)| find == name)
-                        .map(|(_, data)| data.slice(len))
-                        .expect(find),
+                    find => match self.columns.iter().find(|(name, _)| find == name) {
+                        Some((_, data)) => data.slice(len),
+                        None => panic!(
+                            "{} is not a column of {}",
+                            find,
+                            self.column_names().join(", ")
+                        ),
+                    },
                 };
                 (find.clone(), array)
             })
@@ -288,6 +290,10 @@ impl Page {
             array.push(Some(value.load(Ordering::Relaxed)));
         }
         AnyArray::I64(array)
+    }
+
+    fn column_names(&self) -> Vec<String> {
+        self.columns.iter().map(|(name, _)| name.clone()).collect()
     }
 
     pub fn star(&self) -> Vec<String> {

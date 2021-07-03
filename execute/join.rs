@@ -7,10 +7,10 @@ pub fn hash_join(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
-) -> Result<RecordBatch, Exception> {
+) -> Result<RecordBatch, String> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
@@ -38,8 +38,8 @@ pub fn hash_join_semi(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
@@ -53,8 +53,8 @@ pub fn hash_join_anti(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
@@ -70,8 +70,8 @@ pub fn hash_join_single(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
@@ -96,8 +96,8 @@ pub fn hash_join_mark(
     left: &HashTable,
     right: &RecordBatch,
     partition_right: &I64Array,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let (left_index, right_index) = left.probe(partition_right);
     let left_input = left.build().gather(&left_index);
     let right_input = right.gather(&right_index);
@@ -115,7 +115,7 @@ pub fn unmatched_tuples(
     left: &RecordBatch,
     unmatched_left: &BoolArray,
     right: &Vec<(String, DataType)>,
-) -> Result<RecordBatch, Exception> {
+) -> Result<RecordBatch, String> {
     let unmatched_left = left.compress(unmatched_left);
     let unmatched_right = RecordBatch::nulls(right.clone(), unmatched_left.len());
     Ok(RecordBatch::zip(unmatched_left, unmatched_right))
@@ -124,10 +124,10 @@ pub fn unmatched_tuples(
 pub fn nested_loop(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
     keep_unmatched_left: Option<&mut BoolArray>,
     keep_unmatched_right: bool,
-) -> Result<RecordBatch, Exception> {
+) -> Result<RecordBatch, String> {
     let input = cross_product(left, right);
     let mask = filter(&input)?;
     let matched = input.compress(&mask);
@@ -148,8 +148,8 @@ pub fn nested_loop(
 pub fn nested_loop_semi(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let input = cross_product(left, right);
     let mask = filter(&input)?;
     let right_mask = mask.any(right.len());
@@ -159,8 +159,8 @@ pub fn nested_loop_semi(
 pub fn nested_loop_anti(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let input = cross_product(left, right);
     let mask = filter(&input)?;
     let right_mask = mask.none(right.len());
@@ -170,8 +170,8 @@ pub fn nested_loop_anti(
 pub fn nested_loop_single(
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let head = cross_product(left, &right);
     let mask = filter(&head)?;
     let count = mask.count(right.len());
@@ -191,8 +191,8 @@ pub fn nested_loop_mark(
     mark: &Column,
     left: &RecordBatch,
     right: &RecordBatch,
-    filter: impl Fn(&RecordBatch) -> Result<BoolArray, Exception>,
-) -> Result<RecordBatch, Exception> {
+    filter: impl Fn(&RecordBatch) -> Result<BoolArray, String>,
+) -> Result<RecordBatch, String> {
     let input = cross_product(left, right);
     let mask = filter(&input)?;
     let right_mask = mask.any(right.len());

@@ -5,12 +5,13 @@ package rpc;
 service Coordinator {
   rpc Check (CheckRequest) returns (CheckResponse) {}
   rpc Submit (SubmitRequest) returns (SubmitResponse) {}
-  rpc Trace (TraceRequest) returns (TraceResponse) {}
 }
 
 message SubmitRequest {
   required string sql = 1;
   map<string, Parameter> variables = 2;
+  required int64 catalog_id = 3;
+  optional int64 txn = 4;
 }
 
 message Parameter {
@@ -27,27 +28,12 @@ message Parameter {
 
 message SubmitResponse {
   required int64 txn = 1;
-  repeated TraceRequest trace = 2;
   required bytes record_batch = 3;
 }
 
-message TraceRequest {
-  required int64 txn = 1;
-  required int32 stage = 2;
-  required int32 worker = 3;
-  repeated TraceEvent events = 4;
-}
-
-message TraceEvent {
-  required string name = 1;
-  required uint64 begin = 2;
-  required uint64 end = 3;
-}
-
-message TraceResponse {}
-
 service Worker {
   rpc Check (CheckRequest) returns (CheckResponse) {}
+  rpc Output (OutputRequest) returns (stream Page) {}
   rpc Broadcast (BroadcastRequest) returns (stream Page) {}
   rpc Exchange (ExchangeRequest) returns (stream Page) {}
   rpc ApproxCardinality (ApproxCardinalityRequest) returns (ApproxCardinalityResponse) {}
@@ -57,20 +43,23 @@ service Worker {
 message CheckRequest {}
 message CheckResponse {}
 
+message OutputRequest {
+  required int64 txn = 1;
+  required bytes expr = 2;
+}
+
 message BroadcastRequest {
   required int64 txn = 1;
   required int32 stage = 2;
   required bytes expr = 3;
-  required int32 listeners = 4;
 }
 
 message ExchangeRequest {
   required int64 txn = 1;
   required int32 stage = 2;
   required bytes expr = 3;
-  required int32 listeners = 4;
-  required string hash_column = 5;
-  required int32 hash_bucket = 6;
+  required string hash_column = 4;
+  required int32 hash_bucket = 5;
 }
 
 message Page {

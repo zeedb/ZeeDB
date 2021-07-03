@@ -1,16 +1,14 @@
 use ast::{Expr, *};
-use context::Context;
-use remote_execution::REMOTE_EXECUTION_KEY;
 
 use crate::{cost::*, rule::*, search_space::*};
 
 const TRACE: bool = false;
 
-pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
+pub fn optimize(expr: Expr, catalog_id: i64, txn: i64) -> Expr {
     let mut optimizer = Optimizer {
-        txn,
         ss: SearchSpace::default(),
-        context,
+        catalog_id,
+        txn,
     };
     let mut expr = crate::rewrite::rewrite(expr);
     optimizer.copy_in_new(&mut expr);
@@ -29,13 +27,13 @@ pub fn optimize(expr: Expr, txn: i64, context: &Context) -> Expr {
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
 // However, the logic and the order of invocation should be exactly the same.
 
-pub(crate) struct Optimizer<'a> {
-    pub txn: i64,
+pub(crate) struct Optimizer {
     pub ss: SearchSpace,
-    pub context: &'a Context,
+    pub catalog_id: i64,
+    pub txn: i64,
 }
 
-impl<'a> Optimizer<'a> {
+impl Optimizer {
     /// optimize_group optimizes the entire expression tree represented by gid in a top-down manner.
     fn optimize_group(&mut self, gid: GroupID, require: PhysicalProp) {
         if TRACE {
@@ -282,11 +280,7 @@ impl<'a> Optimizer<'a> {
             let mexpr = MultiExpr::new(gid, removed);
             let mid = self.ss.add_mexpr(mexpr).unwrap();
             // Initialize a new Group.
-            let props = crate::cardinality_estimation::compute_logical_props(
-                mid,
-                self.context[REMOTE_EXECUTION_KEY].as_ref(),
-                &self.ss,
-            );
+            let props = crate::cardinality_estimation::compute_logical_props(mid, &self.ss);
             let lower_bound = compute_lower_bound(&self.ss[mid], &props, &self.ss);
             let group = Group {
                 logical: vec![mid],

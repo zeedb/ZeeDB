@@ -1,64 +1,6 @@
-use ast::Index;
-use catalog_types::{Catalog, ROOT_CATALOG_ID};
-use statistics::{ColumnStatistics, Statistics};
 use zetasql::{function_enums::*, *};
 
-use catalog_types::builtin_function_options;
-
-pub struct BootstrapStatistics;
-
-impl Statistics for BootstrapStatistics {
-    fn approx_cardinality(&self, _table_id: i64) -> f64 {
-        1.0
-    }
-
-    fn column_statistics(&self, _table_id: i64, _column_name: &str) -> Option<ColumnStatistics> {
-        None
-    }
-}
-
-#[derive(Clone)]
-pub struct BootstrapCatalog;
-
-impl Catalog for BootstrapCatalog {
-    fn catalog_id(&self) -> i64 {
-        ROOT_CATALOG_ID
-    }
-
-    fn simple_catalog(&self, _table_names: Vec<Vec<String>>) -> SimpleCatalogProto {
-        SimpleCatalogProto {
-            catalog: vec![bootstrap_metadata_catalog()],
-            builtin_function_options: Some(builtin_function_options()),
-            procedure: vec![
-                simple_procedure(
-                    "create_table".to_string(),
-                    vec![TypeKind::TypeInt64],
-                    TypeKind::TypeBool,
-                ),
-                simple_procedure(
-                    "drop_table".to_string(),
-                    vec![TypeKind::TypeInt64],
-                    TypeKind::TypeBool,
-                ),
-                simple_procedure(
-                    "create_index".to_string(),
-                    vec![TypeKind::TypeInt64],
-                    TypeKind::TypeBool,
-                ),
-                simple_procedure(
-                    "drop_index".to_string(),
-                    vec![TypeKind::TypeInt64],
-                    TypeKind::TypeBool,
-                ),
-            ],
-            ..Default::default()
-        }
-    }
-
-    fn indexes(&self, _table_id: i64) -> Vec<Index> {
-        vec![]
-    }
-}
+use crate::builtin_function_options;
 
 pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;
@@ -128,19 +70,42 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
                 ],
             ),
         ],
+        builtin_function_options: Some(builtin_function_options()),
+        procedure: vec![
+            simple_procedure(
+                "create_table".to_string(),
+                vec![TypeKind::TypeInt64],
+                TypeKind::TypeBool,
+            ),
+            simple_procedure(
+                "drop_table".to_string(),
+                vec![TypeKind::TypeInt64],
+                TypeKind::TypeBool,
+            ),
+            simple_procedure(
+                "create_index".to_string(),
+                vec![TypeKind::TypeInt64],
+                TypeKind::TypeBool,
+            ),
+            simple_procedure(
+                "drop_index".to_string(),
+                vec![TypeKind::TypeInt64],
+                TypeKind::TypeBool,
+            ),
+        ],
         ..Default::default()
     }
 }
 
-fn simple_function(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {
-    FunctionProto {
-        name_path: vec![name],
-        group: Some("system".to_string()),
-        signature: vec![simple_signature(arguments, returns)],
-        mode: Some(Mode::Scalar as i32),
-        ..Default::default()
-    }
-}
+// fn simple_function(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {
+//     FunctionProto {
+//         name_path: vec![name],
+//         group: Some("system".to_string()),
+//         signature: vec![simple_signature(arguments, returns)],
+//         mode: Some(Mode::Scalar as i32),
+//         ..Default::default()
+//     }
+// }
 
 fn simple_procedure(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> ProcedureProto {
     ProcedureProto {

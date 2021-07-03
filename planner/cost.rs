@@ -1,6 +1,4 @@
 use ast::*;
-use context::WORKER_COUNT_KEY;
-use remote_execution::REMOTE_EXECUTION_KEY;
 
 use crate::{cardinality_estimation::LogicalProps, optimize::Optimizer, search_space::*};
 
@@ -32,7 +30,7 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
         | Call { .. }
         | Explain { .. } => 0.0,
         SeqScan { table, .. } => {
-            let n = opt.context[REMOTE_EXECUTION_KEY].approx_cardinality(table.id);
+            let n = statistics::approx_cardinality(table.id);
             n * SEQ_SCAN
         }
         IndexScan { .. } => {
@@ -60,7 +58,7 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
         } => {
             let build = opt.ss[leaf(left)].props.cardinality;
             let probe = opt.ss[leaf(right)].props.cardinality;
-            let workers = opt.context[WORKER_COUNT_KEY] as f64;
+            let workers: f64 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
             build * workers * HASH_BUILD + probe * HASH_PROBE
         }
         HashJoin {
@@ -85,7 +83,7 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
         }
         Broadcast { input, .. } => {
             let n = opt.ss[leaf(input)].props.cardinality;
-            let workers = opt.context[WORKER_COUNT_KEY] as f64;
+            let workers: f64 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
             n * EXCHANGE * workers
         }
         Exchange { input, .. } => {

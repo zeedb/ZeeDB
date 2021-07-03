@@ -1,17 +1,12 @@
 #![allow(dead_code)]
 
-mod cost;
-mod optimize;
-// optimize_tests are in execute, so we can use real data for testing.
-mod bootstrap;
 mod cardinality_estimation;
+mod cost;
 mod distribution;
+mod optimize;
 mod rewrite;
 mod rule;
 mod search_space;
 mod unnest;
 
-pub use crate::{
-    bootstrap::{BootstrapCatalog, BootstrapStatistics},
-    optimize::optimize,
-};
+pub use crate::optimize::optimize;

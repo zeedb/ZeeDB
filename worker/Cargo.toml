@@ -14,7 +14,6 @@ rand = { version = "0.8.2", features = ["small_rng"]}
 rayon = "1.5"
 
 ast = { path = "../ast" }
-context = { path = "../context" }
 execute = { path = "../execute" }
 kernel = { path = "../kernel" }
 rpc = { path = "../rpc" }

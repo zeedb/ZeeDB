@@ -1,12 +1,9 @@
 use std::collections::HashMap;
 
 use ast::*;
-use catalog_types::CATALOG_KEY;
 use chrono::{NaiveDate, TimeZone, Utc};
-use context::Context;
-use parser::{Parser, PARSER_KEY};
 
-use crate::{unnest::unnest_dependent_joins, BootstrapCatalog};
+use crate::unnest::unnest_dependent_joins;
 
 pub fn rewrite(expr: Expr) -> Expr {
     let expr = top_down_rewrite(expr, rewrite_ddl);
@@ -25,7 +22,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
     fn catalog_id_query(name: &Name) -> String {
         let mut catalog_id = format!("{}", name.catalog_id);
         for catalog_name in &name.path[0..name.path.len() - 1] {
-            catalog_id = format!("(select catalog_id from metadata.catalog where catalog_name = {:?} and parent_catalog_id = {})", catalog_name, catalog_id);
+            catalog_id = format!("(select catalog_id from catalog where catalog_name = {:?} and parent_catalog_id = {})", catalog_name, catalog_id);
         }
         catalog_id
     }
@@ -33,7 +30,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
         LogicalCreateDatabase { name, reserved_id } => {
             let parent_catalog_id = catalog_id_query(&name);
             let catalog_name = format!("{:?}", name.path.last().unwrap());
-            Ok(LogicalRewrite { sql: format!("insert into metadata.catalog (parent_catalog_id, catalog_id, catalog_name) select {}, {}, {}", parent_catalog_id, reserved_id, catalog_name) })
+            Ok(LogicalRewrite { sql: format!("insert into catalog (parent_catalog_id, catalog_id, catalog_name) select {}, {}, {}", parent_catalog_id, reserved_id, catalog_name) })
         }
         LogicalCreateTable {
             name,
@@ -44,12 +41,12 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             let catalog_id = catalog_id_query(&name);
             let table_name = format!("{:?}", name.path.last().unwrap());
             lines.push(format!(
-                "insert into metadata.table (catalog_id, table_id, table_name) select {}, {}, {};",
+                "insert into table (catalog_id, table_id, table_name) select {}, {}, {};",
                 catalog_id, reserved_id, table_name
             ));
             for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                 let column_type = column_type.to_string();
-                lines.push(format!("insert into metadata.column (table_id, column_id, column_name, column_type) select {}, {}, {:?}, {:?};", reserved_id, column_id, column_name, column_type));
+                lines.push(format!("insert into column (table_id, column_id, column_name, column_type) select {}, {}, {:?}, {:?};", reserved_id, column_id, column_name, column_type));
             }
             lines.push(format!("call create_table({});", reserved_id));
             Ok(LogicalRewrite {
@@ -64,15 +61,15 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
         } => {
             let mut lines = vec![];
             let catalog_id = catalog_id_query(&name);
-            lines.push(format!("insert into metadata.index (catalog_id, index_id, table_id, index_name) values ({}, {}, {}, {:?});", catalog_id, reserved_id, table.id, name.path.last().unwrap()));
+            // TODO check that table is empty.
+            lines.push(format!("insert into index (catalog_id, index_id, table_id, index_name) values ({}, {}, {}, {:?});", catalog_id, reserved_id, table.id, name.path.last().unwrap()));
             for (index_order, column_name) in columns.iter().enumerate() {
-                let column_id = format!("(select column_id from metadata.column where table_id = {} and column_name = {:?})", table.id, column_name);
-                lines.push(format!("insert into metadata.index_column (index_id, column_id, index_order) select {}, {}, {:?};", reserved_id, column_id, index_order));
+                let column_id = format!(
+                    "(select column_id from column where table_id = {} and column_name = {:?})",
+                    table.id, column_name
+                );
+                lines.push(format!("insert into index_column (index_id, column_id, index_order) select {}, {}, {:?};", reserved_id, column_id, index_order));
             }
-            // TODO why does moving this up cause a crash?
-            lines.push(
-                format!("assert (select is_empty({})) as 'Cannot create index because table {} is not empty.';", table.id, table.name),
-            );
             lines.push(format!("call create_index({});", reserved_id));
             let sql = lines.join("\n");
             Ok(LogicalRewrite { sql })
@@ -83,7 +80,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 ObjectType::Database => {
                     let parent_catalog_id = catalog_id_query(&name);
                     lines.push(format!(
-                        "delete from metadata.catalog where parent_catalog_id = {} and catalog_name = {:?};",
+                        "delete from catalog where parent_catalog_id = {} and catalog_name = {:?};",
                         parent_catalog_id,
                         name.path.last().unwrap()
                     ));
@@ -92,7 +89,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 ObjectType::Table => {
                     let catalog_id = catalog_id_query(&name);
                     lines.push(format!(
-                        "delete from metadata.table where catalog_id = {} and table_name = {:?};",
+                        "delete from table where catalog_id = {} and table_name = {:?};",
                         catalog_id,
                         name.path.last().unwrap()
                     ));
@@ -101,7 +98,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 ObjectType::Index => {
                     let catalog_id = catalog_id_query(&name);
                     lines.push(format!(
-                        "delete from metadata.index where catalog_id = {} and index_name = {:?};",
+                        "delete from index where catalog_id = {} and index_name = {:?};",
                         catalog_id,
                         name.path.last().unwrap()
                     ));
@@ -715,18 +712,13 @@ fn rewrite_logical_rewrite(expr: Expr) -> Result<Expr, Expr> {
 }
 
 fn analyze_bootstrap(sql: &str) -> Expr {
-    let mut context = Context::default();
-    context.insert(PARSER_KEY, Parser::default());
-    context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
-    context[PARSER_KEY]
-        .analyze(
-            sql,
-            catalog_types::ROOT_CATALOG_ID,
-            0,
-            &HashMap::new(),
-            &context,
-        )
-        .unwrap()
+    parser::analyze(
+        sql,
+        &HashMap::default(),
+        catalog::METADATA_CATALOG_ID,
+        i64::MAX,
+    )
+    .unwrap()
 }
 
 fn bottom_up_rewrite(mut expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {

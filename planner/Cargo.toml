@@ -9,13 +9,13 @@ path = "lib.rs"
 
 [dependencies]
 ast = { path = "../ast" }
-catalog_types = { path = "../catalog_types" }
+catalog = { path = "../catalog" }
 chrono = { version = "0.4.11", features = [] }
-context = { path = "../context" }
 kernel = { path = "../kernel" }
 parser = { path = "../parser" }
 rand = { version = "0.8.2", features = ["small_rng"]}
 remote_execution = { path = "../remote_execution" }
 rpc = { path = "../rpc" }
+sequences = { path = "../sequences" }
 statistics = { path = "../statistics" }
 zetasql = { path = "../zetasql" }

@@ -1,26 +1,25 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use ast::{Index, *};
-use catalog_types::{builtin_function_options, Catalog, CATALOG_KEY};
-use context::{env_var, Context, WORKER_COUNT_KEY};
+use catalog_types::{builtin_function_options, Catalog};
 use kernel::*;
-use parser::{Parser, PARSER_KEY};
 use planner::{BootstrapCatalog, BootstrapStatistics};
-use remote_execution::REMOTE_EXECUTION_KEY;
+use sequences::Sequences;
 use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
-pub struct MetadataCatalog;
+pub struct MetadataCatalog {
+    pub txn: i64,
+    pub catalog_id: i64,
+}
 
 impl Catalog for MetadataCatalog {
-    fn catalog(
-        &self,
-        catalog_id: i64,
-        table_names: Vec<Vec<String>>,
-        txn: i64,
-        context: &Context,
-    ) -> SimpleCatalogProto {
+    fn catalog_id(&self) -> i64 {
+        self.catalog_id
+    }
+
+    fn simple_catalog(&self, table_names: Vec<Vec<String>>) -> SimpleCatalogProto {
         let mut root = CatalogWithId {
-            catalog_id,
+            catalog_id: self.catalog_id,
             simple_catalog: SimpleCatalogProto {
                 builtin_function_options: Some(builtin_function_options()),
                 ..Default::default()
@@ -28,22 +27,17 @@ impl Catalog for MetadataCatalog {
             children: HashMap::new(),
         };
         for qualified_name in table_names {
-            add_table_to_catalog(&mut root, qualified_name, txn, context);
+            add_table_to_catalog(&mut root, qualified_name, self.txn);
         }
         root.simplify()
     }
 
-    fn indexes(&self, table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
-        select_indexes(table_id, txn, context)
+    fn indexes(&self, table_id: i64) -> Vec<Index> {
+        select_indexes(table_id, self.txn)
     }
 }
 
-fn add_table_to_catalog(
-    parent: &mut CatalogWithId,
-    mut qualified_name: Vec<String>,
-    txn: i64,
-    context: &Context,
-) {
+fn add_table_to_catalog(parent: &mut CatalogWithId, mut qualified_name: Vec<String>, txn: i64) {
     match qualified_name.len() {
         0 => panic!(),
         1 => {
@@ -55,12 +49,10 @@ fn add_table_to_catalog(
                 .find(|t| t.name.as_ref() == Some(&table_name))
                 .is_some()
             {
-                parent.simple_catalog.table.push(select_table(
-                    parent.catalog_id,
-                    &table_name,
-                    txn,
-                    context,
-                ))
+                parent
+                    .simple_catalog
+                    .table
+                    .push(select_table(parent.catalog_id, &table_name, txn))
             }
         }
         _ => {
@@ -68,25 +60,19 @@ fn add_table_to_catalog(
             match parent.children.entry(catalog_name) {
                 Entry::Occupied(mut occupied) => {
                     let parent = occupied.get_mut();
-                    add_table_to_catalog(parent, qualified_name, txn, context)
+                    add_table_to_catalog(parent, qualified_name, txn)
                 }
                 Entry::Vacant(vacant) => {
-                    let value =
-                        select_catalog(parent.catalog_id, vacant.key().as_str(), txn, context);
+                    let value = select_catalog(parent.catalog_id, vacant.key().as_str(), txn);
                     let parent = vacant.insert(value);
-                    add_table_to_catalog(parent, qualified_name, txn, context);
+                    add_table_to_catalog(parent, qualified_name, txn);
                 }
             };
         }
     }
 }
 
-fn select_catalog(
-    parent_catalog_id: i64,
-    catalog_name: &str,
-    txn: i64,
-    context: &Context,
-) -> CatalogWithId {
+fn select_catalog(parent_catalog_id: i64, catalog_name: &str, txn: i64) -> CatalogWithId {
     let mut variables = HashMap::new();
     variables.insert(
         "parent_catalog_id".to_string(),
@@ -104,14 +90,8 @@ fn select_catalog(
     and catalog_name = @catalog_name",
         &variables,
     );
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), txn);
-    let batch = match stream.next() {
-        Some(first) => first.unwrap(),
-        None => panic!(
-            "No catalog {} in parent {}",
-            catalog_name, parent_catalog_id
-        ),
-    };
+    let mut stream = remote_execution::submit(q.clone(), txn);
+    let batch = stream.next().unwrap().unwrap();
     let catalog_id = as_i64(&batch, 0).get(0).unwrap();
     CatalogWithId {
         catalog_id,
@@ -124,12 +104,7 @@ fn select_catalog(
     }
 }
 
-fn select_table(
-    catalog_id: i64,
-    table_name: &str,
-    txn: i64,
-    context: &Context,
-) -> SimpleTableProto {
+fn select_table(catalog_id: i64, table_name: &str, txn: i64) -> SimpleTableProto {
     let mut variables = HashMap::new();
     variables.insert("catalog_id".to_string(), Value::I64(Some(catalog_id)));
     variables.insert(
@@ -149,11 +124,10 @@ fn select_table(
         name: Some(table_name.to_string()),
         ..Default::default()
     };
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), txn);
+    let mut stream = remote_execution::submit(q.clone(), txn);
     loop {
-        match stream.next() {
+        match stream.next().unwrap() {
             Some(batch) => {
-                let batch = batch.unwrap();
                 for offset in 0..batch.len() {
                     let table_id = as_i64(&batch, 0).get(offset).unwrap();
                     let column_name = as_string(&batch, 1).get_str(offset).unwrap();
@@ -178,7 +152,7 @@ fn select_table(
     table
 }
 
-fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
+fn select_indexes(table_id: i64, txn: i64) -> Vec<Index> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
     let q = plan_using_bootstrap_catalog(
@@ -192,11 +166,10 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
         &variables,
     );
     let mut indexes: Vec<Index> = vec![];
-    let mut stream = context[REMOTE_EXECUTION_KEY].submit(q.clone(), txn);
+    let mut stream = remote_execution::submit(q.clone(), txn);
     loop {
-        match stream.next() {
+        match stream.next().unwrap() {
             Some(batch) => {
-                let batch = batch.unwrap();
                 for offset in 0..batch.len() {
                     let index_id = as_i64(&batch, 0).get(offset).unwrap();
                     let column_name = as_string(&batch, 1).get(offset).unwrap();
@@ -219,22 +192,15 @@ fn select_indexes(table_id: i64, txn: i64, context: &Context) -> Vec<Index> {
 }
 
 fn plan_using_bootstrap_catalog(query: &str, variables: &HashMap<String, Value>) -> Expr {
-    let mut context = Context::default();
-    context.insert(PARSER_KEY, Parser::default());
-    context.insert(CATALOG_KEY, Box::new(BootstrapCatalog));
-    context.insert(REMOTE_EXECUTION_KEY, Box::new(BootstrapStatistics));
-    context.insert(WORKER_COUNT_KEY, env_var("WORKER_COUNT"));
-
-    let expr = context[PARSER_KEY]
-        .analyze(
-            query,
-            catalog_types::ROOT_CATALOG_ID,
-            0,
-            variables,
-            &context,
-        )
-        .unwrap();
-    planner::optimize(expr, 0, &context)
+    let expr = parser::analyze(
+        query,
+        variables,
+        &BootstrapCatalog,
+        // TODO make Sequences a trait and create BootstrapSequences that always fails.
+        &Sequences::default(),
+    )
+    .unwrap();
+    planner::optimize(expr, &BootstrapCatalog, &BootstrapStatistics)
 }
 
 struct CatalogWithId {

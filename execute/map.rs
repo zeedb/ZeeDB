@@ -10,24 +10,24 @@ pub trait FromArray<'a>: Sized {
 pub trait IntoArray: Sized {
     type Container: Array;
 
-    fn into_element(self) -> Result<Option<<Self::Container as Array>::Element>, Exception>;
+    fn into_element(self) -> Result<Option<<Self::Container as Array>::Element>, String>;
 }
 
 pub trait ArrayExt<'a, A: FromArray<'a>> {
-    fn map<B: IntoArray>(&'a self, f: impl Fn(A) -> B) -> Result<AnyArray, Exception>;
+    fn map<B: IntoArray>(&'a self, f: impl Fn(A) -> B) -> Result<AnyArray, String>;
 
     fn bi_map<'b, B: FromArray<'b>, C: IntoArray>(
         &'a self,
         right: &'b B::Container,
         f: impl Fn(A, B) -> C,
-    ) -> Result<AnyArray, Exception>;
+    ) -> Result<AnyArray, String>;
 
     fn tri_map<'b, 'c, B: FromArray<'b>, C: FromArray<'c>, D: IntoArray>(
         &'a self,
         middle: &'b B::Container,
         right: &'c C::Container,
         f: impl Fn(A, B, C) -> D,
-    ) -> Result<AnyArray, Exception>;
+    ) -> Result<AnyArray, String>;
 }
 
 impl<'a> FromArray<'a> for bool {
@@ -49,7 +49,7 @@ impl<'a> FromArray<'a> for Option<bool> {
 impl IntoArray for bool {
     type Container = BoolArray;
 
-    fn into_element(self) -> Result<Option<bool>, Exception> {
+    fn into_element(self) -> Result<Option<bool>, String> {
         Ok(Some(self))
     }
 }
@@ -57,15 +57,15 @@ impl IntoArray for bool {
 impl IntoArray for Option<bool> {
     type Container = BoolArray;
 
-    fn into_element(self) -> Result<Option<bool>, Exception> {
+    fn into_element(self) -> Result<Option<bool>, String> {
         Ok(self)
     }
 }
 
-impl IntoArray for Result<Option<bool>, Exception> {
+impl IntoArray for Result<Option<bool>, String> {
     type Container = BoolArray;
 
-    fn into_element(self) -> Result<Option<bool>, Exception> {
+    fn into_element(self) -> Result<Option<bool>, String> {
         self
     }
 }
@@ -89,7 +89,7 @@ impl<'a> FromArray<'a> for Option<i64> {
 impl IntoArray for i64 {
     type Container = I64Array;
 
-    fn into_element(self) -> Result<Option<i64>, Exception> {
+    fn into_element(self) -> Result<Option<i64>, String> {
         Ok(Some(self))
     }
 }
@@ -97,15 +97,15 @@ impl IntoArray for i64 {
 impl IntoArray for Option<i64> {
     type Container = I64Array;
 
-    fn into_element(self) -> Result<Option<i64>, Exception> {
+    fn into_element(self) -> Result<Option<i64>, String> {
         Ok(self)
     }
 }
 
-impl IntoArray for Result<Option<i64>, Exception> {
+impl IntoArray for Result<Option<i64>, String> {
     type Container = I64Array;
 
-    fn into_element(self) -> Result<Option<i64>, Exception> {
+    fn into_element(self) -> Result<Option<i64>, String> {
         self
     }
 }
@@ -129,7 +129,7 @@ impl<'a> FromArray<'a> for Option<f64> {
 impl IntoArray for f64 {
     type Container = F64Array;
 
-    fn into_element(self) -> Result<Option<f64>, Exception> {
+    fn into_element(self) -> Result<Option<f64>, String> {
         Ok(Some(self))
     }
 }
@@ -137,15 +137,15 @@ impl IntoArray for f64 {
 impl IntoArray for Option<f64> {
     type Container = F64Array;
 
-    fn into_element(self) -> Result<Option<f64>, Exception> {
+    fn into_element(self) -> Result<Option<f64>, String> {
         Ok(self)
     }
 }
 
-impl IntoArray for Result<Option<f64>, Exception> {
+impl IntoArray for Result<Option<f64>, String> {
     type Container = F64Array;
 
-    fn into_element(self) -> Result<Option<f64>, Exception> {
+    fn into_element(self) -> Result<Option<f64>, String> {
         self
     }
 }
@@ -169,7 +169,7 @@ impl<'a> FromArray<'a> for Option<Date<Utc>> {
 impl IntoArray for Date<Utc> {
     type Container = DateArray;
 
-    fn into_element(self) -> Result<Option<i32>, Exception> {
+    fn into_element(self) -> Result<Option<i32>, String> {
         Ok(Some(epoch_date(self)))
     }
 }
@@ -177,15 +177,15 @@ impl IntoArray for Date<Utc> {
 impl IntoArray for Option<Date<Utc>> {
     type Container = DateArray;
 
-    fn into_element(self) -> Result<Option<i32>, Exception> {
+    fn into_element(self) -> Result<Option<i32>, String> {
         Ok(self.map(epoch_date))
     }
 }
 
-impl IntoArray for Result<Option<Date<Utc>>, Exception> {
+impl IntoArray for Result<Option<Date<Utc>>, String> {
     type Container = DateArray;
 
-    fn into_element(self) -> Result<Option<i32>, Exception> {
+    fn into_element(self) -> Result<Option<i32>, String> {
         self.map(|option| option.map(epoch_date))
     }
 }
@@ -209,7 +209,7 @@ impl<'a> FromArray<'a> for Option<DateTime<Utc>> {
 impl IntoArray for DateTime<Utc> {
     type Container = TimestampArray;
 
-    fn into_element(self) -> Result<Option<i64>, Exception> {
+    fn into_element(self) -> Result<Option<i64>, String> {
         Ok(Some(epoch_micros(self)))
     }
 }
@@ -217,15 +217,15 @@ impl IntoArray for DateTime<Utc> {
 impl IntoArray for Option<DateTime<Utc>> {
     type Container = TimestampArray;
 
-    fn into_element(self) -> Result<Option<i64>, Exception> {
+    fn into_element(self) -> Result<Option<i64>, String> {
         Ok(self.map(epoch_micros))
     }
 }
 
-impl IntoArray for Result<Option<DateTime<Utc>>, Exception> {
+impl IntoArray for Result<Option<DateTime<Utc>>, String> {
     type Container = TimestampArray;
 
-    fn into_element(self) -> Result<Option<i64>, Exception> {
+    fn into_element(self) -> Result<Option<i64>, String> {
         self.map(|option| option.map(epoch_micros))
     }
 }
@@ -249,7 +249,7 @@ impl<'a> FromArray<'a> for Option<&'a str> {
 impl IntoArray for String {
     type Container = StringArray;
 
-    fn into_element(self) -> Result<Option<String>, Exception> {
+    fn into_element(self) -> Result<Option<String>, String> {
         Ok(Some(self))
     }
 }
@@ -257,21 +257,21 @@ impl IntoArray for String {
 impl IntoArray for Option<String> {
     type Container = StringArray;
 
-    fn into_element(self) -> Result<Option<String>, Exception> {
+    fn into_element(self) -> Result<Option<String>, String> {
         Ok(self)
     }
 }
 
-impl IntoArray for Result<Option<String>, Exception> {
+impl IntoArray for Result<Option<String>, String> {
     type Container = StringArray;
 
-    fn into_element(self) -> Result<Option<String>, Exception> {
+    fn into_element(self) -> Result<Option<String>, String> {
         self
     }
 }
 
 impl<'a, A: FromArray<'a>> ArrayExt<'a, A> for A::Container {
-    fn map<B: IntoArray>(&'a self, f: impl Fn(A) -> B) -> Result<AnyArray, Exception> {
+    fn map<B: IntoArray>(&'a self, f: impl Fn(A) -> B) -> Result<AnyArray, String> {
         let mut output = B::Container::with_capacity(self.len());
         for i in 0..self.len() {
             if let Some(next) = <A as FromArray<'a>>::from_array(self, i) {
@@ -287,7 +287,7 @@ impl<'a, A: FromArray<'a>> ArrayExt<'a, A> for A::Container {
         &'a self,
         right: &'b B::Container,
         f: impl Fn(A, B) -> C,
-    ) -> Result<AnyArray, Exception> {
+    ) -> Result<AnyArray, String> {
         assert_eq!(self.len(), right.len());
         let mut output = C::Container::with_capacity(self.len());
         for i in 0..self.len() {
@@ -307,7 +307,7 @@ impl<'a, A: FromArray<'a>> ArrayExt<'a, A> for A::Container {
         middle: &'b B::Container,
         right: &'c C::Container,
         f: impl Fn(A, B, C) -> D,
-    ) -> Result<AnyArray, Exception> {
+    ) -> Result<AnyArray, String> {
         assert_eq!(self.len(), middle.len());
         assert_eq!(self.len(), right.len());
         let mut output = D::Container::with_capacity(self.len());

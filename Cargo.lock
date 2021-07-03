@@ -215,25 +215,8 @@ name = "catalog"
 version = "0.1.0"
 dependencies = [
  "ast",
- "catalog_types",
- "context",
  "kernel",
- "once_cell",
- "parser",
- "planner",
  "remote_execution",
- "rpc",
- "statistics",
- "tokio",
- "zetasql",
-]
-
-[[package]]
-name = "catalog_types"
-version = "0.1.0"
-dependencies = [
- "ast",
- "context",
  "zetasql",
 ]
 
@@ -286,18 +269,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
 
 [[package]]
-name = "context"
-version = "0.1.0"
-
-[[package]]
 name = "coordinator"
 version = "0.1.0"
 dependencies = [
  "ast",
  "bincode",
  "catalog",
- "catalog_types",
- "context",
  "kernel",
  "parser",
  "planner",
@@ -305,6 +282,7 @@ dependencies = [
  "rayon",
  "remote_execution",
  "rpc",
+ "sequences",
  "statistics",
  "tokio",
  "tonic",
@@ -440,10 +418,13 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "bincode",
+ "catalog",
  "coordinator",
  "kernel",
  "once_cell",
  "rpc",
+ "serde",
+ "serde_json",
  "tokio",
  "tonic",
  "worker",
@@ -466,7 +447,6 @@ dependencies = [
  "ast",
  "bincode",
  "chrono",
- "context",
  "kernel",
  "num-traits",
  "rand 0.8.2",
@@ -1037,12 +1017,12 @@ name = "parser"
 version = "0.1.0"
 dependencies = [
  "ast",
- "catalog_types",
+ "catalog",
  "chrono",
- "context",
  "kernel",
  "prost-types",
  "rpc",
+ "sequences",
  "time",
  "tokio",
  "tonic",
@@ -1102,14 +1082,14 @@ name = "planner"
 version = "0.1.0"
 dependencies = [
  "ast",
- "catalog_types",
+ "catalog",
  "chrono",
- "context",
  "kernel",
  "parser",
  "rand 0.8.2",
  "remote_execution",
  "rpc",
+ "sequences",
  "statistics",
  "zetasql",
 ]
@@ -1404,12 +1384,11 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "bincode",
- "context",
  "futures",
  "kernel",
+ "once_cell",
  "regex",
  "rpc",
- "statistics",
  "tokio",
  "tonic",
 ]
@@ -1496,6 +1475,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "388a1df253eca08550bef6c72392cfe7c30914bf41df5269b68cbd6ff8f570a3"
 
 [[package]]
+name = "sequences"
+version = "0.1.0"
+
+[[package]]
 name = "serde"
 version = "1.0.123"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1574,9 +1557,12 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "statistics"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "hyperloglogplus",
  "kernel",
  "rand 0.8.2",
+ "remote_execution",
+ "rpc",
  "serde",
  "twox-hash",
 ]
@@ -1585,7 +1571,6 @@ dependencies = [
 name = "storage"
 version = "0.1.0"
 dependencies = [
- "context",
  "kernel",
  "packed_simd_2",
  "rand 0.8.2",
@@ -2056,7 +2041,6 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "bincode",
- "context",
  "execute",
  "kernel",
  "rand 0.8.2",

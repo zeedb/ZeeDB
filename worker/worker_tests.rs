@@ -46,7 +46,6 @@ fn test_broadcast() {
                 expr: bincode::serialize(&expr).unwrap(),
                 txn: 0,
                 stage: 0,
-                listeners: 1,
             }))
             .await
             .unwrap()

@@ -1,29 +1,25 @@
 use std::{borrow::Borrow, collections::HashMap};
 
 use ast::*;
-use context::Context;
 use kernel::*;
 use zetasql::{
     any_resolved_aggregate_scan_base_proto::Node::*, any_resolved_create_statement_proto::Node::*,
     any_resolved_create_table_stmt_base_proto::Node::*, any_resolved_expr_proto::Node::*,
     any_resolved_function_call_base_proto::Node::*,
     any_resolved_non_scalar_function_call_base_proto::Node::*, any_resolved_scan_proto::Node::*,
-    any_resolved_statement_proto::Node::*, value_proto::Value::*, *,
+    any_resolved_statement_proto::Node::*, resolved_create_statement_enums::CreateScope,
+    value_proto::Value::*, *,
 };
 
-use crate::SEQUENCES_KEY;
-
 pub fn convert<'a>(
-    catalog_id: i64,
-    variables: &'a HashMap<String, Value>,
     q: &AnyResolvedStatementProto,
-    context: &Context,
+    variables: &'a HashMap<String, Value>,
+    catalog_id: i64,
 ) -> Expr {
     Converter {
         catalog_id,
         variables,
         known_columns: HashMap::new(),
-        context,
     }
     .any_stmt(q)
 }
@@ -31,7 +27,6 @@ pub fn convert<'a>(
 struct Converter<'a> {
     catalog_id: i64,
     variables: &'a HashMap<String, Value>,
-    context: &'a Context,
     known_columns: HashMap<i64, Column>,
 }
 
@@ -293,6 +288,7 @@ impl<'a> Converter<'a> {
             let output = outputs[i].clone();
             projects.push((input, output))
         }
+        assert!(!projects.is_empty());
         LogicalMap {
             include_existing: false,
             projects,
@@ -374,6 +370,7 @@ impl<'a> Converter<'a> {
             let column = self.column(&c);
             projects.push((Scalar::Column(column.clone()), column))
         }
+        assert!(!projects.is_empty());
         LogicalMap {
             include_existing: false,
             projects,
@@ -516,6 +513,7 @@ impl<'a> Converter<'a> {
         // Form the result, using as many stages as are necessary.
         let mut result = input;
         if input_projects.len() > 0 {
+            assert!(!input_projects.is_empty());
             result = LogicalMap {
                 include_existing: false,
                 projects: input_projects,
@@ -528,6 +526,7 @@ impl<'a> Converter<'a> {
             input: Box::new(result),
         };
         if output_projects.len() > 0 {
+            assert!(!output_projects.is_empty());
             result = LogicalMap {
                 include_existing: false,
                 projects: output_projects,
@@ -570,7 +569,7 @@ impl<'a> Converter<'a> {
             name,
             table,
             columns,
-            reserved_id: self.context[SEQUENCES_KEY].next_index_id(),
+            reserved_id: sequences::next_index_id(),
         }
     }
 
@@ -579,6 +578,9 @@ impl<'a> Converter<'a> {
     }
 
     fn create_table_base(&mut self, q: &ResolvedCreateTableStmtBaseProto) -> Expr {
+        if q.parent.get().create_scope == Some(CreateScope::CreateTemp as i32) {
+            panic!("CREATE TEMP TABLE is not supported");
+        }
         for option in &q.option_list {
             panic!("CREATE TABLE does not support option {}", option.name());
         }
@@ -590,7 +592,7 @@ impl<'a> Converter<'a> {
         LogicalCreateTable {
             name,
             columns,
-            reserved_id: self.context[SEQUENCES_KEY].next_table_id(),
+            reserved_id: sequences::next_table_id(),
         }
     }
 
@@ -773,7 +775,7 @@ impl<'a> Converter<'a> {
                 catalog_id: self.catalog_id,
                 path: q.name_path.clone(),
             },
-            reserved_id: self.context[SEQUENCES_KEY].next_catalog_id(),
+            reserved_id: sequences::next_catalog_id(),
         }
     }
 

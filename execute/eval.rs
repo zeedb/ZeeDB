@@ -2,49 +2,40 @@ use ast::*;
 use chrono::*;
 use kernel::*;
 use regex::{Captures, Regex};
-use storage::STORAGE_KEY;
 
-use crate::{map::ArrayExt, tracing::QueryState};
+use crate::map::ArrayExt;
 
 pub(crate) fn all(
     predicates: &Vec<Scalar>,
     input: &RecordBatch,
-    state: &QueryState,
-) -> Result<BoolArray, Exception> {
+    txn: i64,
+) -> Result<BoolArray, String> {
     let mut mask = BoolArray::trues(input.len());
     for p in predicates {
-        mask = eval(p, &input, state)?.as_bool().and(&mask);
+        mask = eval(p, &input, txn)?.as_bool().and(&mask);
     }
     Ok(mask)
 }
 
-pub(crate) fn eval(
-    scalar: &Scalar,
-    input: &RecordBatch,
-    state: &QueryState,
-) -> Result<AnyArray, Exception> {
+pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, txn: i64) -> Result<AnyArray, String> {
     let a = match scalar {
         Scalar::Literal(value) => value.repeat(input.len()),
         Scalar::Column(column) => {
             let find = column.canonical_name();
             input.find(&find).expect(&find).clone()
         }
-        Scalar::Call(function) => eval_function(function.as_ref(), input, state)?,
-        Scalar::Cast(scalar, data_type) => eval(scalar, input, state)?.cast(*data_type),
+        Scalar::Call(function) => eval_function(function.as_ref(), input, txn)?,
+        Scalar::Cast(scalar, data_type) => eval(scalar, input, txn)?.cast(*data_type),
     };
     Ok(a)
 }
 
-fn eval_function(
-    function: &F,
-    input: &RecordBatch,
-    state: &QueryState,
-) -> Result<AnyArray, Exception> {
-    let e = |scalar| eval(scalar, input, state);
-    let es = |scalars: &Vec<Scalar>| {
+fn eval_function(function: &F, input: &RecordBatch, txn: i64) -> Result<AnyArray, String> {
+    let e = |scalar| eval(scalar, input, txn);
+    let es = |scalars: &Vec<Scalar>| -> Result<Vec<AnyArray>, String> {
         let mut arrays = vec![];
         for scalar in scalars {
-            arrays.push(eval(scalar, input, state)?)
+            arrays.push(eval(scalar, input, txn)?)
         }
         Ok(arrays)
     };
@@ -53,7 +44,7 @@ fn eval_function(
             "{} should have been eliminated in the rewrite phase",
             function.name()
         ),
-        F::Xid => Ok(I64Array::from_values(vec![state.txn])
+        F::Xid => Ok(I64Array::from_values(vec![txn])
             .repeat(input.len())
             .as_any()),
         F::Coalesce(varargs) => {
@@ -92,18 +83,11 @@ fn eval_function(
         F::DecimalLogarithmDouble(a) => e(a)?.as_f64().map(f64::log10),
         F::Error(a) => {
             let message = e(a)?.as_string().get(0).clone().unwrap_or("".to_string());
-            return Err(Exception::Error(message));
+            return Err(message);
         }
         F::ExpDouble(a) => e(a)?.as_f64().map(f64::exp),
         F::ExtractDateFromTimestamp(a) => e(a)?.as_timestamp().map(date_from_timestamp),
         F::FloorDouble(a) => e(a)?.as_f64().map(f64::floor),
-        F::IsEmpty(a) => e(a)?.as_i64().map(|a| {
-            state.context[STORAGE_KEY]
-                .lock()
-                .unwrap()
-                .table(a)
-                .is_empty()
-        }),
         F::IsFalse(a) => e(a)?
             .as_bool()
             .map(|a: Option<bool>| Ok(Some(a == Some(false)))),
@@ -385,7 +369,7 @@ pub(crate) fn substr(value: &str, mut position: i64, mut length: i64) -> String 
         .collect()
 }
 
-fn strpos(string: Option<&str>, substring: Option<&str>) -> Result<Option<i64>, Exception> {
+fn strpos(string: Option<&str>, substring: Option<&str>) -> Result<Option<i64>, String> {
     match (string, substring) {
         (Some(string), Some(substring)) => Ok(string.find(substring).map(|i| i as i64 + 1)),
         _ => Ok(None),
@@ -451,10 +435,10 @@ pub(crate) fn regexp_replace(
     value: &str,
     regexp: &str,
     replacement: &str,
-) -> Result<Option<String>, Exception> {
+) -> Result<Option<String>, String> {
     let regexp = match Regex::new(regexp) {
         Ok(regexp) => regexp,
-        Err(err) => return Err(Exception::Error(err.to_string())),
+        Err(err) => return Err(err.to_string()),
     };
     if let Some(err) = check_replacement(replacement) {
         return Err(err);
@@ -490,7 +474,7 @@ pub(crate) fn regexp_replace(
     Ok(Some(regexp.replace_all(value, rewrite).to_string()))
 }
 
-fn check_replacement(replacement: &str) -> Option<Exception> {
+fn check_replacement(replacement: &str) -> Option<String> {
     let mut i = 0;
     let chars: Vec<_> = replacement.chars().collect();
     while i < chars.len() {
@@ -506,15 +490,11 @@ fn check_replacement(replacement: &str) -> Option<Exception> {
                 } else if c == '\\' {
                     // Nothing to do
                 } else {
-                    return Some(Exception::Error(
-                        "Invalid REGEXP_REPLACE pattern".to_string(),
-                    ));
+                    return Some("Invalid REGEXP_REPLACE pattern".to_string());
                 }
                 i += 1;
             } else {
-                return Some(Exception::Error(
-                    "REGEXP_REPLACE pattern ends with \\".to_string(),
-                ));
+                return Some("REGEXP_REPLACE pattern ends with \\".to_string());
             }
         }
     }
@@ -642,13 +622,11 @@ fn date_trunc(d: Date<Utc>, date_part: DatePart) -> Date<Utc> {
 fn timestamp_trunc(
     ts: Option<DateTime<Utc>>,
     date_part: DatePart,
-) -> Result<Option<DateTime<Utc>>, Exception> {
+) -> Result<Option<DateTime<Utc>>, String> {
     if let Some(ts) = ts {
         let part = match date_part {
             DatePart::Nanosecond => {
-                return Err(Exception::Error(
-                    "timestamp_trunc(_, NANOSECOND) is not supported".to_string(),
-                ))
+                return Err("timestamp_trunc(_, NANOSECOND) is not supported".to_string())
             }
             DatePart::Microsecond => ts,
             DatePart::Millisecond => ts.duration_trunc(Duration::milliseconds(1)).unwrap(),
@@ -719,13 +697,11 @@ fn prev_weekday_or_today(mut d: Date<Utc>, weekday: Weekday) -> Date<Utc> {
 fn extract_from_timestamp(
     ts: Option<DateTime<Utc>>,
     date_part: DatePart,
-) -> Result<Option<i64>, Exception> {
+) -> Result<Option<i64>, String> {
     if let Some(ts) = ts {
         let part = match date_part {
             DatePart::Nanosecond => {
-                return Err(Exception::Error(
-                    "extract(NANOSECOND from _) is not supported".to_string(),
-                ))
+                return Err("extract(NANOSECOND from _) is not supported".to_string())
             }
             DatePart::Microsecond => ts.timestamp_subsec_micros() as i64,
             DatePart::Millisecond => ts.timestamp_subsec_millis() as i64,
@@ -812,7 +788,7 @@ fn timestamp_add(
     ts: Option<DateTime<Utc>>,
     amount: Option<i64>,
     date_part: DatePart,
-) -> Result<Option<DateTime<Utc>>, Exception> {
+) -> Result<Option<DateTime<Utc>>, String> {
     match (ts, amount) {
         (Some(ts), Some(amount)) => Ok(Some(ts + timestamp_duration(amount, date_part)?)),
         _ => Ok(None),
@@ -823,19 +799,17 @@ fn timestamp_sub(
     ts: Option<DateTime<Utc>>,
     amount: Option<i64>,
     date_part: DatePart,
-) -> Result<Option<DateTime<Utc>>, Exception> {
+) -> Result<Option<DateTime<Utc>>, String> {
     match (ts, amount) {
         (Some(ts), Some(amount)) => Ok(Some(ts - timestamp_duration(amount, date_part)?)),
         _ => Ok(None),
     }
 }
 
-fn timestamp_duration(amount: i64, date_part: DatePart) -> Result<Duration, Exception> {
+fn timestamp_duration(amount: i64, date_part: DatePart) -> Result<Duration, String> {
     Ok(match date_part {
         DatePart::Nanosecond => {
-            return Err(Exception::Error(
-                "timestamp_add/subtract(_, NANOSECOND) is not supported".to_string(),
-            ))
+            return Err("timestamp_add/subtract(_, NANOSECOND) is not supported".to_string())
         }
         DatePart::Microsecond => Duration::microseconds(amount),
         DatePart::Millisecond => Duration::milliseconds(amount),
@@ -850,10 +824,12 @@ fn timestamp_duration(amount: i64, date_part: DatePart) -> Result<Duration, Exce
         | DatePart::Month
         | DatePart::Quarter
         | DatePart::Year
-        | DatePart::IsoYear => panic!(
-            "timestamp_add/subtract(_, {:?}) is not supported",
-            date_part
-        ),
+        | DatePart::IsoYear => {
+            return Err(format!(
+                "timestamp_add/subtract(_, {:?}) is not supported",
+                date_part,
+            ))
+        }
     })
 }
 
@@ -861,14 +837,12 @@ fn timestamp_diff(
     later: Option<DateTime<Utc>>,
     earlier: Option<DateTime<Utc>>,
     date_part: DatePart,
-) -> Result<Option<i64>, Exception> {
+) -> Result<Option<i64>, String> {
     match (later, earlier) {
         (Some(later), Some(earlier)) => {
             let diff = match date_part {
                 DatePart::Nanosecond => {
-                    return Err(Exception::Error(
-                        "timestamp_diff(_, NANOSECOND) is not supported".to_string(),
-                    ))
+                    return Err("timestamp_diff(_, NANOSECOND) is not supported".to_string())
                 }
                 DatePart::Microsecond => (later - earlier).num_microseconds().unwrap(),
                 DatePart::Millisecond => (later - earlier).num_milliseconds() as i64,

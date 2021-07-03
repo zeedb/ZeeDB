@@ -36,7 +36,6 @@ pub enum F {
     ExpDouble(Scalar),
     ExtractDateFromTimestamp(Scalar),
     FloorDouble(Scalar),
-    IsEmpty(Scalar),
     IsFalse(Scalar),
     IsInf(Scalar),
     IsNan(Scalar),
@@ -155,7 +154,6 @@ impl F {
             | F::ExpDouble(_)
             | F::ExtractDateFromTimestamp(_)
             | F::FloorDouble(_)
-            | F::IsEmpty(_)
             | F::IsFalse(_)
             | F::IsInf(_)
             | F::IsNan(_)
@@ -287,7 +285,6 @@ impl std::ops::Index<usize> for F {
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
-            | F::IsEmpty(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -460,7 +457,6 @@ impl std::ops::IndexMut<usize> for F {
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
-            | F::IsEmpty(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -883,7 +879,6 @@ impl F {
             "ZetaSQL:atanh" => unary(args, |a| F::AtanhDouble(a)),
             "ZetaSQL:atan2" => binary(args, |a, b| F::Atan2Double(a, b)),
             "ZetaSQL:error" => unary(args, |a| F::Error(a)),
-            "system:is_empty" => unary(args, |a| F::IsEmpty(a)),
             other => panic!("{} is not a known function name", other),
         }
     }
@@ -919,7 +914,6 @@ impl F {
             F::ExpDouble(_) => "ExpDouble",
             F::ExtractDateFromTimestamp(_) => "ExtractDateFromTimestamp",
             F::FloorDouble(_) => "FloorDouble",
-            F::IsEmpty(_) => "IsEmpty",
             F::IsFalse(_) => "IsFalse",
             F::IsInf(_) => "IsInf",
             F::IsNan(_) => "IsNan",
@@ -1049,7 +1043,6 @@ impl F {
             | F::ExpDouble(a)
             | F::ExtractDateFromTimestamp(a)
             | F::FloorDouble(a)
-            | F::IsEmpty(a)
             | F::IsFalse(a)
             | F::IsInf(a)
             | F::IsNan(a)
@@ -1189,7 +1182,6 @@ impl F {
             | F::GreaterOrEqual { .. }
             | F::In { .. }
             | F::Is { .. }
-            | F::IsEmpty { .. }
             | F::IsFalse { .. }
             | F::IsInf { .. }
             | F::IsNan { .. }
@@ -1337,7 +1329,6 @@ impl F {
             F::ExpDouble(a) => F::ExpDouble(f(a)),
             F::ExtractDateFromTimestamp(a) => F::ExtractDateFromTimestamp(f(a)),
             F::FloorDouble(a) => F::FloorDouble(f(a)),
-            F::IsEmpty(a) => F::IsEmpty(f(a)),
             F::IsFalse(a) => F::IsFalse(f(a)),
             F::IsInf(a) => F::IsInf(f(a)),
             F::IsNan(a) => F::IsNan(f(a)),

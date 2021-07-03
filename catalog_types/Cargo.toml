@@ -9,5 +9,4 @@ path = "lib.rs"
 
 [dependencies]
 ast = { path = "../ast" }
-context = { path = "../context" }
 zetasql = { path = "../zetasql" }

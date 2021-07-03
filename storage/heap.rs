@@ -13,6 +13,7 @@ pub struct Heap {
 }
 
 impl Heap {
+    // TODO replace with Default
     pub fn empty() -> Self {
         Self { pages: vec![] }
     }

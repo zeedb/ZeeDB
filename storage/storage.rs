@@ -1,17 +1,16 @@
-use std::{collections::HashMap, fmt, sync::Mutex};
+use std::{collections::HashMap, fmt};
 
-use context::ContextKey;
 use kernel::DataType;
 use statistics::TableStatistics;
 
 use crate::{art::Art, heap::*};
 
-pub const STORAGE_KEY: ContextKey<Mutex<Storage>> = ContextKey::new("STORAGE");
-
+#[derive(Clone)]
 pub struct Storage {
     tables: Vec<Heap>,
     indexes: Vec<Art>,
     statistics: HashMap<i64, TableStatistics>,
+    temp_tables: HashMap<(i64, String), Heap>,
 }
 
 impl Storage {
@@ -24,8 +23,17 @@ impl Storage {
     }
 
     pub fn create_table(&mut self, id: i64) {
+        assert!(self.tables.len() < id as usize + 1);
         self.tables.resize_with(id as usize + 1, Heap::empty);
         self.statistics.insert(id, TableStatistics::default());
+    }
+
+    pub fn temp_table(&self, txn: i64, name: String) -> &Heap {
+        &self.temp_tables[&(txn, name)]
+    }
+
+    pub fn create_temp_table(&mut self, txn: i64, name: String, heap: Heap) {
+        self.temp_tables.insert((txn, name.clone()), heap);
     }
 
     pub fn drop_table(&mut self, id: i64) {
@@ -42,6 +50,7 @@ impl Storage {
     }
 
     pub fn create_index(&mut self, id: i64) {
+        assert!(self.indexes.len() < id as usize + 1);
         self.indexes.resize_with(id as usize + 1, Art::empty);
     }
 
@@ -78,6 +87,7 @@ impl Default for Storage {
             tables,
             indexes,
             statistics,
+            temp_tables: HashMap::default(),
         }
     }
 }
@@ -92,16 +102,6 @@ impl fmt::Debug for Storage {
             }
         }
         Ok(())
-    }
-}
-
-impl Clone for Storage {
-    fn clone(&self) -> Self {
-        Self {
-            tables: self.tables.clone(),
-            indexes: self.indexes.clone(),
-            statistics: self.statistics.clone(),
-        }
     }
 }
 

@@ -15,8 +15,8 @@ prost-types = "0.7.0"
 time = "0.1.39"
 
 ast = { path = "../ast" }
-catalog_types = { path = "../catalog_types" }
-context = { path = "../context" }
+catalog = { path = "../catalog" }
 kernel = { path = "../kernel" }
 rpc = { path = "../rpc" }
+sequences = { path = "../sequences" }
 zetasql = { path = "../zetasql" }

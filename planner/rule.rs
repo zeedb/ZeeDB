@@ -1,7 +1,6 @@
 use std::collections::HashSet;
 
 use ast::*;
-use catalog_types::CATALOG_KEY;
 use kernel::DataType;
 
 use crate::{optimize::Optimizer, search_space::*};
@@ -353,8 +352,7 @@ impl Rule {
                 } = bind
                 {
                     let mut results = vec![];
-                    let catalog = &parent.context[CATALOG_KEY];
-                    for index in catalog.indexes(table.id, parent.txn, &parent.context) {
+                    for index in catalog::indexes(table.id, parent.txn) {
                         if let Some((lookup, predicates)) = index.matches(&predicates) {
                             results.push(IndexScan {
                                 include_existing: true,
@@ -417,8 +415,7 @@ impl Rule {
                     } = *left
                     {
                         let mut results = vec![];
-                        let catalog = &parent.context[CATALOG_KEY];
-                        for index in catalog.indexes(table.id, parent.txn, &parent.context) {
+                        for index in catalog::indexes(table.id, parent.txn) {
                             if let Some((lookup, mut predicates)) = index.matches(join.predicates())
                             {
                                 predicates.extend(table_predicates.clone());
@@ -497,8 +494,7 @@ impl Rule {
                     columns,
                 } = bind
                 {
-                    let catalog = &parent.context[CATALOG_KEY];
-                    let indexes = catalog.indexes(table.id, parent.txn, &parent.context);
+                    let indexes = catalog::indexes(table.id, parent.txn);
                     return single(Insert {
                         table,
                         indexes,
