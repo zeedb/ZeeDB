@@ -54,7 +54,6 @@ substitutions:
     set -eux
     zetasql_server & 
     cargo bench --bench example
-    cargo bench --bench example -- --profile-time=5
     tar -zcf benchmarks.tar.gz /cargo/target/criterion
 timeout: 3600s
 options:
