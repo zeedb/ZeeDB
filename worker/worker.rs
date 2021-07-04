@@ -16,6 +16,7 @@ use storage::Storage;
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};
 
+// TODO eliminate this and use RAYON_NUM_THREADS to control number of threads.
 const CONCURRENT_QUERIES: usize = 10;
 
 #[derive(Clone)]
@@ -23,6 +24,7 @@ pub struct WorkerNode {
     storage: Arc<Mutex<Storage>>,
     broadcast: Arc<Mutex<HashMap<(Expr, i64, i32), Broadcast>>>,
     exchange: Arc<Mutex<HashMap<(Expr, i64, i32), Exchange>>>,
+    // TODO eliminate this in favor of global thread pool, and use RAYON_NUM_THREADS to control number of threads.
     pool: Arc<ThreadPool>,
 }
 
@@ -72,7 +74,7 @@ impl Worker for WorkerNode {
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         self.pool
-            .spawn(move || broadcast(&storage, request.txn, expr, vec![sender]));
+            .spawn(move || broadcast(&storage, request.txn, 0, expr, vec![sender]));
         Ok(Response::new(PageStream { receiver }))
     }
 
@@ -82,7 +84,7 @@ impl Worker for WorkerNode {
     ) -> Result<Response<Self::BroadcastStream>, Status> {
         let request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
-        let listeners = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
+        let listeners: usize = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         match self
@@ -97,16 +99,18 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, _, _), topic) = occupied.remove_entry();
-                    self.pool
-                        .spawn(move || broadcast(&storage, request.txn, expr, topic.listeners));
+                    self.pool.spawn(move || {
+                        broadcast(&storage, request.txn, request.stage, expr, topic.listeners)
+                    });
                 }
             }
             Entry::Vacant(vacant) => {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, _, _) = vacant.into_key();
-                    self.pool
-                        .spawn(move || broadcast(&storage, request.txn, expr, vec![sender]));
+                    self.pool.spawn(move || {
+                        broadcast(&storage, request.txn, request.stage, expr, vec![sender])
+                    });
                 // Otherwise, create a new topic with one listener.
                 } else {
                     vacant.insert(Broadcast {
@@ -124,7 +128,7 @@ impl Worker for WorkerNode {
     ) -> Result<Response<Self::ExchangeStream>, Status> {
         let request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
-        let listeners = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
+        let listeners: usize = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         match self
@@ -146,6 +150,7 @@ impl Worker for WorkerNode {
                         exchange(
                             &storage,
                             request.txn,
+                            request.stage,
                             expr,
                             request.hash_column,
                             topic.listeners,
@@ -161,6 +166,7 @@ impl Worker for WorkerNode {
                         exchange(
                             &storage,
                             request.txn,
+                            request.stage,
                             expr,
                             request.hash_column,
                             vec![(request.hash_bucket, sender)],
@@ -221,12 +227,20 @@ impl Worker for WorkerNode {
     }
 }
 
-fn broadcast(storage: &Mutex<Storage>, txn: i64, expr: Expr, listeners: Vec<Sender<Page>>) {
+fn broadcast(
+    storage: &Mutex<Storage>,
+    txn: i64,
+    stage: i32,
+    expr: Expr,
+    listeners: Vec<Sender<Page>>,
+) {
+    let worker_id = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+    let _session = log::session(Some(worker_id), stage);
     // Send each batch of records produced by expr to each worker node in the cluster.
     let mut query = Node::compile(expr);
     loop {
         let result = match query.next(storage, txn) {
-            Ok(Some(batch)) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Ok(Some(record_batch)) => Part::RecordBatch(serialize_record_batch(&record_batch)),
             Ok(None) => break,
             Err(message) => Part::Error(message),
         };
@@ -242,10 +256,13 @@ fn broadcast(storage: &Mutex<Storage>, txn: i64, expr: Expr, listeners: Vec<Send
 fn exchange(
     storage: &Mutex<Storage>,
     txn: i64,
+    stage: i32,
     expr: Expr,
     hash_column: String,
     mut listeners: Vec<(i32, Sender<Page>)>,
 ) {
+    let worker_id = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+    let _session = log::session(Some(worker_id), stage);
     // Order listeners by bucket.
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
     // Split up each batch of records produced by expr and send the splits to the worker nodes.
@@ -253,13 +270,13 @@ fn exchange(
     loop {
         match query.next(storage, txn) {
             Ok(Some(batch)) => {
-                for (hash_bucket, batch_part) in partition(batch, &hash_column, listeners.len())
+                for (hash_bucket, record_batch) in partition(batch, &hash_column, listeners.len())
                     .iter()
                     .enumerate()
                 {
                     let (_, sink) = &listeners[hash_bucket];
                     sink.blocking_send(Page {
-                        part: Some(Part::RecordBatch(bincode::serialize(&batch_part).unwrap())),
+                        part: Some(Part::RecordBatch(serialize_record_batch(record_batch))),
                     })
                     .unwrap();
                 }
@@ -283,4 +300,9 @@ fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<Reco
     } else {
         todo!()
     }
+}
+
+#[log::trace]
+fn serialize_record_batch(record_batch: &RecordBatch) -> Vec<u8> {
+    bincode::serialize(record_batch).unwrap()
 }

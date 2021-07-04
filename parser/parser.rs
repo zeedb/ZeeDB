@@ -57,15 +57,40 @@ pub fn split(sql: &str) -> Vec<String> {
     })
 }
 
+#[log::trace]
 pub fn analyze(
     sql: &str,
     variables: &HashMap<String, Value>,
     catalog_id: i64,
     txn: i64,
 ) -> Result<Expr, String> {
-    // TODO just enter runtime() and call parser().await once.
     // Extract table names from script.
-    let table_names = rpc::runtime().block_on(async move {
+    let table_names = extract_table_names_from_stmt(sql);
+    // Construct a minimal catalog containing just the referenced tables.
+    let simple_catalog = catalog::simple_catalog(table_names, catalog_id, txn);
+    // Parse each statement in the script, one at a time, in a loop.
+    let mut offset = 0;
+    let mut exprs = vec![];
+    loop {
+        // Parse the next statement.
+        let (stmt, next_offset) = analyze_next_statement(sql, offset, variables, &simple_catalog)?;
+        let expr = convert(&stmt, variables, catalog_id);
+        offset = next_offset;
+        exprs.push(expr);
+        // If we've parsed the entire expression, return.
+        if offset as usize == sql.as_bytes().len() {
+            if exprs.len() == 1 {
+                return Ok(exprs.pop().unwrap());
+            } else {
+                return Ok(Expr::LogicalScript { statements: exprs });
+            }
+        }
+    }
+}
+
+#[log::trace]
+fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
+    rpc::runtime().block_on(async move {
         parser()
             .await
             .extract_table_names_from_statement(Request::new(
@@ -82,58 +107,47 @@ pub fn analyze(
             .drain(..)
             .map(|name| name.table_name_segment)
             .collect()
-    });
-    // Construct a minimal catalog containing just the referenced tables.
-    let simple_catalog = catalog::simple_catalog(table_names, catalog_id, txn);
-    // Parse each statement in the script, one at a time, in a loop.
-    let mut offset = 0;
-    let mut exprs = vec![];
-    loop {
-        // Parse the next statement.
-        let request = AnalyzeRequest {
-            simple_catalog: Some(simple_catalog.clone()),
-            options: Some(AnalyzerOptionsProto {
-                default_timezone: Some("UTC".to_string()),
-                language_options: Some(language_options()),
-                prune_unused_columns: Some(true),
-                query_parameters: variables
-                    .iter()
-                    .map(|(name, value)| QueryParameterProto {
-                        name: Some(name.clone()),
-                        r#type: Some(value.data_type().to_proto()),
-                    })
-                    .collect(),
-                ..Default::default()
-            }),
-            target: Some(ParseResumeLocation(ParseResumeLocationProto {
-                input: Some(sql.to_string()),
-                byte_position: Some(offset),
-                ..Default::default()
-            })),
+    })
+}
+
+#[log::trace]
+fn analyze_next_statement(
+    sql: &str,
+    offset: i32,
+    variables: &HashMap<String, Value>,
+    simple_catalog: &SimpleCatalogProto,
+) -> Result<(AnyResolvedStatementProto, i32), String> {
+    let request = AnalyzeRequest {
+        simple_catalog: Some(simple_catalog.clone()),
+        options: Some(AnalyzerOptionsProto {
+            default_timezone: Some("UTC".to_string()),
+            language_options: Some(language_options()),
+            prune_unused_columns: Some(true),
+            query_parameters: variables
+                .iter()
+                .map(|(name, value)| QueryParameterProto {
+                    name: Some(name.clone()),
+                    r#type: Some(value.data_type().to_proto()),
+                })
+                .collect(),
             ..Default::default()
-        };
-        let response = match rpc::runtime()
-            .block_on(async move { parser().await.analyze(Request::new(request)).await })
-        {
+        }),
+        target: Some(ParseResumeLocation(ParseResumeLocationProto {
+            input: Some(sql.to_string()),
+            byte_position: Some(offset),
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    let response =
+        match rpc::runtime().block_on(async move { parser().await.analyze(request).await }) {
             Ok(response) => response.into_inner(),
             Err(status) => return Err(status.message().to_string()),
         };
-        let expr = match response.result.unwrap() {
-            ResolvedStatement(stmt) => convert(&stmt, variables, catalog_id),
-            ResolvedExpression(_) => {
-                panic!("expected statement but found expression")
-            }
-        };
-        // Add expr to list and prepare to continue parsing.
-        offset = response.resume_byte_position.unwrap();
-        exprs.push(expr);
-        // If we've parsed the entire expression, return.
-        if offset as usize == sql.as_bytes().len() {
-            if exprs.len() == 1 {
-                return Ok(exprs.pop().unwrap());
-            } else {
-                return Ok(Expr::LogicalScript { statements: exprs });
-            }
+    match response.result.unwrap() {
+        ResolvedStatement(stmt) => Ok((stmt, response.resume_byte_position.unwrap())),
+        ResolvedExpression(_) => {
+            panic!("expected statement but found expression")
         }
     }
 }

@@ -3,6 +3,20 @@ use ast::Value;
 use crate::test_runner::TestRunner;
 
 #[test]
+fn test_insert() {
+    println!("[");
+    let mut t = TestRunner::default();
+    t.run("create table test (i int64)", vec![]);
+    assert_eq!(
+        "EMPTY",
+        t.run(
+            "insert into test values (@i)",
+            vec![("i".to_string(), Value::I64(Some(0)))],
+        )
+    );
+}
+
+#[test]
 fn test_aggregate() {
     assert!(!TestRunner::default().rewrite("tests/aggregate.testlog"));
 }

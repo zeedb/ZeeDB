@@ -216,6 +216,7 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "kernel",
+ "log 0.1.0",
  "remote_execution",
  "zetasql",
 ]
@@ -276,6 +277,7 @@ dependencies = [
  "bincode",
  "catalog",
  "kernel",
+ "log 0.1.0",
  "parser",
  "planner",
  "rand 0.8.2",
@@ -421,6 +423,7 @@ dependencies = [
  "catalog",
  "coordinator",
  "kernel",
+ "log 0.1.0",
  "once_cell",
  "rpc",
  "serde",
@@ -448,6 +451,7 @@ dependencies = [
  "bincode",
  "chrono",
  "kernel",
+ "log 0.1.0",
  "num-traits",
  "rand 0.8.2",
  "regex",
@@ -734,7 +738,7 @@ dependencies = [
  "indexmap",
  "itoa",
  "lazy_static",
- "log",
+ "log 0.4.13",
  "num-format",
  "quick-xml",
  "rgb",
@@ -823,11 +827,30 @@ dependencies = [
 
 [[package]]
 name = "log"
+version = "0.1.0"
+dependencies = [
+ "log_attrs",
+ "once_cell",
+ "rayon",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "log"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fcf3805d4480bb5b86070dcfeb9e2cb2ebc148adb753c5cca5f884d1d65a42b2"
 dependencies = [
  "cfg-if 0.1.10",
+]
+
+[[package]]
+name = "log_attrs"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -872,7 +895,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf80d3e903b34e0bd7282b218398aec54e082c840d9baf8339e0080a0c542956"
 dependencies = [
  "libc",
- "log",
+ "log 0.4.13",
  "miow",
  "ntapi",
  "winapi",
@@ -1020,6 +1043,7 @@ dependencies = [
  "catalog",
  "chrono",
  "kernel",
+ "log 0.1.0",
  "prost-types",
  "rpc",
  "sequences",
@@ -1085,6 +1109,7 @@ dependencies = [
  "catalog",
  "chrono",
  "kernel",
+ "log 0.1.0",
  "parser",
  "rand 0.8.2",
  "remote_execution",
@@ -1133,7 +1158,7 @@ dependencies = [
  "inferno",
  "lazy_static",
  "libc",
- "log",
+ "log 0.4.13",
  "nix",
  "parking_lot",
  "symbolic-demangle",
@@ -1161,9 +1186,9 @@ checksum = "bc881b2c22681370c6a780e47af9840ef841837bc98118431d4e1868bd0c1086"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.24"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
+checksum = "f0d8caf72986c1a598726adc988bb5984792ef84f5ee5aa50209145ee8077038"
 dependencies = [
  "unicode-xid",
 ]
@@ -1187,7 +1212,7 @@ dependencies = [
  "bytes",
  "heck",
  "itertools 0.9.0",
- "log",
+ "log 0.4.13",
  "multimap",
  "petgraph",
  "prost",
@@ -1230,9 +1255,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.8"
+version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "991431c3519a3f36861882da93630ce66b52918dcf1b8e2fd66b397fc96f28df"
+checksum = "c3d0b9745dc2debf507c8422de05d7226cc1f0644216dfdfead988f9b1ab32a7"
 dependencies = [
  "proc-macro2",
 ]
@@ -1386,6 +1411,7 @@ dependencies = [
  "bincode",
  "futures",
  "kernel",
+ "log 0.1.0",
  "once_cell",
  "regex",
  "rpc",
@@ -1609,9 +1635,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.60"
+version = "1.0.73"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c700597eca8a5a762beb35753ef6b94df201c81cca676604f547495a0d7f0081"
+checksum = "f71489ff30030d2ae598524f61326b902466f72a0fb1a8564c001cc63425bcc7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1729,7 +1755,7 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
- "log",
+ "log 0.4.13",
  "pin-project-lite",
  "tokio",
 ]
@@ -1814,7 +1840,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09adeb8c97449311ccd28a427f96fb563e7fd31aabf994189879d9da2394b89d"
 dependencies = [
  "cfg-if 1.0.0",
- "log",
+ "log 0.4.13",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -1914,7 +1940,7 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ce8a968cb1cd110d136ff8b819a556d6fb6d919363c61534f6860c7eb172ba0"
 dependencies = [
- "log",
+ "log 0.4.13",
  "try-lock",
 ]
 
@@ -1948,7 +1974,7 @@ checksum = "046ceba58ff062da072c7cb4ba5b22a37f00a302483f7e2a6cdc18fedbdc1fd3"
 dependencies = [
  "bumpalo",
  "lazy_static",
- "log",
+ "log 0.4.13",
  "proc-macro2",
  "quote",
  "syn",
@@ -2043,6 +2069,7 @@ dependencies = [
  "bincode",
  "execute",
  "kernel",
+ "log 0.1.0",
  "rand 0.8.2",
  "rayon",
  "remote_execution",

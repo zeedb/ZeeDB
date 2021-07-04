@@ -16,6 +16,7 @@ rayon = "1.5"
 ast = { path = "../ast" }
 execute = { path = "../execute" }
 kernel = { path = "../kernel" }
+log = { path = "../log" }
 rpc = { path = "../rpc" }
 remote_execution = { path = "../remote_execution" }
 statistics = { path = "../statistics" }

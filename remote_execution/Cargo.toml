@@ -16,5 +16,6 @@ tonic = "0.4.3"
 regex = "1.4.2"
 
 ast = { path = "../ast" }
+log = { path = "../log" }
 kernel = { path = "../kernel" }
 rpc = { path = "../rpc" }

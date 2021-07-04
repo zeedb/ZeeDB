@@ -4,20 +4,31 @@ use crate::{cost::*, rule::*, search_space::*};
 
 const TRACE: bool = false;
 
-pub fn optimize(expr: Expr, catalog_id: i64, txn: i64) -> Expr {
+#[log::trace]
+pub fn optimize(expr: Expr, txn: i64) -> Expr {
+    let expr = crate::rewrite::rewrite(expr);
+    let expr = search(expr, txn);
+    let expr = finish(expr);
+    expr
+}
+
+#[log::trace]
+fn search(mut expr: Expr, txn: i64) -> Expr {
     let mut optimizer = Optimizer {
         ss: SearchSpace::default(),
-        catalog_id,
         txn,
     };
-    let mut expr = crate::rewrite::rewrite(expr);
     optimizer.copy_in_new(&mut expr);
     let gid = match expr {
         Leaf { gid } => GroupID(gid),
         _ => panic!("copy_in_new did not replace expr with Leaf"),
     };
     optimizer.optimize_group(gid, PhysicalProp::None);
-    let mut expr = optimizer.winner(gid, PhysicalProp::None);
+    optimizer.winner(gid, PhysicalProp::None)
+}
+
+#[log::trace]
+fn finish(mut expr: Expr) -> Expr {
     crate::distribution::set_hash_columns(&mut expr);
     crate::distribution::set_stages(&mut expr);
     expr
@@ -29,7 +40,6 @@ pub fn optimize(expr: Expr, catalog_id: i64, txn: i64) -> Expr {
 
 pub(crate) struct Optimizer {
     pub ss: SearchSpace,
-    pub catalog_id: i64,
     pub txn: i64,
 }
 

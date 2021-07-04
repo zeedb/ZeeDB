@@ -11,6 +11,7 @@ use zetasql::{
     value_proto::Value::*, *,
 };
 
+#[log::trace]
 pub fn convert<'a>(
     q: &AnyResolvedStatementProto,
     variables: &'a HashMap<String, Value>,

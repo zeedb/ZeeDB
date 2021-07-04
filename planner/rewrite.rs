@@ -5,6 +5,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 
 use crate::unnest::unnest_dependent_joins;
 
+#[log::trace]
 pub fn rewrite(expr: Expr) -> Expr {
     let expr = top_down_rewrite(expr, rewrite_ddl);
     let expr = top_down_rewrite(expr, rewrite_with);

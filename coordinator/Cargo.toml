@@ -15,6 +15,7 @@ rayon = "1.5"
 
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
+log = { path = "../log" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 rpc = { path = "../rpc" }

@@ -17,6 +17,7 @@ time = "0.1.39"
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
 kernel = { path = "../kernel" }
+log = { path = "../log" }
 rpc = { path = "../rpc" }
 sequences = { path = "../sequences" }
 zetasql = { path = "../zetasql" }

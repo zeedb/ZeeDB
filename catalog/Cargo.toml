@@ -10,5 +10,6 @@ path = "lib.rs"
 [dependencies]
 ast = { path = "../ast" }
 kernel = { path = "../kernel" }
+log = { path = "../log" }
 remote_execution = { path = "../remote_execution" }
 zetasql = { path = "../zetasql" }

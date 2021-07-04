@@ -380,6 +380,7 @@ impl Node {
         storage: &Mutex<Storage>,
         txn: i64,
     ) -> Result<Option<RecordBatch>, String> {
+        let _span = log::enter(self.name());
         match self {
             Node::TableFreeScan { empty } => {
                 if *empty {

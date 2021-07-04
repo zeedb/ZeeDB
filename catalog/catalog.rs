@@ -6,6 +6,7 @@ use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
 use crate::{defaults::*, METADATA_CATALOG_ID, RESERVED_IDS};
 
+#[log::trace]
 pub fn simple_catalog(
     table_names: Vec<Vec<String>>,
     catalog_id: i64,
@@ -70,6 +71,7 @@ pub fn indexes(table_id: i64, txn: i64) -> Vec<Index> {
     indexes
 }
 
+#[log::trace]
 fn catalog_name_to_id(parent_catalog_id: i64, catalog_name: &String, txn: i64) -> i64 {
     let mut variables = HashMap::new();
     variables.insert(

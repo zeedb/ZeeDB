@@ -8,6 +8,8 @@ members = [
     "encoding",
     "execute",
     "kernel",
+    "log",
+    "log_attrs",
     "parser",
     "planner",
     "rpc",

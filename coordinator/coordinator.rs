@@ -11,11 +11,13 @@ use rpc::{
 };
 use tonic::{async_trait, Request, Response, Status};
 
+// TODO eliminate this and use RAYON_NUM_THREADS to control number of threads.
 const CONCURRENT_QUERIES: usize = 10;
 
 #[derive(Clone)]
 pub struct CoordinatorNode {
     txn: Arc<AtomicI64>,
+    // TODO eliminate this in favor of global thread pool, and use RAYON_NUM_THREADS to control number of threads.
     pool: Arc<ThreadPool>,
 }
 
@@ -54,12 +56,14 @@ impl Coordinator for CoordinatorNode {
         let record_batch = receiver.await.unwrap()?;
         Ok(Response::new(SubmitResponse {
             txn,
-            record_batch: bincode::serialize(&record_batch).unwrap(),
+            record_batch: serialize_record_batch(record_batch),
         }))
     }
 }
 
 fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
+    let _session = log::session(None, 0);
+    let _span = log::enter(&request.sql);
     let variables = request
         .variables
         .iter()
@@ -71,7 +75,7 @@ fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
             return Err(Status::invalid_argument(message));
         }
     };
-    let expr = planner::optimize(expr, request.catalog_id, txn);
+    let expr = planner::optimize(expr, txn);
     let schema = expr.schema();
     let mut stream = remote_execution::output(expr, txn);
     let mut batches = vec![];
@@ -84,4 +88,9 @@ fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
     }
     let record_batch = RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema));
     Ok(record_batch)
+}
+
+#[log::trace]
+fn serialize_record_batch(record_batch: RecordBatch) -> Vec<u8> {
+    bincode::serialize(&record_batch).unwrap()
 }

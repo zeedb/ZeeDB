@@ -12,6 +12,7 @@ ast = { path = "../ast" }
 catalog = { path = "../catalog" }
 chrono = { version = "0.4.11", features = [] }
 kernel = { path = "../kernel" }
+log = { path = "../log" }
 parser = { path = "../parser" }
 rand = { version = "0.8.2", features = ["small_rng"]}
 remote_execution = { path = "../remote_execution" }
