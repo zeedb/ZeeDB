@@ -1,14 +1,17 @@
-use std::{cell::RefCell, collections::HashMap, time::Instant};
+use std::{cell::RefCell, collections::HashMap, sync::Mutex, time::Instant};
 
 use once_cell::sync::OnceCell;
+use rpc::{TraceSpan, TraceStage};
 use serde::{Deserialize, Serialize};
 
 static ZERO: OnceCell<Instant> = OnceCell::new();
 
+static CACHE: OnceCell<Mutex<HashMap<CacheKey, CacheValue>>> = OnceCell::new();
+
 thread_local!(static APPEND: RefCell<Vec<Event>> = RefCell::default());
 
-pub fn session(worker_id: Option<i32>, stage: i32) -> Session {
-    Session { worker_id, stage }
+pub fn session(txn: i64, stage: i32, worker: Option<i32>) -> Session {
+    Session { txn, stage, worker }
 }
 
 pub fn enter(name: impl Into<String>) -> Span {
@@ -19,39 +22,37 @@ pub fn enter(name: impl Into<String>) -> Span {
     }
 }
 
-pub struct Session {
-    worker_id: Option<i32>,
-    stage: i32,
+pub fn trace(txn: i64, worker: Option<i32>) -> Vec<TraceStage> {
+    let key = CacheKey { txn, worker };
+    let value = CACHE
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap()
+        .remove(&key)
+        .unwrap_or_default();
+    value.stages
 }
 
-impl Drop for Session {
-    fn drop(&mut self) {
-        let process_name = self
-            .worker_id
-            .map(|i| format!("Worker-{}", i))
-            .unwrap_or("Coordinator".to_string());
-        let pid = self.worker_id.unwrap_or(-1);
-        let tid = self.stage;
-        let mut events = vec![];
-        events.push(JsonTraceEvent::process_name(pid, process_name));
-        for e in APPEND.with(|cell| cell.take()).drain(..).rev() {
-            events.push(JsonTraceEvent::X {
-                name: e.name,
-                ts: e.start.duration_since(*ZERO.get().unwrap()).as_micros() as u64,
-                dur: e.end.duration_since(e.start).as_micros() as u64,
-                pid,
-                tid,
-            });
-        }
-        for e in events {
-            println!("{},", serde_json::to_string(&e).unwrap());
-        }
-    }
+pub struct Session {
+    txn: i64,
+    stage: i32,
+    worker: Option<i32>,
 }
 
 pub struct Span {
     name: String,
     start: Instant,
+}
+
+#[derive(Default, Debug, Hash, PartialEq, Eq)]
+struct CacheKey {
+    txn: i64,
+    worker: Option<i32>,
+}
+
+#[derive(Default)]
+struct CacheValue {
+    stages: Vec<TraceStage>,
 }
 
 impl Drop for Span {
@@ -63,6 +64,38 @@ impl Drop for Span {
                 end: Instant::now(),
             })
         });
+    }
+}
+
+impl Drop for Session {
+    fn drop(&mut self) {
+        let mut events = APPEND.with(|cell| cell.take());
+        let zero = *ZERO.get().unwrap();
+        let stage = TraceStage {
+            stage: self.stage,
+            worker: self.worker,
+            spans: events
+                .drain(..)
+                .rev()
+                .map(|e| TraceSpan {
+                    name: e.name,
+                    start: e.start.duration_since(zero).as_micros() as u64,
+                    end: e.end.duration_since(zero).as_micros() as u64,
+                })
+                .collect(),
+        };
+        let key = CacheKey {
+            txn: self.txn,
+            worker: self.worker,
+        };
+        CACHE
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap()
+            .entry(key)
+            .or_default()
+            .stages
+            .push(stage);
     }
 }
 
@@ -90,6 +123,29 @@ pub enum JsonTraceEvent {
         pid: i32,
         args: HashMap<&'static str, String>,
     },
+}
+
+pub fn to_json(stages: Vec<TraceStage>) -> Vec<JsonTraceEvent> {
+    let mut events = vec![];
+    for stage in stages {
+        let process_name = stage
+            .worker
+            .map(|i| format!("Worker-{}", i))
+            .unwrap_or("Coordinator".to_string());
+        let pid = stage.worker.unwrap_or(-1);
+        let tid = stage.stage;
+        events.push(JsonTraceEvent::process_name(pid, process_name));
+        for e in stage.spans {
+            events.push(JsonTraceEvent::X {
+                name: e.name,
+                ts: e.start,
+                dur: e.end - e.start,
+                pid,
+                tid,
+            });
+        }
+    }
+    events
 }
 
 impl JsonTraceEvent {

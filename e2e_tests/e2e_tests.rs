@@ -1,19 +1,19 @@
+use std::fs::File;
+
 use ast::Value;
 
 use crate::test_runner::TestRunner;
 
 #[test]
 fn test_insert() {
-    println!("[");
     let mut t = TestRunner::default();
     t.run("create table test (i int64)", vec![]);
-    assert_eq!(
-        "EMPTY",
-        t.run(
-            "insert into test values (@i)",
-            vec![("i".to_string(), Value::I64(Some(0)))],
-        )
+    let json = t.bench(
+        "insert into test values (@i)",
+        vec![("i".to_string(), Value::I64(Some(0)))],
     );
+    let mut file = File::create("trace.json").unwrap();
+    serde_json::to_writer_pretty(&mut file, &json).unwrap();
 }
 
 #[test]

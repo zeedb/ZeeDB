@@ -10,7 +10,8 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use rpc::{
     page::Part, worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse,
     BroadcastRequest, CheckRequest, CheckResponse, ColumnStatisticsRequest,
-    ColumnStatisticsResponse, ExchangeRequest, OutputRequest, Page, PageStream,
+    ColumnStatisticsResponse, ExchangeRequest, OutputRequest, Page, PageStream, TraceRequest,
+    TraceResponse,
 };
 use storage::Storage;
 use tokio::sync::mpsc::Sender;
@@ -225,6 +226,16 @@ impl Worker for WorkerNode {
             statistics: receiver.await.unwrap(),
         }))
     }
+
+    async fn trace(
+        &self,
+        request: Request<TraceRequest>,
+    ) -> Result<Response<TraceResponse>, Status> {
+        let request = request.into_inner();
+        let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+        let stages = log::trace(request.txn, Some(worker));
+        Ok(Response::new(TraceResponse { stages }))
+    }
 }
 
 fn broadcast(
@@ -234,8 +245,8 @@ fn broadcast(
     expr: Expr,
     listeners: Vec<Sender<Page>>,
 ) {
-    let worker_id = std::env::var("WORKER_ID").unwrap().parse().unwrap();
-    let _session = log::session(Some(worker_id), stage);
+    let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+    let _session = log::session(txn, stage, Some(worker));
     // Send each batch of records produced by expr to each worker node in the cluster.
     let mut query = Node::compile(expr);
     loop {
@@ -261,8 +272,8 @@ fn exchange(
     hash_column: String,
     mut listeners: Vec<(i32, Sender<Page>)>,
 ) {
-    let worker_id = std::env::var("WORKER_ID").unwrap().parse().unwrap();
-    let _session = log::session(Some(worker_id), stage);
+    let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+    let _session = log::session(txn, stage, Some(worker));
     // Order listeners by bucket.
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
     // Split up each batch of records produced by expr and send the splits to the worker nodes.

@@ -8,6 +8,7 @@ use kernel::RecordBatch;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use rpc::{
     coordinator_server::Coordinator, CheckRequest, CheckResponse, SubmitRequest, SubmitResponse,
+    TraceRequest, TraceResponse,
 };
 use tonic::{async_trait, Request, Response, Status};
 
@@ -59,10 +60,23 @@ impl Coordinator for CoordinatorNode {
             record_batch: serialize_record_batch(record_batch),
         }))
     }
+
+    async fn trace(
+        &self,
+        request: Request<TraceRequest>,
+    ) -> Result<Response<TraceResponse>, Status> {
+        let request = request.into_inner();
+        let mut stages = log::trace(request.txn, None);
+        for mut worker in remote_execution::workers().await {
+            let mut response = worker.trace(request.clone()).await.unwrap().into_inner();
+            stages.append(&mut response.stages);
+        }
+        Ok(Response::new(TraceResponse { stages }))
+    }
 }
 
 fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
-    let _session = log::session(None, 0);
+    let _session = log::session(txn, 0, None);
     let _span = log::enter(&request.sql);
     let variables = request
         .variables

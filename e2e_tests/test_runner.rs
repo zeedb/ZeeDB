@@ -14,10 +14,11 @@ use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
 use coordinator::CoordinatorNode;
 use fs::File;
 use kernel::RecordBatch;
+use log::JsonTraceEvent;
 use once_cell::sync::Lazy;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, CheckRequest, SubmitRequest,
+    worker_server::WorkerServer, CheckRequest, SubmitRequest, TraceRequest,
 };
 use tonic::transport::{Channel, Endpoint, Server};
 use worker::WorkerNode;
@@ -113,6 +114,30 @@ impl TestRunner {
             }
             Err(status) => format!("ERROR: {}", status.message()),
         }
+    }
+
+    pub fn bench(&mut self, sql: &str, variables: Vec<(String, Value)>) -> Vec<JsonTraceEvent> {
+        let query_request = SubmitRequest {
+            sql: sql.to_string(),
+            variables: variables
+                .iter()
+                .map(|(k, v)| (k.clone(), v.into_proto()))
+                .collect(),
+            catalog_id: self.catalog_id,
+            txn: None,
+        };
+        let query_response = rpc::runtime()
+            .block_on(self.client.lock().unwrap().submit(query_request))
+            .unwrap()
+            .into_inner();
+        let trace_request = TraceRequest {
+            txn: query_response.txn,
+        };
+        let trace_response = rpc::runtime()
+            .block_on(self.client.lock().unwrap().trace(trace_request))
+            .unwrap()
+            .into_inner();
+        log::to_json(trace_response.stages)
     }
 }
 
