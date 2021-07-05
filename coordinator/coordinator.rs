@@ -40,10 +40,10 @@ impl Coordinator for CoordinatorNode {
             .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
         let (sender, receiver) = tokio::sync::oneshot::channel();
         rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
-        let record_batch = receiver.await.unwrap()?;
+        let batch = receiver.await.unwrap()?;
         Ok(Response::new(SubmitResponse {
             txn,
-            record_batch: serialize_record_batch(record_batch),
+            record_batch: serialize_record_batch(batch),
         }))
     }
 
@@ -81,16 +81,16 @@ fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
     let mut batches = vec![];
     loop {
         match stream.next() {
-            Ok(Some(record_batch)) => batches.push(record_batch),
+            Ok(Some(batch)) => batches.push(batch),
             Ok(None) => break,
             Err(message) => return Err(Status::internal(message)),
         }
     }
-    let record_batch = RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema));
-    Ok(record_batch)
+    let batch = RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema));
+    Ok(batch)
 }
 
 #[log::trace]
-fn serialize_record_batch(record_batch: RecordBatch) -> Vec<u8> {
-    bincode::serialize(&record_batch).unwrap()
+fn serialize_record_batch(batch: RecordBatch) -> Vec<u8> {
+    bincode::serialize(&batch).unwrap()
 }

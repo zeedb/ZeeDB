@@ -367,7 +367,7 @@ impl Node {
 macro_rules! ok_some {
     ($input:expr) => {
         match $input {
-            Ok(Some(record_batch)) => record_batch,
+            Ok(Some(batch)) => batch,
             Ok(None) => return Ok(None),
             Err(err) => return Err(err),
         }

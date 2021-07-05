@@ -237,7 +237,7 @@ fn broadcast(
     let mut query = Node::compile(expr);
     loop {
         let result = match query.next(storage, txn) {
-            Ok(Some(record_batch)) => Part::RecordBatch(serialize_record_batch(&record_batch)),
+            Ok(Some(batch)) => Part::RecordBatch(serialize_record_batch(&batch)),
             Ok(None) => break,
             Err(message) => Part::Error(message),
         };
@@ -267,13 +267,13 @@ fn exchange(
     loop {
         match query.next(storage, txn) {
             Ok(Some(batch)) => {
-                for (hash_bucket, record_batch) in partition(batch, &hash_column, listeners.len())
+                for (hash_bucket, batch) in partition(batch, &hash_column, listeners.len())
                     .iter()
                     .enumerate()
                 {
                     let (_, sink) = &listeners[hash_bucket];
                     sink.blocking_send(Page {
-                        part: Some(Part::RecordBatch(serialize_record_batch(record_batch))),
+                        part: Some(Part::RecordBatch(serialize_record_batch(batch))),
                     })
                     .unwrap();
                 }
@@ -300,6 +300,6 @@ fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<Reco
 }
 
 #[log::trace]
-fn serialize_record_batch(record_batch: &RecordBatch) -> Vec<u8> {
-    bincode::serialize(record_batch).unwrap()
+fn serialize_record_batch(batch: &RecordBatch) -> Vec<u8> {
+    bincode::serialize(batch).unwrap()
 }

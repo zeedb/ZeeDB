@@ -356,8 +356,8 @@ impl Page {
         let mut star: Vec<String> = self.star();
         star.push("$xmin".to_string());
         star.push("$xmax".to_string());
-        let record_batch = self.select(&star);
-        for line in fixed_width(&record_batch).split_terminator('\n') {
+        let batch = self.select(&star);
+        for line in fixed_width(&batch).split_terminator('\n') {
             for _ in 0..indent {
                 write!(f, "\t")?;
             }

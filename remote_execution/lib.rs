@@ -135,8 +135,8 @@ pub fn exchange(
 fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, String> {
     match page.unwrap().part.unwrap() {
         Part::RecordBatch(bytes) => {
-            let record_batch = bincode::deserialize(&bytes).unwrap();
-            Ok(record_batch)
+            let batch = bincode::deserialize(&bytes).unwrap();
+            Ok(batch)
         }
         Part::Error(error) => Err(error),
     }
