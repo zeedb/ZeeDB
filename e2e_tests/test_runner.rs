@@ -12,15 +12,19 @@ use std::{
 use ast::Value;
 use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
 use coordinator::CoordinatorNode;
+use difference::Changeset;
 use fs::File;
 use kernel::RecordBatch;
 use log::JsonTraceEvent;
 use once_cell::sync::Lazy;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, CheckRequest, SubmitRequest, TraceRequest,
+    worker_server::WorkerServer, CheckRequest, SubmitRequest, SubmitResponse, TraceRequest,
 };
-use tonic::transport::{Channel, Endpoint, Server};
+use tonic::{
+    transport::{Channel, Endpoint, Server},
+    Status,
+};
 use worker::WorkerNode;
 
 pub struct TestRunner {
@@ -42,7 +46,7 @@ impl Default for TestRunner {
             client,
             catalog_id: ROOT_CATALOG_ID,
         };
-        runner.run(&format!("create database test{}", catalog_id), vec![]);
+        runner.test(&format!("create database test{}", catalog_id), vec![]);
         // TODO this is an evil trick that just happens to match the catalog id we just created.
         // We should query this value from the metadata schema.
         runner.catalog_id = catalog_id;
@@ -61,11 +65,11 @@ impl TestRunner {
             if line.starts_with("<") {
                 found.push_str(line);
                 found.push('\n');
-                self.run(line.strip_prefix("<").unwrap(), vec![]);
+                self.test(line.strip_prefix("<").unwrap(), vec![]);
             } else if line.starts_with(">") {
                 found.push_str(line);
                 found.push('\n');
-                found.push_str(&self.run(line.strip_prefix(">").unwrap(), vec![]));
+                found.push_str(&self.test(line.strip_prefix(">").unwrap(), vec![]));
                 found.push('\n');
                 found.push('\n');
             } else if line.starts_with("#") {
@@ -81,6 +85,8 @@ impl TestRunner {
                     .unwrap();
                 false
             } else {
+                let changes = Changeset::new(&expect, &found, " ");
+                println!("{}", changes);
                 println!(
                     "\x1b[0;31mSet environment variables REWRITE=1 to rewrite {}\x1b[0m",
                     path
@@ -92,20 +98,10 @@ impl TestRunner {
         }
     }
 
-    pub fn run(&mut self, sql: &str, variables: Vec<(String, Value)>) -> String {
-        let request = SubmitRequest {
-            sql: sql.to_string(),
-            variables: variables
-                .iter()
-                .map(|(k, v)| (k.clone(), v.into_proto()))
-                .collect(),
-            catalog_id: self.catalog_id,
-            txn: None,
-        };
-        match rpc::runtime().block_on(self.client.lock().unwrap().submit(request)) {
+    pub fn test(&mut self, sql: &str, variables: Vec<(String, Value)>) -> String {
+        match self.submit(sql, &variables) {
             Ok(response) => {
-                let batch: RecordBatch =
-                    bincode::deserialize(&response.into_inner().record_batch).unwrap();
+                let batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
                 if batch.len() == 0 {
                     "EMPTY".to_string()
                 } else {
@@ -117,19 +113,7 @@ impl TestRunner {
     }
 
     pub fn bench(&mut self, sql: &str, variables: Vec<(String, Value)>) -> Vec<JsonTraceEvent> {
-        let query_request = SubmitRequest {
-            sql: sql.to_string(),
-            variables: variables
-                .iter()
-                .map(|(k, v)| (k.clone(), v.into_proto()))
-                .collect(),
-            catalog_id: self.catalog_id,
-            txn: None,
-        };
-        let query_response = rpc::runtime()
-            .block_on(self.client.lock().unwrap().submit(query_request))
-            .unwrap()
-            .into_inner();
+        let query_response = self.submit(sql, &variables).unwrap();
         let trace_request = TraceRequest {
             txn: query_response.txn,
         };
@@ -138,6 +122,25 @@ impl TestRunner {
             .unwrap()
             .into_inner();
         log::to_json(trace_response.stages)
+    }
+
+    pub fn submit(
+        &mut self,
+        sql: &str,
+        variables: &Vec<(String, Value)>,
+    ) -> Result<SubmitResponse, Status> {
+        let request = SubmitRequest {
+            sql: sql.to_string(),
+            variables: variables
+                .iter()
+                .map(|(k, v)| (k.clone(), v.into_proto()))
+                .collect(),
+            catalog_id: self.catalog_id,
+            txn: None,
+        };
+        rpc::runtime()
+            .block_on(self.client.lock().unwrap().submit(request))
+            .map(|response| response.into_inner())
     }
 }
 

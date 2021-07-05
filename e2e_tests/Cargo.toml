@@ -11,6 +11,7 @@ ast = { path = "../ast" }
 bincode = "1.3.1"
 catalog = { path = "../catalog" }
 coordinator = { path = "../coordinator" }
+difference = "2.0.0"
 kernel = { path = "../kernel" }
 log = { path = "../log" }
 once_cell = "1.7.2"

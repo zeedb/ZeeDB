@@ -7,7 +7,7 @@ use crate::test_runner::TestRunner;
 #[test]
 fn test_insert() {
     let mut t = TestRunner::default();
-    t.run("create table test (i int64)", vec![]);
+    t.test("create table test (i int64)", vec![]);
     let json = t.bench(
         "insert into test values (@i)",
         vec![("i".to_string(), Value::I64(Some(0)))],
@@ -100,7 +100,7 @@ fn test_with() {
 fn test_variables() {
     assert_eq!(
         "$col1\n1    ".to_string(),
-        TestRunner::default().run(
+        TestRunner::default().test(
             "select @var",
             vec![("var".to_string(), Value::I64(Some(1)))]
         )
