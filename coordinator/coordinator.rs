@@ -5,34 +5,21 @@ use std::sync::{
 
 use ast::Value;
 use kernel::RecordBatch;
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use rpc::{
     coordinator_server::Coordinator, CheckRequest, CheckResponse, SubmitRequest, SubmitResponse,
     TraceRequest, TraceResponse,
 };
 use tonic::{async_trait, Request, Response, Status};
 
-// TODO eliminate this and use RAYON_NUM_THREADS to control number of threads.
-const CONCURRENT_QUERIES: usize = 10;
-
 #[derive(Clone)]
 pub struct CoordinatorNode {
     txn: Arc<AtomicI64>,
-    // TODO eliminate this in favor of global thread pool, and use RAYON_NUM_THREADS to control number of threads.
-    pool: Arc<ThreadPool>,
 }
 
 impl Default for CoordinatorNode {
     fn default() -> Self {
         Self {
             txn: Default::default(),
-            pool: Arc::new(
-                ThreadPoolBuilder::new()
-                    .num_threads(CONCURRENT_QUERIES)
-                    .thread_name(|i| format!("coordinator-{}", i))
-                    .build()
-                    .unwrap(),
-            ),
         }
     }
 }
@@ -52,8 +39,7 @@ impl Coordinator for CoordinatorNode {
             .txn
             .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        self.pool
-            .spawn(move || sender.send(submit(request, txn)).unwrap());
+        rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
         let record_batch = receiver.await.unwrap()?;
         Ok(Response::new(SubmitResponse {
             txn,

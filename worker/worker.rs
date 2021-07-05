@@ -6,7 +6,6 @@ use std::{
 use ast::Expr;
 use execute::Node;
 use kernel::RecordBatch;
-use rayon::{ThreadPool, ThreadPoolBuilder};
 use rpc::{
     page::Part, worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse,
     BroadcastRequest, CheckRequest, CheckResponse, ColumnStatisticsRequest,
@@ -17,16 +16,11 @@ use storage::Storage;
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};
 
-// TODO eliminate this and use RAYON_NUM_THREADS to control number of threads.
-const CONCURRENT_QUERIES: usize = 10;
-
 #[derive(Clone)]
 pub struct WorkerNode {
     storage: Arc<Mutex<Storage>>,
     broadcast: Arc<Mutex<HashMap<(Expr, i64, i32), Broadcast>>>,
     exchange: Arc<Mutex<HashMap<(Expr, i64, i32), Exchange>>>,
-    // TODO eliminate this in favor of global thread pool, and use RAYON_NUM_THREADS to control number of threads.
-    pool: Arc<ThreadPool>,
 }
 
 struct Broadcast {
@@ -43,13 +37,6 @@ impl Default for WorkerNode {
             storage: Default::default(),
             broadcast: Default::default(),
             exchange: Default::default(),
-            pool: Arc::new(
-                ThreadPoolBuilder::new()
-                    .num_threads(CONCURRENT_QUERIES)
-                    .thread_name(|i| format!("worker-{}", i))
-                    .build()
-                    .unwrap(),
-            ),
         }
     }
 }
@@ -74,8 +61,7 @@ impl Worker for WorkerNode {
         let expr = bincode::deserialize(&request.expr).unwrap();
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        self.pool
-            .spawn(move || broadcast(&storage, request.txn, 0, expr, vec![sender]));
+        rayon::spawn(move || broadcast(&storage, request.txn, 0, expr, vec![sender]));
         Ok(Response::new(PageStream { receiver }))
     }
 
@@ -100,7 +86,7 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, _, _), topic) = occupied.remove_entry();
-                    self.pool.spawn(move || {
+                    rayon::spawn(move || {
                         broadcast(&storage, request.txn, request.stage, expr, topic.listeners)
                     });
                 }
@@ -109,7 +95,7 @@ impl Worker for WorkerNode {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, _, _) = vacant.into_key();
-                    self.pool.spawn(move || {
+                    rayon::spawn(move || {
                         broadcast(&storage, request.txn, request.stage, expr, vec![sender])
                     });
                 // Otherwise, create a new topic with one listener.
@@ -147,7 +133,7 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, _, _), topic) = occupied.remove_entry();
-                    self.pool.spawn(move || {
+                    rayon::spawn(move || {
                         exchange(
                             &storage,
                             request.txn,
@@ -163,7 +149,7 @@ impl Worker for WorkerNode {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, _, _) = vacant.into_key();
-                    self.pool.spawn(move || {
+                    rayon::spawn(move || {
                         exchange(
                             &storage,
                             request.txn,
@@ -191,7 +177,7 @@ impl Worker for WorkerNode {
         let request = request.into_inner();
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        self.pool.spawn(move || {
+        rayon::spawn(move || {
             let cardinality = storage
                 .lock()
                 .unwrap()
@@ -212,7 +198,7 @@ impl Worker for WorkerNode {
         let request = request.into_inner();
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        self.pool.spawn(move || {
+        rayon::spawn(move || {
             let bytes = storage
                 .lock()
                 .unwrap()

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 static ZERO: OnceCell<Instant> = OnceCell::new();
 
+// TODO this should retain a limited amount of data.
 static CACHE: OnceCell<Mutex<HashMap<CacheKey, CacheValue>>> = OnceCell::new();
 
 thread_local!(static APPEND: RefCell<Vec<Event>> = RefCell::default());
