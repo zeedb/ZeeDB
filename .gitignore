@@ -1,3 +1,4 @@
 benchmarks/profiles/*.svg
 target
 scratch.sh
+.DS_Store
