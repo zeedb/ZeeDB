@@ -3,22 +3,16 @@ use crate::{
     AnyArray, Array, RecordBatch,
 };
 
-// TODO does this still need to be Vec?
-pub fn fixed_width(batches: &Vec<RecordBatch>) -> String {
-    let header: Vec<Vec<String>> = batches[0]
+pub fn fixed_width(batch: &RecordBatch) -> String {
+    let header: Vec<Vec<String>> = batch
         .columns
         .iter()
         .map(|(name, _)| vec![name.clone()])
         .collect();
-    let data: Vec<Vec<Vec<String>>> = batches
+    let data: Vec<Vec<String>> = batch
+        .columns
         .iter()
-        .map(|batch| {
-            batch
-                .columns
-                .iter()
-                .map(|(_, array)| fixed_width_column(array))
-                .collect()
-        })
+        .map(|(_, array)| fixed_width_column(array))
         .collect();
     let columns = cat(header, data);
     let widths: Vec<usize> = columns
@@ -85,12 +79,10 @@ fn fixed_width_column(array: &AnyArray) -> Vec<String> {
     }
 }
 
-fn cat(header: Vec<Vec<String>>, data: Vec<Vec<Vec<String>>>) -> Vec<Vec<String>> {
+fn cat(header: Vec<Vec<String>>, data: Vec<Vec<String>>) -> Vec<Vec<String>> {
     let mut columns = header;
-    for batch in data {
-        for i in 0..batch.len() {
-            columns[i].extend_from_slice(batch[i].as_slice())
-        }
+    for i in 0..data.len() {
+        columns[i].extend_from_slice(data[i].as_slice())
     }
     columns
 }

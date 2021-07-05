@@ -220,6 +220,6 @@ impl RecordBatch {
 
 impl Debug for RecordBatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", crate::fixed_width(&vec![self.clone()]))
+        write!(f, "{}", crate::fixed_width(self))
     }
 }

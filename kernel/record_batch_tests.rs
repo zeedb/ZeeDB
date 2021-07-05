@@ -8,6 +8,6 @@ fn test_serialize_deserialize() {
     )])];
     for batch in examples {
         let circle = bincode::deserialize(&bincode::serialize(&batch).unwrap()).unwrap();
-        assert_eq!(fixed_width(&vec![batch]), fixed_width(&vec![circle]));
+        assert_eq!(fixed_width(&batch), fixed_width(&circle));
     }
 }

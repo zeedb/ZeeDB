@@ -357,7 +357,7 @@ impl Page {
         star.push("$xmin".to_string());
         star.push("$xmax".to_string());
         let record_batch = self.select(&star);
-        for line in fixed_width(&vec![record_batch]).split_terminator('\n') {
+        for line in fixed_width(&record_batch).split_terminator('\n') {
             for _ in 0..indent {
                 write!(f, "\t")?;
             }

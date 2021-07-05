@@ -105,7 +105,7 @@ impl TestRunner {
                 if batch.len() == 0 {
                     "EMPTY".to_string()
                 } else {
-                    kernel::fixed_width(&vec![batch])
+                    kernel::fixed_width(&batch)
                 }
             }
             Err(status) => format!("ERROR: {}", status.message()),

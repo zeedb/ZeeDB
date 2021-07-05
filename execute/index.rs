@@ -162,7 +162,7 @@ fn push_byte_key_prefix(result: &mut PackedBytes, columns: &Vec<&AnyArray>, i: u
                     // Strings are null-terminated, so that a key cannot be a prefix of another key.
                     result.push(&[0]);
                 } else {
-                    // TODO this creates a collsion between NULL and "".
+                    // TODO this creates a collision between NULL and "".
                     result.push(&[0]);
                 }
             }
