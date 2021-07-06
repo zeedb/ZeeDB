@@ -2,8 +2,9 @@ use rpc::{ApproxCardinalityRequest, ColumnStatisticsRequest};
 
 use crate::ColumnStatistics;
 
+#[log::trace]
 pub fn approx_cardinality(table_id: i64) -> f64 {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let mut total = 0.0;
         for mut worker in remote_execution::workers().await {
             let request = ApproxCardinalityRequest { table_id };
@@ -19,8 +20,9 @@ pub fn approx_cardinality(table_id: i64) -> f64 {
     })
 }
 
+#[log::trace]
 pub fn column_statistics(table_id: i64, column_name: &str) -> Option<ColumnStatistics> {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let mut total = None;
         for mut worker in remote_execution::workers().await {
             let request = ColumnStatisticsRequest {

@@ -20,8 +20,9 @@ impl RecordStream {
         Self { inner }
     }
 
+    #[log::trace]
     pub fn next(&mut self) -> Result<Option<RecordBatch>, String> {
-        match rpc::runtime().block_on(self.inner.next()) {
+        match log::rpc(self.inner.next()) {
             Some(Ok(batch)) => Ok(Some(batch)),
             None => Ok(None),
             Some(Err(message)) => Err(message),
@@ -30,13 +31,14 @@ impl RecordStream {
 }
 
 /// Submit a query to the coordinator.
+#[log::trace]
 pub fn submit(
     sql: &str,
     variables: &HashMap<String, Value>,
     catalog_id: i64,
     txn: Option<i64>,
 ) -> RecordBatch {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let request = SubmitRequest {
             sql: sql.to_string(),
             variables: variables
@@ -57,8 +59,9 @@ pub fn submit(
 }
 
 /// Execute a compiled expression on every worker and send the result to 1 listener.
+#[log::trace]
 pub fn output(expr: Expr, txn: i64) -> RecordStream {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let mut streams = vec![];
         let workers = workers().await;
         for mut worker in workers {
@@ -79,8 +82,9 @@ pub fn output(expr: Expr, txn: i64) -> RecordStream {
 }
 
 /// Execute a compiled expression on every worker and send the result to every worker.
+#[log::trace]
 pub fn broadcast(expr: Expr, txn: i64, stage: i32) -> RecordStream {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let mut streams = vec![];
         let workers = workers().await;
         for mut worker in workers {
@@ -102,6 +106,7 @@ pub fn broadcast(expr: Expr, txn: i64, stage: i32) -> RecordStream {
 }
 
 /// Execute a compiled expression on every worker and send a partition the results between workers.
+#[log::trace]
 pub fn exchange(
     expr: Expr,
     txn: i64,
@@ -109,7 +114,7 @@ pub fn exchange(
     hash_column: String,
     hash_bucket: i32,
 ) -> RecordStream {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let mut streams = vec![];
         let workers = workers().await;
         for mut worker in workers {
@@ -132,6 +137,7 @@ pub fn exchange(
     })
 }
 
+#[log::trace]
 fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, String> {
     match page.unwrap().part.unwrap() {
         Part::RecordBatch(bytes) => {

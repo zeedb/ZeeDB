@@ -43,7 +43,7 @@ impl Coordinator for CoordinatorNode {
         let batch = receiver.await.unwrap()?;
         Ok(Response::new(SubmitResponse {
             txn,
-            record_batch: serialize_record_batch(batch),
+            record_batch: bincode::serialize(&batch).unwrap(),
         }))
     }
 
@@ -88,9 +88,4 @@ fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
     }
     let batch = RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema));
     Ok(batch)
-}
-
-#[log::trace]
-fn serialize_record_batch(batch: RecordBatch) -> Vec<u8> {
-    bincode::serialize(&batch).unwrap()
 }

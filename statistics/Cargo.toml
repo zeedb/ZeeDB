@@ -16,4 +16,5 @@ twox-hash = { version = "1.6.0", features = [] }
 
 kernel = { path = "../kernel" }
 remote_execution = { path = "../remote_execution" }
+log = { path = "../log" }
 rpc = { path = "../rpc" }

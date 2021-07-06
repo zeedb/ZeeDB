@@ -23,8 +23,9 @@ impl RecordStream {
 impl Iterator for RecordStream {
     type Item = Result<RecordBatch, Exception>;
 
+    #[log::trace]
     fn next(&mut self) -> Option<Self::Item> {
-        rpc::runtime().block_on(self.inner.next())
+        log::wait_for_rpc(self.inner.next())
     }
 }
 

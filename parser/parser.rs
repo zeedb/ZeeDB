@@ -15,8 +15,9 @@ use crate::convert::convert;
 
 pub const MAX_QUERY: usize = 4_194_304;
 
+#[log::trace]
 pub fn format(sql: &str) -> String {
-    rpc::runtime().block_on(async {
+    log::rpc(async {
         parser()
             .await
             .format_sql(Request::new(FormatSqlRequest {
@@ -30,8 +31,9 @@ pub fn format(sql: &str) -> String {
     })
 }
 
+#[log::trace]
 pub fn split(sql: &str) -> Vec<String> {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         let mut parser = parser().await;
         let mut statements = vec![];
         let mut offset = 0usize;
@@ -90,7 +92,7 @@ pub fn analyze(
 
 #[log::trace]
 fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
-    rpc::runtime().block_on(async move {
+    log::rpc(async move {
         parser()
             .await
             .extract_table_names_from_statement(Request::new(
@@ -139,11 +141,10 @@ fn analyze_next_statement(
         })),
         ..Default::default()
     };
-    let response =
-        match rpc::runtime().block_on(async move { parser().await.analyze(request).await }) {
-            Ok(response) => response.into_inner(),
-            Err(status) => return Err(status.message().to_string()),
-        };
+    let response = match log::rpc(async move { parser().await.analyze(request).await }) {
+        Ok(response) => response.into_inner(),
+        Err(status) => return Err(status.message().to_string()),
+    };
     match response.result.unwrap() {
         ResolvedStatement(stmt) => Ok((stmt, response.resume_byte_position.unwrap())),
         ResolvedExpression(_) => {

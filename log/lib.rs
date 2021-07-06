@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, sync::Mutex, time::Instant};
+use std::{cell::RefCell, collections::HashMap, future::Future, sync::Mutex, time::Instant};
 
 use once_cell::sync::OnceCell;
 use rpc::{TraceSpan, TraceStage};
@@ -32,6 +32,11 @@ pub fn trace(txn: i64, worker: Option<i32>) -> Vec<TraceStage> {
         .remove(&key)
         .unwrap_or_default();
     value.stages
+}
+
+pub fn rpc<T>(future: impl Future<Output = T>) -> T {
+    let _span = enter("(rpc)");
+    rpc::runtime().block_on(future)
 }
 
 pub struct Session {

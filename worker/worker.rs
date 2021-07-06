@@ -6,6 +6,7 @@ use std::{
 use ast::Expr;
 use execute::Node;
 use kernel::RecordBatch;
+use log::Session;
 use rpc::{
     page::Part, worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse,
     BroadcastRequest, CheckRequest, CheckResponse, ColumnStatisticsRequest,
@@ -231,13 +232,12 @@ fn broadcast(
     expr: Expr,
     listeners: Vec<Sender<Page>>,
 ) {
-    let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
-    let _session = log::session(txn, stage, Some(worker));
+    let _session = log_session(txn, stage);
     // Send each batch of records produced by expr to each worker node in the cluster.
     let mut query = Node::compile(expr);
     loop {
         let result = match query.next(storage, txn) {
-            Ok(Some(batch)) => Part::RecordBatch(serialize_record_batch(&batch)),
+            Ok(Some(batch)) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
             Ok(None) => break,
             Err(message) => Part::Error(message),
         };
@@ -258,8 +258,7 @@ fn exchange(
     hash_column: String,
     mut listeners: Vec<(i32, Sender<Page>)>,
 ) {
-    let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
-    let _session = log::session(txn, stage, Some(worker));
+    let _session = log_session(txn, stage);
     // Order listeners by bucket.
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
     // Split up each batch of records produced by expr and send the splits to the worker nodes.
@@ -273,7 +272,7 @@ fn exchange(
                 {
                     let (_, sink) = &listeners[hash_bucket];
                     sink.blocking_send(Page {
-                        part: Some(Part::RecordBatch(serialize_record_batch(batch))),
+                        part: Some(Part::RecordBatch(bincode::serialize(&batch).unwrap())),
                     })
                     .unwrap();
                 }
@@ -299,7 +298,7 @@ fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<Reco
     }
 }
 
-#[log::trace]
-fn serialize_record_batch(batch: &RecordBatch) -> Vec<u8> {
-    bincode::serialize(batch).unwrap()
+fn log_session(txn: i64, stage: i32) -> Session {
+    let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+    log::session(txn, stage, Some(worker))
 }
