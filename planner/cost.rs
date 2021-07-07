@@ -1,6 +1,6 @@
 use ast::*;
 
-use crate::{cardinality_estimation::LogicalProps, optimize::Optimizer, search_space::*};
+use crate::{cardinality_estimation::LogicalProps, search_space::*};
 
 pub type Cost = f64;
 
@@ -18,9 +18,9 @@ const INSERT: Cost = 1.0;
 // physicalCost computes the local cost of the physical operator at the head of a multi-expression tree.
 // To compute the total physical cost of an expression, you need to choose a single physical expression
 // at every node of the tree and add up the local costs.
-pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
-    let parent = opt.ss[mid].parent;
-    match &opt.ss[mid].expr {
+pub(crate) fn physical_cost(mid: MultiExprID, ss: &SearchSpace) -> Cost {
+    let parent = ss[mid].parent;
+    match &ss[mid].expr {
         TableFreeScan { .. }
         | Out { .. }
         | Limit { .. }
@@ -34,20 +34,20 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
             n * SEQ_SCAN
         }
         IndexScan { .. } => {
-            let n = opt.ss[parent].props.cardinality;
+            let n = ss[parent].props.cardinality;
             n * INDEX_SCAN
         }
         Filter { input, .. } => {
-            let n = opt.ss[leaf(input)].props.cardinality;
+            let n = ss[leaf(input)].props.cardinality;
             n * FILTER
         }
         Map { .. } => {
-            let n = opt.ss[parent].props.cardinality;
+            let n = ss[parent].props.cardinality;
             n * MAP
         }
         NestedLoop { left, right, .. } => {
-            let build = opt.ss[leaf(left)].props.cardinality;
-            let probe = opt.ss[leaf(right)].props.cardinality;
+            let build = ss[leaf(left)].props.cardinality;
+            let probe = ss[leaf(right)].props.cardinality;
             build * probe * NESTED_LOOP
         }
         HashJoin {
@@ -56,8 +56,8 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
             right,
             ..
         } => {
-            let build = opt.ss[leaf(left)].props.cardinality;
-            let probe = opt.ss[leaf(right)].props.cardinality;
+            let build = ss[leaf(left)].props.cardinality;
+            let probe = ss[leaf(right)].props.cardinality;
             let workers: f64 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
             build * workers * HASH_BUILD + probe * HASH_PROBE
         }
@@ -67,31 +67,31 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
             right,
             ..
         } => {
-            let build = opt.ss[leaf(left)].props.cardinality;
-            let probe = opt.ss[leaf(right)].props.cardinality;
+            let build = ss[leaf(left)].props.cardinality;
+            let probe = ss[leaf(right)].props.cardinality;
             build * HASH_BUILD + probe * HASH_PROBE
         }
-        CreateTempTable { input, .. } => opt.ss[leaf(input)].props.cardinality,
-        GetTempTable { .. } => opt.ss[parent].props.cardinality,
+        CreateTempTable { input, .. } => ss[leaf(input)].props.cardinality,
+        GetTempTable { .. } => ss[parent].props.cardinality,
         Aggregate { input, .. } => {
-            let n = opt.ss[leaf(input)].props.cardinality;
+            let n = ss[leaf(input)].props.cardinality;
             n * HASH_BUILD
         }
         Sort { .. } => {
-            let n = opt.ss[parent].props.cardinality.max(1.0);
+            let n = ss[parent].props.cardinality.max(1.0);
             n * n.log2() * SORT
         }
         Broadcast { input, .. } => {
-            let n = opt.ss[leaf(input)].props.cardinality;
+            let n = ss[leaf(input)].props.cardinality;
             let workers: f64 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
             n * EXCHANGE * workers
         }
         Exchange { input, .. } => {
-            let n = opt.ss[leaf(input)].props.cardinality;
+            let n = ss[leaf(input)].props.cardinality;
             n * EXCHANGE
         }
         Insert { input, .. } | Delete { input, .. } => {
-            let n = opt.ss[leaf(input)].props.cardinality;
+            let n = ss[leaf(input)].props.cardinality;
             n * INSERT
         }
         Leaf { .. }
@@ -120,7 +120,7 @@ pub(crate) fn physical_cost(mid: MultiExprID, opt: &Optimizer) -> Cost {
         | LogicalRewrite { .. }
         | LogicalScript { .. }
         | LogicalCall { .. }
-        | LogicalExplain { .. } => panic!("logical operator {}", &opt.ss[mid].expr),
+        | LogicalExplain { .. } => panic!("logical operator {}", &ss[mid].expr),
     }
 }
 

@@ -15,320 +15,305 @@ pub fn optimize(expr: Expr, txn: i64) -> Expr {
 
 #[log::trace]
 fn search_for_best_plan(mut expr: Expr, txn: i64) -> Expr {
-    let mut optimizer = Optimizer {
-        ss: SearchSpace::default(),
-        txn,
-    };
-    optimizer.copy_in_new(&mut expr);
+    let mut ss = SearchSpace::empty(txn);
+    copy_in_new(&mut ss, &mut expr);
     let gid = match expr {
         Leaf { gid } => GroupID(gid),
         _ => panic!("copy_in_new did not replace expr with Leaf"),
     };
-    optimizer.optimize_group(gid, PhysicalProp::None);
-    optimizer.winner(gid, PhysicalProp::None)
+    optimize_group(&mut ss, gid, PhysicalProp::None);
+    winner(&mut ss, gid, PhysicalProp::None)
 }
 
 // Our implementation of tasks differs from Columbia/Cascades:
 // we use ordinary functions and recursion rather than task objects and a stack of pending tasks.
 // However, the logic and the order of invocation should be exactly the same.
 
-pub(crate) struct Optimizer {
-    pub ss: SearchSpace,
-    pub txn: i64,
+/// optimize_group optimizes the entire expression tree represented by gid in a top-down manner.
+fn optimize_group(ss: &mut SearchSpace, gid: GroupID, require: PhysicalProp) {
+    if TRACE {
+        println!("optimize_group @{:?} {:?}", gid.0, require)
+    }
+    // If the lower bound of the group is greater than the upper bound for the required property, give up.
+    if ss[gid].lower_bound >= ss[gid].upper_bound[require].unwrap_or(f64::MAX) {
+        return;
+    }
+    // If there is already a winner for the required property, stop early.
+    if ss[gid].winners[require].is_some() {
+        return;
+    }
+    // Cost all the physical mexprs with the same required property.
+    for mid in ss[gid].physical.clone() {
+        optimize_inputs_and_cost(ss, mid, require);
+    }
+    // Optimize all logical mexprs with the same required property.
+    for mid in ss[gid].logical.clone() {
+        optimize_expr(ss, mid, false, require);
+    }
 }
 
-impl Optimizer {
-    /// optimize_group optimizes the entire expression tree represented by gid in a top-down manner.
-    fn optimize_group(&mut self, gid: GroupID, require: PhysicalProp) {
-        if TRACE {
-            println!("optimize_group @{:?} {:?}", gid.0, require)
-        }
-        // If the lower bound of the group is greater than the upper bound for the required property, give up.
-        if self.ss[gid].lower_bound >= self.ss[gid].upper_bound[require].unwrap_or(f64::MAX) {
-            return;
-        }
-        // If there is already a winner for the required property, stop early.
-        if self.ss[gid].winners[require].is_some() {
-            return;
-        }
-        // Cost all the physical mexprs with the same required property.
-        for mid in self.ss[gid].physical.clone() {
-            self.optimize_inputs_and_cost(mid, require);
-        }
-        // Optimize all logical mexprs with the same required property.
-        for mid in self.ss[gid].logical.clone() {
-            self.optimize_expr(mid, false, require);
-        }
+/// optimize_expr ensures that every matching rule has been applied to mexpr.
+fn optimize_expr(ss: &mut SearchSpace, mid: MultiExprID, explore: bool, require: PhysicalProp) {
+    if TRACE {
+        println!(
+            "optimize_expr{} ({:?}) {:?}",
+            if explore { " (exploring)" } else { "" },
+            &ss[mid],
+            require
+        )
     }
-
-    /// optimize_expr ensures that every matching rule has been applied to mexpr.
-    fn optimize_expr(&mut self, mid: MultiExprID, explore: bool, require: PhysicalProp) {
-        if TRACE {
-            println!(
-                "optimize_expr{} ({:?}) {:?}",
-                if explore { " (exploring)" } else { "" },
-                &self.ss[mid],
-                require
-            )
+    for rule in Rule::all() {
+        // Have we already applied this rule to this multi-expression?
+        if ss[mid].fired.contains(&rule) {
+            continue;
         }
-        for rule in Rule::all() {
-            // Have we already applied this rule to this multi-expression?
-            if self.ss[mid].fired.contains(&rule) {
-                continue;
-            }
-            // If we are exploring, rather than optimizing, skip physical expressions:
-            if explore && rule.output_is_physical() {
-                continue;
-            }
-            // Does the pattern match the multi-expression?
-            if rule.matches_fast(&self.ss[mid], require) {
-                // Explore inputs recursively:
-                for i in 0..self.ss[mid].expr.len() {
-                    // If the i'th child of the LHS of the rule is not a leaf node, explore it recursively:
-                    if rule.non_leaf(i) {
-                        self.explore_group(leaf(&self.ss[mid].expr[i]), require)
-                    }
+        // If we are exploring, rather than optimizing, skip physical expressions:
+        if explore && rule.output_is_physical() {
+            continue;
+        }
+        // Does the pattern match the multi-expression?
+        if rule.matches_fast(&ss[mid], require) {
+            // Explore inputs recursively:
+            for i in 0..ss[mid].expr.len() {
+                // If the i'th child of the LHS of the rule is not a leaf node, explore it recursively:
+                if rule.non_leaf(i) {
+                    explore_group(ss, leaf(&ss[mid].expr[i]), require)
                 }
-                // Apply the rule, potentially adding another MultiExpr to the Group:
-                self.apply_rule(rule, mid, explore, require);
-                self.ss[mid].fired.insert(rule);
             }
+            // Apply the rule, potentially adding another MultiExpr to the Group:
+            apply_rule(ss, rule, mid, explore, require);
+            ss[mid].fired.insert(rule);
         }
     }
+}
 
-    /// apply_rule applies rule to mexpr.
-    /// If the result is a logical expr, optimize it recursively.
-    /// If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
-    fn apply_rule(&mut self, rule: Rule, mid: MultiExprID, explore: bool, require: PhysicalProp) {
-        if TRACE {
-            println!(
-                "apply_rule{} {:?} ({:?}) {:?}",
-                if explore { " (exploring)" } else { "" },
-                rule,
-                &self.ss[mid],
-                require
-            )
-        }
-        for expr in rule.bind(&self.ss, mid) {
-            for expr in rule.apply(expr, &self) {
-                // Add mexpr if it isn't already present in the group.
-                if let Some(mid) = self.copy_in(expr, self.ss[mid].parent) {
-                    if TRACE {
-                        println!("{:?}", &self.ss);
-                    }
-                    if !self.ss[mid].expr.is_logical() {
-                        // If rule produced a physical implementation, cost the implementation:
-                        self.optimize_inputs_and_cost(mid, require);
-                    } else {
-                        // If rule produced a new new logical expression, optimize it:
-                        self.optimize_expr(mid, explore, require)
-                    }
+/// apply_rule applies rule to mexpr.
+/// If the result is a logical expr, optimize it recursively.
+/// If the result is a physical expr, evaluate its cost and potentially declare it the current winner.
+fn apply_rule(
+    ss: &mut SearchSpace,
+    rule: Rule,
+    mid: MultiExprID,
+    explore: bool,
+    require: PhysicalProp,
+) {
+    if TRACE {
+        println!(
+            "apply_rule{} {:?} ({:?}) {:?}",
+            if explore { " (exploring)" } else { "" },
+            rule,
+            &ss[mid],
+            require
+        )
+    }
+    for expr in rule.bind(&ss, mid) {
+        for expr in rule.apply(expr, ss) {
+            // Add mexpr if it isn't already present in the group.
+            if let Some(mid) = copy_in(ss, expr, ss[mid].parent) {
+                if TRACE {
+                    println!("{:?}", &ss);
+                }
+                if !ss[mid].expr.is_logical() {
+                    // If rule produced a physical implementation, cost the implementation:
+                    optimize_inputs_and_cost(ss, mid, require);
+                } else {
+                    // If rule produced a new new logical expression, optimize it:
+                    optimize_expr(ss, mid, explore, require)
                 }
             }
         }
     }
+}
 
-    /// explore_group ensures that a non-leaf input to a complex rule has been logically explored,
-    /// to make sure the logical expression that matches the non-leaf input has a chance to be discovered.
-    fn explore_group(&mut self, gid: GroupID, require: PhysicalProp) {
+/// explore_group ensures that a non-leaf input to a complex rule has been logically explored,
+/// to make sure the logical expression that matches the non-leaf input has a chance to be discovered.
+fn explore_group(ss: &mut SearchSpace, gid: GroupID, require: PhysicalProp) {
+    if TRACE {
+        println!("explore_group @{:?} {:?}", gid.0, require)
+    }
+    if !ss[gid].explored {
+        for mid in ss[gid].logical.clone() {
+            optimize_expr(ss, mid, true, require)
+        }
+        ss[gid].explored = true;
+    }
+}
+
+/// optimize_inputs_and_cost takes a physical expr, recursively optimizes all of its inputs,
+/// estimates its cost, and potentially declares it the winning physical expr of the group.
+fn optimize_inputs_and_cost(ss: &mut SearchSpace, mid: MultiExprID, require: PhysicalProp) {
+    if TRACE {
+        println!("optimize_inputs_and_cost ({:?}) {:?}", &ss[mid], require)
+    }
+    // If this expression doesn't meet the required property, abandon it.
+    if !require.met(&ss[mid].expr) {
+        return;
+    }
+    // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
+    let parent = ss[mid].parent;
+    let upper_bound = ss[parent].upper_bound[require].unwrap_or(f64::MAX);
+    let physical_cost = physical_cost(mid, ss);
+    // If we can find a winning strategy for each input and an associated cost,
+    // try to declare the current MultiExpr as the winner of its group.
+    if optimize_inputs(ss, mid, physical_cost, upper_bound) {
+        try_to_declare_winner(ss, mid, physical_cost, require);
+    }
+}
+
+fn optimize_inputs(
+    ss: &mut SearchSpace,
+    mid: MultiExprID,
+    physical_cost: Cost,
+    upper_bound: Cost,
+) -> bool {
+    // Initially, physicalCost is the actual physical cost of the operator at the head of the multi-expression,
+    // and inputCosts are the total physical cost of the winning strategy for each input group.
+    // If we don't yet have a winner for an inputGroup, we use the lower bound.
+    // Thus, physicalCost + sum(inputCosts) = a lower-bound for the total cost of the best strategy for this group.
+    let mut input_costs = init_costs_using_lower_bound(ss, mid);
+    for i in 0..ss[mid].expr.len() {
+        // If we can prove the cost of this MultiExpr exceeds the upper_bound of the Group, give up:
+        let lower_bound = cost_so_far(physical_cost, &input_costs);
+        if lower_bound >= upper_bound {
+            return false;
+        }
+        // Propagate the cost upper_bound downwards to the input group,
+        // using the best available estimate of the cost of the other inputs:
+        let input = leaf(&ss[mid].expr[i]);
+        let require = PhysicalProp::required(&ss[mid].expr, i);
+        let others_lower_bound = lower_bound - input_costs[i];
+        let input_upper_bound = upper_bound - others_lower_bound;
+        ss[input].upper_bound[require] = Some(input_upper_bound);
+        // Optimize input group:
+        optimize_group(ss, leaf(&ss[mid].expr[i]), require);
+        // If we failed to declare a winner, give up:
+        if ss[input].winners[require].is_none() {
+            return false;
+        }
+        input_costs[i] = ss[input].winners[require].as_ref().unwrap().cost
+    }
+    true
+}
+
+fn try_to_declare_winner(
+    ss: &mut SearchSpace,
+    mid: MultiExprID,
+    physical_cost: Cost,
+    require: PhysicalProp,
+) {
+    if TRACE {
+        println!(
+            "try_to_declare_winner ({:?}) ${:?} {:?}",
+            &ss[mid], physical_cost, require
+        )
+    }
+    let mut total_cost = physical_cost;
+    for i in 0..ss[mid].expr.len() {
+        let input = leaf(&ss[mid].expr[i]);
+        let require_input = PhysicalProp::required(&ss[mid].expr, i);
+        match ss[input].winners[require_input].as_ref() {
+            Some(winner) => {
+                total_cost += winner.cost;
+            }
+            None => {
+                return;
+            }
+        }
+    }
+    let gid = ss[mid].parent;
+    let current_cost = ss[gid].winners[require].map(|w| w.cost).unwrap_or(f64::MAX);
+    if total_cost < current_cost {
+        ss[gid].winners[require] = Some(Winner {
+            plan: mid,
+            cost: total_cost,
+        });
         if TRACE {
-            println!("explore_group @{:?} {:?}", gid.0, require)
-        }
-        if !self.ss[gid].explored {
-            for mid in self.ss[gid].logical.clone() {
-                self.optimize_expr(mid, true, require)
-            }
-            self.ss[gid].explored = true;
+            println!("{:?}", &ss);
         }
     }
+}
 
-    /// optimize_inputs_and_cost takes a physical expr, recursively optimizes all of its inputs,
-    /// estimates its cost, and potentially declares it the winning physical expr of the group.
-    fn optimize_inputs_and_cost(&mut self, mid: MultiExprID, require: PhysicalProp) {
-        if TRACE {
-            println!(
-                "optimize_inputs_and_cost ({:?}) {:?}",
-                &self.ss[mid], require
-            )
-        }
-        // If this expression doesn't meet the required property, abandon it.
-        if !require.met(&self.ss[mid].expr) {
-            return;
-        }
-        // Identify the maximum cost we are willing to pay for the logical plan that is implemented by mid.
-        let parent = self.ss[mid].parent;
-        let upper_bound = self.ss[parent].upper_bound[require].unwrap_or(f64::MAX);
-        let physical_cost = physical_cost(mid, &self);
-        // If we can find a winning strategy for each input and an associated cost,
-        // try to declare the current MultiExpr as the winner of its group.
-        if self.optimize_inputs(mid, physical_cost, upper_bound) {
-            self.try_to_declare_winner(mid, physical_cost, require);
-        }
+fn copy_in(ss: &mut SearchSpace, mut expr: Expr, gid: GroupID) -> Option<MultiExprID> {
+    // Recursively copy in the children.
+    for i in 0..expr.len() {
+        copy_in_new(ss, &mut expr[i]);
     }
-
-    fn optimize_inputs(
-        &mut self,
-        mid: MultiExprID,
-        physical_cost: Cost,
-        upper_bound: Cost,
-    ) -> bool {
-        // Initially, physicalCost is the actual physical cost of the operator at the head of the multi-expression,
-        // and inputCosts are the total physical cost of the winning strategy for each input group.
-        // If we don't yet have a winner for an inputGroup, we use the lower bound.
-        // Thus, physicalCost + sum(inputCosts) = a lower-bound for the total cost of the best strategy for this group.
-        let mut input_costs = self.init_costs_using_lower_bound(mid);
-        for i in 0..self.ss[mid].expr.len() {
-            // If we can prove the cost of this MultiExpr exceeds the upper_bound of the Group, give up:
-            let lower_bound = cost_so_far(physical_cost, &input_costs);
-            if lower_bound >= upper_bound {
-                return false;
-            }
-            // Propagate the cost upper_bound downwards to the input group,
-            // using the best available estimate of the cost of the other inputs:
-            let input = leaf(&self.ss[mid].expr[i]);
-            let require = PhysicalProp::required(&self.ss[mid].expr, i);
-            let others_lower_bound = lower_bound - input_costs[i];
-            let input_upper_bound = upper_bound - others_lower_bound;
-            self.ss[input].upper_bound[require] = Some(input_upper_bound);
-            // Optimize input group:
-            self.optimize_group(leaf(&self.ss[mid].expr[i]), require);
-            // If we failed to declare a winner, give up:
-            if self.ss[input].winners[require].is_none() {
-                return false;
-            }
-            input_costs[i] = self.ss[input].winners[require].as_ref().unwrap().cost
+    // If this is the first time we observe expr as a member of gid, add it to the group.
+    if let Some(mid) = ss.add_mexpr(MultiExpr::new(gid, expr)) {
+        // Add expr to group.
+        if ss[mid].expr.is_logical() {
+            ss[gid].logical.push(mid);
+        } else {
+            ss[gid].physical.push(mid);
         }
-        true
+        Some(mid)
+    } else {
+        None
     }
+}
 
-    fn try_to_declare_winner(
-        &mut self,
-        mid: MultiExprID,
-        physical_cost: Cost,
-        require: PhysicalProp,
-    ) {
-        if TRACE {
-            println!(
-                "try_to_declare_winner ({:?}) ${:?} {:?}",
-                &self.ss[mid], physical_cost, require
-            )
-        }
-        let mut total_cost = physical_cost;
-        for i in 0..self.ss[mid].expr.len() {
-            let input = leaf(&self.ss[mid].expr[i]);
-            let require_input = PhysicalProp::required(&self.ss[mid].expr, i);
-            match self.ss[input].winners[require_input].as_ref() {
-                Some(winner) => {
-                    total_cost += winner.cost;
-                }
-                None => {
-                    return;
-                }
-            }
-        }
-        let gid = self.ss[mid].parent;
-        let current_cost = self.ss[gid].winners[require]
-            .map(|w| w.cost)
-            .unwrap_or(f64::MAX);
-        if total_cost < current_cost {
-            self.ss[gid].winners[require] = Some(Winner {
-                plan: mid,
-                cost: total_cost,
-            });
-            if TRACE {
-                println!("{:?}", &self.ss);
-            }
-        }
-    }
-
-    fn copy_in(&mut self, mut expr: Expr, gid: GroupID) -> Option<MultiExprID> {
+fn copy_in_new(ss: &mut SearchSpace, expr: &mut Expr) {
+    if let Leaf { .. } = expr {
+        // Nothing to do.
+    } else if let Some(mid) = ss.find_dup(&expr) {
+        let gid = ss[mid].parent;
+        *expr = Leaf { gid: gid.0 };
+    } else {
         // Recursively copy in the children.
         for i in 0..expr.len() {
-            self.copy_in_new(&mut expr[i]);
+            copy_in_new(ss, &mut expr[i]);
         }
-        // If this is the first time we observe expr as a member of gid, add it to the group.
-        if let Some(mid) = self.ss.add_mexpr(MultiExpr::new(gid, expr)) {
-            // Add expr to group.
-            if self.ss[mid].expr.is_logical() {
-                self.ss[gid].logical.push(mid);
-            } else {
-                self.ss[gid].physical.push(mid);
-            }
-            Some(mid)
-        } else {
-            None
+        // Record temp tables.
+        if let LogicalCreateTempTable { name, input, .. } = expr {
+            ss.temp_tables
+                .insert(name.clone(), ss[leaf(input)].props.clone());
         }
+        // Replace expr with a Leaf node.
+        let gid = ss.reserve();
+        let removed = std::mem::replace(expr, Leaf { gid: gid.0 });
+        // Initialize a new MultiExpr.
+        let mexpr = MultiExpr::new(gid, removed);
+        let mid = ss.add_mexpr(mexpr).unwrap();
+        // Initialize a new Group.
+        let props = crate::cardinality_estimation::compute_logical_props(mid, &ss);
+        let lower_bound = compute_lower_bound(&ss[mid], &props, &ss);
+        let group = Group {
+            logical: vec![mid],
+            physical: vec![],
+            props,
+            lower_bound,
+            upper_bound: PerPhysicalProp::default(),
+            winners: PerPhysicalProp::default(),
+            explored: false,
+        };
+        ss.add_group(gid, group);
     }
+}
 
-    fn copy_in_new(&mut self, expr: &mut Expr) {
-        if let Leaf { .. } = expr {
-            // Nothing to do.
-        } else if let Some(mid) = self.ss.find_dup(&expr) {
-            let gid = self.ss[mid].parent;
-            *expr = Leaf { gid: gid.0 };
-        } else {
-            // Recursively copy in the children.
-            for i in 0..expr.len() {
-                self.copy_in_new(&mut expr[i]);
-            }
-            // Record temp tables.
-            if let LogicalCreateTempTable { name, input, .. } = expr {
-                self.ss
-                    .temp_tables
-                    .insert(name.clone(), self.ss[leaf(input)].props.clone());
-            }
-            // Replace expr with a Leaf node.
-            let gid = self.ss.reserve();
-            let removed = std::mem::replace(expr, Leaf { gid: gid.0 });
-            // Initialize a new MultiExpr.
-            let mexpr = MultiExpr::new(gid, removed);
-            let mid = self.ss.add_mexpr(mexpr).unwrap();
-            // Initialize a new Group.
-            let props = crate::cardinality_estimation::compute_logical_props(mid, &self.ss);
-            let lower_bound = compute_lower_bound(&self.ss[mid], &props, &self.ss);
-            let group = Group {
-                logical: vec![mid],
-                physical: vec![],
-                props,
-                lower_bound,
-                upper_bound: PerPhysicalProp::default(),
-                winners: PerPhysicalProp::default(),
-                explored: false,
-            };
-            self.ss.add_group(gid, group);
-        }
+fn init_costs_using_lower_bound(ss: &SearchSpace, mid: MultiExprID) -> Vec<Cost> {
+    let mut costs = Vec::with_capacity(ss[mid].expr.len());
+    for i in 0..ss[mid].expr.len() {
+        let input = leaf(&ss[mid].expr[i]);
+        let require = PhysicalProp::required(&ss[mid].expr, i);
+        let cost = match ss[input].winners[require].as_ref() {
+            Some(winner) => winner.cost,
+            None => ss[input].lower_bound,
+        };
+        costs.push(cost);
     }
+    costs
+}
 
-    fn init_costs_using_lower_bound(&self, mid: MultiExprID) -> Vec<Cost> {
-        let mut costs = Vec::with_capacity(self.ss[mid].expr.len());
-        for i in 0..self.ss[mid].expr.len() {
-            let input = leaf(&self.ss[mid].expr[i]);
-            let require = PhysicalProp::required(&self.ss[mid].expr, i);
-            let cost = match self.ss[input].winners[require].as_ref() {
-                Some(winner) => winner.cost,
-                None => self.ss[input].lower_bound,
-            };
-            costs.push(cost);
-        }
-        costs
+fn winner(ss: &SearchSpace, gid: GroupID, require: PhysicalProp) -> Expr {
+    let mid = ss[gid].winners[require]
+        .unwrap_or_else(|| panic!("group @{} has no winner for {:?}\n{:?}", gid.0, require, ss))
+        .plan;
+    let mut expr = ss[mid].expr.clone();
+    for i in 0..expr.len() {
+        let require = PhysicalProp::required(&expr, i);
+        expr[i] = winner(ss, leaf(&expr[i]), require);
     }
-
-    fn winner(&self, gid: GroupID, require: PhysicalProp) -> Expr {
-        let mid = self.ss[gid].winners[require]
-            .unwrap_or_else(|| {
-                panic!(
-                    "group @{} has no winner for {:?}\n{:?}",
-                    gid.0, require, self.ss
-                )
-            })
-            .plan;
-        let mut expr = self.ss[mid].expr.clone();
-        for i in 0..expr.len() {
-            let require = PhysicalProp::required(&expr, i);
-            expr[i] = self.winner(leaf(&expr[i]), require);
-        }
-        expr
-    }
+    expr
 }
 
 fn cost_so_far(physical_cost: Cost, input_costs: &Vec<Cost>) -> Cost {
