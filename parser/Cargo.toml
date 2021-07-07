@@ -8,16 +8,15 @@ publish = false
 path = "lib.rs"
 
 [dependencies]
-chrono = { version = "0.4.11", features = [] }
-tokio = { version = "1.7.1", features = ["rt-multi-thread"] }
-tonic = "0.4.3"
-prost-types = "0.7.0"
-time = "0.1.39"
-
 ast = { path = "../ast" }
 catalog = { path = "../catalog" }
+chrono = { version = "0.4.11", features = [] }
 kernel = { path = "../kernel" }
 log = { path = "../log" }
+prost-types = "0.7.0"
 rpc = { path = "../rpc" }
 sequences = { path = "../sequences" }
+time = "0.1.39"
+tokio = { version = "1.7.1", features = ["rt-multi-thread"] }
+tonic = "0.4.3"
 zetasql = { path = "../zetasql" }

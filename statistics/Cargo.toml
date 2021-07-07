@@ -10,12 +10,11 @@ path = "lib.rs"
 [dependencies]
 bincode = "1.3.1"
 hyperloglogplus = "0.2.2"
+kernel = { path = "../kernel" }
+log = { path = "../log" }
 once_cell = "1.7.2"
 rand = { version = "0.8.2", features = ["small_rng"]}
+remote_execution = { path = "../remote_execution" }
+rpc = { path = "../rpc" }
 serde = { version = "1.0.123", features = ["derive"] }
 twox-hash = { version = "1.6.0", features = [] }
-
-kernel = { path = "../kernel" }
-remote_execution = { path = "../remote_execution" }
-log = { path = "../log" }
-rpc = { path = "../rpc" }
