@@ -16,7 +16,7 @@ pub fn optimize(expr: Expr, txn: i64) -> Expr {
 #[log::trace]
 fn search_for_best_plan(mut expr: Expr, txn: i64) -> Expr {
     let mut ss = SearchSpace::empty(txn);
-    copy_in_new(&mut ss, &mut expr);
+    ss.copy_in_new(&mut expr);
     let gid = match expr {
         Leaf { gid } => GroupID(gid),
         _ => panic!("copy_in_new did not replace expr with Leaf"),
@@ -109,7 +109,7 @@ fn apply_rule(
     for expr in rule.bind(&ss, mid) {
         for expr in rule.apply(expr, ss) {
             // Add mexpr if it isn't already present in the group.
-            if let Some(mid) = copy_in(ss, expr, ss[mid].parent) {
+            if let Some(mid) = ss.copy_in(expr, ss[mid].parent) {
                 if TRACE {
                     println!("{:?}", &ss);
                 }
@@ -230,63 +230,6 @@ fn try_to_declare_winner(
         if TRACE {
             println!("{:?}", &ss);
         }
-    }
-}
-
-fn copy_in(ss: &mut SearchSpace, mut expr: Expr, gid: GroupID) -> Option<MultiExprID> {
-    // Recursively copy in the children.
-    for i in 0..expr.len() {
-        copy_in_new(ss, &mut expr[i]);
-    }
-    // If this is the first time we observe expr as a member of gid, add it to the group.
-    if let Some(mid) = ss.add_mexpr(MultiExpr::new(gid, expr)) {
-        // Add expr to group.
-        if ss[mid].expr.is_logical() {
-            ss[gid].logical.push(mid);
-        } else {
-            ss[gid].physical.push(mid);
-        }
-        Some(mid)
-    } else {
-        None
-    }
-}
-
-fn copy_in_new(ss: &mut SearchSpace, expr: &mut Expr) {
-    if let Leaf { .. } = expr {
-        // Nothing to do.
-    } else if let Some(mid) = ss.find_dup(&expr) {
-        let gid = ss[mid].parent;
-        *expr = Leaf { gid: gid.0 };
-    } else {
-        // Recursively copy in the children.
-        for i in 0..expr.len() {
-            copy_in_new(ss, &mut expr[i]);
-        }
-        // Record temp tables.
-        if let LogicalCreateTempTable { name, input, .. } = expr {
-            ss.temp_tables
-                .insert(name.clone(), ss[leaf(input)].props.clone());
-        }
-        // Replace expr with a Leaf node.
-        let gid = ss.reserve();
-        let removed = std::mem::replace(expr, Leaf { gid: gid.0 });
-        // Initialize a new MultiExpr.
-        let mexpr = MultiExpr::new(gid, removed);
-        let mid = ss.add_mexpr(mexpr).unwrap();
-        // Initialize a new Group.
-        let props = crate::cardinality_estimation::compute_logical_props(mid, &ss);
-        let lower_bound = compute_lower_bound(&ss[mid], &props, &ss);
-        let group = Group {
-            logical: vec![mid],
-            physical: vec![],
-            props,
-            lower_bound,
-            upper_bound: PerPhysicalProp::default(),
-            winners: PerPhysicalProp::default(),
-            explored: false,
-        };
-        ss.add_group(gid, group);
     }
 }
 

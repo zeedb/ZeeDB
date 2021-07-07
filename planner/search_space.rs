@@ -8,7 +8,7 @@ use ast::*;
 
 use crate::{cardinality_estimation::*, cost::*, rule::*};
 
-// SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
+/// SearchSpace is a data structure that compactly describes a combinatorial set of query plans.
 #[derive(Default)]
 pub(crate) struct SearchSpace {
     pub groups: Vec<Option<Group>>,
@@ -20,13 +20,13 @@ pub(crate) struct SearchSpace {
 }
 
 #[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq)]
-pub struct GroupID(pub usize);
+pub(crate) struct GroupID(pub(crate) usize);
 
 #[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq)]
-pub struct MultiExprID(pub usize);
+pub(crate) struct MultiExprID(pub(crate) usize);
 
-// Group represents a single logical query, which can be realized by many
-// specific logical and physical query plans.
+/// Group represents a single logical query, which can be realized by many
+/// specific logical and physical query plans.
 pub(crate) struct Group {
     // logical holds a set of equivalent logical query plans.
     pub logical: Vec<MultiExprID>,
@@ -53,9 +53,9 @@ pub(crate) struct Group {
     pub explored: bool,
 }
 
-// MultiExpr represents a part of a Group.
-// Unlike Group, which represents *all* equivalent query plans,
-// MultiExpr specifies operator at the top of a the query.
+/// MultiExpr represents a part of a Group.
+/// Unlike Group, which represents *all* equivalent query plans,
+/// MultiExpr specifies operator at the top of a the query.
 pub(crate) struct MultiExpr {
     // Parent group of this expression.
     pub parent: GroupID,
@@ -72,17 +72,17 @@ pub(crate) struct MultiExpr {
 }
 
 #[derive(Copy, Clone)]
-pub struct Winner {
+pub(crate) struct Winner {
     pub plan: MultiExprID,
     pub cost: Cost,
 }
 
-pub struct PerPhysicalProp<T> {
+pub(crate) struct PerPhysicalProp<T> {
     by_required_prop: [Option<T>; 3],
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
-pub enum PhysicalProp {
+pub(crate) enum PhysicalProp {
     None = 0,
     BroadcastDist = 1,
     ExchangeDist = 2,
@@ -96,16 +96,73 @@ impl SearchSpace {
         }
     }
 
-    pub fn reserve(&mut self) -> GroupID {
+    pub fn copy_in(&mut self, mut expr: Expr, gid: GroupID) -> Option<MultiExprID> {
+        // Recursively copy in the children.
+        for i in 0..expr.len() {
+            self.copy_in_new(&mut expr[i]);
+        }
+        // If this is the first time we observe expr as a member of gid, add it to the group.
+        if let Some(mid) = self.add_mexpr(MultiExpr::new(gid, expr)) {
+            // Add expr to group.
+            if self[mid].expr.is_logical() {
+                self[gid].logical.push(mid);
+            } else {
+                self[gid].physical.push(mid);
+            }
+            Some(mid)
+        } else {
+            None
+        }
+    }
+
+    pub fn copy_in_new(&mut self, expr: &mut Expr) {
+        if let Leaf { .. } = expr {
+            // Nothing to do.
+        } else if let Some(mid) = self.find_dup(&expr) {
+            let gid = self[mid].parent;
+            *expr = Leaf { gid: gid.0 };
+        } else {
+            // Recursively copy in the children.
+            for i in 0..expr.len() {
+                self.copy_in_new(&mut expr[i]);
+            }
+            // Record temp tables.
+            if let LogicalCreateTempTable { name, input, .. } = expr {
+                self.temp_tables
+                    .insert(name.clone(), self[leaf(input)].props.clone());
+            }
+            // Replace expr with a Leaf node.
+            let gid = self.reserve();
+            let removed = std::mem::replace(expr, Leaf { gid: gid.0 });
+            // Initialize a new MultiExpr.
+            let mexpr = MultiExpr::new(gid, removed);
+            let mid = self.add_mexpr(mexpr).unwrap();
+            // Initialize a new Group.
+            let props = crate::cardinality_estimation::compute_logical_props(mid, &self);
+            let lower_bound = compute_lower_bound(&self[mid], &props, &self);
+            let group = Group {
+                logical: vec![mid],
+                physical: vec![],
+                props,
+                lower_bound,
+                upper_bound: PerPhysicalProp::default(),
+                winners: PerPhysicalProp::default(),
+                explored: false,
+            };
+            self.add_group(gid, group);
+        }
+    }
+
+    fn reserve(&mut self) -> GroupID {
         self.groups.push(None);
         GroupID(self.groups.len() - 1)
     }
 
-    pub fn add_group(&mut self, gid: GroupID, group: Group) {
+    fn add_group(&mut self, gid: GroupID, group: Group) {
         self.groups[gid.0] = Some(group);
     }
 
-    pub fn add_mexpr(&mut self, mexpr: MultiExpr) -> Option<MultiExprID> {
+    fn add_mexpr(&mut self, mexpr: MultiExpr) -> Option<MultiExprID> {
         let mid = MultiExprID(self.mexprs.len());
         // Record the first instance of each logical expression.
         if self.find_dup(&mexpr.expr).is_none() {
@@ -121,7 +178,7 @@ impl SearchSpace {
         Some(mid)
     }
 
-    pub fn find_dup(&mut self, expr: &Expr) -> Option<MultiExprID> {
+    fn find_dup(&mut self, expr: &Expr) -> Option<MultiExprID> {
         if expr.is_logical() {
             self.memo_first.get(expr).map(|id| *id)
         } else {
@@ -129,7 +186,7 @@ impl SearchSpace {
         }
     }
 
-    pub fn find_dup_in(&mut self, expr: &Expr, parent: GroupID) -> Option<MultiExprID> {
+    fn find_dup_in(&mut self, expr: &Expr, parent: GroupID) -> Option<MultiExprID> {
         if expr.is_logical() {
             self.memo_all.get(&(parent, expr.clone())).map(|id| *id)
         } else {
@@ -239,7 +296,7 @@ impl fmt::Debug for MultiExpr {
     }
 }
 
-pub fn leaf(expr: &Expr) -> GroupID {
+pub(crate) fn leaf(expr: &Expr) -> GroupID {
     if let Leaf { gid } = expr {
         GroupID(*gid)
     } else {
