@@ -3,7 +3,7 @@ use std::sync::{
     Arc,
 };
 
-use ast::Value;
+use ast::{Expr, Value};
 use kernel::RecordBatch;
 use rpc::{
     coordinator_server::Coordinator, CheckRequest, CheckResponse, SubmitRequest, SubmitResponse,
@@ -11,17 +11,9 @@ use rpc::{
 };
 use tonic::{async_trait, Request, Response, Status};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct CoordinatorNode {
     txn: Arc<AtomicI64>,
-}
-
-impl Default for CoordinatorNode {
-    fn default() -> Self {
-        Self {
-            txn: Default::default(),
-        }
-    }
 }
 
 #[async_trait]
@@ -76,6 +68,11 @@ fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
         }
     };
     let expr = planner::optimize(expr, txn);
+    execute(expr, txn)
+}
+
+#[log::trace]
+fn execute(expr: Expr, txn: i64) -> Result<RecordBatch, Status> {
     let schema = expr.schema();
     let mut stream = remote_execution::output(expr, txn);
     let mut batches = vec![];

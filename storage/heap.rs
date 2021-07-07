@@ -1,6 +1,7 @@
 use std::{fmt, sync::Arc};
 
 use kernel::*;
+use statistics::TableStatistics;
 
 use crate::page::*;
 
@@ -101,6 +102,14 @@ impl Heap {
 
     pub fn is_empty(&self) -> bool {
         self.pages.is_empty()
+    }
+
+    pub fn statistics(&self) -> TableStatistics {
+        let mut result = TableStatistics::default();
+        for page in self.scan() {
+            result.merge(page.statistics());
+        }
+        result
     }
 }
 

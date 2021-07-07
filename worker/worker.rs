@@ -8,10 +8,9 @@ use execute::Node;
 use kernel::RecordBatch;
 use log::Session;
 use rpc::{
-    page::Part, worker_server::Worker, ApproxCardinalityRequest, ApproxCardinalityResponse,
-    BroadcastRequest, CheckRequest, CheckResponse, ColumnStatisticsRequest,
-    ColumnStatisticsResponse, ExchangeRequest, OutputRequest, Page, PageStream, TraceRequest,
-    TraceResponse,
+    page::Part, worker_server::Worker, BroadcastRequest, CheckRequest, CheckResponse,
+    ExchangeRequest, OutputRequest, Page, PageStream, StatisticsRequest, StatisticsResponse,
+    TraceRequest, TraceResponse,
 };
 use storage::Storage;
 use tokio::sync::mpsc::Sender;
@@ -171,46 +170,14 @@ impl Worker for WorkerNode {
         Ok(Response::new(PageStream { receiver }))
     }
 
-    async fn approx_cardinality(
+    async fn statistics(
         &self,
-        request: Request<ApproxCardinalityRequest>,
-    ) -> Result<Response<ApproxCardinalityResponse>, Status> {
+        request: Request<StatisticsRequest>,
+    ) -> Result<Response<StatisticsResponse>, Status> {
         let request = request.into_inner();
-        let storage = self.storage.clone();
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
-            let cardinality = storage
-                .lock()
-                .unwrap()
-                .statistics(request.table_id)
-                .unwrap()
-                .approx_cardinality() as f64;
-            sender.send(cardinality).unwrap();
-        });
-        Ok(Response::new(ApproxCardinalityResponse {
-            cardinality: receiver.await.unwrap(),
-        }))
-    }
-
-    async fn column_statistics(
-        &self,
-        request: Request<ColumnStatisticsRequest>,
-    ) -> Result<Response<ColumnStatisticsResponse>, Status> {
-        let request = request.into_inner();
-        let storage = self.storage.clone();
-        let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || {
-            let bytes = storage
-                .lock()
-                .unwrap()
-                .statistics(request.table_id)
-                .unwrap()
-                .column(&request.column_name)
-                .map(|s| bincode::serialize(s).unwrap());
-            sender.send(bytes).unwrap();
-        });
-        Ok(Response::new(ColumnStatisticsResponse {
-            statistics: receiver.await.unwrap(),
+        let statistics = self.storage.lock().unwrap().statistics(request.table_id);
+        Ok(Response::new(StatisticsResponse {
+            table_statistics: bincode::serialize(&statistics).unwrap(),
         }))
     }
 

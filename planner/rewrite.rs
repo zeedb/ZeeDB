@@ -6,7 +6,7 @@ use chrono::{NaiveDate, TimeZone, Utc};
 use crate::unnest::unnest_dependent_joins;
 
 #[log::trace]
-pub fn rewrite(expr: Expr) -> Expr {
+pub fn rewrite_plan(expr: Expr) -> Expr {
     let expr = top_down_rewrite(expr, rewrite_ddl);
     let expr = top_down_rewrite(expr, rewrite_with);
     let expr = top_down_rewrite(expr, rewrite_scalars);
@@ -705,7 +705,7 @@ fn rewrite_logical_rewrite(expr: Expr) -> Result<Expr, Expr> {
     match expr {
         LogicalRewrite { sql } => {
             let expr = analyze_bootstrap(&sql);
-            let expr = rewrite(expr);
+            let expr = rewrite_plan(expr);
             Ok(expr)
         }
         _ => Err(expr),

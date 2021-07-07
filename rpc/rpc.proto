@@ -57,8 +57,7 @@ service Worker {
   rpc Output (OutputRequest) returns (stream Page) {}
   rpc Broadcast (BroadcastRequest) returns (stream Page) {}
   rpc Exchange (ExchangeRequest) returns (stream Page) {}
-  rpc ApproxCardinality (ApproxCardinalityRequest) returns (ApproxCardinalityResponse) {}
-  rpc ColumnStatistics (ColumnStatisticsRequest) returns (ColumnStatisticsResponse) {}
+  rpc Statistics(StatisticsRequest) returns (StatisticsResponse) {}
   rpc Trace (TraceRequest) returns (TraceResponse) {}
 }
 
@@ -84,26 +83,17 @@ message ExchangeRequest {
   required int32 hash_bucket = 5;
 }
 
+message StatisticsRequest {
+  required int64 table_id = 1;
+}
+
+message StatisticsResponse {
+  required bytes table_statistics = 1;
+}
+
 message Page {
   oneof part {
     bytes record_batch = 1;
     string error = 2;
   }
-}
-
-message ApproxCardinalityRequest {
-  required int64 table_id = 1;
-}
-
-message ApproxCardinalityResponse {
-  required double cardinality = 1;
-}
-
-message ColumnStatisticsRequest {
-  required int64 table_id = 1;
-  required string column_name = 2;
-}
-
-message ColumnStatisticsResponse {
-  optional bytes statistics = 1;
 }

@@ -9,7 +9,6 @@ use crate::{art::Art, heap::*};
 pub struct Storage {
     tables: Vec<Heap>,
     indexes: Vec<Art>,
-    statistics: HashMap<i64, TableStatistics>,
     temp_tables: HashMap<(i64, String), Heap>,
 }
 
@@ -25,7 +24,6 @@ impl Storage {
     pub fn create_table(&mut self, id: i64) {
         assert!(self.tables.len() < id as usize + 1);
         self.tables.resize_with(id as usize + 1, Heap::empty);
-        self.statistics.insert(id, TableStatistics::default());
     }
 
     pub fn temp_table(&self, txn: i64, name: String) -> &Heap {
@@ -38,7 +36,6 @@ impl Storage {
 
     pub fn drop_table(&mut self, id: i64) {
         self.tables[id as usize].truncate();
-        self.statistics.remove(&id);
     }
 
     pub fn index(&self, id: i64) -> &Art {
@@ -58,12 +55,8 @@ impl Storage {
         self.indexes[id as usize].truncate()
     }
 
-    pub fn statistics(&self, id: i64) -> Option<&TableStatistics> {
-        self.statistics.get(&id)
-    }
-
-    pub fn statistics_mut(&mut self, id: i64) -> Option<&mut TableStatistics> {
-        self.statistics.get_mut(&id)
+    pub fn statistics(&self, table_id: i64) -> TableStatistics {
+        self.table(table_id).statistics()
     }
 }
 
@@ -86,7 +79,6 @@ impl Default for Storage {
         Self {
             tables,
             indexes,
-            statistics,
             temp_tables: HashMap::default(),
         }
     }

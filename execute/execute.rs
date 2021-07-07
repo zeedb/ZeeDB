@@ -911,13 +911,6 @@ impl Node {
                         .unwrap()
                         .table_mut(table.id)
                         .insert(&input, txn);
-                    // Update statistics.
-                    storage
-                        .lock()
-                        .unwrap()
-                        .statistics_mut(table.id)
-                        .expect(&table.name)
-                        .insert(&input);
                     // Update indexes.
                     for index in indexes.iter_mut() {
                         crate::index::insert(

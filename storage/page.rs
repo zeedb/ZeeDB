@@ -1,6 +1,7 @@
 use std::{fmt, sync::atomic::*};
 
 use kernel::*;
+use statistics::TableStatistics;
 
 pub const PAGE_SIZE: usize = 1024;
 
@@ -350,6 +351,13 @@ impl Page {
 
     pub fn approx_num_rows(&self) -> usize {
         self.len.load(Ordering::Relaxed)
+    }
+
+    pub fn statistics(&self) -> TableStatistics {
+        let mut result = TableStatistics::default();
+        let record_batch = self.select(&self.star());
+        result.insert(&record_batch);
+        result
     }
 
     pub(crate) fn print(&self, f: &mut fmt::Formatter<'_>, indent: usize) -> fmt::Result {

@@ -6,14 +6,15 @@ const TRACE: bool = false;
 
 #[log::trace]
 pub fn optimize(expr: Expr, txn: i64) -> Expr {
-    let expr = crate::rewrite::rewrite(expr);
-    let expr = search(expr, txn);
-    let expr = finish(expr);
+    let expr = crate::rewrite::rewrite_plan(expr);
+    let mut expr = search_for_best_plan(expr, txn);
+    crate::distribution::set_hash_columns(&mut expr);
+    crate::distribution::set_stages(&mut expr);
     expr
 }
 
 #[log::trace]
-fn search(mut expr: Expr, txn: i64) -> Expr {
+fn search_for_best_plan(mut expr: Expr, txn: i64) -> Expr {
     let mut optimizer = Optimizer {
         ss: SearchSpace::default(),
         txn,
@@ -25,13 +26,6 @@ fn search(mut expr: Expr, txn: i64) -> Expr {
     };
     optimizer.optimize_group(gid, PhysicalProp::None);
     optimizer.winner(gid, PhysicalProp::None)
-}
-
-#[log::trace]
-fn finish(mut expr: Expr) -> Expr {
-    crate::distribution::set_hash_columns(&mut expr);
-    crate::distribution::set_stages(&mut expr);
-    expr
 }
 
 // Our implementation of tasks differs from Columbia/Cascades:

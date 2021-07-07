@@ -1,10 +1,11 @@
 use std::collections::{hash_map::Entry, HashMap};
 
 use kernel::{DataType, RecordBatch};
+use serde::{Deserialize, Serialize};
 
 use crate::ColumnStatistics;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TableStatistics {
     cardinality: usize,
     columns: HashMap<String, ColumnStatistics>,
@@ -43,16 +44,7 @@ impl TableStatistics {
         self.cardinality
     }
 
-    pub fn column(&self, column: &String) -> Option<&ColumnStatistics> {
+    pub fn column(&self, column: &str) -> Option<&ColumnStatistics> {
         self.columns.get(column)
-    }
-}
-
-impl Default for TableStatistics {
-    fn default() -> Self {
-        Self {
-            cardinality: 0,
-            columns: HashMap::new(),
-        }
     }
 }
