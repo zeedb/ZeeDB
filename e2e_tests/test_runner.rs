@@ -36,7 +36,7 @@ impl Default for TestRunner {
     fn default() -> Self {
         // Take a global lock, so we only initialize 1 cluster at a time.
         static CREATE_CLUSTER: Lazy<Arc<Mutex<CoordinatorClient<Channel>>>> =
-            Lazy::new(|| Arc::new(Mutex::new(create_cluster())));
+            Lazy::new(|| Arc::new(Mutex::new(connect_to_cluster())));
         let client = CREATE_CLUSTER.clone();
         // Find a free database.
         static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(RESERVED_IDS));
@@ -144,7 +144,30 @@ impl TestRunner {
     }
 }
 
-fn create_cluster() -> CoordinatorClient<Channel> {
+fn connect_to_cluster() -> CoordinatorClient<Channel> {
+    if !std::env::var("COORDINATOR").is_ok() {
+        create_cluster()
+    }
+    rpc::runtime().block_on(async move {
+        let coordinator = std::env::var("COORDINATOR").unwrap();
+        let mut client = CoordinatorClient::new(
+            Endpoint::new(coordinator.clone())
+                .unwrap()
+                .connect_lazy()
+                .unwrap(),
+        );
+        // Check that coordinator is running.
+        for _ in 0..10usize {
+            match client.check(CheckRequest {}).await {
+                Ok(_) => return client,
+                Err(_) => std::thread::sleep(Duration::from_millis(100)),
+            }
+        }
+        panic!("Failed to connect to coordinator at {}", coordinator)
+    })
+}
+
+fn create_cluster() {
     // Find a free port.
     let port = free_port();
     // Set configuration environment variables that will be picked up by various services.
@@ -155,7 +178,7 @@ fn create_cluster() -> CoordinatorClient<Channel> {
     // Create an empty 1-worker cluster.
     let worker = WorkerNode::default();
     let coordinator = CoordinatorNode::default();
-    // Connect to the cluster.
+    // Launch cluster.
     rpc::runtime().block_on(async move {
         let addr = format!("127.0.0.1:{}", port).parse().unwrap();
         tokio::spawn(async move {
@@ -166,20 +189,6 @@ fn create_cluster() -> CoordinatorClient<Channel> {
                 .await
                 .unwrap()
         });
-        let mut client = CoordinatorClient::new(
-            Endpoint::new(format!("http://127.0.0.1:{}", port))
-                .unwrap()
-                .connect_lazy()
-                .unwrap(),
-        );
-        // Check that coordinator is running.
-        for _ in 0..10usize {
-            match client.check(CheckRequest {}).await {
-                Ok(_) => return client,
-                Err(_) => std::thread::sleep(Duration::from_millis(1)),
-            }
-        }
-        panic!("Coordinator failed to start on port {}", port)
     })
 }
 

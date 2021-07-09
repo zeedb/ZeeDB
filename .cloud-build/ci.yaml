@@ -3,10 +3,17 @@ steps:
     id: 'Build Tests'
     entrypoint: sh
     args: [-c, $_BUILD_TESTS]
+    env: 
+      - RUSTFLAGS=-Z instrument-coverage
   - name: gcr.io/zeedeebee/zeedb-builder
     id: 'Run Tests'
     entrypoint: sh
     args: [-c, $_RUN_TESTS]
+    env: 
+      - RUSTFLAGS=-Z instrument-coverage
+      - COORDINATOR=http://127.0.0.1:50100
+      - WORKER_0=http://127.0.0.1:50101
+      - WORKER_COUNT=1
   - name: gcr.io/zeedeebee/zeedb-builder
     id: 'Build Benchmarks'
     entrypoint: sh
@@ -36,20 +43,22 @@ substitutions:
   _DEVELOP: '1'
   _BUILD_TESTS: |
     set -eux
-    RUSTFLAGS="-Z instrument-coverage" cargo test -Z timings --no-run
+    cargo build -Z timings --tests --bins
     sccache --show-stats
-    cp cargo-timing.html cargo-timing-test.html
+    mv cargo-timing.html cargo-timing-test.html
   _RUN_TESTS: |
     set -eux
     zetasql_server &
-    RUSTFLAGS="-Z instrument-coverage" cargo test
+    COORDINATOR_PORT=50100 /cargo/target/debug/zeedb-coordinator &
+    WORKER_PORT=50101 WORKER_ID=0 /cargo/target/debug/zeedb-worker &
+    cargo test
     grcov . --binary-path /cargo/target/debug/ -s . -t html --branch --ignore-not-existing -o ./coverage
     tar -zcf coverage.tar.gz ./coverage
   _BUILD_BENCHMARKS: |
     set -eux
     cargo bench -Z timings --no-run
     sccache --show-stats
-    cp cargo-timing.html cargo-timing-bench.html
+    mv cargo-timing.html cargo-timing-bench.html
   _RUN_BENCHMARKS: |
     set -eux
     zetasql_server & 

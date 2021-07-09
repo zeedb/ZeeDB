@@ -41,6 +41,7 @@ pub fn simple_catalog(
     root_catalog
 }
 
+#[log::trace]
 pub fn indexes(table_id: i64, txn: i64) -> Vec<Index> {
     if table_id < RESERVED_IDS {
         return vec![];
@@ -88,6 +89,7 @@ fn catalog_name_to_id(parent_catalog_id: i64, catalog_name: &String, txn: i64) -
     column.as_i64().get(0).unwrap()
 }
 
+#[log::trace]
 fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> i64 {
     let mut variables = HashMap::new();
     variables.insert("catalog_id".to_string(), Value::I64(Some(catalog_id)));
@@ -102,6 +104,7 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> i64 {
     column.as_i64().get(0).unwrap()
 }
 
+#[log::trace]
 fn table_columns(table_id: i64, txn: i64) -> Vec<SimpleColumnProto> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));

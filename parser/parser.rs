@@ -156,8 +156,16 @@ fn analyze_next_statement(
 async fn parser() -> ZetaSqlLocalServiceClient<Channel> {
     ZetaSqlLocalServiceClient::connect("http://localhost:50051")
         .await
-        .unwrap()
+        .expect(NO_PARSER)
 }
+
+const NO_PARSER: &str = "\x1b[0;31m
+Failed to connect to ZetaSQL analyzer services at http://localhost:50051.
+If you are running on CI or in the linux devcontainer, run:
+\tzetasql_server &
+If you are running on a non-linux system, run:
+\tdocker run --publish 127.0.0.1:50051:50051 --name zetasql --detach gcr.io/zeedeebee/zetasql
+\x1b[0m";
 
 fn language_options() -> LanguageOptionsProto {
     LanguageOptionsProto {

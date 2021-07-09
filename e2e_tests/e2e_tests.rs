@@ -5,6 +5,14 @@ use ast::Value;
 use crate::test_runner::TestRunner;
 
 #[test]
+fn test_select() {
+    assert_eq!(
+        "$col1\n1    ".to_string(),
+        TestRunner::default().test("select 1", vec![])
+    );
+}
+
+#[test]
 fn test_insert() {
     let mut t = TestRunner::default();
     t.test("create table test (i int64)", vec![]);
