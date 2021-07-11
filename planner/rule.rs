@@ -13,6 +13,7 @@ pub(crate) enum Rule {
     // Enforcers.
     InsertBroadcast,
     InsertExchange,
+    InsertGather,
     // Implementation rules
     LogicalGetToTableFreeScan,
     LogicalGetToSeqScan,
@@ -43,6 +44,7 @@ impl Rule {
         match self {
             Rule::InsertBroadcast
             | Rule::InsertExchange
+            | Rule::InsertGather
             | Rule::LogicalGetToTableFreeScan
             | Rule::LogicalGetToSeqScan
             | Rule::LogicalGetToIndexScan
@@ -96,6 +98,22 @@ impl Rule {
                 | Join::Single(_)
                 | Join::Mark(_, _) => false,
             },
+            // Full outer joins can't be implemented by broadcasting the build side of the join.
+            // TODO return a good error message when someone tries to do a non-equi full outer join.
+            (
+                Rule::LogicalJoinToNestedLoop,
+                LogicalJoin {
+                    join: Join::Outer(_),
+                    ..
+                },
+            )
+            | (
+                Rule::LogicalJoinToBroadcastHashJoin,
+                LogicalJoin {
+                    join: Join::Outer(_),
+                    ..
+                },
+            ) => false,
             (Rule::LogicalJoinToNestedLoop, LogicalJoin { .. })
             | (Rule::LogicalJoinToBroadcastHashJoin, LogicalJoin { .. })
             | (Rule::LogicalJoinToExchangeHashJoin, LogicalJoin { .. }) => true,
@@ -118,7 +136,8 @@ impl Rule {
             | (Rule::LogicalExplainToExplain, LogicalExplain { .. })
             | (Rule::LogicalScriptToScript, LogicalScript { .. })
             | (Rule::InsertBroadcast, _)
-            | (Rule::InsertExchange, _) => true,
+            | (Rule::InsertExchange, _)
+            | (Rule::InsertGather, _) => true,
             _ => false,
         }
     }
@@ -151,6 +170,7 @@ impl Rule {
             | Rule::LogicalScriptToScript => required == PhysicalProp::None,
             Rule::InsertBroadcast => required == PhysicalProp::BroadcastDist,
             Rule::InsertExchange => required == PhysicalProp::ExchangeDist,
+            Rule::InsertGather => required == PhysicalProp::GatherDist,
         }
     }
 
@@ -219,7 +239,7 @@ impl Rule {
                     }
                 }
             }
-            Rule::InsertBroadcast | Rule::InsertExchange => binds.push(Leaf {
+            Rule::InsertBroadcast | Rule::InsertExchange | Rule::InsertGather => binds.push(Leaf {
                 gid: ss[mid].parent.0,
             }),
             _ => binds.push(ss[mid].expr.clone()),
@@ -322,6 +342,12 @@ impl Rule {
                 return single(Exchange {
                     stage: -1,
                     hash_column: None,
+                    input: Box::new(bind),
+                });
+            }
+            Rule::InsertGather => {
+                return single(Gather {
+                    stage: -1,
                     input: Box::new(bind),
                 });
             }
@@ -547,6 +573,7 @@ impl Rule {
             Rule::InnerJoinAssociativity,
             Rule::InsertBroadcast,
             Rule::InsertExchange,
+            Rule::InsertGather,
             Rule::LogicalGetToTableFreeScan,
             Rule::LogicalGetToSeqScan,
             Rule::LogicalGetToIndexScan,

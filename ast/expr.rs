@@ -224,7 +224,7 @@ pub enum Expr {
         left: Box<Expr>,
         right: Box<Expr>,
     },
-    /// Broadcast broadcasts the build side of a join to every node.
+    /// Broadcast the build side of a join to every node.
     Broadcast {
         stage: i32,
         input: Box<Expr>,
@@ -234,6 +234,11 @@ pub enum Expr {
         stage: i32,
         /// hash_column is initially unset during the optimization phase, to reduce the size of the search space, then added before compilation.
         hash_column: Option<Column>,
+        input: Box<Expr>,
+    },
+    /// Gather input on a single node for sorting.
+    Gather {
+        stage: i32,
         input: Box<Expr>,
     },
     Insert {
@@ -311,6 +316,7 @@ impl Expr {
             | Expr::Union { .. }
             | Expr::Broadcast { .. }
             | Expr::Exchange { .. }
+            | Expr::Gather { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -355,6 +361,7 @@ impl Expr {
             | Expr::Sort { .. }
             | Expr::Broadcast { .. }
             | Expr::Exchange { .. }
+            | Expr::Gather { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -507,6 +514,7 @@ impl Expr {
             | Expr::Union { .. }
             | Expr::Broadcast { .. }
             | Expr::Exchange { .. }
+            | Expr::Gather { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -608,6 +616,7 @@ impl Expr {
             | Expr::Union { .. }
             | Expr::Broadcast { .. }
             | Expr::Exchange { .. }
+            | Expr::Gather { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -734,6 +743,7 @@ impl Expr {
             | Expr::Union { .. }
             | Expr::Broadcast { .. }
             | Expr::Exchange { .. }
+            | Expr::Gather { .. }
             | Expr::Insert { .. }
             | Expr::Values { .. }
             | Expr::Delete { .. }
@@ -764,6 +774,7 @@ impl Expr {
             | Union { left: input, .. }
             | Broadcast { input, .. }
             | Exchange { input, .. }
+            | Gather { input, .. }
             | Delete { input, .. } => input.schema(),
             SeqScan { projects, .. } => projects
                 .iter()
@@ -922,6 +933,7 @@ impl std::ops::Index<usize> for Expr {
             | Expr::Sort { input, .. }
             | Expr::Broadcast { input, .. }
             | Expr::Exchange { input, .. }
+            | Expr::Gather { input, .. }
             | Expr::Insert { input, .. }
             | Expr::Values { input, .. }
             | Expr::Delete { input, .. }
@@ -988,6 +1000,7 @@ impl std::ops::IndexMut<usize> for Expr {
             | Expr::Sort { input, .. }
             | Expr::Broadcast { input, .. }
             | Expr::Exchange { input, .. }
+            | Expr::Gather { input, .. }
             | Expr::Insert { input, .. }
             | Expr::Values { input, .. }
             | Expr::Delete { input, .. }

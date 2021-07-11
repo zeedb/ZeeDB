@@ -7,7 +7,7 @@ use once_cell::sync::OnceCell;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, page::Part, worker_client::WorkerClient,
-    BroadcastRequest, ExchangeRequest, OutputRequest, Page, SubmitRequest,
+    BroadcastRequest, ExchangeRequest, GatherRequest, Page, SubmitRequest,
 };
 use tonic::{transport::Channel, Status};
 
@@ -58,17 +58,18 @@ pub fn submit(
 }
 
 /// Execute a compiled expression on every worker and send the result to 1 listener.
-pub fn output(expr: Expr, txn: i64) -> RecordStream {
+pub fn gather(expr: Expr, txn: i64, stage: i32) -> RecordStream {
     log::rpc(async move {
         let mut streams = vec![];
         let workers = workers().await;
         for mut worker in workers {
-            let request = OutputRequest {
+            let request = GatherRequest {
                 txn,
+                stage,
                 expr: bincode::serialize(&expr).unwrap(),
             };
             let response = worker
-                .output(request)
+                .gather(request)
                 .await
                 .unwrap()
                 .into_inner()

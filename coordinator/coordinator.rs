@@ -68,13 +68,13 @@ fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
         }
     };
     let expr = planner::optimize(expr, txn);
-    execute(expr, txn)
+    gather(expr, txn)
 }
 
 #[log::trace]
-fn execute(expr: Expr, txn: i64) -> Result<RecordBatch, Status> {
+fn gather(expr: Expr, txn: i64) -> Result<RecordBatch, Status> {
     let schema = expr.schema();
-    let mut stream = remote_execution::output(expr, txn);
+    let mut stream = remote_execution::gather(expr, txn, 0);
     let mut batches = vec![];
     loop {
         match stream.next() {

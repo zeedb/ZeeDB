@@ -54,7 +54,7 @@ message TraceSpan {
 
 service Worker {
   rpc Check (CheckRequest) returns (CheckResponse) {}
-  rpc Output (OutputRequest) returns (stream Page) {}
+  rpc Gather (GatherRequest) returns (stream Page) {}
   rpc Broadcast (BroadcastRequest) returns (stream Page) {}
   rpc Exchange (ExchangeRequest) returns (stream Page) {}
   rpc Statistics(StatisticsRequest) returns (StatisticsResponse) {}
@@ -64,9 +64,10 @@ service Worker {
 message CheckRequest {}
 message CheckResponse {}
 
-message OutputRequest {
+message GatherRequest {
   required int64 txn = 1;
-  required bytes expr = 2;
+  required int32 stage = 2;
+  required bytes expr = 3;
 }
 
 message BroadcastRequest {

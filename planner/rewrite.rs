@@ -242,6 +242,7 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Expr::Union { .. }
         | Expr::Broadcast { .. }
         | Expr::Exchange { .. }
+        | Expr::Gather { .. }
         | Expr::Insert { .. }
         | Expr::Values { .. }
         | Expr::Delete { .. }

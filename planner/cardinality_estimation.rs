@@ -95,6 +95,7 @@ pub(crate) fn compute_logical_props(mid: MultiExprID, ss: &SearchSpace) -> Logic
         | Union { .. }
         | Broadcast { .. }
         | Exchange { .. }
+        | Gather { .. }
         | Insert { .. }
         | Values { .. }
         | Delete { .. }

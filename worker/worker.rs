@@ -9,7 +9,7 @@ use kernel::RecordBatch;
 use log::Session;
 use rpc::{
     page::Part, worker_server::Worker, BroadcastRequest, CheckRequest, CheckResponse,
-    ExchangeRequest, OutputRequest, Page, PageStream, StatisticsRequest, StatisticsResponse,
+    ExchangeRequest, GatherRequest, Page, PageStream, StatisticsRequest, StatisticsResponse,
     TraceRequest, TraceResponse,
 };
 use storage::Storage;
@@ -37,21 +37,21 @@ impl Worker for WorkerNode {
 
     type ExchangeStream = PageStream;
 
-    type OutputStream = PageStream;
+    type GatherStream = PageStream;
 
     async fn check(&self, _: Request<CheckRequest>) -> Result<Response<CheckResponse>, Status> {
         Ok(Response::new(CheckResponse {}))
     }
 
-    async fn output(
+    async fn gather(
         &self,
-        request: Request<OutputRequest>,
-    ) -> Result<Response<Self::OutputStream>, Status> {
+        request: Request<GatherRequest>,
+    ) -> Result<Response<Self::GatherStream>, Status> {
         let request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
         let storage = self.storage.clone();
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        rayon::spawn(move || broadcast(&storage, request.txn, 0, expr, vec![sender]));
+        rayon::spawn(move || broadcast(&storage, request.txn, request.stage, expr, vec![sender]));
         Ok(Response::new(PageStream { receiver }))
     }
 

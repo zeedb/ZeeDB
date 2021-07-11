@@ -78,7 +78,7 @@ pub(crate) struct Winner {
 }
 
 pub(crate) struct PerPhysicalProp<T> {
-    by_required_prop: [Option<T>; 3],
+    by_required_prop: [Option<T>; 4],
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -86,6 +86,7 @@ pub(crate) enum PhysicalProp {
     None = 0,
     BroadcastDist = 1,
     ExchangeDist = 2,
+    GatherDist = 3,
 }
 
 impl SearchSpace {
@@ -332,6 +333,7 @@ impl PhysicalProp {
             PhysicalProp::None,
             PhysicalProp::BroadcastDist,
             PhysicalProp::ExchangeDist,
+            PhysicalProp::GatherDist,
         ]
     }
 
@@ -358,6 +360,8 @@ impl PhysicalProp {
             (IndexScan { .. }, 0) => PhysicalProp::BroadcastDist,
             (NestedLoop { .. }, 0) => PhysicalProp::BroadcastDist,
             (Aggregate { .. }, 0) => PhysicalProp::ExchangeDist,
+            (Call { .. }, 0) => PhysicalProp::BroadcastDist,
+            (Sort { .. }, 0) => PhysicalProp::GatherDist,
             (_, _) => PhysicalProp::None,
         }
     }
@@ -365,7 +369,7 @@ impl PhysicalProp {
     pub fn met(&self, expr: &Expr) -> bool {
         match self {
             PhysicalProp::None => match expr {
-                Expr::Broadcast { .. } | Expr::Exchange { .. } => false,
+                Expr::Broadcast { .. } | Expr::Exchange { .. } | Expr::Gather { .. } => false,
                 _ => true,
             },
             PhysicalProp::BroadcastDist => match expr {
@@ -376,6 +380,10 @@ impl PhysicalProp {
                 Expr::Exchange { .. } => true,
                 _ => false,
             },
+            PhysicalProp::GatherDist => match expr {
+                Expr::Gather { .. } => true,
+                _ => false,
+            },
         }
     }
 
@@ -384,6 +392,7 @@ impl PhysicalProp {
             PhysicalProp::None => "Any",
             PhysicalProp::BroadcastDist => "Broadcast",
             PhysicalProp::ExchangeDist => "Exchange",
+            PhysicalProp::GatherDist => "Gather",
         }
     }
 }

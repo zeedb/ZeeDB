@@ -39,7 +39,7 @@ pub fn set_hash_columns(expr: &mut Expr) {
 
 pub fn set_stages(expr: &mut Expr) {
     fn top_down_rewrite(expr: &mut Expr, next_stage: &mut i32) {
-        if let Broadcast { stage, .. } | Exchange { stage, .. } = expr {
+        if let Broadcast { stage, .. } | Exchange { stage, .. } | Gather { stage, .. } = expr {
             *stage = *next_stage;
             *next_stage += 1;
         }

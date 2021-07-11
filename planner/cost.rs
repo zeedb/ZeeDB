@@ -90,6 +90,10 @@ pub(crate) fn physical_cost(mid: MultiExprID, ss: &SearchSpace) -> Cost {
             let n = ss[leaf(input)].props.cardinality;
             n * EXCHANGE
         }
+        Gather { input, .. } => {
+            let n = ss[leaf(input)].props.cardinality;
+            n * EXCHANGE
+        }
         Insert { input, .. } | Delete { input, .. } => {
             let n = ss[leaf(input)].props.cardinality;
             n * INSERT

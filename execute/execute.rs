@@ -103,6 +103,11 @@ pub enum Node {
         input: Option<(Column, Expr)>,
         stream: Option<RemoteQuery>,
     },
+    Gather {
+        stage: i32,
+        input: Option<Expr>,
+        stream: Option<RemoteQuery>,
+    },
     Insert {
         finished: bool,
         table: Table,
@@ -285,6 +290,15 @@ impl Node {
 
                 Node::Exchange {
                     input: Some((hash_column.unwrap(), *input)),
+                    stream: None,
+                    stage,
+                }
+            }
+            Gather { input, stage } => {
+                assert!(stage >= 0);
+
+                Node::Gather {
+                    input: Some(*input),
                     stream: None,
                     stage,
                 }
@@ -881,6 +895,18 @@ impl Node {
                 }
                 stream.as_mut().unwrap().inner.next()
             }
+            Node::Gather {
+                input,
+                stream,
+                stage,
+            } => {
+                if let Some(expr) = input.take() {
+                    *stream = Some(RemoteQuery::new(remote_execution::gather(
+                        expr, txn, *stage,
+                    )));
+                }
+                stream.as_mut().unwrap().inner.next()
+            }
             Node::Insert {
                 finished,
                 table,
@@ -1068,6 +1094,7 @@ impl Node {
             Node::Union { .. } => "Union",
             Node::Broadcast { .. } => "Broadcast",
             Node::Exchange { .. } => "Exchange",
+            Node::Gather { .. } => "Gather",
             Node::Insert { .. } => "Insert",
             Node::Values { .. } => "Values",
             Node::Delete { .. } => "Delete",

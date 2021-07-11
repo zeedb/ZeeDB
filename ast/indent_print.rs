@@ -198,7 +198,7 @@ impl IndentPrint for Expr {
                 right.indent_print(f, indent + 1)?;
                 Ok(())
             }
-            Expr::Broadcast { input, .. } => {
+            Expr::Broadcast { input, .. } | Expr::Gather { input, .. } => {
                 write!(f, "{}", self.name())?;
                 newline(f, indent)?;
                 input.indent_print(f, indent + 1)?;
@@ -392,6 +392,7 @@ impl Expr {
             Expr::Union { .. } => "Union",
             Expr::Broadcast { .. } => "Broadcast",
             Expr::Exchange { .. } => "Exchange",
+            Expr::Gather { .. } => "Gather",
             Expr::Insert { .. } => "Insert",
             Expr::Values { .. } => "Values",
             Expr::Delete { .. } => "Delete",
