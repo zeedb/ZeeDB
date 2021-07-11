@@ -5,7 +5,7 @@ use std::{
 
 use ast::Expr;
 use execute::Node;
-use kernel::RecordBatch;
+use kernel::{AnyArray, RecordBatch};
 use log::Session;
 use rpc::{
     page::Part, worker_server::Worker, BroadcastRequest, CheckRequest, CheckResponse,
@@ -247,12 +247,23 @@ fn exchange(
     }
 }
 
-fn partition(batch: RecordBatch, _hash_column: &str, workers: usize) -> Vec<RecordBatch> {
-    if workers == 1 {
-        vec![batch]
-    } else {
-        todo!()
+fn partition(batch: RecordBatch, hash_column: &String, workers: usize) -> Vec<RecordBatch> {
+    let (_, column) = batch
+        .columns
+        .iter()
+        .find(|(name, _)| name == hash_column)
+        .unwrap();
+    let hashes = match column {
+        AnyArray::I64(column) => column,
+        _ => panic!("{} is not an I64Array", column.data_type()),
+    };
+    let buckets = hashes.hash_buckets(workers);
+    let mut batches = vec![];
+    for i in 0..workers {
+        let mask = buckets.equal_scalar(Some(i as i32));
+        batches.push(batch.compress(&mask));
     }
+    batches
 }
 
 fn log_session(txn: i64, stage: i32) -> Session {

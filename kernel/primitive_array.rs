@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, StringArray};
+use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, I32Array, StringArray};
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct I64Array {
@@ -257,5 +257,15 @@ impl I64Array {
             column.hash(&mut seeds);
         }
         seeds
+    }
+
+    pub fn hash_buckets(&self, n_buckets: usize) -> I32Array {
+        let mut indexes = I32Array::with_capacity(self.len());
+        for i in 0..self.len() {
+            let value = u64::from_ne_bytes(self.get(i).unwrap().to_ne_bytes());
+            let bucket = value % n_buckets as u64;
+            indexes.push(Some(bucket as i32));
+        }
+        indexes
     }
 }

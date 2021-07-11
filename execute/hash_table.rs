@@ -12,7 +12,7 @@ impl HashTable {
     pub fn new(input: &RecordBatch, partition_by: &I64Array) -> Self {
         let n_rows = input.len();
         let n_buckets = size_hash_table(n_rows);
-        let buckets = bucketize(&partition_by, n_buckets);
+        let buckets = partition_by.hash_buckets(n_buckets);
         let indexes = buckets.sort();
         let tuples = input.gather(&indexes);
         let offsets = bucket_offsets(&buckets, n_buckets);
@@ -42,16 +42,6 @@ impl HashTable {
     pub fn build(&self) -> &RecordBatch {
         &self.tuples
     }
-}
-
-fn bucketize(hashes: &I64Array, n_buckets: usize) -> I32Array {
-    let mut indexes = I32Array::with_capacity(hashes.len());
-    for i in 0..hashes.len() {
-        let value = u64::from_ne_bytes(hashes.get(i).unwrap().to_ne_bytes());
-        let bucket = value % n_buckets as u64;
-        indexes.push(Some(bucket as i32));
-    }
-    indexes
 }
 
 fn bucket_offsets(buckets: &I32Array, n_buckets: usize) -> Vec<usize> {

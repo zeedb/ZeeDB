@@ -228,7 +228,7 @@ pub trait Array: Sized + Clone + Default {
     }
 
     fn equal_scalar(&self, other: Option<Self::Element>) -> BoolArray {
-        self.unary_operator(|a| Some(a) != other)
+        self.unary_operator(|a| Some(a) == other)
     }
 
     fn less_scalar(&self, other: Option<Self::Element>) -> BoolArray {

@@ -75,6 +75,63 @@ macro_rules! array_like {
                 }
             }
 
+            // Fundamental operator support.
+
+            fn unary_operator<A: Array>(&self, f: impl Fn($t) -> A::Element) -> A {
+                self.unary_null_operator(|a| match a {
+                    Some(a) => Some(f(a)),
+                    None => None,
+                })
+            }
+
+            fn unary_null_operator<A: Array>(
+                &self,
+                f: impl Fn(Option<$t>) -> Option<A::Element>,
+            ) -> A {
+                let mut result = A::with_capacity(self.len());
+                for i in 0..self.len() {
+                    result.push(f(self.get(i)));
+                }
+                result
+            }
+
+            fn binary_operator<A: Array>(
+                &self,
+                other: &Self,
+                f: impl Fn($t, $t) -> A::Element,
+            ) -> A {
+                assert_eq!(self.len(), other.len());
+
+                self.binary_null_operator(other, |a, b| match (a, b) {
+                    (Some(a), Some(b)) => Some(f(a, b)),
+                    _ => None,
+                })
+            }
+
+            fn binary_null_operator<A: Array>(
+                &self,
+                other: &Self,
+                f: impl Fn(Option<$t>, Option<$t>) -> Option<A::Element>,
+            ) -> A {
+                let mut result = A::with_capacity(self.len());
+                for i in 0..self.len() {
+                    result.push(f(self.get(i), other.get(i)));
+                }
+                result
+            }
+
+            // Array comparison operators.
+
+            pub fn equal(&self, other: &Self) -> BoolArray {
+                self.binary_operator(other, |a, b| a == b)
+            }
+
+            // Scalar comparison operators.
+
+            pub fn equal_scalar(&self, other: Option<$t>) -> BoolArray {
+                self.unary_operator(|a| Some(a) == other)
+            }
+
             // Complex operations.
 
             pub fn sort(&self) -> I32Array {

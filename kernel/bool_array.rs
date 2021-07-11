@@ -219,7 +219,7 @@ impl BoolArray {
         default: bool,
         reduce: impl Fn(bool, bool) -> bool,
     ) -> Self {
-        assert_eq!(self.len() % stride, 0);
+        assert!(self.len() == 0 || self.len() % stride == 0);
 
         let mut result = if default {
             Self::trues(stride)
@@ -248,7 +248,7 @@ impl BoolArray {
     }
 
     pub fn count(&self, stride: usize) -> I64Array {
-        assert_eq!(self.len() % stride, 0);
+        assert!(self.len() == 0 || self.len() % stride == 0);
 
         if self.len() == 0 {
             return I64Array::zeros(stride);
