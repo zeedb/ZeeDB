@@ -2,19 +2,10 @@ use crate::{Array, Bitmask, BoolArray};
 
 macro_rules! array_like {
     ($T:ident, $t:ty) => {
-        #[derive(Debug, Clone, Eq, PartialEq)]
+        #[derive(Debug, Clone, Eq, PartialEq, Default)]
         pub struct $T {
             values: Vec<$t>,
             is_valid: Bitmask,
-        }
-
-        impl Default for $T {
-            fn default() -> Self {
-                Self {
-                    values: vec![],
-                    is_valid: Bitmask::new(),
-                }
-            }
         }
 
         impl $T {

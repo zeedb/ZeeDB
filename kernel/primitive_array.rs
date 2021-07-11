@@ -2,26 +2,26 @@ use std::ops::Range;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, StringArray};
+use crate::{AnyArray, Array, BitSlice, Bitmask, BoolArray, DataType, I32Array, StringArray};
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct I64Array {
     values: Vec<i64>,
     is_valid: Bitmask,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct F64Array {
     values: Vec<f64>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct DateArray {
     values: Vec<i32>,
     is_valid: Bitmask,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct TimestampArray {
     values: Vec<i64>,
     is_valid: Bitmask,
@@ -29,15 +29,6 @@ pub struct TimestampArray {
 
 macro_rules! impl_array {
     ($T:ty, $V:ident, $t:ty) => {
-        impl Default for $T {
-            fn default() -> Self {
-                Self {
-                    values: Vec::new(),
-                    is_valid: Bitmask::new(),
-                }
-            }
-        }
-
         impl Array for $T {
             type Element = $t;
 

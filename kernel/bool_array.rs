@@ -7,7 +7,7 @@ use crate::{
     TimestampArray,
 };
 
-#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct BoolArray {
     values: Bitmask,
     is_valid: Bitmask,
@@ -284,15 +284,6 @@ impl BoolArray {
             if value { "true" } else { "false" },
             StringArray
         )
-    }
-}
-
-impl Default for BoolArray {
-    fn default() -> Self {
-        Self {
-            values: Bitmask::new(),
-            is_valid: Bitmask::new(),
-        }
     }
 }
 

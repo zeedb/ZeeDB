@@ -2,7 +2,7 @@ use std::{fmt::Debug, ops::Range};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize, Default)]
 pub struct Bitmask {
     values: Vec<u8>,
     len: usize,
@@ -15,13 +15,6 @@ pub struct BitSlice<'a> {
 }
 
 impl Bitmask {
-    pub fn new() -> Self {
-        Self {
-            values: vec![],
-            len: 0,
-        }
-    }
-
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
             values: Vec::with_capacity((capacity + 7) / 8),

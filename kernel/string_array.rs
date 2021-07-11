@@ -164,9 +164,9 @@ impl StringArray {
 impl Default for StringArray {
     fn default() -> Self {
         Self {
-            buffer: String::new(),
+            buffer: String::default(),
             offsets: vec![0],
-            is_valid: Bitmask::new(),
+            is_valid: Bitmask::default(),
         }
     }
 }

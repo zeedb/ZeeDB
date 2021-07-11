@@ -16,7 +16,7 @@ use storage::Storage;
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct WorkerNode {
     storage: Arc<Mutex<Storage>>,
     broadcast: Arc<Mutex<HashMap<(Expr, i64, i32), Broadcast>>>,
@@ -29,16 +29,6 @@ struct Broadcast {
 
 struct Exchange {
     listeners: Vec<(i32, Sender<Page>)>,
-}
-
-impl Default for WorkerNode {
-    fn default() -> Self {
-        Self {
-            storage: Default::default(),
-            broadcast: Default::default(),
-            exchange: Default::default(),
-        }
-    }
 }
 
 #[async_trait]
