@@ -512,7 +512,8 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a single batch.
                 if build_left.is_none() {
-                    let input = build(left, left_schema, storage, txn)?;
+                    let input = build(left, storage, txn)?
+                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
                     let bits = BoolArray::trues(input.len());
                     *build_left = Some(input);
                     // Allocate a bit array to keep track of which rows on the left side never found join partners.
@@ -556,7 +557,8 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a single batch.
                 if build_left.is_none() {
-                    let input = build(left, left_schema, storage, txn)?;
+                    let input = build(left, storage, txn)?
+                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
                     *build_left = Some(input);
                 }
                 // Get the next batch of rows from the right (probe) side.
@@ -612,7 +614,8 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
-                    let left = build(left, left_schema, storage, txn)?;
+                    let left = build(left, storage, txn)?
+                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
                     let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
                     {
                         AnyArray::I64(a) => a,
@@ -670,7 +673,8 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
-                    let left = build(left, left_schema, storage, txn)?;
+                    let left = build(left, storage, txn)?
+                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
                     let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
                     {
                         AnyArray::I64(a) => a,
@@ -844,7 +848,7 @@ impl Node {
                 Ok(Some(input.slice(start_inclusive..end_exclusive)))
             }
             Node::Sort { order_by, input } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = ok_some!(build(input, storage, txn));
                 let desc = order_by.iter().map(|o| o.descending).collect();
                 let columns = order_by
                     .iter()
@@ -1064,14 +1068,13 @@ impl Node {
             }
             Node::Explain { finished, input } => {
                 if *finished {
-                    Ok(None)
-                } else {
-                    *finished = true;
-                    Ok(Some(RecordBatch::new(vec![(
-                        "plan".to_string(),
-                        AnyArray::String(StringArray::from_values(vec![input.to_string()])),
-                    )])))
+                    return Ok(None);
                 }
+                *finished = true;
+                Ok(Some(RecordBatch::new(vec![(
+                    "plan".to_string(),
+                    AnyArray::String(StringArray::from_values(vec![input.to_string()])),
+                )])))
             }
         }
     }
@@ -1126,17 +1129,15 @@ fn dummy_row() -> RecordBatch {
 
 fn build(
     input: &mut Node,
-    schema: &Vec<(String, DataType)>,
     storage: &Mutex<Storage>,
     txn: i64,
-) -> Result<RecordBatch, String> {
+) -> Result<Option<RecordBatch>, String> {
     let mut batches = vec![];
     loop {
         if let Some(batch) = input.next(storage, txn)? {
             batches.push(batch)
         } else {
-            let empty = || RecordBatch::empty(schema.clone());
-            let batch = RecordBatch::cat(batches).unwrap_or_else(empty);
+            let batch = RecordBatch::cat(batches);
             return Ok(batch);
         }
     }
