@@ -167,38 +167,82 @@ fn connect_to_cluster() -> CoordinatorClient<Channel> {
     })
 }
 
+const N_WORKERS: usize = 2;
+
 fn create_cluster() {
-    // Find a free port.
-    let port = free_port();
-    // Set configuration environment variables that will be picked up by various services.
-    std::env::set_var("COORDINATOR", format!("http://127.0.0.1:{}", port).as_str());
-    std::env::set_var("WORKER_0", format!("http://127.0.0.1:{}", port).as_str());
-    std::env::set_var("WORKER_ID", "0");
-    std::env::set_var("WORKER_COUNT", "1");
-    // Create an empty 1-worker cluster.
-    let worker = WorkerNode::default();
-    let coordinator = CoordinatorNode::default();
-    // Launch cluster.
+    let (coordinator_port, worker_ports) = find_cluster_ports();
+    set_common_env_variables(coordinator_port, &worker_ports);
     rpc::runtime().block_on(async move {
-        let addr = format!("127.0.0.1:{}", port).parse().unwrap();
-        tokio::spawn(async move {
-            Server::builder()
-                .add_service(CoordinatorServer::new(coordinator))
-                .add_service(WorkerServer::new(worker))
-                .serve(addr)
-                .await
-                .unwrap()
-        });
+        spawn_coordinator(coordinator_port);
+        for worker_id in 0..N_WORKERS {
+            spawn_worker(worker_id, worker_ports[worker_id]);
+        }
     })
 }
 
-fn free_port() -> u16 {
-    const MIN: u16 = 50100;
-    const MAX: u16 = 51100;
-    for port in MIN..MAX {
+fn find_cluster_ports() -> (u16, Vec<u16>) {
+    let coordinator_port = free_port(MIN_PORT);
+    let mut worker_ports: Vec<u16> = vec![];
+    let mut worker_port = coordinator_port;
+    for _ in 0..N_WORKERS {
+        worker_port = free_port(worker_port + 1);
+        worker_ports.push(worker_port);
+    }
+    (coordinator_port, worker_ports)
+}
+
+fn set_common_env_variables(coordinator_port: u16, worker_ports: &Vec<u16>) {
+    std::env::set_var("WORKER_COUNT", N_WORKERS.to_string());
+    std::env::set_var(
+        "COORDINATOR",
+        format!("http://127.0.0.1:{}", coordinator_port).as_str(),
+    );
+    for worker_id in 0..N_WORKERS {
+        std::env::set_var(
+            format!("WORKER_{}", worker_id),
+            format!("http://127.0.0.1:{}", worker_ports[worker_id]).as_str(),
+        );
+    }
+}
+
+fn spawn_coordinator(coordinator_port: u16) {
+    std::env::set_var("COORDINATOR_PORT", coordinator_port.to_string());
+    let coordinator = CoordinatorNode::default();
+    let addr = format!("127.0.0.1:{}", coordinator_port).parse().unwrap();
+    tokio::spawn(async move {
+        Server::builder()
+            .add_service(CoordinatorServer::new(coordinator))
+            .serve(addr)
+            .await
+            .unwrap()
+    });
+}
+
+fn spawn_worker(worker_id: usize, worker_port: u16) {
+    std::env::set_var("WORKER_ID", worker_id.to_string());
+    std::env::set_var("WORKER_PORT", worker_port.to_string());
+    let worker = WorkerNode::default();
+    let addr = format!("127.0.0.1:{}", worker_port).parse().unwrap();
+    tokio::spawn(async move {
+        Server::builder()
+            .add_service(WorkerServer::new(worker))
+            .serve(addr)
+            .await
+            .unwrap()
+    });
+}
+
+const MIN_PORT: u16 = 50100;
+const MAX_PORT: u16 = 51100;
+
+fn free_port(min: u16) -> u16 {
+    for port in min..MAX_PORT {
         if TcpListener::bind(("127.0.0.1", port)).is_ok() {
             return port;
         }
     }
-    panic!("Could not find a free port between {} and {}", MIN, MAX)
+    panic!(
+        "Could not find a free port between {} and {}",
+        min, MAX_PORT
+    )
 }

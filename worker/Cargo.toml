@@ -14,6 +14,7 @@ path = "main.rs"
 ast = { path = "../ast" }
 bincode = "1.3.1"
 execute = { path = "../execute" }
+globals = { path = "../globals" }
 kernel = { path = "../kernel" }
 log = { path = "../log" }
 rand = { version = "0.8.2", features = ["small_rng"]}

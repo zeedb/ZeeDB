@@ -1,7 +1,7 @@
 use kernel::*;
 
 /// HashTable stores a large set of tuples in a fixed-size, dense hash table.
-/// tuples[buckets[i]..buckets[i + 1]] contains all tuples where hash(tuple) % (buckets.len() - 1) == i
+/// tuples[offsets[i]..offsets[i + 1]] contains all tuples where hash(tuple) % (offsets.len() - 1) == i
 #[derive(Debug)]
 pub struct HashTable {
     offsets: Vec<usize>,

@@ -13,7 +13,8 @@ steps:
       - RUSTFLAGS=-Z instrument-coverage
       - COORDINATOR=http://127.0.0.1:50100
       - WORKER_0=http://127.0.0.1:50101
-      - WORKER_COUNT=1
+      - WORKER_1=http://127.0.0.1:50102
+      - WORKER_COUNT=2
   - name: gcr.io/zeedeebee/zeedb-builder
     id: 'Build Benchmarks'
     entrypoint: sh
@@ -51,6 +52,7 @@ substitutions:
     zetasql_server &
     COORDINATOR_PORT=50100 /cargo/target/debug/zeedb-coordinator &
     WORKER_PORT=50101 WORKER_ID=0 /cargo/target/debug/zeedb-worker &
+    WORKER_PORT=50102 WORKER_ID=1 /cargo/target/debug/zeedb-worker &
     cargo test
     grcov . --binary-path /cargo/target/debug/ -s . -t html --branch --ignore-not-existing -o ./coverage
     tar -zcf coverage.tar.gz ./coverage

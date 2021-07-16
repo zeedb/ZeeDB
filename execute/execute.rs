@@ -4,6 +4,7 @@ use std::{
 };
 
 use ast::{Expr, Index, *};
+use globals::Global;
 use kernel::*;
 use remote_execution::RecordStream;
 use storage::{Heap, Page, Storage, PAGE_SIZE};
@@ -397,7 +398,9 @@ impl Node {
         let _span = log::enter(self.name());
         match self {
             Node::TableFreeScan { empty } => {
-                if *empty {
+                // Produce a single row on worker 0.
+                // TODO this will cause all queries of the form INSERT INTO _ VALUES _ to execute on worker 0.
+                if *empty || globals::WORKER.get() != 0 {
                     return Ok(None);
                 }
                 *empty = true;
@@ -888,13 +891,12 @@ impl Node {
                 stage,
             } => {
                 if let Some((hash_column, expr)) = input.take() {
-                    let worker_id: i32 = std::env::var("WORKER_ID").unwrap().parse().unwrap();
                     *stream = Some(RemoteQuery::new(remote_execution::exchange(
                         expr,
                         txn,
                         *stage,
                         hash_column.canonical_name(),
-                        worker_id,
+                        globals::WORKER.get(),
                     )));
                 }
                 stream.as_mut().unwrap().inner.next()
@@ -904,6 +906,10 @@ impl Node {
                 stream,
                 stage,
             } => {
+                // Only execute Gather on worker 0.
+                if globals::WORKER.get() != 0 {
+                    return Ok(None);
+                }
                 if let Some(expr) = input.take() {
                     *stream = Some(RemoteQuery::new(remote_execution::gather(
                         expr, txn, *stage,
@@ -1067,7 +1073,7 @@ impl Node {
                 Ok(None)
             }
             Node::Explain { finished, input } => {
-                if *finished {
+                if *finished || globals::WORKER.get() != 0 {
                     return Ok(None);
                 }
                 *finished = true;

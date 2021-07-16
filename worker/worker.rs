@@ -5,6 +5,7 @@ use std::{
 
 use ast::Expr;
 use execute::Node;
+use globals::Global;
 use kernel::{AnyArray, RecordBatch};
 use log::Session;
 use rpc::{
@@ -16,8 +17,9 @@ use storage::Storage;
 use tokio::sync::mpsc::Sender;
 use tonic::{async_trait, Request, Response, Status};
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct WorkerNode {
+    worker: i32,
     storage: Arc<Mutex<Storage>>,
     broadcast: Arc<Mutex<HashMap<(Expr, i64, i32), Broadcast>>>,
     exchange: Arc<Mutex<HashMap<(Expr, i64, i32), Exchange>>>,
@@ -29,6 +31,17 @@ struct Broadcast {
 
 struct Exchange {
     listeners: Vec<(i32, Sender<Page>)>,
+}
+
+impl Default for WorkerNode {
+    fn default() -> Self {
+        Self {
+            worker: std::env::var("WORKER_ID").unwrap().parse().unwrap(),
+            storage: Default::default(),
+            broadcast: Default::default(),
+            exchange: Default::default(),
+        }
+    }
 }
 
 #[async_trait]
@@ -50,8 +63,9 @@ impl Worker for WorkerNode {
         let request = request.into_inner();
         let expr = bincode::deserialize(&request.expr).unwrap();
         let storage = self.storage.clone();
+        let worker = self.worker;
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        rayon::spawn(move || broadcast(&storage, request.txn, request.stage, expr, vec![sender]));
+        rayon::spawn(move || gather(&storage, request.txn, request.stage, worker, expr, sender));
         Ok(Response::new(PageStream { receiver }))
     }
 
@@ -63,6 +77,7 @@ impl Worker for WorkerNode {
         let expr = bincode::deserialize(&request.expr).unwrap();
         let listeners: usize = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
         let storage = self.storage.clone();
+        let worker = self.worker;
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         match self
             .broadcast
@@ -77,7 +92,14 @@ impl Worker for WorkerNode {
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, _, _), topic) = occupied.remove_entry();
                     rayon::spawn(move || {
-                        broadcast(&storage, request.txn, request.stage, expr, topic.listeners)
+                        broadcast(
+                            &storage,
+                            request.txn,
+                            request.stage,
+                            worker,
+                            expr,
+                            topic.listeners,
+                        )
                     });
                 }
             }
@@ -86,7 +108,14 @@ impl Worker for WorkerNode {
                 if listeners == 1 {
                     let (expr, _, _) = vacant.into_key();
                     rayon::spawn(move || {
-                        broadcast(&storage, request.txn, request.stage, expr, vec![sender])
+                        broadcast(
+                            &storage,
+                            request.txn,
+                            request.stage,
+                            worker,
+                            expr,
+                            vec![sender],
+                        )
                     });
                 // Otherwise, create a new topic with one listener.
                 } else {
@@ -107,6 +136,7 @@ impl Worker for WorkerNode {
         let expr = bincode::deserialize(&request.expr).unwrap();
         let listeners: usize = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
         let storage = self.storage.clone();
+        let worker = self.worker;
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
         match self
             .exchange
@@ -128,6 +158,7 @@ impl Worker for WorkerNode {
                             &storage,
                             request.txn,
                             request.stage,
+                            worker,
                             expr,
                             request.hash_column,
                             topic.listeners,
@@ -144,6 +175,7 @@ impl Worker for WorkerNode {
                             &storage,
                             request.txn,
                             request.stage,
+                            worker,
                             expr,
                             request.hash_column,
                             vec![(request.hash_bucket, sender)],
@@ -176,9 +208,30 @@ impl Worker for WorkerNode {
         request: Request<TraceRequest>,
     ) -> Result<Response<TraceResponse>, Status> {
         let request = request.into_inner();
-        let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
-        let stages = log::trace(request.txn, Some(worker));
+        let stages = log::trace(request.txn, Some(self.worker));
         Ok(Response::new(TraceResponse { stages }))
+    }
+}
+
+fn gather(
+    storage: &Mutex<Storage>,
+    txn: i64,
+    stage: i32,
+    worker: i32,
+    expr: Expr,
+    listener: Sender<Page>,
+) {
+    let _unset = globals::WORKER.set(worker);
+    let _session = log_session(txn, stage);
+    // Send each batch of records produced by expr to each worker node in the cluster.
+    let mut query = Node::compile(expr.clone());
+    loop {
+        let result = match query.next(storage, txn) {
+            Ok(Some(batch)) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Ok(None) => break,
+            Err(message) => Part::Error(message),
+        };
+        listener.blocking_send(Page { part: Some(result) }).unwrap();
     }
 }
 
@@ -186,9 +239,11 @@ fn broadcast(
     storage: &Mutex<Storage>,
     txn: i64,
     stage: i32,
+    worker: i32,
     expr: Expr,
     listeners: Vec<Sender<Page>>,
 ) {
+    let _unset = globals::WORKER.set(worker);
     let _session = log_session(txn, stage);
     // Send each batch of records produced by expr to each worker node in the cluster.
     let mut query = Node::compile(expr);
@@ -211,10 +266,12 @@ fn exchange(
     storage: &Mutex<Storage>,
     txn: i64,
     stage: i32,
+    worker: i32,
     expr: Expr,
     hash_column: String,
     mut listeners: Vec<(i32, Sender<Page>)>,
 ) {
+    let _unset = globals::WORKER.set(worker);
     let _session = log_session(txn, stage);
     // Order listeners by bucket.
     listeners.sort_by_key(|(hash_bucket, _)| *hash_bucket);
@@ -223,10 +280,8 @@ fn exchange(
     loop {
         match query.next(storage, txn) {
             Ok(Some(batch)) => {
-                for (hash_bucket, batch) in partition(batch, &hash_column, listeners.len())
-                    .iter()
-                    .enumerate()
-                {
+                let batches = partition(&batch, &hash_column, listeners.len());
+                for (hash_bucket, batch) in batches.iter().enumerate() {
                     let (_, sink) = &listeners[hash_bucket];
                     sink.blocking_send(Page {
                         part: Some(Part::RecordBatch(bincode::serialize(&batch).unwrap())),
@@ -247,7 +302,7 @@ fn exchange(
     }
 }
 
-fn partition(batch: RecordBatch, hash_column: &String, workers: usize) -> Vec<RecordBatch> {
+fn partition(batch: &RecordBatch, hash_column: &String, workers: usize) -> Vec<RecordBatch> {
     let (_, column) = batch
         .columns
         .iter()
@@ -267,6 +322,6 @@ fn partition(batch: RecordBatch, hash_column: &String, workers: usize) -> Vec<Re
 }
 
 fn log_session(txn: i64, stage: i32) -> Session {
-    let worker = std::env::var("WORKER_ID").unwrap().parse().unwrap();
+    let worker = globals::WORKER.get();
     log::session(txn, stage, Some(worker))
 }
