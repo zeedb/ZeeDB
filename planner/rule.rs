@@ -468,7 +468,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return single(to_aggregate(group_by, aggregate, input));
+                    return single(to_aggregate(group_by, aggregate, input, ss.txn));
                 }
             }
             Rule::LogicalLimitToLimit => {
@@ -601,9 +601,15 @@ impl Rule {
     }
 }
 
-fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box<Expr>) -> Expr {
+fn to_aggregate(
+    group_by: Vec<Column>,
+    aggregate: Vec<AggregateExpr>,
+    input: Box<Expr>,
+    txn: i64,
+) -> Expr {
     if group_by.is_empty() {
-        let hash_bucket = Scalar::Literal(Value::I64(Some(0))); // TODO randomize so different nodes get different aggregates.
+        let worker = crate::distribution::select_worker(txn) as i64;
+        let hash_bucket = Scalar::Literal(Value::I64(Some(worker)));
         let constant = Column::computed("$constant", &None, DataType::I64);
         Aggregate {
             partition_by: constant.clone(),

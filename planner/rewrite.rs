@@ -668,8 +668,6 @@ fn push_down_projections(expr: Expr) -> Result<Expr, Expr> {
                 } => {
                     let mut combined = inner.clone();
                     for (x, c) in &outer {
-                        // TODO if some* mapped items can be embedded, embed them.
-                        // TODO if column is renamed, that should be embedd-able, but it's not presently because we use column names as ids.
                         if !x.is_just(c) {
                             return Err(LogicalMap {
                                 include_existing: outer_include_existing,

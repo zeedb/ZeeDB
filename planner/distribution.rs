@@ -64,7 +64,7 @@ pub fn set_workers(expr: &mut Expr, txn: i64) {
     top_down_rewrite(expr, txn);
 }
 
-fn select_worker(txn: i64) -> i32 {
+pub(crate) fn select_worker(txn: i64) -> i32 {
     let mut rng = SmallRng::seed_from_u64(txn as u64);
     let count: i32 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
     rng.gen_range(0..count)
