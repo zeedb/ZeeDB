@@ -1,4 +1,5 @@
 use ast::*;
+use rand::prelude::*;
 
 pub fn set_hash_columns(expr: &mut Expr) {
     fn top_down_rewrite(expr: &mut Expr, column: Option<Column>) {
@@ -49,4 +50,22 @@ pub fn set_stages(expr: &mut Expr) {
     }
     let mut next_stage = 1;
     top_down_rewrite(expr, &mut next_stage);
+}
+
+pub fn set_workers(expr: &mut Expr, txn: i64) {
+    fn top_down_rewrite(expr: &mut Expr, txn: i64) {
+        if let TableFreeScan { worker } | Gather { worker, .. } = expr {
+            *worker = select_worker(txn)
+        }
+        for i in 0..expr.len() {
+            top_down_rewrite(&mut expr[i], txn)
+        }
+    }
+    top_down_rewrite(expr, txn);
+}
+
+fn select_worker(txn: i64) -> i32 {
+    let mut rng = SmallRng::seed_from_u64(txn as u64);
+    let count: i32 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
+    rng.gen_range(0..count)
 }

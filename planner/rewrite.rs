@@ -226,7 +226,7 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Expr::LogicalScript { .. }
         | Expr::LogicalExplain { .. }
         | Expr::LogicalRewrite { .. } => false,
-        Expr::TableFreeScan
+        Expr::TableFreeScan { .. }
         | Expr::SeqScan { .. }
         | Expr::IndexScan { .. }
         | Expr::Filter { .. }

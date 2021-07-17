@@ -14,6 +14,7 @@ use crate::{hash_table::HashTable, index::PackedBytes};
 #[derive(Debug)]
 pub enum Node {
     TableFreeScan {
+        worker: i32,
         empty: bool,
     },
     SeqScan {
@@ -105,6 +106,7 @@ pub enum Node {
         stream: Option<RemoteQuery>,
     },
     Gather {
+        worker: i32,
         stage: i32,
         input: Option<Expr>,
         stream: Option<RemoteQuery>,
@@ -148,7 +150,10 @@ pub struct RemoteQuery {
 impl Node {
     pub fn compile(expr: Expr) -> Self {
         match expr {
-            TableFreeScan => Node::TableFreeScan { empty: false },
+            TableFreeScan { worker } => Node::TableFreeScan {
+                worker,
+                empty: false,
+            },
             SeqScan {
                 projects,
                 predicates,
@@ -295,13 +300,18 @@ impl Node {
                     stage,
                 }
             }
-            Gather { input, stage } => {
+            Gather {
+                input,
+                worker,
+                stage,
+            } => {
                 assert!(stage >= 0);
 
                 Node::Gather {
+                    worker,
+                    stage,
                     input: Some(*input),
                     stream: None,
-                    stage,
                 }
             }
             Insert {
@@ -397,10 +407,9 @@ impl Node {
     ) -> Result<Option<RecordBatch>, String> {
         let _span = log::enter(self.name());
         match self {
-            Node::TableFreeScan { empty } => {
+            Node::TableFreeScan { worker, empty } => {
                 // Produce a single row on worker 0.
-                // TODO this will cause all queries of the form INSERT INTO _ VALUES _ to execute on worker 0.
-                if *empty || globals::WORKER.get() != 0 {
+                if *empty || globals::WORKER.get() != *worker {
                     return Ok(None);
                 }
                 *empty = true;
@@ -902,12 +911,12 @@ impl Node {
                 stream.as_mut().unwrap().inner.next()
             }
             Node::Gather {
+                worker,
+                stage,
                 input,
                 stream,
-                stage,
             } => {
-                // Only execute Gather on worker 0.
-                if globals::WORKER.get() != 0 {
+                if globals::WORKER.get() != *worker {
                     return Ok(None);
                 }
                 if let Some(expr) = input.take() {

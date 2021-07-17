@@ -347,13 +347,14 @@ impl Rule {
             }
             Rule::InsertGather => {
                 return single(Gather {
+                    worker: -1,
                     stage: -1,
                     input: Box::new(bind),
                 });
             }
             Rule::LogicalGetToTableFreeScan => {
                 if let LogicalSingleGet = bind {
-                    return single(TableFreeScan);
+                    return single(TableFreeScan { worker: -1 });
                 }
             }
             Rule::LogicalGetToSeqScan => {

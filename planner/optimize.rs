@@ -10,6 +10,7 @@ pub fn optimize(expr: Expr, txn: i64) -> Expr {
     let mut expr = search_for_best_plan(expr, txn);
     crate::distribution::set_hash_columns(&mut expr);
     crate::distribution::set_stages(&mut expr);
+    crate::distribution::set_workers(&mut expr, txn);
     expr
 }
 

@@ -38,7 +38,7 @@ fn test_broadcast() {
             input: Box::new(Map {
                 projects: vec![(Scalar::Literal(Value::I64(Some(1))), column.clone())],
                 include_existing: false,
-                input: Box::new(TableFreeScan),
+                input: Box::new(TableFreeScan { worker: -1 }),
             }),
         };
         let _response = client

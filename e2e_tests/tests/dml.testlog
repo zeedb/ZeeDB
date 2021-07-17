@@ -27,7 +27,7 @@ id
 < create table foo (id int64, ok bool);
 < insert into foo (id, ok) values (1, false);
 < insert into foo (ok, id) values (true, 2);
-> select * from foo;
+> select * from foo order by id;
 id ok   
 1  false
 2  true 

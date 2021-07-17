@@ -29,7 +29,7 @@ impl IndentPrint for Expr {
         };
         match self {
             Expr::Leaf { gid } => write!(f, "@{}", gid),
-            Expr::LogicalSingleGet | Expr::TableFreeScan => write!(f, "{}", self.name()),
+            Expr::LogicalSingleGet | Expr::TableFreeScan { .. } => write!(f, "{}", self.name()),
             Expr::LogicalGet {
                 predicates, table, ..
             }

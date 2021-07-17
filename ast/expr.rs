@@ -155,7 +155,9 @@ pub enum Expr {
     LogicalRewrite {
         sql: String,
     },
-    TableFreeScan,
+    TableFreeScan {
+        worker: i32,
+    },
     SeqScan {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
@@ -238,6 +240,7 @@ pub enum Expr {
     },
     /// Gather input on a single node for sorting.
     Gather {
+        worker: i32,
         stage: i32,
         input: Box<Expr>,
     },
@@ -379,7 +382,7 @@ impl Expr {
             | Expr::LogicalCreateTable { .. }
             | Expr::LogicalCreateIndex { .. }
             | Expr::LogicalDrop { .. }
-            | Expr::TableFreeScan
+            | Expr::TableFreeScan { .. }
             | Expr::SeqScan { .. }
             | Expr::GetTempTable { .. }
             | Expr::LogicalRewrite { .. } => 0,
