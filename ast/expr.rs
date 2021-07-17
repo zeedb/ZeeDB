@@ -19,8 +19,8 @@ pub enum Expr {
     LogicalSingleGet,
     // LogicalGet { table } implements the FROM clause.
     LogicalGet {
-        projects: Vec<Column>,
         predicates: Vec<Scalar>,
+        projects: Vec<Column>,
         table: Table,
     },
     // LogicalFilter { predicates } implements the WHERE/HAVING clauses.
