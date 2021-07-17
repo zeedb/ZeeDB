@@ -755,7 +755,7 @@ impl Node {
                 input,
             } => {
                 // Create a new temp table.
-                let mut heap = Heap::empty();
+                let mut heap = Heap::default();
                 // Temp table uses different column names.
                 let renames = columns
                     .iter()

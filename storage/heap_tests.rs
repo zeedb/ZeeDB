@@ -4,7 +4,7 @@ use crate::heap::*;
 
 #[test]
 fn test_insert_delete() {
-    let mut heap = Heap::empty();
+    let mut heap = Heap::default();
     heap.insert(
         &RecordBatch::new(vec![
             (
@@ -44,7 +44,7 @@ a b  $xmin $xmax
 #[test]
 fn test_insert_new_page() {
     let ints: Vec<_> = (0..crate::page::PAGE_SIZE as i64 * 2).collect();
-    let mut heap = Heap::empty();
+    let mut heap = Heap::default();
     heap.insert(
         &RecordBatch::new(vec![(
             "a".to_string(),

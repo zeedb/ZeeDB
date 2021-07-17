@@ -8,17 +8,12 @@ use crate::page::*;
 // Heap represents a logical table as a list of pages.
 // New tuples are added to the end of the heap.
 // Deleted tuples are periodically garbage-collected and the heap is compacted.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Heap {
     pages: Vec<Arc<Page>>,
 }
 
 impl Heap {
-    // TODO replace with Default
-    pub fn empty() -> Self {
-        Self { pages: vec![] }
-    }
-
     pub fn scan(&self) -> Vec<Arc<Page>> {
         self.pages.clone()
     }

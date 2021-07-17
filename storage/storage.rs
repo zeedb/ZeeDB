@@ -23,7 +23,7 @@ impl Storage {
 
     pub fn create_table(&mut self, id: i64) {
         assert!(self.tables.len() < id as usize + 1);
-        self.tables.resize_with(id as usize + 1, Heap::empty);
+        self.tables.resize_with(id as usize + 1, Heap::default);
     }
 
     pub fn temp_table(&self, txn: i64, name: String) -> &Heap {
@@ -64,7 +64,7 @@ impl Default for Storage {
     fn default() -> Self {
         // First 100 tables are reserved for system use.
         let mut tables = Vec::with_capacity(0);
-        tables.resize_with(100, Heap::empty);
+        tables.resize_with(100, Heap::default);
         // Initially there are no indexes.
         let indexes = vec![];
         // Bootstrap statistics.
