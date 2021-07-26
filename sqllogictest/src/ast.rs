@@ -102,8 +102,7 @@ pub struct QueryOutput<'a> {
     pub types: Vec<Type>,
     pub sort: Sort,
     pub label: Option<&'a str>,
-    pub column_names: Option<Vec<repr::ColumnName>>,
-    pub mode: Mode,
+    pub column_names: Option<Vec<String>>,
     pub output: Output,
     pub output_str: &'a str,
 }
@@ -124,56 +123,8 @@ pub enum Record<'a> {
         sql: &'a str,
         output: Result<QueryOutput<'a>, &'a str>,
     },
-    /// A `simple` directive.
-    Simple {
-        location: Location,
-        conn: Option<&'a str>,
-        sql: &'a str,
-        output: Output,
-        output_str: &'a str,
-    },
     /// A `hash-threshold` directive.
     HashThreshold { threshold: u64 },
     /// A `halt` directive.
     Halt,
-}
-
-/// Specifies the dialect of a sqllogictest file. Different sqllogictest runners
-/// have slightly different behavior.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Mode {
-    /// In `Standard` mode, expected query output is formatted so that every
-    /// value is always on its own line, like so:
-    ///
-    ///
-    ///    query II
-    ///    SELECT * FROM VALUES (1, 2), (3, 4)
-    ///    ----
-    ///    1
-    ///    2
-    ///    3
-    ///    4
-    ///
-    /// Row boundaries are not visually represented, but they can be inferred
-    /// because the number of columns per row is specified by the `query`
-    /// directive.
-    Standard,
-
-    /// In `Cockroach` mode, expected query output is formatted so that rows
-    /// can contain multiple whitespace-separated columns:
-    ///
-    ///    query II
-    ///    SELECT * FROM VALUES (1, 2), (3, 4)
-    ///    ----
-    ///    1 2
-    ///    3 4
-    ///
-    /// This formatting, while easier to parse visually, is thoroughly
-    /// frustrating when column values contain whitespace, e.g., strings like
-    /// "one two", as there is no way to know where the column boundaries are.
-    /// We jump through some hoops to make this work. You might want to
-    /// refer to this upstream Cockroach commit [0] for additional details.
-    ///
-    /// [0]: https://github.com/cockroachdb/cockroach/commit/75c3023ec86a76fe6fb60fe1c6f00752b9784801
-    Cockroach,
 }

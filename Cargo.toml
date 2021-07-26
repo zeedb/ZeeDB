@@ -17,6 +17,7 @@ members = [
     "remote_execution",
     "sequences",
     "statistics",
+    "sqllogictest",
     "storage",
     "worker",
     "zetasql",

@@ -25,38 +25,52 @@
 //!       compare to expected results
 //!       if wrong, record the error
 
-use std::collections::HashMap;
-use std::error::Error;
-use std::fmt;
-use std::fs::{File, OpenOptions};
-use std::io::{Read, Seek, SeekFrom, Write};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::ops;
-use std::path::Path;
-use std::str;
-use std::time::Duration;
+use std::{
+    collections::HashMap,
+    error::Error,
+    fmt,
+    fs::{File, OpenOptions},
+    io::{Read, Seek, SeekFrom, Stderr, Stdout, Write},
+    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+    ops,
+    path::Path,
+    str,
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc, Mutex,
+    },
+    time::Duration,
+};
 
 use anyhow::{anyhow, bail};
+use ast::Value;
+use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
 use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
+use coordinator::CoordinatorNode;
 use fallible_iterator::FallibleIterator;
+use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
 use md5::{Digest, Md5};
+use once_cell::sync::Lazy;
 use postgres_protocol::types;
 use regex::Regex;
+use rpc::{
+    coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
+    worker_server::WorkerServer, CheckRequest, SubmitRequest,
+};
 use tempfile::TempDir;
-use tokio_postgres::types::FromSql;
-use tokio_postgres::types::Kind as PgKind;
-use tokio_postgres::types::Type as PgType;
-use tokio_postgres::{NoTls, Row, SimpleQueryMessage};
+use tokio_postgres::{
+    types::{FromSql, Kind as PgKind, Type as PgType},
+    NoTls, Row, SimpleQueryMessage,
+};
+use tonic::transport::{Channel, Endpoint, Server};
 use uuid::Uuid;
+use worker::WorkerNode;
 
-use pgrepr::{Interval, Jsonb, Numeric, Value};
-use repr::adt::numeric;
-use repr::ColumnName;
-use sql::ast::Statement;
-
-use crate::ast::{Location, Mode, Output, QueryOutput, Record, Sort, Type};
-use crate::util;
+use crate::{
+    ast::{Location, Output, QueryOutput, Record, Sort, Type},
+    util,
+};
 
 #[derive(Debug)]
 pub enum Outcome<'a> {
@@ -87,13 +101,13 @@ pub enum Outcome<'a> {
         location: Location,
     },
     WrongColumnNames {
-        expected_column_names: &'a Vec<ColumnName>,
-        actual_column_names: Vec<ColumnName>,
+        expected_column_names: &'a Vec<String>,
+        actual_column_names: Vec<String>,
         location: Location,
     },
     OutputFailure {
         expected_output: &'a Output,
-        actual_raw_output: Vec<Row>,
+        actual_raw_output: RecordBatch,
         actual_output: Output,
         location: Location,
     },
@@ -283,10 +297,10 @@ impl<'a> fmt::Display for OutcomesDisplay<'a> {
 }
 
 pub(crate) struct Runner {
+    catalog_id: i64,
     // Drop order matters for these fields.
-    client: tokio_postgres::Client,
+    client: CoordinatorClient<Channel>,
     clients: HashMap<String, tokio_postgres::Client>,
-    server: materialized::Server,
     _temp_dir: TempDir,
 }
 
@@ -299,63 +313,53 @@ impl<'a> FromSql<'a> for Slt {
         mut raw: &'a [u8],
     ) -> Result<Self, Box<dyn Error + 'static + Send + Sync>> {
         Ok(match *ty {
-            PgType::BOOL => Self(Value::Bool(types::bool_from_sql(raw)?)),
-            PgType::BYTEA => Self(Value::Bytea(types::bytea_from_sql(raw).to_vec())),
-            PgType::FLOAT4 => Self(Value::Float4(types::float4_from_sql(raw)?)),
-            PgType::FLOAT8 => Self(Value::Float8(types::float8_from_sql(raw)?)),
-            PgType::DATE => Self(Value::Date(NaiveDate::from_sql(ty, raw)?)),
-            PgType::INT4 => Self(Value::Int4(types::int4_from_sql(raw)?)),
-            PgType::INT8 => Self(Value::Int8(types::int8_from_sql(raw)?)),
-            PgType::INTERVAL => Self(Value::Interval(Interval::from_sql(ty, raw)?)),
-            PgType::JSONB => Self(Value::Jsonb(Jsonb::from_sql(ty, raw)?)),
-            PgType::NUMERIC => Self(Value::Numeric(Numeric::from_sql(ty, raw)?)),
-            PgType::OID => Self(Value::Int4(types::oid_from_sql(raw)? as i32)),
-            PgType::TEXT => Self(Value::Text(types::text_from_sql(raw)?.to_string())),
-            PgType::TIME => Self(Value::Time(NaiveTime::from_sql(ty, raw)?)),
-            PgType::TIMESTAMP => Self(Value::Timestamp(NaiveDateTime::from_sql(ty, raw)?)),
-            PgType::TIMESTAMPTZ => Self(Value::TimestampTz(DateTime::<Utc>::from_sql(ty, raw)?)),
-            PgType::UUID => Self(Value::Uuid(Uuid::from_sql(ty, raw)?)),
-            PgType::RECORD => {
-                let num_fields = read_be_i32(&mut raw)?;
-                let mut tuple = vec![];
-                for _ in 0..num_fields {
-                    let oid = read_be_i32(&mut raw)? as u32;
-                    let typ = match PgType::from_oid(oid) {
-                        Some(typ) => typ,
-                        None => return Err("unknown oid".into()),
-                    };
-                    let v = read_value::<Option<Slt>>(&typ, &mut raw)?;
-                    tuple.push(v.map(|v| v.0));
-                }
-                Self(Value::Record(tuple))
-            }
+            PgType::BOOL => Self(Value::Bool(Some(types::bool_from_sql(raw)?))),
+            PgType::BYTEA => unimplemented!(),
+            PgType::FLOAT4 => unimplemented!(),
+            PgType::FLOAT8 => Self(Value::F64(Some(types::float8_from_sql(raw)?))),
+            PgType::DATE => Self(Value::Date(Some(epoch_date(NaiveDate::from_sql(ty, raw)?)))),
+            PgType::INT4 => unimplemented!(),
+            PgType::INT8 => Self(Value::I64(Some(types::int8_from_sql(raw)?))),
+            PgType::INTERVAL => unimplemented!(),
+            PgType::JSONB => unimplemented!(),
+            PgType::NUMERIC => unimplemented!(),
+            PgType::OID => unimplemented!(),
+            PgType::TEXT => Self(Value::String(Some(types::text_from_sql(raw)?.to_string()))),
+            PgType::TIME => unimplemented!(),
+            PgType::TIMESTAMP => Self(Value::Timestamp(Some(epoch_time(NaiveDateTime::from_sql(
+                ty, raw,
+            )?)))),
+            PgType::TIMESTAMPTZ => unimplemented!(),
+            PgType::UUID => unimplemented!(),
+            PgType::RECORD => unimplemented!(),
 
             _ => match ty.kind() {
                 PgKind::Array(arr_type) => {
-                    let arr = types::array_from_sql(raw)?;
-                    let elements: Vec<Option<Value>> = arr
-                        .values()
-                        .map(|v| match v {
-                            Some(v) => Ok(Some(Slt::from_sql(arr_type, v)?)),
-                            None => Ok(None),
-                        })
-                        .collect::<Vec<Option<Slt>>>()?
-                        .into_iter()
-                        // Map a Vec<Option<Slt>> to Vec<Option<Value>>.
-                        .map(|v| v.map(|v| v.0))
-                        .collect();
-                    Self(Value::Array {
-                        dims: arr
-                            .dimensions()
-                            .map(|d| {
-                                Ok(repr::adt::array::ArrayDimension {
-                                    lower_bound: d.lower_bound as usize,
-                                    length: d.len as usize,
-                                })
-                            })
-                            .collect()?,
-                        elements,
-                    })
+                    // let arr = types::array_from_sql(raw)?;
+                    // let elements: Vec<Option<Value>> = arr
+                    //     .values()
+                    //     .map(|v| match v {
+                    //         Some(v) => Ok(Some(Slt::from_sql(arr_type, v)?)),
+                    //         None => Ok(None),
+                    //     })
+                    //     .collect::<Vec<Option<Slt>>>()?
+                    //     .into_iter()
+                    //     // Map a Vec<Option<Slt>> to Vec<Option<Value>>.
+                    //     .map(|v| v.map(|v| v.0))
+                    //     .collect();
+                    // Self(Value::Array {
+                    //     dims: arr
+                    //         .dimensions()
+                    //         .map(|d| {
+                    //             Ok(repr::adt::array::ArrayDimension {
+                    //                 lower_bound: d.lower_bound as usize,
+                    //                 length: d.len as usize,
+                    //             })
+                    //         })
+                    //         .collect()?,
+                    //     elements,
+                    // })
+                    unimplemented!()
                 }
                 _ => unreachable!(),
             },
@@ -420,133 +424,78 @@ where
     T::from_sql_nullable(type_, value)
 }
 
-fn format_datum(d: Slt, typ: &Type, mode: Mode, col: usize) -> String {
-    match (typ, d.0) {
-        (Type::Bool, Value::Bool(b)) => b.to_string(),
+fn epoch_date(d: NaiveDate) -> i32 {
+    let epoch = NaiveDate::from_ymd(1970, 1, 1);
+    (d - epoch).num_days() as i32
+}
 
-        (Type::Integer, Value::Int4(i)) => i.to_string(),
-        (Type::Integer, Value::Int8(i)) => i.to_string(),
-        (Type::Integer, Value::Float4(f)) => format!("{}", f as i64),
-        (Type::Integer, Value::Float8(f)) => format!("{}", f as i64),
+fn epoch_time(t: NaiveDateTime) -> i64 {
+    let epoch = NaiveDateTime::from_timestamp(0, 0);
+    (t - epoch).num_microseconds().unwrap()
+}
+
+fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option<String> {
+    let string = match (typ, column) {
+        (Type::Bool, AnyArray::Bool(b)) => b.get(row)?.to_string(),
+        (Type::Integer, AnyArray::I64(i)) => i.get(row)?.to_string(),
         // This is so wrong, but sqlite needs it.
-        (Type::Integer, Value::Text(_)) => "0".to_string(),
-        (Type::Integer, Value::Bool(b)) => i8::from(b).to_string(),
-        (Type::Integer, Value::Numeric(d)) => {
-            let mut d = d.0 .0.clone();
-            let mut cx = numeric::cx_datum();
-            cx.round(&mut d);
-            numeric::munge_numeric(&mut d).unwrap();
-            d.to_standard_notation_string()
-        }
-
-        (Type::Real, Value::Int4(i)) => format!("{:.3}", i),
-        (Type::Real, Value::Int8(i)) => format!("{:.3}", i),
-        (Type::Real, Value::Float4(f)) => match mode {
-            Mode::Standard => format!("{:.3}", f),
-            Mode::Cockroach => format!("{}", f),
-        },
-        (Type::Real, Value::Float8(f)) => match mode {
-            Mode::Standard => format!("{:.3}", f),
-            Mode::Cockroach => format!("{}", f),
-        },
-        (Type::Real, Value::Numeric(d)) => match mode {
-            Mode::Standard => {
-                let mut d = d.0 .0.clone();
-                if d.exponent() < -3 {
-                    numeric::rescale(&mut d, 3).unwrap();
-                }
-                numeric::munge_numeric(&mut d).unwrap();
-                d.to_standard_notation_string()
-            }
-            Mode::Cockroach => d.0 .0.to_standard_notation_string(),
-        },
-
-        (Type::Text, Value::Text(s)) => {
+        (Type::Integer, AnyArray::String(_)) => "0".to_string(),
+        (Type::Integer, AnyArray::Bool(b)) => i8::from(b.get(row)?).to_string(),
+        (Type::Real, AnyArray::I64(i)) => format!("{:.3}", i.get(row)?),
+        (Type::Real, AnyArray::F64(f)) => format!("{:.3}", f.get(row)?),
+        (Type::Text, AnyArray::String(s)) => {
+            let s = s.get(row)?;
             if s.is_empty() {
                 "(empty)".to_string()
             } else {
                 s
             }
         }
-        (Type::Text, Value::Bool(b)) => b.to_string(),
-        (Type::Text, Value::Float4(f)) => format!("{:.3}", f),
-        (Type::Text, Value::Float8(f)) => format!("{:.3}", f),
-        // Bytes are printed as text iff they are valid UTF-8. This
-        // seems guaranteed to confuse everyone, but it is required for
-        // compliance with the CockroachDB sqllogictest runner. [0]
-        //
-        // [0]: https://github.com/cockroachdb/cockroach/blob/970782487/pkg/sql/logictest/logic.go#L2038-L2043
-        (Type::Text, Value::Bytea(b)) => match str::from_utf8(&b) {
-            Ok(s) => s.to_string(),
-            Err(_) => format!("{:?}", b),
-        },
-        (Type::Text, Value::Numeric(d)) => d.0 .0.to_standard_notation_string(),
-        // Everything else gets normal text encoding. This correctly handles things
-        // like arrays, tuples, and strings that need to be quoted.
-        (Type::Text, d) => {
-            let mut buf: String = "".into();
-            d.encode_text(&mut buf);
-            buf
-        }
-
-        (Type::Oid, Value::Int4(o)) => o.to_string(),
-
+        (Type::Text, AnyArray::Bool(b)) => b.get(row)?.to_string(),
+        (Type::Text, AnyArray::F64(f)) => format!("{:.3}", f.get(row)?),
         (_, d) => panic!(
             "Don't know how to format {:?} as {:?} in column {}",
             d, typ, col,
         ),
-    }
+    };
+    Some(string)
 }
 
-fn format_row(row: &Row, types: &[Type], mode: Mode, sort: &Sort) -> Vec<String> {
+fn format_row(rows: &RecordBatch, i: usize, types: &[Type], sort: &Sort) -> Vec<String> {
     let mut formatted: Vec<String> = vec![];
-    for i in 0..row.len() {
-        let t: Option<Slt> = row.get::<usize, Option<Slt>>(i);
-        let t: Option<String> = t.map(|d| format_datum(d, &types[i], mode, i));
+    for j in 0..rows.columns.len() {
+        let (_, column) = &rows.columns[j];
+        let t: Option<String> = format_datum(column, &types[j], i, j);
         formatted.push(match t {
             Some(t) => t,
             None => "NULL".into(),
         });
     }
-    if mode == Mode::Cockroach && sort.yes() {
-        formatted
-            .iter()
-            .flat_map(|s| {
-                crate::parser::split_cols(&s, types.len())
-                    .into_iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-            })
-            .collect()
-    } else {
-        formatted
-    }
+    formatted
 }
 
 impl Runner {
-    pub async fn start(config: &RunConfig<'_>) -> Result<Self, anyhow::Error> {
+    pub async fn start() -> Result<Self, anyhow::Error> {
+        let mut client = connect_to_cluster().await;
+        // Find the id of the next database.
+        // TODO this is an evil trick that just happens to match, we should query this value from the metadata schema.
+        static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(RESERVED_IDS));
+        let catalog_id = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
+        // Create a new, empty database.
+        client
+            .submit(SubmitRequest {
+                sql: format!("create database test{}", catalog_id),
+                catalog_id: ROOT_CATALOG_ID,
+                txn: None,
+                variables: HashMap::default(),
+            })
+            .await?;
+
         let temp_dir = tempfile::tempdir()?;
-        let mz_config = materialized::Config {
-            logging: None,
-            timestamp_frequency: Duration::from_secs(1),
-            logical_compaction_window: None,
-            workers: config.workers,
-            timely_worker: timely::WorkerConfig::default(),
-            data_directory: temp_dir.path().to_path_buf(),
-            symbiosis_url: Some("postgres://".into()),
-            listen_addr: SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 0),
-            tls: None,
-            experimental_mode: true,
-            safe_mode: false,
-            telemetry: None,
-            introspection_frequency: Duration::from_secs(1),
-        };
-        let server = materialized::serve(mz_config).await?;
-        let client = connect(&server).await;
 
         Ok(Runner {
-            server,
             _temp_dir: temp_dir,
+            catalog_id,
             client,
             clients: HashMap::new(),
         })
@@ -588,13 +537,6 @@ impl Runner {
                 output,
                 location,
             } => self.run_query(sql, output, location.clone()).await,
-            Record::Simple {
-                conn,
-                sql,
-                output,
-                location,
-                ..
-            } => self.run_simple(*conn, sql, output, location.clone()).await,
             _ => Ok(Outcome::Success),
         }
     }
@@ -606,16 +548,13 @@ impl Runner {
         sql: &'a str,
         location: Location,
     ) -> Result<Outcome<'a>, anyhow::Error> {
-        lazy_static! {
-            static ref UNSUPPORTED_INDEX_STATEMENT_REGEX: Regex =
-                Regex::new("^(CREATE UNIQUE INDEX|REINDEX)").unwrap();
-        }
-        if UNSUPPORTED_INDEX_STATEMENT_REGEX.is_match(sql) {
-            // sure, we totally made you an index
-            return Ok(Outcome::Success);
-        }
-
-        match self.client.execute(sql, &[]).await {
+        let request = SubmitRequest {
+            sql: sql.to_string(),
+            catalog_id: self.catalog_id,
+            txn: None,
+            variables: HashMap::default(),
+        };
+        match self.statement(sql).await {
             Ok(actual) => {
                 if let Some(expected_error) = expected_error {
                     return Ok(Outcome::UnexpectedPlanSuccess {
@@ -658,46 +597,7 @@ impl Runner {
         output: &'a Result<QueryOutput<'_>, &'a str>,
         location: Location,
     ) -> Result<Outcome<'a>, anyhow::Error> {
-        // get statement
-        let statements = match sql::parse::parse(sql) {
-            Ok(statements) => statements,
-            Err(e) => match output {
-                Ok(_) => {
-                    return Ok(Outcome::ParseFailure {
-                        error: e.into(),
-                        location,
-                    });
-                }
-                Err(expected_error) => {
-                    if Regex::new(expected_error)?.is_match(&format!("{:#}", e)) {
-                        return Ok(Outcome::Success);
-                    } else {
-                        return Ok(Outcome::ParseFailure {
-                            error: e.into(),
-                            location,
-                        });
-                    }
-                }
-            },
-        };
-        let statement = match &*statements {
-            [] => bail!("Got zero statements?"),
-            [statement] => statement,
-            _ => bail!("Got multiple statements: {:?}", statements),
-        };
-        match statement {
-            Statement::CreateView { .. }
-            | Statement::Select { .. }
-            | Statement::ShowIndexes { .. } => (),
-            _ => {
-                if output.is_err() {
-                    // We're not interested in testing our hacky handling of INSERT etc
-                    return Ok(Outcome::Success);
-                }
-            }
-        }
-
-        let rows = match self.client.query(sql, &[]).await {
+        let rows = match self.query(sql).await {
             Ok(rows) => rows,
             Err(error) => {
                 return match output {
@@ -736,7 +636,6 @@ impl Runner {
             types: expected_types,
             column_names: expected_column_names,
             output: expected_output,
-            mode,
             ..
         } = match output {
             Err(expected_error) => {
@@ -749,14 +648,11 @@ impl Runner {
         };
 
         // Various checks as long as there are returned rows.
-        if let Some(row) = rows.get(0) {
+        if rows.len() > 0 {
             // check column names
             if let Some(expected_column_names) = expected_column_names {
-                let actual_column_names = row
-                    .columns()
-                    .iter()
-                    .map(|t| ColumnName::from(t.name()))
-                    .collect::<Vec<_>>();
+                let actual_column_names =
+                    rows.columns.iter().map(|(name, _)| name.clone()).collect();
                 if expected_column_names != &actual_column_names {
                     return Ok(Outcome::WrongColumnNames {
                         expected_column_names,
@@ -767,17 +663,18 @@ impl Runner {
             }
         }
 
+        if rows.columns.len() != expected_types.len() {
+            return Ok(Outcome::WrongColumnCount {
+                expected_count: expected_types.len(),
+                actual_count: rows.columns.len(),
+                location,
+            });
+        }
+
         // format output
         let mut formatted_rows = vec![];
-        for row in &rows {
-            if row.len() != expected_types.len() {
-                return Ok(Outcome::WrongColumnCount {
-                    expected_count: expected_types.len(),
-                    actual_count: row.len(),
-                    location,
-                });
-            }
-            let row = format_row(row, &expected_types, *mode, sort);
+        for i in 0..rows.len() {
+            let row = format_row(&rows, i, &expected_types, sort);
             formatted_rows.push(row);
         }
 
@@ -829,106 +726,60 @@ impl Runner {
         Ok(Outcome::Success)
     }
 
-    async fn get_conn(&mut self, name: Option<&str>) -> &tokio_postgres::Client {
-        match name {
-            None => &self.client,
-            Some(name) => {
-                if !self.clients.contains_key(name) {
-                    let client = connect(&self.server).await;
-                    self.clients.insert(name.into(), client);
-                }
-                self.clients.get(name).unwrap()
-            }
-        }
+    async fn statement(&mut self, sql: &str) -> Result<u64, anyhow::Error> {
+        let request = SubmitRequest {
+            sql: sql.to_string(),
+            catalog_id: self.catalog_id,
+            txn: None,
+            variables: HashMap::default(),
+        };
+        let response = self.client.submit(request).await?.into_inner();
+        Ok(0) // TODO
     }
 
-    async fn run_simple<'a>(
-        &mut self,
-        conn: Option<&'a str>,
-        sql: &'a str,
-        output: &'a Output,
-        location: Location,
-    ) -> Result<Outcome<'a>, anyhow::Error> {
-        let client = self.get_conn(conn).await;
-        let actual = Output::Values(match client.simple_query(sql).await {
-            Ok(result) => result
-                .into_iter()
-                .map(|m| match m {
-                    SimpleQueryMessage::Row(row) => {
-                        let mut s = vec![];
-                        for i in 0..row.len() {
-                            s.push(row.get(i).unwrap_or("NULL"));
-                        }
-                        s.join(",")
-                    }
-                    SimpleQueryMessage::CommandComplete(count) => format!("COMPLETE {}", count),
-                    _ => panic!("unexpected"),
-                })
-                .collect::<Vec<_>>(),
-            Err(error) => vec![error.to_string()],
-        });
-        if *output != actual {
-            Ok(Outcome::OutputFailure {
-                expected_output: output,
-                actual_raw_output: vec![],
-                actual_output: actual,
-                location,
-            })
-        } else {
-            Ok(Outcome::Success)
-        }
+    async fn query(&mut self, sql: &str) -> Result<RecordBatch, anyhow::Error> {
+        let request = SubmitRequest {
+            sql: sql.to_string(),
+            catalog_id: self.catalog_id,
+            txn: None,
+            variables: HashMap::default(),
+        };
+        let response = self.client.submit(request).await?.into_inner();
+        let record_batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
+        Ok(record_batch)
     }
-}
-
-async fn connect(server: &materialized::Server) -> tokio_postgres::Client {
-    let addr = server.local_addr();
-    let (client, connection) = tokio_postgres::connect(
-        &format!("host={} port={} user=materialize", addr.ip(), addr.port()),
-        NoTls,
-    )
-    .await
-    .unwrap();
-
-    tokio::spawn(async move {
-        if let Err(e) = connection.await {
-            eprintln!("connection error: {}", e);
-        }
-    });
-    client
 }
 
 pub trait WriteFmt {
     fn write_fmt(&self, fmt: fmt::Arguments<'_>);
 }
 
-pub struct RunConfig<'a> {
-    pub stdout: &'a dyn WriteFmt,
-    pub stderr: &'a dyn WriteFmt,
+pub struct RunConfig {
     pub verbosity: usize,
     pub workers: usize,
     pub no_fail: bool,
 }
 
-fn print_record(config: &RunConfig<'_>, record: &Record) {
+fn print_record(config: &RunConfig, record: &Record) {
     match record {
         Record::Statement { sql, .. } | Record::Query { sql, .. } => {
-            writeln!(config.stdout, "{}", crate::util::indent(sql, 4))
+            println!("{}", crate::util::indent(sql, 4))
         }
         _ => (),
     }
 }
 
 pub async fn run_string(
-    config: &RunConfig<'_>,
+    config: &RunConfig,
     source: &str,
     input: &str,
 ) -> Result<Outcomes, anyhow::Error> {
     let mut outcomes = Outcomes::default();
-    let mut state = Runner::start(config).await.unwrap();
+    let mut state = Runner::start().await.unwrap();
     let mut parser = crate::parser::Parser::new(source, input);
-    writeln!(config.stdout, "==> {}", source);
+    println!("==> {}", source);
     for record in parser.parse_records()? {
-        // In maximal-verbosity mode, print the query before attempting to run
+        // In maximal-verbosity print the query before attempting to run
         // it. Running the query might panic, so it is important to print out
         // what query we are trying to run *before* we panic.
         if config.verbosity >= 2 {
@@ -952,8 +803,8 @@ pub async fn run_string(
                 // record panics, you can tell which record caused it.
                 print_record(config, &record);
             }
-            writeln!(config.stdout, "{}", util::indent(&outcome.to_string(), 4));
-            writeln!(config.stdout, "{}", util::indent("----", 4));
+            println!("{}", util::indent(&outcome.to_string(), 4));
+            println!("{}", util::indent("----", 4));
         }
 
         outcomes.0[outcome.code()] += 1;
@@ -965,19 +816,19 @@ pub async fn run_string(
     Ok(outcomes)
 }
 
-pub async fn run_file(config: &RunConfig<'_>, filename: &Path) -> Result<Outcomes, anyhow::Error> {
+pub async fn run_file(config: &RunConfig, filename: &Path) -> Result<Outcomes, anyhow::Error> {
     let mut input = String::new();
     File::open(filename)?.read_to_string(&mut input)?;
     run_string(config, &format!("{}", filename.display()), &input).await
 }
 
-pub async fn run_stdin(config: &RunConfig<'_>) -> Result<Outcomes, anyhow::Error> {
+pub async fn run_stdin(config: &RunConfig) -> Result<Outcomes, anyhow::Error> {
     let mut input = String::new();
     std::io::stdin().lock().read_to_string(&mut input)?;
     run_string(config, "<stdin>", &input).await
 }
 
-pub async fn rewrite_file(config: &RunConfig<'_>, filename: &Path) -> Result<(), anyhow::Error> {
+pub async fn rewrite_file(config: &RunConfig, filename: &Path) -> Result<(), anyhow::Error> {
     let mut file = OpenOptions::new().read(true).write(true).open(filename)?;
 
     let mut input = String::new();
@@ -985,9 +836,9 @@ pub async fn rewrite_file(config: &RunConfig<'_>, filename: &Path) -> Result<(),
 
     let mut buf = RewriteBuffer::new(&input);
 
-    let mut state = Runner::start(config).await?;
+    let mut state = Runner::start().await?;
     let mut parser = crate::parser::Parser::new(filename.to_str().unwrap_or(""), &input);
-    writeln!(config.stdout, "==> {}", filename.display());
+    println!("==> {}", filename.display());
     for record in parser.parse_records()? {
         let record = record;
         let outcome = state.run_record(&record).await?;
@@ -998,7 +849,6 @@ pub async fn rewrite_file(config: &RunConfig<'_>, filename: &Path) -> Result<(),
             Record::Query {
                 output:
                     Ok(QueryOutput {
-                        mode,
                         output: Output::Values(_),
                         output_str: expected_output,
                         types,
@@ -1026,56 +876,12 @@ pub async fn rewrite_file(config: &RunConfig<'_>, filename: &Path) -> Result<(),
             }
 
             for (i, row) in actual_output.chunks(types.len()).enumerate() {
-                match mode {
-                    // In Cockroach mode, output each row on its own line, with
-                    // two spaces between each column.
-                    Mode::Cockroach => {
-                        if i != 0 {
-                            buf.append("\n");
-                        }
-                        buf.append(&row.join("  "));
+                for (j, col) in row.iter().enumerate() {
+                    if i != 0 || j != 0 {
+                        buf.append("\n");
                     }
-                    // In standard mode, output each value on its own line,
-                    // and ignore row boundaries.
-                    Mode::Standard => {
-                        for (j, col) in row.iter().enumerate() {
-                            if i != 0 || j != 0 {
-                                buf.append("\n");
-                            }
-                            buf.append(col);
-                        }
-                    }
+                    buf.append(col);
                 }
-            }
-        } else if let (
-            Record::Simple {
-                output_str: expected_output,
-                ..
-            },
-            Outcome::OutputFailure {
-                actual_output: Output::Values(actual_output),
-                ..
-            },
-        ) = (&record, &outcome)
-        {
-            // Output everything before this record.
-            let offset = expected_output.as_ptr() as usize - input.as_ptr() as usize;
-            buf.flush_to(offset);
-            buf.skip_to(offset + expected_output.len());
-
-            // Attempt to install the result separator (----), if it does
-            // not already exist.
-            if buf.peek_last(5) == "\n----" {
-                buf.append("\n");
-            } else if buf.peek_last(6) != "\n----\n" {
-                buf.append("\n----\n");
-            }
-
-            for (i, row) in actual_output.iter().enumerate() {
-                if i != 0 {
-                    buf.append("\n");
-                }
-                buf.append(row);
             }
         } else if let Outcome::Success = outcome {
             // Ok.
@@ -1130,4 +936,103 @@ impl<'a> RewriteBuffer<'a> {
         self.flush_to(self.input.len());
         self.output
     }
+}
+
+async fn connect_to_cluster() -> CoordinatorClient<Channel> {
+    if !std::env::var("COORDINATOR").is_ok() {
+        create_cluster().await
+    }
+    let coordinator = std::env::var("COORDINATOR").unwrap();
+    let mut client = CoordinatorClient::new(
+        Endpoint::new(coordinator.clone())
+            .unwrap()
+            .connect_lazy()
+            .unwrap(),
+    );
+    // Check that coordinator is running.
+    for _ in 0..10usize {
+        match client.check(CheckRequest {}).await {
+            Ok(_) => return client,
+            Err(_) => std::thread::sleep(Duration::from_millis(100)),
+        }
+    }
+    panic!("Failed to connect to coordinator at {}", coordinator)
+}
+
+const N_WORKERS: usize = 2;
+
+async fn create_cluster() {
+    let (coordinator_port, worker_ports) = find_cluster_ports();
+    set_common_env_variables(coordinator_port, &worker_ports);
+    spawn_coordinator(coordinator_port);
+    for worker_id in 0..N_WORKERS {
+        spawn_worker(worker_id, worker_ports[worker_id]);
+    }
+}
+
+fn find_cluster_ports() -> (u16, Vec<u16>) {
+    let coordinator_port = free_port(MIN_PORT);
+    let mut worker_ports: Vec<u16> = vec![];
+    let mut worker_port = coordinator_port;
+    for _ in 0..N_WORKERS {
+        worker_port = free_port(worker_port + 1);
+        worker_ports.push(worker_port);
+    }
+    (coordinator_port, worker_ports)
+}
+
+fn set_common_env_variables(coordinator_port: u16, worker_ports: &Vec<u16>) {
+    std::env::set_var("WORKER_COUNT", N_WORKERS.to_string());
+    std::env::set_var(
+        "COORDINATOR",
+        format!("http://127.0.0.1:{}", coordinator_port).as_str(),
+    );
+    for worker_id in 0..N_WORKERS {
+        std::env::set_var(
+            format!("WORKER_{}", worker_id),
+            format!("http://127.0.0.1:{}", worker_ports[worker_id]).as_str(),
+        );
+    }
+}
+
+fn spawn_coordinator(coordinator_port: u16) {
+    std::env::set_var("COORDINATOR_PORT", coordinator_port.to_string());
+    let coordinator = CoordinatorNode::default();
+    let addr = format!("127.0.0.1:{}", coordinator_port).parse().unwrap();
+    tokio::spawn(async move {
+        Server::builder()
+            .add_service(CoordinatorServer::new(coordinator))
+            .serve(addr)
+            .await
+            .unwrap()
+    });
+}
+
+fn spawn_worker(worker_id: usize, worker_port: u16) {
+    std::env::set_var("WORKER_ID", worker_id.to_string());
+    std::env::set_var("WORKER_PORT", worker_port.to_string());
+    let worker = WorkerNode::default();
+    let addr = format!("127.0.0.1:{}", worker_port).parse().unwrap();
+    tokio::spawn(async move {
+        Server::builder()
+            .add_service(WorkerServer::new(worker))
+            .serve(addr)
+            .await
+            .unwrap()
+    });
+}
+
+const MIN_PORT: u16 = 50100;
+const MAX_PORT: u16 = 51100;
+
+fn free_port(min: u16) -> u16 {
+    for port in min..MAX_PORT {
+        if TcpListener::bind(("127.0.0.1", port)).is_ok() {
+            return port;
+        }
+    }
+    panic!(
+        "Could not find a free port between {} and {}",
+        min, MAX_PORT
+    )
 }

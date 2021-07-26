@@ -7,19 +7,23 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0.
 
-use std::cell::RefCell;
-use std::fmt;
-use std::fs::File;
-use std::io::{self, Write};
-use std::path::PathBuf;
-use std::process;
+use std::{
+    cell::RefCell,
+    fmt,
+    fs::File,
+    io::{self, Write},
+    path::PathBuf,
+    process,
+};
 
 use chrono::Utc;
 use structopt::StructOpt;
 use walkdir::WalkDir;
 
-use sqllogictest::runner::{self, Outcomes, RunConfig, WriteFmt};
-use sqllogictest::util;
+use sqllogictest::{
+    runner::{self, Outcomes, RunConfig, WriteFmt},
+    util,
+};
 
 /// Runs sqllogictest scripts to verify database engine correctness.
 #[derive(StructOpt)]
@@ -53,14 +57,9 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
-    ore::panic::set_abort_on_panic();
-    ore::test::init_logging_default("warn");
-
-    let args: Args = ore::cli::parse_args();
+    let args: Args = Args::from_args();
 
     let config = RunConfig {
-        stdout: &OutputStream::new(io::stdout(), args.timestamps),
-        stderr: &OutputStream::new(io::stderr(), args.timestamps),
         verbosity: args.verbosity,
         workers: args.workers,
         no_fail: args.no_fail,
@@ -74,7 +73,7 @@ async fn main() {
         Some(filename) => match File::create(&filename) {
             Ok(file) => Some(file),
             Err(err) => {
-                writeln!(config.stderr, "creating {}: {}", filename.display(), err);
+                eprintln!("creating {}: {}", filename.display(), err);
                 process::exit(1);
             }
         },
@@ -87,7 +86,7 @@ async fn main() {
             match sqllogictest::runner::run_stdin(&config).await {
                 Ok(o) => outcomes += o,
                 Err(err) => {
-                    writeln!(config.stderr, "error: parsing stdin: {}", err);
+                    eprintln!("error: parsing stdin: {}", err);
                     bad_file = true;
                 }
             }
@@ -98,8 +97,7 @@ async fn main() {
                         match runner::run_file(&config, entry.path()).await {
                             Ok(o) => {
                                 if o.any_failed() || config.verbosity >= 1 {
-                                    writeln!(
-                                        config.stdout,
+                                    println!(
                                         "{}",
                                         util::indent(&o.display(config.no_fail).to_string(), 4)
                                     );
@@ -107,14 +105,14 @@ async fn main() {
                                 outcomes += o;
                             }
                             Err(err) => {
-                                writeln!(config.stderr, "error: parsing file: {}", err);
+                                eprintln!("error: parsing file: {}", err);
                                 bad_file = true;
                             }
                         }
                     }
                     Ok(_) => (),
                     Err(err) => {
-                        writeln!(config.stderr, "error: reading directory entry: {}", err);
+                        eprintln!("error: reading directory entry: {}", err);
                         bad_file = true;
                     }
                 }
@@ -125,17 +123,13 @@ async fn main() {
         process::exit(1);
     }
 
-    writeln!(config.stdout, "{}", outcomes.display(config.no_fail));
+    println!("{}", outcomes.display(config.no_fail));
 
     if let Some(json_summary_file) = json_summary_file {
         match serde_json::to_writer(json_summary_file, &outcomes.as_json()) {
             Ok(()) => (),
             Err(err) => {
-                writeln!(
-                    config.stderr,
-                    "error: unable to write summary file: {}",
-                    err
-                );
+                eprintln!("error: unable to write summary file: {}", err);
                 process::exit(2);
             }
         }
@@ -146,17 +140,14 @@ async fn main() {
     }
 }
 
-async fn rewrite(config: &RunConfig<'_>, args: Args) {
+async fn rewrite(config: &RunConfig, args: Args) {
     if args.json_summary_file.is_some() {
-        writeln!(
-            config.stderr,
-            "--rewrite-results is not compatible with --json-summary-file"
-        );
+        eprintln!("--rewrite-results is not compatible with --json-summary-file");
         process::exit(1);
     }
 
     if args.paths.iter().any(|path| path == "-") {
-        writeln!(config.stderr, "--rewrite-results cannot be used with stdin");
+        eprintln!("--rewrite-results cannot be used with stdin");
         process::exit(1);
     }
 
@@ -167,13 +158,13 @@ async fn rewrite(config: &RunConfig<'_>, args: Args) {
                 Ok(entry) => {
                     if entry.file_type().is_file() {
                         if let Err(err) = runner::rewrite_file(config, entry.path()).await {
-                            writeln!(config.stderr, "error: rewriting file: {}", err);
+                            eprintln!("error: rewriting file: {}", err);
                             bad_file = true;
                         }
                     }
                 }
                 Err(err) => {
-                    writeln!(config.stderr, "error: reading directory entry: {}", err);
+                    eprintln!("error: reading directory entry: {}", err);
                     bad_file = true;
                 }
             }

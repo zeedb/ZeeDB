@@ -14,16 +14,14 @@ use std::borrow::ToOwned;
 use anyhow::{anyhow, bail};
 use lazy_static::lazy_static;
 use regex::Regex;
-use repr::ColumnName;
 
-use crate::ast::{Location, Mode, Output, QueryOutput, Record, Sort, Type};
+use crate::ast::{Location, Output, QueryOutput, Record, Sort, Type};
 
 #[derive(Debug, Clone)]
 pub struct Parser<'a> {
     contents: &'a str,
     fname: String,
     curline: usize,
-    mode: Mode,
 }
 
 impl<'a> Parser<'a> {
@@ -32,7 +30,6 @@ impl<'a> Parser<'a> {
             contents,
             fname: fname.to_string(),
             curline: 1,
-            mode: Mode::Standard,
         }
     }
 
@@ -88,8 +85,6 @@ impl<'a> Parser<'a> {
 
             "query" => self.parse_query(words, first_line),
 
-            "simple" => self.parse_simple(words),
-
             "hash-threshold" => {
                 let threshold = words
                     .next()
@@ -127,9 +122,8 @@ impl<'a> Parser<'a> {
             "subtest" | "user" | "kv-batch-size" => self.parse_record(),
 
             "mode" => {
-                self.mode = match words.next() {
-                    Some("cockroach") => Mode::Cockroach,
-                    Some("standard") | Some("sqlite") => Mode::Standard,
+                match words.next() {
+                    Some("standard") | Some("sqlite") => {}
                     other => bail!("unknown parse mode: {:?}", other),
                 };
                 self.parse_record()
@@ -256,7 +250,7 @@ impl<'a> Parser<'a> {
                 split_at(&mut output_str, &LINE_REGEX)?
                     .split(' ')
                     .filter(|s| !s.is_empty())
-                    .map(|s| ColumnName::from(s.replace("␠", " ")))
+                    .map(|s| s.replace("␠", " "))
                     .collect(),
             )
         } else {
@@ -274,32 +268,6 @@ impl<'a> Parser<'a> {
                     Output::Values(vec![])
                 } else {
                     let mut vals: Vec<String> = output_str.lines().map(|s| s.to_owned()).collect();
-                    if let Mode::Cockroach = self.mode {
-                        let mut rows: Vec<Vec<String>> = vec![];
-                        for line in vals {
-                            let cols = split_cols(&line, types.len());
-                            if sort != Sort::No && cols.len() != types.len() {
-                                // We can't check this condition for
-                                // Sort::No, because some tests use strings
-                                // with whitespace that look like extra
-                                // columns. (Note that these tests never
-                                // use any of the sorting options.)
-                                bail!(
-                                    "col len ({}) did not match declared col len ({})",
-                                    cols.len(),
-                                    types.len()
-                                );
-                            }
-                            rows.push(cols.into_iter().map(|col| col.replace("␠", " ")).collect());
-                        }
-                        if sort == Sort::Row {
-                            rows.sort();
-                        }
-                        vals = rows.into_iter().flatten().collect();
-                        if sort == Sort::Value {
-                            vals.sort();
-                        }
-                    }
                     Output::Values(vals)
                 }
             }
@@ -311,42 +279,10 @@ impl<'a> Parser<'a> {
                 sort,
                 label,
                 column_names,
-                mode: self.mode,
                 output,
                 output_str,
             }),
             location,
-        })
-    }
-
-    fn parse_simple(
-        &mut self,
-        mut words: std::iter::Peekable<impl Iterator<Item = &'a str>>,
-    ) -> Result<Record<'a>, anyhow::Error> {
-        let location = self.location();
-        let mut conn = None;
-        if let Some(options) = words.next() {
-            for option in options.split(',') {
-                if let Some(value) = option.strip_prefix("conn=") {
-                    conn = Some(value);
-                } else {
-                    bail!("Unrecognized option {:?} in {:?}", option, options);
-                }
-            }
-        }
-        lazy_static! {
-            static ref QUERY_OUTPUT_REGEX: Regex = Regex::new(r"\r?\n----").unwrap();
-            static ref DOUBLE_LINE_REGEX: Regex = Regex::new(r"(\n|\r\n|$)(\n|\r\n|$)").unwrap();
-        }
-        let sql = self.split_at(&QUERY_OUTPUT_REGEX)?;
-        let output_str = self.split_at(&DOUBLE_LINE_REGEX)?.trim_start();
-        let output = Output::Values(output_str.lines().map(String::from).collect());
-        Ok(Record::Simple {
-            location,
-            conn,
-            sql,
-            output,
-            output_str,
         })
     }
 }
