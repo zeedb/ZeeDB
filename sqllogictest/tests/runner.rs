@@ -7,10 +7,12 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0.
 
-use sqllogictest::runner::{run_string, RunConfig};
+use std::path::Path;
+
+use sqllogictest::runner::{run_path, run_string, RunConfig};
 
 #[test]
-fn test_runner() {
+fn test_run_string() {
     rpc::runtime().block_on(async {
         let config = RunConfig {
             verbosity: 1,
@@ -36,6 +38,21 @@ statement count 1
 DELETE FROM t1 WHERE true;
 ";
         let outcomes = run_string(&config, "<test>", input).await.unwrap();
+        assert!(!outcomes.any_failed());
+    });
+}
+
+#[test]
+fn test_run_path() {
+    rpc::runtime().block_on(async {
+        let config = RunConfig {
+            verbosity: 1,
+            workers: 1,
+            no_fail: false,
+        };
+        let outcomes = run_path(&config, &Path::new("./tests/example_path"))
+            .await
+            .unwrap();
         assert!(!outcomes.any_failed());
     });
 }

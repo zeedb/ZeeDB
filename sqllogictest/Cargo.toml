@@ -19,7 +19,6 @@ parser = { path = "../parser" }
 regex = "1.5.4"
 rpc = { path = "../rpc" }
 serde_json = "1.0.64"
-structopt = "0.3.22"
 tokio = "1.8.1"
 tonic = "0.4.3"
 walkdir = "2.3.2"

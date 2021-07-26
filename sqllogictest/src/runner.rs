@@ -48,9 +48,10 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, CheckRequest, QueryRequest, 
+    worker_server::WorkerServer, CheckRequest, QueryRequest,
 };
 use tonic::transport::{Channel, Endpoint, Server};
+use walkdir::WalkDir;
 use worker::WorkerNode;
 
 use crate::{
@@ -651,6 +652,24 @@ pub async fn run_string(
 
         if let Outcome::Bail { .. } = outcome {
             break;
+        }
+    }
+    Ok(outcomes)
+}
+
+pub async fn run_path(config: &RunConfig, path: &Path) -> Result<Outcomes, anyhow::Error> {
+    let mut outcomes = Outcomes::default();
+    for entry in WalkDir::new(path) {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            let o = run_file(&config, entry.path()).await?;
+            if o.any_failed() || config.verbosity >= 1 {
+                println!(
+                    "{}",
+                    util::indent(&o.display(config.no_fail).to_string(), 4)
+                );
+            }
+            outcomes += o;
         }
     }
     Ok(outcomes)
