@@ -267,7 +267,7 @@ impl<'a> Parser<'a> {
                 } else if output_str.starts_with('\r') || output_str.starts_with('\n') {
                     Output::Values(vec![])
                 } else {
-                    let mut vals: Vec<String> = output_str.lines().map(|s| s.to_owned()).collect();
+                    let vals: Vec<String> = output_str.lines().map(|s| s.to_owned()).collect();
                     Output::Values(vals)
                 }
             }
@@ -328,17 +328,4 @@ fn parse_expected_error(line: &str) -> &str {
     // specified.
     let pos = PGCODE_RE.find(line).unwrap().end();
     &line[pos..]
-}
-
-/// Split on whitespace to normalize multiple spaces to one space. This happens
-/// unconditionally in Cockroach mode, regardless of the sort option.
-///
-/// TODO: this doesn't have the whitespace-collapsing behavior for
-/// single-column values that cockroach relies on
-pub(crate) fn split_cols(line: &str, expected_columns: usize) -> Vec<&str> {
-    if expected_columns == 1 {
-        vec![line.trim()]
-    } else {
-        line.split_whitespace().collect()
-    }
 }

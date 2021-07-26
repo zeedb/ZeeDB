@@ -10,25 +10,17 @@ anyhow = "1.0.42"
 ast = { path = "../ast" }
 bincode = "1.3.1"
 catalog = { path = "../catalog" }
-chrono = { version = "0.4.0", default-features = false, features = ["clock", "std"] }
 coordinator = { path = "../coordinator" }
-fallible-iterator = "0.2.0"
-futures = "0.3.15"
 kernel = { path = "../kernel" }
 lazy_static = "1.0.0"
 md-5 = "0.9.0"
 once_cell = "1.7.2"
 parser = { path = "../parser" }
-postgres-protocol = { git = "https://github.com/MaterializeInc/rust-postgres", branch = "mz-0.7.2" }
 regex = "1.5.4"
 rpc = { path = "../rpc" }
 serde_json = "1.0.64"
 structopt = "0.3.22"
-tempfile = "3.2.0"
-timely = { git = "https://github.com/TimelyDataflow/timely-dataflow", default-features = false, features = ["bincode"] }
 tokio = "1.8.1"
-tokio-postgres = { git = "https://github.com/MaterializeInc/rust-postgres", branch = "mz-0.7.2", features = ["with-chrono-0_4", "with-uuid-0_8", "with-serde_json-1"] }
 tonic = "0.4.3"
-uuid = "0.8.2"
 walkdir = "2.3.2"
 worker = { path = "../worker" }

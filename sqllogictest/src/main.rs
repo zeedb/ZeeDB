@@ -7,21 +7,13 @@
 // the Business Source License, use of this software will be governed
 // by the Apache License, Version 2.0.
 
-use std::{
-    cell::RefCell,
-    fmt,
-    fs::File,
-    io::{self, Write},
-    path::PathBuf,
-    process,
-};
+use std::{fs::File, path::PathBuf, process};
 
-use chrono::Utc;
 use structopt::StructOpt;
 use walkdir::WalkDir;
 
 use sqllogictest::{
-    runner::{self, Outcomes, RunConfig, WriteFmt},
+    runner::{self, Outcomes, RunConfig},
     util,
 };
 
@@ -38,9 +30,6 @@ struct Args {
     /// Don't exit with a failing code if not all queries are successful.
     #[structopt(long)]
     no_fail: bool,
-    /// Prefix every line of output with the current time.
-    #[structopt(long)]
-    timestamps: bool,
     /// Rewrite expected output based on actual output.
     #[structopt(long)]
     rewrite_results: bool,
@@ -66,7 +55,7 @@ async fn main() {
     };
 
     if args.rewrite_results {
-        return rewrite(&config, args).await;
+        return rewrite(args).await;
     }
 
     let json_summary_file = match args.json_summary_file {
@@ -140,7 +129,7 @@ async fn main() {
     }
 }
 
-async fn rewrite(config: &RunConfig, args: Args) {
+async fn rewrite(args: Args) {
     if args.json_summary_file.is_some() {
         eprintln!("--rewrite-results is not compatible with --json-summary-file");
         process::exit(1);
@@ -157,7 +146,7 @@ async fn rewrite(config: &RunConfig, args: Args) {
             match entry {
                 Ok(entry) => {
                     if entry.file_type().is_file() {
-                        if let Err(err) = runner::rewrite_file(config, entry.path()).await {
+                        if let Err(err) = runner::rewrite_file(entry.path()).await {
                             eprintln!("error: rewriting file: {}", err);
                             bad_file = true;
                         }
@@ -172,67 +161,5 @@ async fn rewrite(config: &RunConfig, args: Args) {
     }
     if bad_file {
         process::exit(1);
-    }
-}
-
-struct OutputStream<W> {
-    inner: RefCell<W>,
-    need_timestamp: RefCell<bool>,
-    timestamps: bool,
-}
-
-impl<W> OutputStream<W>
-where
-    W: Write,
-{
-    fn new(inner: W, timestamps: bool) -> OutputStream<W> {
-        OutputStream {
-            inner: RefCell::new(inner),
-            need_timestamp: RefCell::new(true),
-            timestamps,
-        }
-    }
-
-    fn emit_str(&self, s: &str) {
-        self.inner.borrow_mut().write_all(s.as_bytes()).unwrap();
-    }
-}
-
-impl<W> WriteFmt for OutputStream<W>
-where
-    W: Write,
-{
-    fn write_fmt(&self, fmt: fmt::Arguments<'_>) {
-        let s = format!("{}", fmt);
-        if self.timestamps {
-            // We need to prefix every line in `s` with the current timestamp.
-
-            let timestamp = Utc::now();
-
-            // If the last character we outputted was a newline, then output a
-            // timestamp prefix at the start of this line.
-            if self.need_timestamp.replace(false) {
-                self.emit_str(&format!("[{}] ", timestamp));
-            }
-
-            // Emit `s`, installing a timestamp at the start of every line
-            // except the last.
-            let (s, last_was_timestamp) = match s.strip_suffix('\n') {
-                None => (&*s, false),
-                Some(s) => (s, true),
-            };
-            self.emit_str(&s.replace("\n", &format!("\n[{}] ", timestamp)));
-
-            // If the line ended with a newline, output the newline but *not*
-            // the timestamp prefix. We want the timestamp to reflect the moment
-            // the *next* character is output. So instead we just remember that
-            // the last character we output was a newline.
-            if last_was_timestamp {
-                *self.need_timestamp.borrow_mut() = true;
-                self.emit_str("\n");
-            }
-        } else {
-            self.emit_str(&s)
-        }
     }
 }

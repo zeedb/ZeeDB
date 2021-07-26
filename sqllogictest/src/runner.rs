@@ -27,44 +27,30 @@
 
 use std::{
     collections::HashMap,
-    error::Error,
     fmt,
     fs::{File, OpenOptions},
-    io::{Read, Seek, SeekFrom, Stderr, Stdout, Write},
-    net::{IpAddr, Ipv4Addr, SocketAddr, TcpListener},
+    io::{Read, Seek, SeekFrom, Write},
+    net::TcpListener,
     ops,
     path::Path,
     str,
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        Arc, Mutex,
-    },
+    sync::atomic::{AtomicI64, Ordering},
     time::Duration,
 };
 
 use anyhow::{anyhow, bail};
-use ast::Value;
 use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
-use chrono::{DateTime, NaiveDate, NaiveDateTime, NaiveTime, Utc};
 use coordinator::CoordinatorNode;
-use fallible_iterator::FallibleIterator;
 use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
 use md5::{Digest, Md5};
 use once_cell::sync::Lazy;
-use postgres_protocol::types;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
     worker_server::WorkerServer, CheckRequest, SubmitRequest,
 };
-use tempfile::TempDir;
-use tokio_postgres::{
-    types::{FromSql, Kind as PgKind, Type as PgType},
-    NoTls, Row, SimpleQueryMessage,
-};
 use tonic::transport::{Channel, Endpoint, Server};
-use uuid::Uuid;
 use worker::WorkerNode;
 
 use crate::{
@@ -300,138 +286,6 @@ pub(crate) struct Runner {
     catalog_id: i64,
     // Drop order matters for these fields.
     client: CoordinatorClient<Channel>,
-    clients: HashMap<String, tokio_postgres::Client>,
-    _temp_dir: TempDir,
-}
-
-#[derive(Debug)]
-pub struct Slt(Value);
-
-impl<'a> FromSql<'a> for Slt {
-    fn from_sql(
-        ty: &PgType,
-        mut raw: &'a [u8],
-    ) -> Result<Self, Box<dyn Error + 'static + Send + Sync>> {
-        Ok(match *ty {
-            PgType::BOOL => Self(Value::Bool(Some(types::bool_from_sql(raw)?))),
-            PgType::BYTEA => unimplemented!(),
-            PgType::FLOAT4 => unimplemented!(),
-            PgType::FLOAT8 => Self(Value::F64(Some(types::float8_from_sql(raw)?))),
-            PgType::DATE => Self(Value::Date(Some(epoch_date(NaiveDate::from_sql(ty, raw)?)))),
-            PgType::INT4 => unimplemented!(),
-            PgType::INT8 => Self(Value::I64(Some(types::int8_from_sql(raw)?))),
-            PgType::INTERVAL => unimplemented!(),
-            PgType::JSONB => unimplemented!(),
-            PgType::NUMERIC => unimplemented!(),
-            PgType::OID => unimplemented!(),
-            PgType::TEXT => Self(Value::String(Some(types::text_from_sql(raw)?.to_string()))),
-            PgType::TIME => unimplemented!(),
-            PgType::TIMESTAMP => Self(Value::Timestamp(Some(epoch_time(NaiveDateTime::from_sql(
-                ty, raw,
-            )?)))),
-            PgType::TIMESTAMPTZ => unimplemented!(),
-            PgType::UUID => unimplemented!(),
-            PgType::RECORD => unimplemented!(),
-
-            _ => match ty.kind() {
-                PgKind::Array(arr_type) => {
-                    // let arr = types::array_from_sql(raw)?;
-                    // let elements: Vec<Option<Value>> = arr
-                    //     .values()
-                    //     .map(|v| match v {
-                    //         Some(v) => Ok(Some(Slt::from_sql(arr_type, v)?)),
-                    //         None => Ok(None),
-                    //     })
-                    //     .collect::<Vec<Option<Slt>>>()?
-                    //     .into_iter()
-                    //     // Map a Vec<Option<Slt>> to Vec<Option<Value>>.
-                    //     .map(|v| v.map(|v| v.0))
-                    //     .collect();
-                    // Self(Value::Array {
-                    //     dims: arr
-                    //         .dimensions()
-                    //         .map(|d| {
-                    //             Ok(repr::adt::array::ArrayDimension {
-                    //                 lower_bound: d.lower_bound as usize,
-                    //                 length: d.len as usize,
-                    //             })
-                    //         })
-                    //         .collect()?,
-                    //     elements,
-                    // })
-                    unimplemented!()
-                }
-                _ => unreachable!(),
-            },
-        })
-    }
-    fn accepts(ty: &PgType) -> bool {
-        match ty.kind() {
-            PgKind::Array(_) | PgKind::Composite(_) => return true,
-            _ => {}
-        }
-        matches!(
-            *ty,
-            PgType::BOOL
-                | PgType::BYTEA
-                | PgType::DATE
-                | PgType::FLOAT4
-                | PgType::FLOAT8
-                | PgType::INT2
-                | PgType::INT4
-                | PgType::INT8
-                | PgType::INTERVAL
-                | PgType::JSONB
-                | PgType::NUMERIC
-                | PgType::OID
-                | PgType::RECORD
-                | PgType::TEXT
-                | PgType::TIME
-                | PgType::TIMESTAMP
-                | PgType::TIMESTAMPTZ
-                | PgType::UUID
-        )
-    }
-}
-
-// From postgres-types/src/private.rs.
-fn read_be_i32(buf: &mut &[u8]) -> Result<i32, Box<dyn Error + Sync + Send>> {
-    if buf.len() < 4 {
-        return Err("invalid buffer size".into());
-    }
-    let mut bytes = [0; 4];
-    bytes.copy_from_slice(&buf[..4]);
-    *buf = &buf[4..];
-    Ok(i32::from_be_bytes(bytes))
-}
-
-// From postgres-types/src/private.rs.
-fn read_value<'a, T>(type_: &PgType, buf: &mut &'a [u8]) -> Result<T, Box<dyn Error + Sync + Send>>
-where
-    T: FromSql<'a>,
-{
-    let len = read_be_i32(buf)?;
-    let value = if len < 0 {
-        None
-    } else {
-        if len as usize > buf.len() {
-            return Err("invalid buffer size".into());
-        }
-        let (head, tail) = buf.split_at(len as usize);
-        *buf = tail;
-        Some(head)
-    };
-    T::from_sql_nullable(type_, value)
-}
-
-fn epoch_date(d: NaiveDate) -> i32 {
-    let epoch = NaiveDate::from_ymd(1970, 1, 1);
-    (d - epoch).num_days() as i32
-}
-
-fn epoch_time(t: NaiveDateTime) -> i64 {
-    let epoch = NaiveDateTime::from_timestamp(0, 0);
-    (t - epoch).num_microseconds().unwrap()
 }
 
 fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option<String> {
@@ -461,7 +315,7 @@ fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option
     Some(string)
 }
 
-fn format_row(rows: &RecordBatch, i: usize, types: &[Type], sort: &Sort) -> Vec<String> {
+fn format_row(rows: &RecordBatch, i: usize, types: &[Type]) -> Vec<String> {
     let mut formatted: Vec<String> = vec![];
     for j in 0..rows.columns.len() {
         let (_, column) = &rows.columns[j];
@@ -490,15 +344,7 @@ impl Runner {
                 variables: HashMap::default(),
             })
             .await?;
-
-        let temp_dir = tempfile::tempdir()?;
-
-        Ok(Runner {
-            _temp_dir: temp_dir,
-            catalog_id,
-            client,
-            clients: HashMap::new(),
-        })
+        Ok(Runner { catalog_id, client })
     }
 
     async fn run_record<'a>(
@@ -548,12 +394,6 @@ impl Runner {
         sql: &'a str,
         location: Location,
     ) -> Result<Outcome<'a>, anyhow::Error> {
-        let request = SubmitRequest {
-            sql: sql.to_string(),
-            catalog_id: self.catalog_id,
-            txn: None,
-            variables: HashMap::default(),
-        };
         match self.statement(sql).await {
             Ok(actual) => {
                 if let Some(expected_error) = expected_error {
@@ -674,7 +514,7 @@ impl Runner {
         // format output
         let mut formatted_rows = vec![];
         for i in 0..rows.len() {
-            let row = format_row(&rows, i, &expected_types, sort);
+            let row = format_row(&rows, i, &expected_types);
             formatted_rows.push(row);
         }
 
@@ -760,7 +600,7 @@ pub struct RunConfig {
     pub no_fail: bool,
 }
 
-fn print_record(config: &RunConfig, record: &Record) {
+fn print_record(record: &Record) {
     match record {
         Record::Statement { sql, .. } | Record::Query { sql, .. } => {
             println!("{}", crate::util::indent(sql, 4))
@@ -783,7 +623,7 @@ pub async fn run_string(
         // it. Running the query might panic, so it is important to print out
         // what query we are trying to run *before* we panic.
         if config.verbosity >= 2 {
-            print_record(config, &record);
+            print_record(&record);
         }
 
         let outcome = state
@@ -801,7 +641,7 @@ pub async fn run_string(
                 // call above, as it's important to have a mode in which records
                 // are printed before they are run, so that if running the
                 // record panics, you can tell which record caused it.
-                print_record(config, &record);
+                print_record(&record);
             }
             println!("{}", util::indent(&outcome.to_string(), 4));
             println!("{}", util::indent("----", 4));
@@ -828,7 +668,7 @@ pub async fn run_stdin(config: &RunConfig) -> Result<Outcomes, anyhow::Error> {
     run_string(config, "<stdin>", &input).await
 }
 
-pub async fn rewrite_file(config: &RunConfig, filename: &Path) -> Result<(), anyhow::Error> {
+pub async fn rewrite_file(filename: &Path) -> Result<(), anyhow::Error> {
     let mut file = OpenOptions::new().read(true).write(true).open(filename)?;
 
     let mut input = String::new();
