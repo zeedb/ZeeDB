@@ -20,7 +20,7 @@ fn test_runner() {
         let input = "statement ok
 CREATE TABLE t1(a INT64, b INT64, c INT64, d INT64, e INT64)
 
-statement ok
+statement count 1
 INSERT INTO t1(e,c,b,d,a) VALUES(NULL,102,NULL,101,104)
 
 query IIIII
@@ -31,6 +31,9 @@ NULL
 102
 101
 NULL
+
+statement count 1
+DELETE FROM t1 WHERE true;
 ";
         let outcomes = run_string(&config, "<test>", input).await.unwrap();
         assert!(!outcomes.any_failed());

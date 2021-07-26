@@ -58,7 +58,7 @@ pub fn submit(
 }
 
 /// Execute a compiled expression on every worker and send the result to 1 listener.
-pub fn gather(expr: Expr, txn: i64, stage: i32) -> RecordStream {
+pub fn gather(expr: &Expr, txn: i64, stage: i32) -> RecordStream {
     log::rpc(async move {
         let mut streams = vec![];
         let workers = workers().await;
@@ -66,7 +66,7 @@ pub fn gather(expr: Expr, txn: i64, stage: i32) -> RecordStream {
             let request = GatherRequest {
                 txn,
                 stage,
-                expr: bincode::serialize(&expr).unwrap(),
+                expr: bincode::serialize(expr).unwrap(),
             };
             let response = worker
                 .gather(request)
@@ -81,7 +81,7 @@ pub fn gather(expr: Expr, txn: i64, stage: i32) -> RecordStream {
 }
 
 /// Execute a compiled expression on every worker and send the result to every worker.
-pub fn broadcast(expr: Expr, txn: i64, stage: i32) -> RecordStream {
+pub fn broadcast(expr: &Expr, txn: i64, stage: i32) -> RecordStream {
     log::rpc(async move {
         let mut streams = vec![];
         let workers = workers().await;
@@ -89,7 +89,7 @@ pub fn broadcast(expr: Expr, txn: i64, stage: i32) -> RecordStream {
             let request = BroadcastRequest {
                 txn,
                 stage,
-                expr: bincode::serialize(&expr).unwrap(),
+                expr: bincode::serialize(expr).unwrap(),
             };
             let response = worker
                 .broadcast(request)
@@ -105,7 +105,7 @@ pub fn broadcast(expr: Expr, txn: i64, stage: i32) -> RecordStream {
 
 /// Execute a compiled expression on every worker and send a partition the results between workers.
 pub fn exchange(
-    expr: Expr,
+    expr: &Expr,
     txn: i64,
     stage: i32,
     hash_column: String,
@@ -118,7 +118,7 @@ pub fn exchange(
             let request = ExchangeRequest {
                 txn,
                 stage,
-                expr: bincode::serialize(&expr).unwrap(),
+                expr: bincode::serialize(expr).unwrap(),
                 hash_column: hash_column.clone(),
                 hash_bucket,
             };
