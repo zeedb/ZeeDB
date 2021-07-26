@@ -6,8 +6,8 @@ use std::sync::{
 use ast::{Expr, Value};
 use kernel::RecordBatch;
 use rpc::{
-    coordinator_server::Coordinator, CheckRequest, CheckResponse, SubmitRequest, SubmitResponse,
-    TraceRequest, TraceResponse,
+    coordinator_server::Coordinator, CheckRequest, CheckResponse, QueryRequest, QueryResponse,
+    StatementResponse, TraceRequest, TraceResponse,
 };
 use tonic::{async_trait, Request, Response, Status};
 
@@ -22,10 +22,10 @@ impl Coordinator for CoordinatorNode {
         Ok(Response::new(CheckResponse {}))
     }
 
-    async fn submit(
+    async fn query(
         &self,
-        request: Request<SubmitRequest>,
-    ) -> Result<Response<SubmitResponse>, Status> {
+        request: Request<QueryRequest>,
+    ) -> Result<Response<QueryResponse>, Status> {
         let request = request.into_inner();
         let txn = request
             .txn
@@ -33,9 +33,26 @@ impl Coordinator for CoordinatorNode {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
         let batch = receiver.await.unwrap()?;
-        Ok(Response::new(SubmitResponse {
+        Ok(Response::new(QueryResponse {
             txn,
             record_batch: bincode::serialize(&batch).unwrap(),
+        }))
+    }
+
+    async fn statement(
+        &self,
+        request: Request<QueryRequest>,
+    ) -> Result<Response<StatementResponse>, Status> {
+        let request = request.into_inner();
+        let txn = request
+            .txn
+            .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
+        let _batch = receiver.await.unwrap()?;
+        Ok(Response::new(StatementResponse {
+            txn,
+            rows_modified: 0, // TODO
         }))
     }
 
@@ -53,7 +70,7 @@ impl Coordinator for CoordinatorNode {
     }
 }
 
-fn submit(request: SubmitRequest, txn: i64) -> Result<RecordBatch, Status> {
+fn submit(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
     let _session = log::session(txn, 0, None);
     let _span = log::enter(&request.sql);
     let variables = request

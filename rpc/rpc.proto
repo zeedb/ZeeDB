@@ -4,11 +4,12 @@ package rpc;
 
 service Coordinator {
   rpc Check (CheckRequest) returns (CheckResponse) {}
-  rpc Submit (SubmitRequest) returns (SubmitResponse) {}
+  rpc Query (QueryRequest) returns (QueryResponse) {}
+  rpc Statement (QueryRequest) returns (StatementResponse) {}
   rpc Trace (TraceRequest) returns (TraceResponse) {}
 }
 
-message SubmitRequest {
+message QueryRequest {
   required string sql = 1;
   map<string, Parameter> variables = 2;
   required int64 catalog_id = 3;
@@ -27,9 +28,14 @@ message Parameter {
   }
 }
 
-message SubmitResponse {
+message QueryResponse {
   required int64 txn = 1;
   required bytes record_batch = 2;
+}
+
+message StatementResponse {
+  required int64 txn = 1;
+  required uint64 rows_modified = 2;
 }
 
 message TraceRequest {

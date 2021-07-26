@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use catalog::ROOT_CATALOG_ID;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, SubmitRequest,
+    worker_server::WorkerServer, QueryRequest,
 };
 use tonic::{
     transport::{Endpoint, Server},
@@ -40,7 +40,7 @@ fn test_submit() {
                 .unwrap(),
         );
         let _response = client
-            .submit(Request::new(SubmitRequest {
+            .query(Request::new(QueryRequest {
                 sql: "select 1".to_string(),
                 variables: HashMap::new(),
                 catalog_id: ROOT_CATALOG_ID,

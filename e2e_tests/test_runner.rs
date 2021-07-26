@@ -19,7 +19,7 @@ use log::JsonTraceEvent;
 use once_cell::sync::Lazy;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, CheckRequest, SubmitRequest, SubmitResponse, TraceRequest,
+    worker_server::WorkerServer, CheckRequest, QueryRequest, QueryResponse, TraceRequest,
 };
 use tonic::{
     transport::{Channel, Endpoint, Server},
@@ -99,7 +99,7 @@ impl TestRunner {
     }
 
     pub fn test(&mut self, sql: &str, variables: Vec<(String, Value)>) -> String {
-        match self.submit(sql, &variables) {
+        match self.query(sql, &variables) {
             Ok(response) => {
                 let batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
                 if batch.len() == 0 {
@@ -113,7 +113,7 @@ impl TestRunner {
     }
 
     pub fn bench(&mut self, sql: &str, variables: Vec<(String, Value)>) -> Vec<JsonTraceEvent> {
-        let query_response = self.submit(sql, &variables).unwrap();
+        let query_response = self.query(sql, &variables).unwrap();
         let trace_request = TraceRequest {
             txn: query_response.txn,
         };
@@ -124,12 +124,12 @@ impl TestRunner {
         log::to_json(trace_response.stages)
     }
 
-    pub fn submit(
+    pub fn query(
         &mut self,
         sql: &str,
         variables: &Vec<(String, Value)>,
-    ) -> Result<SubmitResponse, Status> {
-        let request = SubmitRequest {
+    ) -> Result<QueryResponse, Status> {
+        let request = QueryRequest {
             sql: sql.to_string(),
             variables: variables
                 .iter()
@@ -139,7 +139,7 @@ impl TestRunner {
             txn: None,
         };
         rpc::runtime()
-            .block_on(self.client.lock().unwrap().submit(request))
+            .block_on(self.client.lock().unwrap().query(request))
             .map(|response| response.into_inner())
     }
 }

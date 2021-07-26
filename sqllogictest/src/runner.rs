@@ -48,7 +48,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
-    worker_server::WorkerServer, CheckRequest, SubmitRequest,
+    worker_server::WorkerServer, CheckRequest, QueryRequest, 
 };
 use tonic::transport::{Channel, Endpoint, Server};
 use worker::WorkerNode;
@@ -337,7 +337,7 @@ impl Runner {
         let catalog_id = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
         // Create a new, empty database.
         client
-            .submit(SubmitRequest {
+            .query(QueryRequest {
                 sql: format!("create database test{}", catalog_id),
                 catalog_id: ROOT_CATALOG_ID,
                 txn: None,
@@ -567,24 +567,24 @@ impl Runner {
     }
 
     async fn statement(&mut self, sql: &str) -> Result<u64, anyhow::Error> {
-        let request = SubmitRequest {
+        let request = QueryRequest {
             sql: sql.to_string(),
             catalog_id: self.catalog_id,
             txn: None,
             variables: HashMap::default(),
         };
-        let response = self.client.submit(request).await?.into_inner();
-        Ok(0) // TODO
+        let response = self.client.statement(request).await?.into_inner();
+        Ok(response.rows_modified)
     }
 
     async fn query(&mut self, sql: &str) -> Result<RecordBatch, anyhow::Error> {
-        let request = SubmitRequest {
+        let request = QueryRequest {
             sql: sql.to_string(),
             catalog_id: self.catalog_id,
             txn: None,
             variables: HashMap::default(),
         };
-        let response = self.client.submit(request).await?.into_inner();
+        let response = self.client.query(request).await?.into_inner();
         let record_batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
         Ok(record_batch)
     }

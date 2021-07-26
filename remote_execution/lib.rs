@@ -7,7 +7,7 @@ use once_cell::sync::OnceCell;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, page::Part, worker_client::WorkerClient,
-    BroadcastRequest, ExchangeRequest, GatherRequest, Page, SubmitRequest,
+    BroadcastRequest, ExchangeRequest, GatherRequest, Page, QueryRequest,
 };
 use tonic::{transport::Channel, Status};
 
@@ -38,7 +38,7 @@ pub fn submit(
     txn: Option<i64>,
 ) -> RecordBatch {
     log::rpc(async move {
-        let request = SubmitRequest {
+        let request = QueryRequest {
             sql: sql.to_string(),
             variables: variables
                 .iter()
@@ -49,7 +49,7 @@ pub fn submit(
         };
         let response = coordinator()
             .await
-            .submit(request)
+            .query(request)
             .await
             .unwrap()
             .into_inner();
