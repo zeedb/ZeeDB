@@ -35,9 +35,6 @@ pub enum Type {
     Real,
     /// A boolean column. Indicated by `B`. This is a CockroachDB extension.
     Bool,
-    /// An object ID (OID) column. Indicated by `O`. This is a CockroachDB
-    /// extension.
-    Oid,
     // Please don't add new types to this enum, unless you are adding support
     // for a sqllogictest dialect that has already done so. These type
     // indicators are not meant to be assertions about the output type, but
