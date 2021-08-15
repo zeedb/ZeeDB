@@ -1,6 +1,6 @@
 use zetasql::{function_enums::*, *};
 
-use crate::builtin_function_options;
+use crate::{builtin_function_options, builtin_named_types};
 
 pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;
@@ -71,6 +71,7 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
             ),
         ],
         builtin_function_options: Some(builtin_function_options()),
+        named_type: builtin_named_types(),
         procedure: vec![
             simple_procedure(
                 "create_table".to_string(),

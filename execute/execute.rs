@@ -75,7 +75,13 @@ pub enum Node {
         columns: Vec<Column>,
         scan: Option<Vec<Arc<Page>>>,
     },
-    Aggregate {
+    SimpleAggregate {
+        worker: i32,
+        finished: bool,
+        aggregate: Vec<AggregateExpr>,
+        input: Box<Node>,
+    },
+    GroupByAggregate {
         finished: bool,
         group_by: Vec<Column>,
         aggregate: Vec<AggregateExpr>,
@@ -151,7 +157,7 @@ impl Node {
     pub fn compile(expr: Expr) -> Self {
         match expr {
             TableFreeScan { worker } => Node::TableFreeScan {
-                worker,
+                worker: worker.unwrap(),
                 empty: false,
             },
             SeqScan {
@@ -249,12 +255,23 @@ impl Node {
                 columns,
                 scan: None,
             },
-            Aggregate {
+            SimpleAggregate {
+                worker,
+                aggregate,
+                input,
+                ..
+            } => Node::SimpleAggregate {
+                worker: worker.unwrap(),
+                finished: false,
+                aggregate,
+                input: Box::new(Node::compile(*input)),
+            },
+            GroupByAggregate {
                 group_by,
                 aggregate,
                 input,
                 ..
-            } => Node::Aggregate {
+            } => Node::GroupByAggregate {
                 finished: false,
                 group_by,
                 aggregate,
@@ -278,42 +295,30 @@ impl Node {
                 left: Box::new(Node::compile(*left)),
                 right: Box::new(Node::compile(*right)),
             },
-            Broadcast { input, stage } => {
-                assert!(stage >= 0);
-
-                Node::Broadcast {
-                    input: Some(*input),
-                    stream: None,
-                    stage,
-                }
-            }
+            Broadcast { input, stage } => Node::Broadcast {
+                input: Some(*input),
+                stream: None,
+                stage: stage.unwrap(),
+            },
             Exchange {
                 hash_column,
                 input,
                 stage,
-            } => {
-                assert!(stage >= 0);
-
-                Node::Exchange {
-                    input: Some((hash_column.unwrap(), *input)),
-                    stream: None,
-                    stage,
-                }
-            }
+            } => Node::Exchange {
+                input: Some((hash_column.unwrap(), *input)),
+                stream: None,
+                stage: stage.unwrap(),
+            },
             Gather {
                 input,
                 worker,
                 stage,
-            } => {
-                assert!(stage >= 0);
-
-                Node::Gather {
-                    worker,
-                    stage,
-                    input: Some(*input),
-                    stream: None,
-                }
-            }
+            } => Node::Gather {
+                worker: worker.unwrap(),
+                stage: stage.unwrap(),
+                input: Some(*input),
+                stream: None,
+            },
             Insert {
                 table,
                 indexes,
@@ -796,7 +801,44 @@ impl Node {
                 let next = page.select(&select_names).rename(&query_names);
                 Ok(Some(next))
             }
-            Node::Aggregate {
+            Node::SimpleAggregate {
+                worker,
+                finished,
+                aggregate,
+                input,
+            } => {
+                if globals::WORKER.get() != *worker {
+                    return Ok(None);
+                }
+                if *finished {
+                    return Ok(None);
+                } else {
+                    *finished = true;
+                }
+                let mut operator = crate::aggregate::SimpleAggregate::new(aggregate);
+                loop {
+                    if let Some(batch) = input.next(storage, txn)? {
+                        let aggregate_columns: Vec<AnyArray> = aggregate
+                            .iter()
+                            .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
+                            .collect();
+                        operator.insert(aggregate_columns);
+                    } else {
+                        let mut names = vec![];
+                        for e in aggregate {
+                            names.push(e.output.canonical_name());
+                        }
+                        let columns = operator
+                            .finish()
+                            .drain(..)
+                            .enumerate()
+                            .map(|(i, array)| (std::mem::take(&mut names[i]), array))
+                            .collect();
+                        return Ok(Some(RecordBatch::new(columns)));
+                    }
+                }
+            }
+            Node::GroupByAggregate {
                 finished,
                 group_by,
                 aggregate,
@@ -1109,7 +1151,8 @@ impl Node {
             Node::HashJoin { .. } => "HashJoin",
             Node::CreateTempTable { .. } => "CreateTempTable",
             Node::GetTempTable { .. } => "GetTempTable",
-            Node::Aggregate { .. } => "Aggregate",
+            Node::SimpleAggregate { .. } => "SimpleAggregate",
+            Node::GroupByAggregate { .. } => "GroupByAggregate",
             Node::Limit { .. } => "Limit",
             Node::Sort { .. } => "Sort",
             Node::Union { .. } => "Union",

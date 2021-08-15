@@ -138,7 +138,7 @@ impl IndentPrint for Expr {
                 aggregate,
                 input,
             }
-            | Expr::Aggregate {
+            | Expr::GroupByAggregate {
                 group_by,
                 aggregate,
                 input,
@@ -148,6 +148,26 @@ impl IndentPrint for Expr {
                 for column in group_by {
                     write!(f, " {}", column)?;
                 }
+                for AggregateExpr {
+                    function,
+                    distinct,
+                    input,
+                    output,
+                } in aggregate
+                {
+                    if *distinct {
+                        write!(f, " {}:({} Distinct {})", output, function, input)?;
+                    } else {
+                        write!(f, " {}:({} {})", output, function, input)?;
+                    }
+                }
+                newline(f, indent)?;
+                input.indent_print(f, indent + 1)
+            }
+            Expr::SimpleAggregate {
+                aggregate, input, ..
+            } => {
+                write!(f, "{}", self.name())?;
                 for AggregateExpr {
                     function,
                     distinct,
@@ -386,7 +406,8 @@ impl Expr {
             Expr::HashJoin { .. } => "HashJoin",
             Expr::CreateTempTable { .. } => "CreateTempTable",
             Expr::GetTempTable { .. } => "GetTempTable",
-            Expr::Aggregate { .. } => "Aggregate",
+            Expr::SimpleAggregate { .. } => "SimpleAggregate",
+            Expr::GroupByAggregate { .. } => "GroupByAggregate",
             Expr::Limit { .. } => "Limit",
             Expr::Sort { .. } => "Sort",
             Expr::Union { .. } => "Union",

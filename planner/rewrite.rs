@@ -236,7 +236,8 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Expr::HashJoin { .. }
         | Expr::CreateTempTable { .. }
         | Expr::GetTempTable { .. }
-        | Expr::Aggregate { .. }
+        | Expr::SimpleAggregate { .. }
+        | Expr::GroupByAggregate { .. }
         | Expr::Limit { .. }
         | Expr::Sort { .. }
         | Expr::Union { .. }

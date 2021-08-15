@@ -1,4 +1,5 @@
-use zetasql::*;
+use kernel::DataType;
+use zetasql::{simple_catalog_proto::NamedTypeProto, *};
 
 pub fn builtin_function_options() -> ZetaSqlBuiltinFunctionOptionsProto {
     ZetaSqlBuiltinFunctionOptionsProto {
@@ -10,6 +11,13 @@ pub fn builtin_function_options() -> ZetaSqlBuiltinFunctionOptionsProto {
         include_function_ids: enabled_functions(),
         ..Default::default()
     }
+}
+
+pub fn builtin_named_types() -> Vec<NamedTypeProto> {
+    vec![NamedTypeProto {
+        name: Some("INTEGER".to_string()),
+        r#type: Some(DataType::I64.to_proto()),
+    }]
 }
 
 pub fn enabled_language_features() -> Vec<i32> {

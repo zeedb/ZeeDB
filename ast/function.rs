@@ -634,6 +634,17 @@ fn binary(mut args: Vec<Scalar>, f: impl Fn(Scalar, Scalar) -> F) -> F {
     f(a, b)
 }
 
+fn reduce(mut args: Vec<Scalar>, f: impl Fn(Scalar, Scalar) -> F) -> F {
+    assert!(args.len() >= 2);
+    let b = args.pop().unwrap();
+    let a = args.pop().unwrap();
+    let mut acc = f(a, b);
+    while !args.is_empty() {
+        acc = f(args.pop().unwrap(), Scalar::Call(Box::new(acc)));
+    }
+    acc
+}
+
 fn binary_date_part(mut args: Vec<Scalar>, f: impl Fn(Scalar, Scalar, DatePart) -> F) -> F {
     assert_eq!(args.len(), 3);
     let c = DatePart::from_scalar(args.pop().unwrap());
@@ -673,7 +684,7 @@ impl F {
         match name {
             "ZetaSQL:$add" if returns == DataType::F64 => binary(args, |a, b| F::AddDouble(a, b)),
             "ZetaSQL:$add" if returns == DataType::I64 => binary(args, |a, b| F::AddInt64(a, b)),
-            "ZetaSQL:$and" => binary(args, |a, b| F::And(a, b)),
+            "ZetaSQL:$and" => reduce(args, |a, b| F::And(a, b)),
             "ZetaSQL:$case_no_value" => {
                 let mut cases = vec![];
                 while args.len() > 1 {
@@ -711,7 +722,7 @@ impl F {
             }
             "ZetaSQL:$not" => unary(args, |a| F::Not(a)),
             "ZetaSQL:$not_equal" => binary(args, |a, b| F::NotEqual(a, b)),
-            "ZetaSQL:$or" => binary(args, |a, b| F::Or(a, b)),
+            "ZetaSQL:$or" => reduce(args, |a, b| F::Or(a, b)),
             "ZetaSQL:$subtract" if returns == DataType::F64 => {
                 binary(args, |a, b| F::SubtractDouble(a, b))
             }

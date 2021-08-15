@@ -89,7 +89,8 @@ pub(crate) fn compute_logical_props(mid: MultiExprID, ss: &SearchSpace) -> Logic
         | HashJoin { .. }
         | CreateTempTable { .. }
         | GetTempTable { .. }
-        | Aggregate { .. }
+        | SimpleAggregate { .. }
+        | GroupByAggregate { .. }
         | Limit { .. }
         | Sort { .. }
         | Union { .. }

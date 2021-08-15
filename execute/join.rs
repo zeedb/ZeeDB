@@ -45,8 +45,17 @@ pub fn hash_join_semi(
     let right_input = right.gather(&right_index);
     let input = RecordBatch::zip(left_input, right_input);
     let mask = filter(&input)?;
-    let right_index_mask = right_index.compress(&mask);
-    Ok(right.gather(&right_index_mask))
+    let matched_indexes = right_index.compress(&mask);
+    let mut matched_mask = BoolArray::trues(right.len());
+    BoolArray::trues(matched_indexes.len()).scatter(&matched_indexes, &mut matched_mask);
+    let result = right.compress(&matched_mask);
+    assert!(
+        result.len() <= right.len(),
+        "Result of semi-join #{} is larger than input #{}",
+        result.len(),
+        right.len()
+    );
+    Ok(result)
 }
 
 pub fn hash_join_anti(
@@ -63,7 +72,14 @@ pub fn hash_join_anti(
     let matched_indexes = right_index.compress(&mask);
     let mut unmatched_mask = BoolArray::trues(right.len());
     BoolArray::falses(matched_indexes.len()).scatter(&matched_indexes, &mut unmatched_mask);
-    Ok(right.compress(&unmatched_mask))
+    let result = right.compress(&unmatched_mask);
+    assert!(
+        result.len() <= right.len(),
+        "Result of anti-join #{} is larger than input #{}",
+        result.len(),
+        right.len()
+    );
+    Ok(result)
 }
 
 pub fn hash_join_single(
@@ -87,8 +103,15 @@ pub fn hash_join_single(
     let right_unmatched = right.compress(&unmatched_mask);
     let left_nulls = RecordBatch::nulls(left.build().schema(), right_unmatched.len());
     let unmatched = RecordBatch::zip(left_nulls, right_unmatched);
-    assert!(matched.len() + unmatched.len() >= right.len());
-    Ok(RecordBatch::cat(vec![matched, unmatched]).unwrap())
+    let result = RecordBatch::cat(vec![matched, unmatched]).unwrap();
+    assert_eq!(
+        result.len(),
+        right.len(),
+        "Result of single join #{} is not the same size as input #{}",
+        result.len(),
+        right.len()
+    );
+    Ok(result)
 }
 
 pub fn hash_join_mark(
@@ -108,7 +131,15 @@ pub fn hash_join_mark(
     BoolArray::trues(matched_indexes.len()).scatter(&matched_indexes, &mut matched_mask);
     let right_column =
         RecordBatch::new(vec![(mark.canonical_name(), AnyArray::Bool(matched_mask))]);
-    Ok(RecordBatch::zip(right.clone(), right_column))
+    let result = RecordBatch::zip(right.clone(), right_column);
+    assert_eq!(
+        result.len(),
+        right.len(),
+        "Result of mark join #{} is not the same size as input #{}",
+        result.len(),
+        right.len()
+    );
+    Ok(result)
 }
 
 pub fn unmatched_tuples(

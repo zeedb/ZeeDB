@@ -10,7 +10,7 @@ pub fn set_hash_columns(expr: &mut Expr) {
                 *hash_column = Some(column.unwrap());
                 top_down_rewrite(input, None);
             }
-            Aggregate {
+            GroupByAggregate {
                 partition_by,
                 input,
                 ..
@@ -41,7 +41,7 @@ pub fn set_hash_columns(expr: &mut Expr) {
 pub fn set_stages(expr: &mut Expr) {
     fn top_down_rewrite(expr: &mut Expr, next_stage: &mut i32) {
         if let Broadcast { stage, .. } | Exchange { stage, .. } | Gather { stage, .. } = expr {
-            *stage = *next_stage;
+            *stage = Some(*next_stage);
             *next_stage += 1;
         }
         for i in 0..expr.len() {
@@ -54,8 +54,10 @@ pub fn set_stages(expr: &mut Expr) {
 
 pub fn set_workers(expr: &mut Expr, txn: i64) {
     fn top_down_rewrite(expr: &mut Expr, txn: i64) {
-        if let TableFreeScan { worker } | Gather { worker, .. } = expr {
-            *worker = select_worker(txn)
+        if let TableFreeScan { worker } | Gather { worker, .. } | SimpleAggregate { worker, .. } =
+            expr
+        {
+            *worker = Some(select_worker(txn))
         }
         for i in 0..expr.len() {
             top_down_rewrite(&mut expr[i], txn)

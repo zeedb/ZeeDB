@@ -156,7 +156,7 @@ pub enum Expr {
         sql: String,
     },
     TableFreeScan {
-        worker: i32,
+        worker: Option<i32>,
     },
     SeqScan {
         projects: Vec<Column>,
@@ -207,7 +207,12 @@ pub enum Expr {
         name: String,
         columns: Vec<Column>,
     },
-    Aggregate {
+    SimpleAggregate {
+        worker: Option<i32>,
+        aggregate: Vec<AggregateExpr>,
+        input: Box<Expr>,
+    },
+    GroupByAggregate {
         partition_by: Column,
         group_by: Vec<Column>,
         aggregate: Vec<AggregateExpr>,
@@ -228,20 +233,20 @@ pub enum Expr {
     },
     /// Broadcast the build side of a join to every node.
     Broadcast {
-        stage: i32,
+        stage: Option<i32>,
         input: Box<Expr>,
     },
     /// Exchange shuffles data during joins and aggregations.
     Exchange {
-        stage: i32,
+        stage: Option<i32>,
         /// hash_column is initially unset during the optimization phase, to reduce the size of the search space, then added before compilation.
         hash_column: Option<Column>,
         input: Box<Expr>,
     },
     /// Gather input on a single node for sorting.
     Gather {
-        worker: i32,
-        stage: i32,
+        worker: Option<i32>,
+        stage: Option<i32>,
         input: Box<Expr>,
     },
     Insert {
@@ -313,7 +318,8 @@ impl Expr {
             | Expr::HashJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
-            | Expr::Aggregate { .. }
+            | Expr::SimpleAggregate { .. }
+            | Expr::GroupByAggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
@@ -359,7 +365,8 @@ impl Expr {
             | Expr::Out { .. }
             | Expr::Map { .. }
             | Expr::IndexScan { .. }
-            | Expr::Aggregate { .. }
+            | Expr::SimpleAggregate { .. }
+            | Expr::GroupByAggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Broadcast { .. }
@@ -511,7 +518,8 @@ impl Expr {
             | Expr::HashJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
-            | Expr::Aggregate { .. }
+            | Expr::SimpleAggregate { .. }
+            | Expr::GroupByAggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
@@ -613,7 +621,8 @@ impl Expr {
             | Expr::HashJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
-            | Expr::Aggregate { .. }
+            | Expr::SimpleAggregate { .. }
+            | Expr::GroupByAggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
@@ -740,7 +749,8 @@ impl Expr {
             | Expr::HashJoin { .. }
             | Expr::CreateTempTable { .. }
             | Expr::GetTempTable { .. }
-            | Expr::Aggregate { .. }
+            | Expr::SimpleAggregate { .. }
+            | Expr::GroupByAggregate { .. }
             | Expr::Limit { .. }
             | Expr::Sort { .. }
             | Expr::Union { .. }
@@ -842,7 +852,14 @@ impl Expr {
                 .iter()
                 .map(|column| (column.canonical_name(), column.data_type))
                 .collect(),
-            Aggregate {
+            SimpleAggregate { aggregate, .. } => {
+                let mut fields = vec![];
+                for a in aggregate {
+                    fields.push((a.output.canonical_name(), a.output.data_type));
+                }
+                fields
+            }
+            GroupByAggregate {
                 group_by,
                 aggregate,
                 ..
@@ -932,7 +949,8 @@ impl std::ops::Index<usize> for Expr {
             | Expr::Out { input, .. }
             | Expr::Map { input, .. }
             | Expr::IndexScan { input, .. }
-            | Expr::Aggregate { input, .. }
+            | Expr::SimpleAggregate { input, .. }
+            | Expr::GroupByAggregate { input, .. }
             | Expr::Limit { input, .. }
             | Expr::Sort { input, .. }
             | Expr::Broadcast { input, .. }
@@ -999,7 +1017,8 @@ impl std::ops::IndexMut<usize> for Expr {
             | Expr::Out { input, .. }
             | Expr::Map { input, .. }
             | Expr::IndexScan { input, .. }
-            | Expr::Aggregate { input, .. }
+            | Expr::SimpleAggregate { input, .. }
+            | Expr::GroupByAggregate { input, .. }
             | Expr::Limit { input, .. }
             | Expr::Sort { input, .. }
             | Expr::Broadcast { input, .. }

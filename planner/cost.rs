@@ -73,7 +73,11 @@ pub(crate) fn physical_cost(mid: MultiExprID, ss: &SearchSpace) -> Cost {
         }
         CreateTempTable { input, .. } => ss[leaf(input)].props.cardinality,
         GetTempTable { .. } => ss[parent].props.cardinality,
-        Aggregate { input, .. } => {
+        SimpleAggregate { input, .. } => {
+            let n = ss[leaf(input)].props.cardinality;
+            n * MAP
+        }
+        GroupByAggregate { input, .. } => {
             let n = ss[leaf(input)].props.cardinality;
             n * HASH_BUILD
         }

@@ -6,6 +6,10 @@ use std::{
 use ast::{AggregateExpr, AggregateFunction, Value};
 use kernel::*;
 
+pub struct SimpleAggregate {
+    aggregate_slots: Vec<Acc>,
+}
+
 pub struct GroupByAggregate {
     group_by_batches: Vec<Batch>,
     aggregate_slots: HashMap<Key, Vec<Acc>, BuildKeyHasher>,
@@ -26,12 +30,38 @@ struct Key {
 #[derive(Clone)]
 enum Acc {
     AnyValue(Value),
-    Count(Option<i64>),
+    Count(i64),
     LogicalAnd(Option<bool>),
     LogicalOr(Option<bool>),
     Max(Value),
     Min(Value),
     Sum(Value),
+}
+
+impl SimpleAggregate {
+    pub fn new(aggregate_fns: &Vec<AggregateExpr>) -> Self {
+        Self {
+            aggregate_slots: aggregate_fns
+                .iter()
+                .map(|a| Acc::new(&a.function, a.input.data_type))
+                .collect(),
+        }
+    }
+
+    /// Insert a batch of rows into the hash table.
+    pub fn insert(&mut self, aggregate: Vec<AnyArray>) {
+        let len = aggregate.first().unwrap().len();
+        for tuple in 0..len as u32 {
+            for i in 0..self.aggregate_slots.len() {
+                self.aggregate_slots[i].update(&aggregate[i], tuple);
+            }
+        }
+    }
+
+    /// Return the results we've accumulated so far.
+    pub fn finish(&self) -> Vec<AnyArray> {
+        self.aggregate_slots.iter().map(Acc::finish).collect()
+    }
 }
 
 impl GroupByAggregate {
@@ -204,7 +234,7 @@ impl Acc {
     fn new(operator: &AggregateFunction, data_type: DataType) -> Self {
         match operator {
             AggregateFunction::AnyValue => Self::AnyValue(Value::null(data_type)),
-            AggregateFunction::Count => Self::Count(None),
+            AggregateFunction::Count => Self::Count(0),
             AggregateFunction::LogicalAnd => Self::LogicalAnd(None),
             AggregateFunction::LogicalOr => Self::LogicalOr(None),
             AggregateFunction::Max => Self::Max(Value::null(data_type)),
@@ -235,38 +265,32 @@ impl Acc {
             }
             (Acc::Count(value), AnyArray::Bool(column)) => {
                 if column.get(tuple as usize).is_some() {
-                    let prev = value.unwrap_or(0);
-                    *value = Some(prev + 1)
+                    *value += 1
                 }
             }
             (Acc::Count(value), AnyArray::I64(column)) => {
                 if column.get(tuple as usize).is_some() {
-                    let prev = value.unwrap_or(0);
-                    *value = Some(prev + 1)
+                    *value += 1
                 }
             }
             (Acc::Count(value), AnyArray::F64(column)) => {
                 if column.get(tuple as usize).is_some() {
-                    let prev = value.unwrap_or(0);
-                    *value = Some(prev + 1)
+                    *value += 1
                 }
             }
             (Acc::Count(value), AnyArray::Date(column)) => {
                 if column.get(tuple as usize).is_some() {
-                    let prev = value.unwrap_or(0);
-                    *value = Some(prev + 1)
+                    *value += 1
                 }
             }
             (Acc::Count(value), AnyArray::Timestamp(column)) => {
                 if column.get(tuple as usize).is_some() {
-                    let prev = value.unwrap_or(0);
-                    *value = Some(prev + 1)
+                    *value += 1
                 }
             }
             (Acc::Count(value), AnyArray::String(column)) => {
                 if column.get(tuple as usize).is_some() {
-                    let prev = value.unwrap_or(0);
-                    *value = Some(prev + 1)
+                    *value += 1
                 }
             }
             (Acc::LogicalAnd(value), AnyArray::Bool(column)) => {
@@ -377,7 +401,7 @@ impl Acc {
         match self {
             Acc::Count(value) => {
                 if let AnyArray::I64(builder) = builder {
-                    builder.push(*value)
+                    builder.push(Some(*value))
                 } else {
                     panic!("expected i64 but found {:?}", builder.data_type())
                 }
@@ -411,6 +435,12 @@ impl Acc {
                 }
             }
         }
+    }
+
+    fn finish(&self) -> AnyArray {
+        let mut array = AnyArray::with_capacity(self.data_type(), 1);
+        self.append(&mut array);
+        array
     }
 
     fn data_type(&self) -> DataType {

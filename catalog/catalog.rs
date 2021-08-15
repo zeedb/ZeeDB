@@ -18,6 +18,7 @@ pub fn simple_catalog(
     let mut catalog_id_cache = HashMap::new();
     let mut root_catalog = SimpleCatalogProto {
         builtin_function_options: Some(builtin_function_options()),
+        named_type: builtin_named_types(),
         ..Default::default()
     };
     for name in &table_names {

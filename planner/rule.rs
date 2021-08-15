@@ -334,27 +334,27 @@ impl Rule {
             }
             Rule::InsertBroadcast => {
                 return single(Broadcast {
-                    stage: -1,
+                    stage: None,
                     input: Box::new(bind),
                 })
             }
             Rule::InsertExchange => {
                 return single(Exchange {
-                    stage: -1,
+                    stage: None,
                     hash_column: None,
                     input: Box::new(bind),
                 });
             }
             Rule::InsertGather => {
                 return single(Gather {
-                    worker: -1,
-                    stage: -1,
+                    worker: None,
+                    stage: None,
                     input: Box::new(bind),
                 });
             }
             Rule::LogicalGetToTableFreeScan => {
                 if let LogicalSingleGet = bind {
-                    return single(TableFreeScan { worker: -1 });
+                    return single(TableFreeScan { worker: None });
                 }
             }
             Rule::LogicalGetToSeqScan => {
@@ -468,7 +468,7 @@ impl Rule {
                     input,
                 } = bind
                 {
-                    return single(to_aggregate(group_by, aggregate, input, ss.txn));
+                    return single(to_aggregate(group_by, aggregate, input));
                 }
             }
             Rule::LogicalLimitToLimit => {
@@ -601,30 +601,17 @@ impl Rule {
     }
 }
 
-fn to_aggregate(
-    group_by: Vec<Column>,
-    aggregate: Vec<AggregateExpr>,
-    input: Box<Expr>,
-    txn: i64,
-) -> Expr {
+fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box<Expr>) -> Expr {
     if group_by.is_empty() {
-        let worker = crate::distribution::select_worker(txn) as i64;
-        let hash_bucket = Scalar::Literal(Value::I64(Some(worker)));
-        let constant = Column::computed("$constant", &None, DataType::I64);
-        Aggregate {
-            partition_by: constant.clone(),
-            group_by,
+        SimpleAggregate {
+            worker: None,
             aggregate,
-            input: Box::new(LogicalMap {
-                projects: vec![(hash_bucket, constant.clone())],
-                include_existing: true,
-                input,
-            }),
+            input,
         }
     } else {
         let partition_by = group_by.iter().map(|c| Scalar::Column(c.clone())).collect();
         let (partition_by, input) = create_hash_column(partition_by, *input);
-        Aggregate {
+        GroupByAggregate {
             partition_by,
             group_by,
             aggregate,
