@@ -980,7 +980,6 @@ impl Node {
                 } else {
                     *finished = true;
                 }
-                let mut count_modified = 0;
                 loop {
                     let input = match input.next(storage, txn)? {
                         Some(next) => next,
@@ -1008,11 +1007,9 @@ impl Node {
                             &tids,
                         );
                     }
-                    // Keep track of how many rows we have modified.
-                    count_modified += 1;
                 }
-                // Insert returns the number of modified rows.
-                Ok(Some(rows_modified(count_modified)))
+                // Insert returns no values.
+                Ok(None)
             }
             Node::Values {
                 columns,
@@ -1185,13 +1182,6 @@ fn dummy_row() -> RecordBatch {
     RecordBatch::new(vec![(
         "$dummy".to_string(),
         AnyArray::Bool(BoolArray::from_values(vec![false])),
-    )])
-}
-
-fn rows_modified(n: i64) -> RecordBatch {
-    RecordBatch::new(vec![(
-        "$rows_modified".to_string(),
-        AnyArray::I64(I64Array::from_values(vec![n])),
     )])
 }
 

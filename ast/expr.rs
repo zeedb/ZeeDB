@@ -879,8 +879,7 @@ impl Expr {
                 .collect(),
             Script { statements, .. } => statements.last().unwrap().schema(),
             Explain { .. } => vec![("plan".to_string(), DataType::String)],
-            Insert { .. } => vec![("$rows_modified".to_string(), DataType::I64)],
-            CreateTempTable { .. } | Call { .. } => dummy_schema(),
+            CreateTempTable { .. } | Insert { .. } | Call { .. } => dummy_schema(),
             Leaf { .. }
             | LogicalSingleGet { .. }
             | LogicalGet { .. }

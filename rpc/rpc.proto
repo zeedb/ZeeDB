@@ -35,7 +35,6 @@ message QueryResponse {
 
 message StatementResponse {
   required int64 txn = 1;
-  required uint64 rows_modified = 2;
 }
 
 message TraceRequest {

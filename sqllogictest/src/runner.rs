@@ -557,8 +557,8 @@ impl Runner {
             txn: None,
             variables: HashMap::default(),
         };
-        let response = self.client.statement(request).await?.into_inner();
-        Ok(response.rows_modified)
+        let _response = self.client.statement(request).await?.into_inner();
+        Ok(0) // TODO
     }
 
     async fn query(&mut self, sql: &str) -> Result<RecordBatch, anyhow::Error> {

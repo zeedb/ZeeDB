@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use ast::{Expr, Value};
-use kernel::{Array, RecordBatch};
+use kernel::RecordBatch;
 use rpc::{
     coordinator_server::Coordinator, CheckRequest, CheckResponse, QueryRequest, QueryResponse,
     StatementResponse, TraceRequest, TraceResponse,
@@ -31,7 +31,7 @@ impl Coordinator for CoordinatorNode {
             .txn
             .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || sender.send(query(request, txn)).unwrap());
+        rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
         let batch = receiver.await.unwrap()?;
         Ok(Response::new(QueryResponse {
             txn,
@@ -48,9 +48,9 @@ impl Coordinator for CoordinatorNode {
             .txn
             .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || sender.send(statement(request, txn)).unwrap());
-        let rows_modified = receiver.await.unwrap()?;
-        Ok(Response::new(StatementResponse { txn, rows_modified }))
+        rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
+        let _batch = receiver.await.unwrap()?;
+        Ok(Response::new(StatementResponse { txn }))
     }
 
     async fn trace(
@@ -67,7 +67,7 @@ impl Coordinator for CoordinatorNode {
     }
 }
 
-fn query(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
+fn submit(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
     let _session = log::session(txn, 0, None);
     let _span = log::enter(&request.sql);
     let variables = request
@@ -83,37 +83,6 @@ fn query(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
     };
     let expr = planner::optimize(expr, txn);
     gather(&expr, txn)
-}
-
-fn statement(request: QueryRequest, txn: i64) -> Result<u64, Status> {
-    let _session = log::session(txn, 0, None);
-    let _span = log::enter(&request.sql);
-    let variables = request
-        .variables
-        .iter()
-        .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter)))
-        .collect();
-    let expr = match parser::analyze(&request.sql, &variables, request.catalog_id, txn) {
-        Ok(expr) => expr,
-        Err(message) => {
-            return Err(Status::invalid_argument(message));
-        }
-    };
-    let expr = planner::optimize(expr, txn);
-    let mut batch = gather(&expr, txn)?;
-    let rows_modified = match expr {
-        Expr::Insert { .. } => {
-            let (_, column) = batch
-                .columns
-                .drain(..)
-                .find(|(name, _)| name == "$rows_modified")
-                .unwrap();
-            column.as_i64().get(0).unwrap() as u64
-        }
-        Expr::Delete { .. } => batch.len() as u64,
-        _ => 0,
-    };
-    Ok(rows_modified)
 }
 
 #[log::trace]
