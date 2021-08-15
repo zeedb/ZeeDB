@@ -2,9 +2,6 @@
 # description: Test invalid input for math functions
 # group: [numeric]
 
-statement ok
-PRAGMA enable_verification
-
 query RR
 SELECT SQRT(-1), SQRT(0)
 ----

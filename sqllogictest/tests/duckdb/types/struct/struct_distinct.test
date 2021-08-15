@@ -2,9 +2,6 @@
 # description: Test STRUCT distinctions
 # group: [struct]
 
-statement ok
-PRAGMA enable_verification
-
 # Constant single integer column distinct
 query T
 SELECT {'x': 1} IS NOT DISTINCT FROM {'x': 2}

@@ -2,9 +2,6 @@
 # description: Test aggregate list
 # group: [aggregate]
 
-statement ok
-PRAGMA enable_verification
-
 # this is underspecified for parallelism because the order in the list() aggr is arbitrary then
 statement ok
 PRAGMA threads=1

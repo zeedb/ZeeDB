@@ -5,9 +5,6 @@
 require parquet
 require vector_size 512
 
-statement ok
-PRAGMA enable_verification
-
 query III
 SELECT * FROM parquet_scan('data/parquet-testing/aws1.snappy.parquet') limit 100
 ----

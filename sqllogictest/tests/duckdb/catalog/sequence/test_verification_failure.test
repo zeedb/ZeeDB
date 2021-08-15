@@ -3,9 +3,6 @@
 # group: [sequence]
 
 statement ok
-PRAGMA enable_verification
-
-statement ok
 CREATE SEQUENCE seq;
 
 statement error

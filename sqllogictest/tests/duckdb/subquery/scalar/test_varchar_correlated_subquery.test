@@ -2,9 +2,6 @@
 # description: Test varchar correlated subqueries
 # group: [scalar]
 
-statement ok
-PRAGMA enable_verification
-
 # varchar tests
 statement ok
 CREATE TABLE strings(v VARCHAR)

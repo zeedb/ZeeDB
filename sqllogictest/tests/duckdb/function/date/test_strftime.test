@@ -2,9 +2,6 @@
 # description: Test strftime function
 # group: [date]
 
-statement ok
-PRAGMA enable_verification
-
 # simple single specifier
 query I
 SELECT strftime(DATE '1992-01-01', '%Y');

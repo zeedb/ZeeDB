@@ -2,9 +2,6 @@
 # description: Test multiple correlated columns and strings
 # group: [scalar]
 
-statement ok
-PRAGMA enable_verification
-
 # multiple correlated columns and strings
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER, str VARCHAR);

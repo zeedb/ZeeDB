@@ -1,9 +1,6 @@
 # name: test/sql/delete/test_using_delete.test
 # description: Test deletions with USING clause
-# group: [delete]
-
-statement ok
-PRAGMA enable_verification;
+# group: [delete];
 
 statement ok
 CREATE TABLE a(i INTEGER);

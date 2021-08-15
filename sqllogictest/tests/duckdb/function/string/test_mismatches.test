@@ -2,9 +2,6 @@
 # description: Test mismatches function
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 query I
 SELECT mismatches('hallo', 'hallo')
 ----

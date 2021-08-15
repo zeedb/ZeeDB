@@ -2,9 +2,6 @@
 # description: Test read CSV function
 # group: [csv]
 
-statement ok
-PRAGMA enable_verification
-
 # read csv with explicit separator
 statement ok
 CREATE TABLE abac_tbl (a VARCHAR, b VARCHAR, c VARCHAR);

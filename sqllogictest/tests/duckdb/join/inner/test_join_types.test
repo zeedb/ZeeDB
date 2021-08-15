@@ -2,9 +2,6 @@
 # description: Test joins with different types
 # group: [inner]
 
-statement ok
-PRAGMA enable_verification
-
 # numeric types
 
 foreach type <numeric> decimal(4,1) decimal(8,1) decimal(12,1) decimal(18,1)

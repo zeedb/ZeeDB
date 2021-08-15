@@ -2,9 +2,6 @@
 # description: GROUP BY nested types (STRUCTs, LISTs)
 # group: [group]
 
-statement ok
-PRAGMA enable_verification
-
 # Key is LIST<INTEGER>
 statement ok
 CREATE VIEW intlists AS SELECT * FROM (VALUES

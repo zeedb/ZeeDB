@@ -2,9 +2,6 @@
 # description: Test basic lambda expressions
 # group: [nested]
 
-statement ok
-PRAGMA enable_verification
-
 # FIXME: just so we don't get "function not found" errors
 statement ok
 create function apply(x, y) as x + y;

@@ -2,9 +2,6 @@
 # description: LEFT test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test LEFT on positive positions
 query TTTTT
 SELECT LEFT('abcd', 0), LEFT('abc', 1), LEFT('abc', 2), LEFT('abc', 3), LEFT('abc', 4)

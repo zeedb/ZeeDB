@@ -2,9 +2,6 @@
 # description: Test joins with comparisons involving both sides of the join
 # group: [join]
 
-statement ok
-PRAGMA enable_verification
-
 # create tables
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);

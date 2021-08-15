@@ -2,9 +2,6 @@
 # description: Test between statement with expressions that have side effects
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # prepared statement with BETWEEN
 statement ok
 PREPARE v1 AS SELECT ? BETWEEN 1 AND 2

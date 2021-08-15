@@ -2,9 +2,6 @@
 # description: Test MEDIAN aggregate
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar quantiles
 query II
 SELECT median(NULL), median(1)

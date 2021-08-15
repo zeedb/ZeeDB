@@ -2,9 +2,6 @@
 # description: Test handling of overflows in float/double
 # group: [overflow]
 
-statement ok
-PRAGMA enable_verification
-
 # out of range constants are not accepted
 statement error
 SELECT 1e1000

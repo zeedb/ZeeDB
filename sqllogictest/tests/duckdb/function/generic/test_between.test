@@ -2,9 +2,6 @@
 # description: Test between statement
 # group: [generic]
 
-statement ok
-PRAGMA enable_verification
-
 # test constant BETWEEN statement
 # simple between
 query T

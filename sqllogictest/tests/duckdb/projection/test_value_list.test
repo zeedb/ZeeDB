@@ -2,9 +2,6 @@
 # description: Test value list in selection
 # group: [projection]
 
-statement ok
-PRAGMA enable_verification
-
 # value list can be a top-level statement
 query II
 (VALUES (1, 3), (2, 4));

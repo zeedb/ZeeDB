@@ -2,9 +2,6 @@
 # description: Prefix test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # "Early out prefix"
 query T
 SELECT prefix('abcd', 'a')

@@ -2,9 +2,6 @@
 # description: Test QUANTILE_DISC operator with LIST quantiles
 # group: [aggregates]
 
-statement ok
-PRAGMA enable_verification
-
 # scalar quantiles
 statement ok
 create table quantiles as select range r, random() FROM range(10000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;

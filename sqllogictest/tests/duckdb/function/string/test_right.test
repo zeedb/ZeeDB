@@ -2,9 +2,6 @@
 # description: RIGHT test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # test RIGHT on positive positions
 query TTTTT
 SELECT RIGHT('abcd', 0), RIGHT('abc', 1), RIGHT('abc', 2), RIGHT('abc', 3), RIGHT('abc', 4)

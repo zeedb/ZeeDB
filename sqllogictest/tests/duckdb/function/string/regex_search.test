@@ -2,9 +2,6 @@
 # description: regex search test
 # group: [string]
 
-statement ok
-PRAGMA enable_verification
-
 # constant strings
 query T
 SELECT regexp_matches('asdf', '.*sd.*')
