@@ -14,10 +14,16 @@ pub fn builtin_function_options() -> ZetaSqlBuiltinFunctionOptionsProto {
 }
 
 pub fn builtin_named_types() -> Vec<NamedTypeProto> {
-    vec![NamedTypeProto {
-        name: Some("INTEGER".to_string()),
-        r#type: Some(DataType::I64.to_proto()),
-    }]
+    vec![
+        NamedTypeProto {
+            name: Some("INTEGER".to_string()),
+            r#type: Some(DataType::I64.to_proto()),
+        },
+        NamedTypeProto {
+            name: Some("VARCHAR".to_string()),
+            r#type: Some(DataType::String.to_proto()),
+        },
+    ]
 }
 
 pub fn enabled_language_features() -> Vec<i32> {
