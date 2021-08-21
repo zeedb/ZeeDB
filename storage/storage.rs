@@ -22,7 +22,8 @@ impl Storage {
     }
 
     pub fn create_table(&mut self, id: i64) {
-        self.tables.resize_with(id as usize + 1, Heap::default);
+        let new_len = self.tables.len().max(id as usize + 1);
+        self.tables.resize_with(new_len, Heap::default);
     }
 
     pub fn temp_table(&self, txn: i64, name: String) -> &Heap {
@@ -46,7 +47,8 @@ impl Storage {
     }
 
     pub fn create_index(&mut self, id: i64) {
-        self.indexes.resize_with(id as usize + 1, Art::empty);
+        let new_len = self.indexes.len().max(id as usize + 1);
+        self.indexes.resize_with(new_len, Art::empty);
     }
 
     pub fn drop_index(&mut self, id: i64) {
