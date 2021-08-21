@@ -276,7 +276,6 @@ pub(crate) struct Runner {
 
 fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option<String> {
     let string = match (typ, column) {
-        (Type::Bool, AnyArray::Bool(b)) => b.get(row)?.to_string(),
         (Type::Integer, AnyArray::I64(i)) => i.get(row)?.to_string(),
         (Type::Integer, AnyArray::F64(f)) => format!("{:.0}", f.get(row)?),
         // This is so wrong, but sqlite needs it.

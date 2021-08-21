@@ -33,8 +33,6 @@ pub enum Type {
     Integer,
     /// A "real" number column (i.e., floating point). Indicated by `R`.
     Real,
-    /// A boolean column. Indicated by `B`. This is a CockroachDB extension.
-    Bool,
     // Please don't add new types to this enum, unless you are adding support
     // for a sqllogictest dialect that has already done so. These type
     // indicators are not meant to be assertions about the output type, but

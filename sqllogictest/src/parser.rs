@@ -307,7 +307,6 @@ fn parse_types(input: &str) -> Result<Vec<Type>, anyhow::Error> {
                 'T' => Type::Text,
                 'I' => Type::Integer,
                 'R' => Type::Real,
-                'B' => Type::Bool,
                 _ => bail!("Unexpected type char {} in: {}", char, input),
             })
         })
