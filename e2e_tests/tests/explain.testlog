@@ -1,5 +1,0 @@
-> explain select 1
-plan                             
-Map $query.$col1:1
-	TableFreeScan
-

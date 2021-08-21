@@ -16,7 +16,10 @@ use std::{
     ops,
     path::Path,
     str,
-    sync::atomic::{AtomicI64, Ordering},
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Mutex,
+    },
     time::Duration,
 };
 
@@ -26,7 +29,7 @@ use coordinator::CoordinatorNode;
 use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
 use md5::{Digest, Md5};
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
@@ -313,22 +316,10 @@ fn format_row(rows: &RecordBatch, i: usize, types: &[Type]) -> Vec<String> {
 }
 
 impl Runner {
-    pub async fn start() -> Result<Self, anyhow::Error> {
+    pub async fn start() -> Self {
         let mut client = connect_to_cluster().await;
-        // Find the id of the next database.
-        // TODO this is an evil trick that just happens to match, we should query this value from the metadata schema.
-        static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(RESERVED_IDS));
-        let catalog_id = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
-        // Create a new, empty database.
-        client
-            .query(QueryRequest {
-                sql: format!("create database test{}", catalog_id),
-                catalog_id: ROOT_CATALOG_ID,
-                txn: None,
-                variables: HashMap::default(),
-            })
-            .await?;
-        Ok(Runner { catalog_id, client })
+        let catalog_id = next_catalog(&mut client).await;
+        Runner { catalog_id, client }
     }
 
     async fn run_record<'a>(
@@ -599,7 +590,7 @@ pub async fn run_string(
     input: &str,
 ) -> Result<Outcomes, anyhow::Error> {
     let mut outcomes = Outcomes::default();
-    let mut state = Runner::start().await.unwrap();
+    let mut state = Runner::start().await;
     let mut parser = crate::parser::Parser::new(source, input);
     println!("==> {}", source);
     for record in parser.parse_records()? {
@@ -678,7 +669,7 @@ pub async fn rewrite_file(filename: &Path) -> Result<(), anyhow::Error> {
 
     let mut buf = RewriteBuffer::new(&input);
 
-    let mut state = Runner::start().await?;
+    let mut state = Runner::start().await;
     let mut parser = crate::parser::Parser::new(filename.to_str().unwrap_or(""), &input);
     println!("==> {}", filename.display());
     for record in parser.parse_records()? {
@@ -780,7 +771,9 @@ impl<'a> RewriteBuffer<'a> {
     }
 }
 
-async fn connect_to_cluster() -> CoordinatorClient<Channel> {
+pub async fn connect_to_cluster() -> CoordinatorClient<Channel> {
+    static LOCK: OnceCell<Mutex<()>> = OnceCell::new();
+    let _lock = LOCK.get_or_init(|| Mutex::default()).lock().unwrap();
     if !std::env::var("COORDINATOR").is_ok() {
         create_cluster().await
     }
@@ -877,4 +870,22 @@ fn free_port(min: u16) -> u16 {
         "Could not find a free port between {} and {}",
         min, MAX_PORT
     )
+}
+
+async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
+    // Find the id of the next database.
+    // TODO this is an evil trick that just happens to match, we should query this value from the metadata schema.
+    static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(RESERVED_IDS));
+    let catalog_id = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
+    // Create a new, empty database.
+    client
+        .query(QueryRequest {
+            sql: format!("create database test{}", catalog_id),
+            catalog_id: ROOT_CATALOG_ID,
+            txn: None,
+            variables: HashMap::default(),
+        })
+        .await
+        .unwrap();
+    catalog_id
 }

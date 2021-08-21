@@ -590,10 +590,11 @@ impl<'a> Converter<'a> {
             path: q.parent.get().name_path.clone(),
         };
         let columns = self.column_definitions(&q.column_definition_list);
+        let reserved_id = sequences::next_table_id();
         LogicalCreateTable {
             name,
             columns,
-            reserved_id: sequences::next_table_id(),
+            reserved_id,
         }
     }
 

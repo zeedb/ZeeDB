@@ -1,4 +1,0 @@
-> select * from (select 1 as a) as t1 join (select 1 as a) as t2 using (a)
-a
-1
-

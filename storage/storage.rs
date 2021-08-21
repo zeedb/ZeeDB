@@ -22,7 +22,6 @@ impl Storage {
     }
 
     pub fn create_table(&mut self, id: i64) {
-        assert!(self.tables.len() < id as usize + 1);
         self.tables.resize_with(id as usize + 1, Heap::default);
     }
 
@@ -47,7 +46,6 @@ impl Storage {
     }
 
     pub fn create_index(&mut self, id: i64) {
-        assert!(self.indexes.len() < id as usize + 1);
         self.indexes.resize_with(id as usize + 1, Art::empty);
     }
 
