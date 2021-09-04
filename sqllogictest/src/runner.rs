@@ -25,6 +25,7 @@ use std::{
 
 use anyhow::{anyhow, bail};
 use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
+use chrono::{Date, DateTime, NaiveDate, TimeZone, Utc};
 use coordinator::CoordinatorNode;
 use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
@@ -293,6 +294,10 @@ fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option
         }
         (Type::Text, AnyArray::Bool(b)) => b.get(row)?.to_string(),
         (Type::Text, AnyArray::F64(f)) => format!("{:.3}", f.get(row)?),
+        (Type::Integer, AnyArray::Date(f)) => date(f.get(row)?).format("%F").to_string(),
+        (Type::Integer, AnyArray::Timestamp(f)) => {
+            timestamp(f.get(row)?).format("%F %T").to_string()
+        }
         (_, d) => panic!(
             "Don't know how to format {:?} as {:?} in column {}",
             d, typ, col,
@@ -888,3 +893,20 @@ async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
         .unwrap();
     catalog_id
 }
+
+fn date(value: i32) -> Date<Utc> {
+    let naive = NaiveDate::from_ymd(1970, 1, 1) + chrono::Duration::days(value as i64);
+    Utc.from_utc_date(&naive)
+}
+
+fn timestamp(value: i64) -> DateTime<Utc> {
+    Utc.timestamp(
+        value / MICROSECONDS,
+        (value % MICROSECONDS * MILLISECONDS) as u32,
+    )
+}
+
+/// Number of milliseconds in a second
+const MILLISECONDS: i64 = 1_000;
+/// Number of microseconds in a second
+const MICROSECONDS: i64 = 1_000_000;

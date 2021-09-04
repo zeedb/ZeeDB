@@ -2,177 +2,154 @@
 # description: Test date limits
 # group: [date]
 
-# min date: 5877642-06-23 (BC)
+# min date: 0001-01-01
 query I
-select '1969-01-01'::date
+select date '1969-01-01'
 ----
 1969-01-01
 
 query I
-select '2370-01-01'::date
+select date '2370-01-01'
 ----
 2370-01-01
 
 query I
-select '5877642-06-23 (BC)'::date
+select date '0001-01-01'
 ----
-5877642-06-23 (BC)
+0001-01-01
 
 statement error
-select '5877642-06-22 (BC)'::date
+select date '0000-01-01'
 
 statement error
-select '5877680-06-22 (BC)'::date
+select date '5877680-06-22 (BC)'
 
 statement error
-select '99999999-06-22 (BC)'::date
+select date '99999999-06-22 (BC)'
 
-# min date for timestamp micros is -290307
+# min date for timestamp micros is 1-1-1
 query I
-select '290308-01-01 (BC)'::date::timestamp
+select cast(date '0001-01-01' as timestamp)
 ----
-290308-01-01 (BC) 00:00:00
+0001-01-01 00:00:00
 
 statement error
-select '290309-01-01 (BC)'::date::timestamp
+select cast(date '290309-01-01 (BC)' as timestamp)
 
-statement error
-select '5877642-06-23 (BC)'::date::timestamp
+statement ok
+select cast(date '0001-01-01' as timestamp)
 
 # date arithmetic
 query I
-select '5877642-06-23 (BC)'::date + 1
+select date_add(date '0001-01-01', interval 1 day)
 ----
-5877642-06-24 (BC)
+0001-01-02
 
 statement error
-select '5877642-06-23 (BC)'::date - 1
+select date_sub(date '0001-01-01', interval 1 day)
 
 statement error
-select '5877642-06-23 (BC)'::date - 365
+select date_sub(date '0001-01-01', interval 365 day)
 
 statement error
-select '5877642-06-23 (BC)'::date - 2147483647
+select date_sub(date '0001-01-01', interval 2147483647 day)
 
 # interval arithmetic
 query I
-select '5877642-06-23 (BC)'::date + interval (1) day
+select date_add(date '0001-01-01', interval (1) day)
 ----
-5877642-06-24 (BC)
+0001-01-02
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (1) day
+select date_sub(date '0001-01-01', interval (1) day)
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (365) day
+select date_sub(date '0001-01-01', interval (365) day)
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (2147483647) day
+select date_sub(date '0001-01-01', interval (2147483647) day)
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (9999999999999) second
+select date_sub(date '0001-01-01', interval (9999999999999) second)
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (9223372036854775807) microsecond
-
-statement error
-select '5877642-06-23 (BC)'::date - interval '1147483647 days 9223372036854775807 microseconds'
-
-statement error
-select '5877642-06-23 (BC)'::date - interval '2147483647 days 9223372036854775807 microseconds'
-
-statement error
-select '5877642-06-23 (BC)'::date - interval '2007483647 days 9223372036854775807 microseconds'
+select date_sub(date '0001-01-01', interval (9223372036854775807) microsecond)
 
 query I
-select '5877642-06-23 (BC)'::date + interval (1) month
+select date_add(date '0001-01-01', interval (1) month)
 ----
-5877642-07-23 (BC)
+0001-02-01
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (1) month
+select date_sub(date '0001-01-01', interval (1) month)
 
 statement error
-select '5877642-06-23 (BC)'::date - interval (2147483647) month
+select date_sub(date '0001-01-01', interval (2147483647) month)
 
-# max date: 5881580-07-11
+# max date: 9999-12-31
 query I
-select '5881580-07-11'::date
+select date '9999-12-31'
 ----
-5881580-07-11
+9999-12-31
 
 statement error
-select '5881580-07-12'::date
+select date '5881580-07-12'
 
 statement error
-select '5881580-08-11'::date
+select date '5881580-08-11'
 
 statement error
-select '99999999-01-01'::date
+select date '99999999-01-01'
 
-# max date for timestamp micros is 294246
+# max date for timestamp micros is 9999-12-31
 query I
-select '294246-12-31'::date::timestamp
+select cast(date '9999-12-31' as timestamp)
 ----
-294246-12-31 00:00:00
+9999-12-31 00:00:00
 
 statement error
-select '294247-12-31'::date::timestamp
+select cast(date '10000-01-01' as timestamp)
 
 # arithmetic
 query I
-select '5881580-07-11'::date - 1
+select date_sub(date '9999-12-31', interval 1 day)
 ----
-5881580-07-10
+9999-12-30
 
 statement error
-select '5881580-07-11'::date + 1
+select date_add(date '9999-12-31', interval 1 day)
 
 statement error
-select '5881580-07-11'::date + 365
+select date_add(date '9999-12-31', interval 365 day)
 
 statement error
-select '5881580-07-11'::date + 2147483647
+select date_add(date '9999-12-31', interval 2147483647 day)
 
 # interval arithmetic
 query I
-select '5881580-07-11'::date - interval (1) day
+select date_sub(date '9999-12-31', interval (1) day)
 ----
-5881580-07-10
+9999-12-30
 
 statement error
-select '5881580-07-11'::date + interval (1) day
+select date_add(date '9999-12-31', interval (1) day)
 
 statement error
-select '5881580-07-11'::date + interval (365) day
+select date_add(date '9999-12-31', interval (365) day)
 
 statement error
-select '5881580-07-11'::date + interval (2147483647) day
+select date_add(date '9999-12-31', interval (2147483647) day)
 
 statement error
-select '5881580-07-11'::date + interval (9999999999999) second
+select date_add(date '9999-12-31', interval (9999999999999) second)
 
 statement error
-select '5881580-07-11'::date + interval (9223372036854775807) microsecond
+select date_add(date '9999-12-31', interval (9223372036854775807) microsecond)
 
 statement error
-select '5881580-07-11'::date + interval '1147483647 days 9223372036854775807 microseconds'
-
-statement error
-select '5881580-07-11'::date + interval '2147483647 days 9223372036854775807 microseconds'
-
-statement error
-select '5881580-07-11'::date + interval '2007483647 days 9223372036854775807 microseconds'
-
-statement error
-select '5881580-07-11'::date + interval (1) month
+select date_add(date '9999-12-31', interval (1) month)
 
 query I
-select '5881580-07-11'::date - interval (1) month
+select date_sub(date '9999-12-31', interval (1) month)
 ----
-5881580-06-11
-
-query I
-select '5881580-07-11'::date - '5877642-06-23 (BC)'::date
-----
-4294967295
+9999-11-30

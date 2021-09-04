@@ -724,18 +724,23 @@ fn extract_from_timestamp(
     }
 }
 
-pub(crate) fn date_add(date: Date<Utc>, amount: i64, date_part: DatePart) -> Date<Utc> {
-    match date_part {
-        DatePart::Day => date + Duration::days(amount),
-        DatePart::Week(_) => date + Duration::days(amount * 7),
-        DatePart::Month => {
-            let d = date.day0(); // This can exceed the last day of the month, but chrono seems to fix it.
-            let m = (date.month0() as i64 + amount).rem_euclid(12);
-            let y = (date.year() as i64 * 12 + date.month0() as i64 + amount).div_euclid(12);
-            Utc.from_utc_date(&NaiveDate::from_ymd(y as i32, (m + 1) as u32, d + 1))
-        }
-        DatePart::Quarter => date_add(date, amount * 3, DatePart::Month),
-        DatePart::Year => date_add(date, amount * 12, DatePart::Month),
+const OVERFLOW: &'static str = "date_add/subtract overflowed";
+
+pub(crate) fn date_add(
+    date: Date<Utc>,
+    amount: i64,
+    date_part: DatePart,
+) -> Result<Option<Date<Utc>>, String> {
+    let ok = match date_part {
+        DatePart::Day => date
+            .checked_add_signed(Duration::days(amount))
+            .ok_or(OVERFLOW.to_string())?,
+        DatePart::Week(_) => date
+            .checked_add_signed(Duration::days(amount * 7))
+            .ok_or(OVERFLOW.to_string())?,
+        DatePart::Month => add_months(date, amount).ok_or(OVERFLOW.to_string())?,
+        DatePart::Quarter => return date_add(date, amount * 3, DatePart::Month),
+        DatePart::Year => return date_add(date, amount * 12, DatePart::Month),
         DatePart::Nanosecond
         | DatePart::Microsecond
         | DatePart::Millisecond
@@ -745,11 +750,46 @@ pub(crate) fn date_add(date: Date<Utc>, amount: i64, date_part: DatePart) -> Dat
         | DatePart::DayOfWeek
         | DatePart::DayOfYear
         | DatePart::IsoWeek
-        | DatePart::IsoYear => panic!("date_add(_, {:?}) is not supported", date_part),
+        | DatePart::IsoYear => panic!("date_add/subtract(_, {:?}) is not supported", date_part),
+    };
+    if is_overflow(ok) {
+        return Err(OVERFLOW.to_string());
+    }
+    Ok(Some(ok))
+}
+
+fn add_months(date: Date<Utc>, amount: i64) -> Option<Date<Utc>> {
+    let y = (date.year() as i64 * 12 + date.month0() as i64 + amount).div_euclid(12) as i32;
+    let m = (date.month0() as i64 + amount).rem_euclid(12) as u32 + 1;
+    let d = date.day().min(days_in_month(y, m));
+    let naive = NaiveDate::from_ymd_opt(y, m, d)?;
+    Some(Utc.from_utc_date(&naive))
+}
+
+fn days_in_month(year: i32, month: u32) -> u32 {
+    match month {
+        9 | 4 | 6 | 11 => 30,
+        2 if is_leap_year(year) => 29,
+        2 => 29,
+        _ => 31,
     }
 }
 
-pub(crate) fn date_sub(date: Date<Utc>, amount: i64, date_part: DatePart) -> Date<Utc> {
+fn is_leap_year(year: i32) -> bool {
+    year % 4 == 0 && !(year % 100 == 0 && year % 400 != 0)
+}
+
+fn is_overflow(date: Date<Utc>) -> bool {
+    let min = Utc.from_utc_date(&NaiveDate::from_ymd(1, 1, 1));
+    let max = Utc.from_utc_date(&NaiveDate::from_ymd(9999, 12, 31));
+    date < min || date > max
+}
+
+pub(crate) fn date_sub(
+    date: Date<Utc>,
+    amount: i64,
+    date_part: DatePart,
+) -> Result<Option<Date<Utc>>, String> {
     date_add(date, -amount, date_part)
 }
 

@@ -1635,6 +1635,7 @@ dependencies = [
  "ast",
  "bincode",
  "catalog",
+ "chrono",
  "coordinator",
  "kernel",
  "lazy_static",

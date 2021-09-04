@@ -81,22 +81,30 @@ fn test_date_add_sub() {
         (2020, 1, 1, 1, DatePart::Month, 2020, 2, 1),
         (2020, 1, 1, 1, DatePart::Quarter, 2020, 4, 1),
         (2020, 1, 1, 1, DatePart::Year, 2021, 1, 1),
+        (9999, 12, 31, -1, DatePart::Day, 9999, 12, 30),
+        (9999, 12, 31, -1, DatePart::Month, 9999, 11, 30),
+        (9999, 12, 31, -1, DatePart::Year, 9998, 12, 31),
+        (1, 1, 1, 1, DatePart::Day, 1, 1, 2),
+        (1, 1, 1, 1, DatePart::Month, 1, 2, 1),
+        (1, 1, 1, 1, DatePart::Year, 2, 1, 1),
     ];
     for (y1, m1, d1, amount, part, y2, m2, d2) in cases {
         let date = date_from_ymd(y1, m1, d1);
         let expect = date_from_ymd(y2, m2, d2);
-        let found = date_add(date, amount, part);
+        let found = date_add(date, amount, part).unwrap().unwrap();
         assert_eq!(
             expect, found,
             "date_add('{}', {}, {:?})",
             date, amount, part
         );
-        let reverse = date_sub(found, amount, part);
-        assert_eq!(
-            date, reverse,
-            "date_sub('{}', {}, {:?})",
-            found, amount, part
-        );
+        if part != DatePart::Month {
+            let reverse = date_sub(found, amount, part).unwrap().unwrap();
+            assert_eq!(
+                date, reverse,
+                "date_sub('{}', {}, {:?})",
+                found, amount, part
+            );
+        }
     }
 }
 

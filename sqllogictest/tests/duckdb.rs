@@ -5,7 +5,10 @@ use sqllogictest::runner::{run_path, RunConfig};
 #[test]
 fn test_all() {
     rpc::runtime().block_on(async {
-        let paths = vec!["./tests/duckdb/types/date/date_parsing.test"];
+        let paths = vec![
+            "./tests/duckdb/types/date/date_limits.test",
+            "./tests/duckdb/types/date/date_parsing.test",
+        ];
         let config = RunConfig {
             verbosity: 2,
             workers: 1,

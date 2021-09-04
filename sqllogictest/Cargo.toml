@@ -10,6 +10,7 @@ anyhow = "1.0.42"
 ast = { path = "../ast" }
 bincode = "1.3.1"
 catalog = { path = "../catalog" }
+chrono = { version = "0.4.11", features = [] }
 coordinator = { path = "../coordinator" }
 kernel = { path = "../kernel" }
 lazy_static = "1.0.0"
