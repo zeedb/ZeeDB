@@ -18,7 +18,7 @@ NULL
 
 # YEAR function
 query I
-SELECT year(i) FROM dates
+SELECT extract(year from i) FROM dates
 ----
 1993
 NULL
@@ -31,18 +31,12 @@ SELECT cast(i AS VARCHAR) FROM dates
 NULL
 
 # check that we can add days to a date
-query T
+statement error
 SELECT i + 5 FROM dates
-----
-1993-08-19
-NULL
 
 # check that we can subtract days from a date
-query T
+statement error
 SELECT i - 5 FROM dates
-----
-1993-08-09
-NULL
 
 # HOWEVER, we can't divide or multiply or modulo
 statement error
@@ -52,36 +46,33 @@ statement error
 SELECT i / 3 FROM dates
 
 statement error
-SELECT i % 3 FROM dates
+SELECT mod(i, 3) FROM dates
 
 # we also can't add two dates together
 statement error
 SELECT i + i FROM dates
 
 # but we can subtract them! resulting in an integer
-query I
+statement error
 SELECT (i + 5) - i FROM dates
-----
-5
-NULL
 
 statement error
-SELECT ''::DATE
+SELECT date ''
 
 statement error
-SELECT '  '::DATE
+SELECT date '  '
 
 statement error
-SELECT '1992'::DATE
+SELECT date '1992'
 
 statement error
-SELECT '1992-'::DATE
+SELECT date '1992-'
 
 statement error
-SELECT '1992-01'::DATE
+SELECT date '1992-01'
 
 statement error
-SELECT '1992-01-'::DATE
+SELECT date '1992-01-'
 
 statement error
-SELECT '30000307-01-01 (BC)'::DATE
+SELECT date '30000307-01-01 (BC)'

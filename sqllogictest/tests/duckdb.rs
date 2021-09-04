@@ -8,6 +8,7 @@ fn test_all() {
         let paths = vec![
             "./tests/duckdb/types/date/date_limits.test",
             "./tests/duckdb/types/date/date_parsing.test",
+            "./tests/duckdb/types/date/test_date.test",
         ];
         let config = RunConfig {
             verbosity: 2,

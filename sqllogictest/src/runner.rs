@@ -294,7 +294,9 @@ fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option
         }
         (Type::Text, AnyArray::Bool(b)) => b.get(row)?.to_string(),
         (Type::Text, AnyArray::F64(f)) => format!("{:.3}", f.get(row)?),
-        (Type::Integer, AnyArray::Date(f)) => date(f.get(row)?).format("%F").to_string(),
+        (Type::Integer, AnyArray::Date(f)) | (Type::Text, AnyArray::Date(f)) => {
+            date(f.get(row)?).format("%F").to_string()
+        }
         (Type::Integer, AnyArray::Timestamp(f)) => {
             timestamp(f.get(row)?).format("%F %T").to_string()
         }
