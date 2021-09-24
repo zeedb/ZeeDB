@@ -21,10 +21,8 @@ SELECT timestamp '2017-07-23T13:10:11', timestamp '2017-07-23T13:10:11Z';
 2017-07-23 13:10:11
 
 # spaces everywhere
-query T
+statement error
 SELECT timestamp '    2017-07-23     13:10:11    ';
-----
-2017-07-23 13:10:11
 
 # other trailing, preceding, or middle gunk is not accepted
 statement error
@@ -73,68 +71,55 @@ SELECT t*t FROM timestamp
 statement error
 SELECT t/t FROM timestamp
 
-statement error
-SELECT t%t FROM timestamp
-
-query T
-SELECT t-t FROM timestamp
+query I
+SELECT timestamp_diff(t, t, millisecond) FROM timestamp
 ----
-00:00:00
+0
 NULL
-00:00:00
-00:00:00
-00:00:00
-00:00:00
-00:00:00
-00:00:00
+0
+0
+0
+0
+0
+0
 
 query I
-SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01');
+SELECT extract(YEAR FROM TIMESTAMP '1992-01-01 01:01:01');
 ----
 1992
 
 query I
-SELECT YEAR(TIMESTAMP '1992-01-01 01:01:01'::DATE);
+SELECT extract(YEAR FROM cast(TIMESTAMP '1992-01-01 01:01:01' AS DATE));
 ----
 1992
 
 query T
-SELECT (TIMESTAMP '1992-01-01 01:01:01')::DATE;
+SELECT cast(TIMESTAMP '1992-01-01 01:01:01' AS DATE);
 ----
 1992-01-01
 
 query T
-SELECT (TIMESTAMP '1992-01-01 01:01:01')::TIME;
-----
-01:01:01
-
-query T
-SELECT t::DATE FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1
+SELECT cast(t AS DATE) FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1
 ----
 2007-01-01
 
 query T
-SELECT t::TIME FROM timestamp WHERE EXTRACT(YEAR from t)=2007 ORDER BY 1
-----
-00:00:01
-
-query T
-SELECT (DATE '1992-01-01')::TIMESTAMP;
+SELECT cast(DATE '1992-01-01' AS TIMESTAMP);
 ----
 1992-01-01 00:00:00
 
 query T
-SELECT TIMESTAMP '2008-01-01 00:00:01.5'::VARCHAR
+SELECT cast(TIMESTAMP '2008-01-01 00:00:01.5' AS VARCHAR)
 ----
-2008-01-01 00:00:01.5
+2008-01-01 00:00:01.500+00
 
 query T
-SELECT TIMESTAMP '-8-01-01 00:00:01.5'::VARCHAR
+SELECT cast(TIMESTAMP '0001-01-01 00:00:01.5' AS VARCHAR)
 ----
-0009-01-01 (BC) 00:00:01.5
+0001-01-01 00:00:01.500+00
 
 # timestamp with large date
 query T
-SELECT TIMESTAMP '100000-01-01 00:00:01.5'::VARCHAR
+SELECT cast(TIMESTAMP '9999-01-01 00:00:01.5' AS VARCHAR)
 ----
-100000-01-01 00:00:01.5
+9999-01-01 00:00:01.500+00

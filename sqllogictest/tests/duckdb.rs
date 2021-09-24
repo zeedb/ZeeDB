@@ -15,6 +15,7 @@ fn test_types_date() {
 #[test]
 fn test_types_timestamp() {
     rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/types/timestamp/test_timestamp.test",
         "./tests/duckdb/types/timestamp/timestamp_limits.test",
     ]));
 }
