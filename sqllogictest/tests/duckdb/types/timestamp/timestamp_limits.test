@@ -37,53 +37,53 @@ select timestamp_sub(timestamp '0001-01-01 00:00:00', interval (1) month)
 statement error
 select timestamp_sub(timestamp '0001-01-01 00:00:00', interval (1) year)
 
-# max date for timestamp micros is 9999-12-31 23:59:59.99999
+# max date for timestamp micros is 9999-12-31 23:59:59.999999
 query I
-select timestamp '9999-12-31 23:59:59.99999'
+select timestamp '9999-12-31 23:59:59.999999'
 ----
-9999-12-31 23:59:59
+9999-12-31 23:59:59.999999
 
 statement error
 select timestamp '294247-01-10 04:00:54.775808'
 
 statement error
-select timestamp_add(timestamp '9999-12-31 23:59:59.99999', interval (1) microsecond)
+select timestamp_add(timestamp '9999-12-31 23:59:59.999999', interval (1) microsecond)
 
 statement error
-select timestamp_add(timestamp '9999-12-31 23:59:59.99999', interval (1) second)
+select timestamp_add(timestamp '9999-12-31 23:59:59.999999', interval (1) second)
 
 statement error
-select timestamp_add(timestamp '9999-12-31 23:59:59.99999', interval (1) hour)
+select timestamp_add(timestamp '9999-12-31 23:59:59.999999', interval (1) hour)
 
 statement error
-select timestamp_add(timestamp '9999-12-31 23:59:59.99999', interval (1) day)
+select timestamp_add(timestamp '9999-12-31 23:59:59.999999', interval (1) day)
 
 statement error
-select timestamp_add(timestamp '9999-12-31 23:59:59.99999', interval (1) month)
+select timestamp_add(timestamp '9999-12-31 23:59:59.999999', interval (1) month)
 
 statement error
-select timestamp_add(timestamp '9999-12-31 23:59:59.99999', interval (1) year)
+select timestamp_add(timestamp '9999-12-31 23:59:59.999999', interval (1) year)
 
 # functions on limits
 query II
-select unix_millis(timestamp '9999-12-31 23:59:59.99999'), unix_millis(timestamp '0001-01-01 00:00:00')
+select unix_millis(timestamp '9999-12-31 23:59:59.999999'), unix_millis(timestamp '0001-01-01 00:00:00')
 ----
 253402300799999
 -62135596800000
 
 query II
-select extract(year from timestamp '9999-12-31 23:59:59.99999'), extract(year from timestamp '0001-01-01 00:00:00')
+select extract(year from timestamp '9999-12-31 23:59:59.999999'), extract(year from timestamp '0001-01-01 00:00:00')
 ----
 9999
 1
 
 query TT
-select format_timestamp("%B", timestamp '9999-12-31 23:59:59.99999'), format_timestamp("%B", timestamp '0001-01-01 00:00:00')
+select format_timestamp("%B", timestamp '9999-12-31 23:59:59.999999'), format_timestamp("%B", timestamp '0001-01-01 00:00:00')
 ----
 December
 January
 
 query I
-select timestamp_diff(timestamp '9999-12-31 23:59:59.99999', timestamp '0001-01-01 00:00:00', millisecond)
+select timestamp_diff(timestamp '9999-12-31 23:59:59.999999', timestamp '0001-01-01 00:00:00', millisecond)
 ----
 315537897599999

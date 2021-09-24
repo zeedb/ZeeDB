@@ -298,7 +298,7 @@ fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option
             date(f.get(row)?).format("%F").to_string()
         }
         (Type::Integer, AnyArray::Timestamp(f)) | (Type::Text, AnyArray::Timestamp(f)) => {
-            timestamp(f.get(row)?).format("%F %T").to_string()
+            timestamp(f.get(row)?).format("%F %T%.f").to_string()
         }
         (_, d) => panic!(
             "Don't know how to format {:?} as {:?} in column {}",
