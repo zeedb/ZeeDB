@@ -3,21 +3,30 @@ use std::path::Path;
 use sqllogictest::runner::{run_path, RunConfig};
 
 #[test]
-fn test_all() {
-    rpc::runtime().block_on(async {
-        let paths = vec![
-            "./tests/duckdb/types/date/date_limits.test",
-            "./tests/duckdb/types/date/date_parsing.test",
-            "./tests/duckdb/types/date/test_date.test",
-        ];
-        let config = RunConfig {
-            verbosity: 2,
-            workers: 1,
-            no_fail: false,
-        };
-        for path in paths {
-            let outcomes = run_path(&config, &Path::new(path)).await.unwrap();
-            assert!(!outcomes.any_failed());
-        }
-    });
+fn test_types_date() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/types/date/date_limits.test",
+        "./tests/duckdb/types/date/date_parsing.test",
+        "./tests/duckdb/types/date/test_date.test",
+        "./tests/duckdb/types/date/test_incorrect_dates.test",
+    ]));
+}
+
+#[test]
+fn test_types_timestamp() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/types/timestamp/timestamp_limits.test",
+    ]));
+}
+
+async fn test(paths: Vec<&'static str>) {
+    let config = RunConfig {
+        verbosity: 2,
+        workers: 1,
+        no_fail: false,
+    };
+    for path in paths {
+        let outcomes = run_path(&config, &Path::new(path)).await.unwrap();
+        assert!(!outcomes.any_failed());
+    }
 }

@@ -157,6 +157,7 @@ pub fn enabled_functions() -> Vec<i32> {
         FunctionSignatureId::FnTimestampFromUnixMicrosInt64 as i32, // timestamp_from_unix_micros
         FunctionSignatureId::FnUnixDate as i32,   // unix_date
         FunctionSignatureId::FnUnixMicrosFromTimestamp as i32, // unix_micros
+        FunctionSignatureId::FnUnixMillisFromTimestamp as i32, // unix_millis
         FunctionSignatureId::FnDateFromTimestamp as i32, // date
         FunctionSignatureId::FnDateFromDate as i32, // date
         FunctionSignatureId::FnDateFromString as i32, // date

@@ -64,6 +64,7 @@ pub enum F {
     UnaryMinusInt64(Scalar),
     UnixDate(Scalar),
     UnixMicrosFromTimestamp(Scalar),
+    UnixMillisFromTimestamp(Scalar),
     UpperString(Scalar),
     DateTruncDate(Scalar, DatePart),
     ExtractFromDate(Scalar, DatePart),
@@ -182,6 +183,7 @@ impl F {
             | F::UnaryMinusInt64(_)
             | F::UnixDate(_)
             | F::UnixMicrosFromTimestamp(_)
+            | F::UnixMillisFromTimestamp(_)
             | F::UpperString(_)
             | F::DateTruncDate(_, _)
             | F::ExtractFromDate(_, _)
@@ -313,6 +315,7 @@ impl std::ops::Index<usize> for F {
             | F::UnaryMinusInt64(a)
             | F::UnixDate(a)
             | F::UnixMicrosFromTimestamp(a)
+            | F::UnixMillisFromTimestamp(a)
             | F::UpperString(a)
             | F::DateTruncDate(a, _)
             | F::ExtractFromDate(a, _)
@@ -485,6 +488,7 @@ impl std::ops::IndexMut<usize> for F {
             | F::UnaryMinusInt64(a)
             | F::UnixDate(a)
             | F::UnixMicrosFromTimestamp(a)
+            | F::UnixMillisFromTimestamp(a)
             | F::UpperString(a)
             | F::DateTruncDate(a, _)
             | F::ExtractFromDate(a, _)
@@ -810,6 +814,7 @@ impl F {
             }
             "ZetaSQL:unix_date" => unary(args, |a| F::UnixDate(a)),
             "ZetaSQL:unix_micros" => unary(args, |a| F::UnixMicrosFromTimestamp(a)),
+            "ZetaSQL:unix_millis" => unary(args, |a| F::UnixMillisFromTimestamp(a)),
             "ZetaSQL:date" if first_argument == Some(DataType::Timestamp) => {
                 unary(args, |a| F::DateFromTimestamp(a))
             }
@@ -953,6 +958,7 @@ impl F {
             F::UnaryMinusInt64(_) => "UnaryMinusInt64",
             F::UnixDate(_) => "UnixDate",
             F::UnixMicrosFromTimestamp(_) => "UnixMicrosFromTimestamp",
+            F::UnixMillisFromTimestamp(_) => "UnixMillisFromTimestamp",
             F::UpperString(_) => "UpperString",
             F::DateTruncDate(_, _) => "DateTruncDate",
             F::ExtractFromDate(_, _) => "ExtractFromDate",
@@ -1082,6 +1088,7 @@ impl F {
             | F::UnaryMinusInt64(a)
             | F::UnixDate(a)
             | F::UnixMicrosFromTimestamp(a)
+            | F::UnixMillisFromTimestamp(a)
             | F::UpperString(a)
             | F::DateTruncDate(a, _)
             | F::ExtractFromDate(a, _)
@@ -1266,6 +1273,7 @@ impl F {
             | F::UnaryMinusInt64 { .. }
             | F::UnixDate { .. }
             | F::UnixMicrosFromTimestamp { .. }
+            | F::UnixMillisFromTimestamp { .. }
             | F::Xid { .. } => DataType::I64,
             F::ChrString { .. }
             | F::ConcatString { .. }
@@ -1368,6 +1376,7 @@ impl F {
             F::UnaryMinusInt64(a) => F::UnaryMinusInt64(f(a)),
             F::UnixDate(a) => F::UnixDate(f(a)),
             F::UnixMicrosFromTimestamp(a) => F::UnixMicrosFromTimestamp(f(a)),
+            F::UnixMillisFromTimestamp(a) => F::UnixMillisFromTimestamp(f(a)),
             F::UpperString(a) => F::UpperString(f(a)),
             F::DateTruncDate(a, date_part) => F::DateTruncDate(f(a), date_part),
             F::ExtractFromDate(a, date_part) => F::ExtractFromDate(f(a), date_part),

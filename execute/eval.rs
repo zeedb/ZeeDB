@@ -121,7 +121,8 @@ fn eval_function(function: &F, input: &RecordBatch, txn: i64) -> Result<AnyArray
         F::UnaryMinusDouble(a) => e(a)?.as_f64().map(|a: f64| -a),
         F::UnaryMinusInt64(a) => e(a)?.as_i64().map(|a: i64| -a),
         F::UnixDate(a) => e(a)?.as_date().map(|a| epoch_date(a) as i64),
-        F::UnixMicrosFromTimestamp(a) => e(a)?.as_timestamp().map(|a| epoch_micros(a) as i64),
+        F::UnixMicrosFromTimestamp(a) => e(a)?.as_timestamp().map(|a| epoch_micros(a)),
+        F::UnixMillisFromTimestamp(a) => e(a)?.as_timestamp().map(|a| epoch_millis(a)),
         F::UpperString(a) => e(a)?.as_string().map(|a: &str| a.to_uppercase()),
         F::DateTruncDate(a, date_part) => e(a)?.as_date().map(|a| date_trunc(a, *date_part)),
         F::ExtractFromDate(a, date_part) => {
@@ -752,7 +753,7 @@ pub(crate) fn date_add(
         | DatePart::IsoWeek
         | DatePart::IsoYear => panic!("date_add/subtract(_, {:?}) is not supported", date_part),
     };
-    if is_overflow(ok) {
+    if is_overflow_date(ok) {
         return Err(OVERFLOW.to_string());
     }
     Ok(Some(ok))
@@ -779,10 +780,16 @@ fn is_leap_year(year: i32) -> bool {
     year % 4 == 0 && !(year % 100 == 0 && year % 400 != 0)
 }
 
-fn is_overflow(date: Date<Utc>) -> bool {
+fn is_overflow_date(date: Date<Utc>) -> bool {
     let min = Utc.from_utc_date(&NaiveDate::from_ymd(1, 1, 1));
     let max = Utc.from_utc_date(&NaiveDate::from_ymd(9999, 12, 31));
     date < min || date > max
+}
+
+fn is_overflow_ts(ts: DateTime<Utc>) -> bool {
+    let min = Utc.timestamp_millis(-62135596800000); // 0001-01-01 00:00:00
+    let max = Utc.timestamp_millis(253402300799999); // 9999-12-31T23:59:59.99999Z
+    ts < min || ts > max
 }
 
 pub(crate) fn date_sub(
@@ -825,25 +832,23 @@ pub(crate) fn date_diff(later: Date<Utc>, earlier: Date<Utc>, date_part: DatePar
 }
 
 fn timestamp_add(
-    ts: Option<DateTime<Utc>>,
-    amount: Option<i64>,
+    ts: DateTime<Utc>,
+    amount: i64,
     date_part: DatePart,
 ) -> Result<Option<DateTime<Utc>>, String> {
-    match (ts, amount) {
-        (Some(ts), Some(amount)) => Ok(Some(ts + timestamp_duration(amount, date_part)?)),
-        _ => Ok(None),
+    let ok = ts + timestamp_duration(amount, date_part)?;
+    if is_overflow_ts(ok) {
+        return Err(OVERFLOW.to_string());
     }
+    Ok(Some(ok))
 }
 
 fn timestamp_sub(
-    ts: Option<DateTime<Utc>>,
-    amount: Option<i64>,
+    ts: DateTime<Utc>,
+    amount: i64,
     date_part: DatePart,
 ) -> Result<Option<DateTime<Utc>>, String> {
-    match (ts, amount) {
-        (Some(ts), Some(amount)) => Ok(Some(ts - timestamp_duration(amount, date_part)?)),
-        _ => Ok(None),
-    }
+    timestamp_add(ts, -amount, date_part)
 }
 
 fn timestamp_duration(amount: i64, date_part: DatePart) -> Result<Duration, String> {
@@ -912,6 +917,10 @@ fn epoch_date(d: Date<Utc>) -> i32 {
 
 fn epoch_micros(ts: DateTime<Utc>) -> i64 {
     ts.timestamp() * MICROSECONDS + ts.timestamp_subsec_micros() as i64
+}
+
+fn epoch_millis(ts: DateTime<Utc>) -> i64 {
+    ts.timestamp_millis()
 }
 
 fn date(value: i32) -> Date<Utc> {
