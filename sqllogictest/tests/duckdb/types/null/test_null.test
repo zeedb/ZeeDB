@@ -10,32 +10,30 @@ NULL
 
 # scalar NULL addition
 query I
-SELECT 3 + NULL
+SELECT 3 + cast(NULL AS INTEGER)
 ----
 NULL
 
 query I
-SELECT NULL + 3
+SELECT cast(NULL AS INTEGER) + 3
 ----
 NULL
 
 # NULL on both sides
 query I
-SELECT NULL + NULL
+SELECT cast(NULL AS INTEGER) + cast(NULL AS INTEGER)
 ----
 NULL
 
 # nested NULL addition
 query I
-SELECT 1 + (NULL + NULL)
+SELECT 1 + (cast(NULL AS INTEGER) + cast(NULL AS INTEGER))
 ----
 NULL
 
 # division by zero
-query I
+statement error
 SELECT 4 / 0
-----
-NULL
 
 statement ok
 CREATE TABLE test (a INTEGER, b INTEGER);
@@ -53,27 +51,19 @@ NULL
 
 # cast NULL
 query I
-SELECT cast(a AS BIGINT) FROM test;
+SELECT cast(a AS DOUBLE) FROM test;
 ----
 11
 NULL
 13
 
 # division by constant zero is NULL
-query I
+statement error
 SELECT a / 0 FROM test;
-----
-NULL
-NULL
-NULL
 
 # division by non-constant zero as well
-query I
+statement error
 SELECT a / (a - a) FROM test;
-----
-NULL
-NULL
-NULL
 
 # NULL addition results in NULL
 query I

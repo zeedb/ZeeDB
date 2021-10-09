@@ -13,12 +13,24 @@ fn test_types_date() {
 }
 
 #[test]
+fn test_types_null() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/types/null/test_boolean_null.test",
+        "./tests/duckdb/types/null/test_is_null.test",
+        "./tests/duckdb/types/null/test_null_aggr.test",
+        "./tests/duckdb/types/null/test_null_cast.test",
+        "./tests/duckdb/types/null/test_null.test",
+    ]));
+}
+
+#[test]
 fn test_types_timestamp() {
     rpc::runtime().block_on(test(vec![
         "./tests/duckdb/types/timestamp/test_incorrect_timestamp.test",
         "./tests/duckdb/types/timestamp/test_timestamp_ms.test",
         "./tests/duckdb/types/timestamp/test_timestamp.test",
         "./tests/duckdb/types/timestamp/timestamp_limits.test",
+        "./tests/duckdb/types/timestamp/utc_offset.test",
     ]));
 }
 

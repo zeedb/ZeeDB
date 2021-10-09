@@ -190,7 +190,17 @@ impl BoolArray {
     }
 
     pub fn and(&self, other: &Self) -> Self {
-        array_binary_operator!(self, other, left, right, left && right)
+        assert_eq!(self.len(), other.len());
+
+        let mut result = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            result.push(match (self.get(i), other.get(i)) {
+                (Some(false), _) | (_, Some(false)) => Some(false),
+                (Some(true), Some(true)) => Some(true),
+                (_, _) => None,
+            });
+        }
+        result
     }
 
     pub fn or(&self, other: &Self) -> Self {
@@ -208,7 +218,17 @@ impl BoolArray {
     }
 
     pub fn and_not(&self, other: &Self) -> Self {
-        array_binary_operator!(self, other, left, right, left && !right)
+        assert_eq!(self.len(), other.len());
+
+        let mut result = Self::with_capacity(self.len());
+        for i in 0..self.len() {
+            result.push(match (self.get(i), other.get(i)) {
+                (Some(false), _) | (_, Some(true)) => Some(false),
+                (Some(true), Some(false)) => Some(true),
+                (_, _) => None,
+            });
+        }
+        result
     }
 
     // Logical reduction operators.

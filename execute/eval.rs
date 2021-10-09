@@ -147,10 +147,10 @@ fn eval_function(function: &F, input: &RecordBatch, txn: i64) -> Result<AnyArray
             .bi_map(&e(b)?.as_f64(), |a: f64, b: f64| a.atan2(b)),
         F::DivideDouble(a, b) => e(a)?
             .as_f64()
-            .bi_map(&e(b)?.as_f64(), |a: f64, b: f64| a / b),
+            .bi_map(&e(b)?.as_f64(), |a: f64, b: f64| div_f64(a, b)),
         F::DivInt64(a, b) => e(a)?
             .as_i64()
-            .bi_map(&e(b)?.as_i64(), |a: i64, b: i64| a / b),
+            .bi_map(&e(b)?.as_i64(), |a: i64, b: i64| div_i64(a, b)),
         F::EndsWithString(a, b) => e(a)?
             .as_string()
             .bi_map(&e(b)?.as_string(), |a: &str, b: &str| a.ends_with(b)),
@@ -318,6 +318,24 @@ fn round(value: f64, digits: i64) -> f64 {
 fn trunc(value: f64, digits: i64) -> f64 {
     let mul = f64::powi(10.0, digits as i32);
     (value * mul).trunc() / mul
+}
+
+fn div_f64(a: f64, b: f64) -> Result<Option<f64>, String> {
+    let n = a / b;
+    if n.is_infinite() {
+        Err("division by zero".to_string())
+    } else {
+        Ok(Some(n))
+    }
+}
+
+fn div_i64(a: i64, b: i64) -> Result<Option<f64>, String> {
+    let n = a as f64 / b as f64;
+    if n.is_infinite() {
+        Err("division by zero".to_string())
+    } else {
+        Ok(Some(n))
+    }
 }
 
 // String functions.

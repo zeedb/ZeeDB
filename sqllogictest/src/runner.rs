@@ -280,7 +280,12 @@ fn format_datum(column: &AnyArray, typ: &Type, row: usize, col: usize) -> Option
         (Type::Integer, AnyArray::I64(i)) => i.get(row)?.to_string(),
         (Type::Integer, AnyArray::F64(f)) => format!("{:.0}", f.get(row)?),
         // This is so wrong, but sqlite needs it.
-        (Type::Integer, AnyArray::String(_)) => "0".to_string(),
+        (Type::Integer, AnyArray::String(_)) => {
+            if column.is_null().get(row).unwrap() {
+                return None;
+            }
+            "0".to_string()
+        }
         (Type::Integer, AnyArray::Bool(b)) => i8::from(b.get(row)?).to_string(),
         (Type::Real, AnyArray::I64(i)) => format!("{:.3}", i.get(row)?),
         (Type::Real, AnyArray::F64(f)) => format!("{:.3}", f.get(row)?),
