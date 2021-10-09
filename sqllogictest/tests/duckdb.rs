@@ -24,6 +24,14 @@ fn test_types_null() {
 }
 
 #[test]
+fn test_types_string() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/types/string/test_big_strings.test",
+        "./tests/duckdb/types/string/test_unicode.test",
+    ]));
+}
+
+#[test]
 fn test_types_timestamp() {
     rpc::runtime().block_on(test(vec![
         "./tests/duckdb/types/timestamp/test_incorrect_timestamp.test",
