@@ -1,5 +1,3 @@
-#![feature(num_as_ne_bytes)]
-
 mod any_array;
 mod array_like;
 #[macro_use]

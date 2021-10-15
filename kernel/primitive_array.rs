@@ -60,7 +60,7 @@ macro_rules! impl_array {
 
             fn bytes(&self, index: usize) -> Option<&[u8]> {
                 if self.is_valid.get(index) {
-                    Some(self.values[index].as_ne_bytes())
+                    Some(as_byte_slice(&self.values[index]))
                 } else {
                     None
                 }
@@ -136,6 +136,12 @@ macro_rules! impl_array {
             }
         }
     };
+}
+
+fn as_byte_slice<T>(primitive: &T) -> &[u8] {
+    let pp = primitive as *const T;
+    let bp = pp as *const u8;
+    unsafe { std::slice::from_raw_parts(bp, std::mem::size_of::<T>()) }
 }
 
 impl_array!(I64Array, I64, i64);

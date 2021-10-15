@@ -151,6 +151,7 @@ impl Node {
                 if key.is_empty() {
                     return node.value;
                 }
+                // TODO replace with std::arch intrinsics.
                 let byte = packed_simd::u8x16::splat(key[0]);
                 let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
                 let mask = 1u16
@@ -208,6 +209,7 @@ impl Node {
                 if key.is_empty() {
                     return self.take();
                 }
+                // TODO replace with std::arch intrinsics.
                 let byte = packed_simd::u8x16::splat(key[0]);
                 let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
                 let mask = 1u16
@@ -423,6 +425,7 @@ impl Node {
             }
             Node::Node16(node) => {
                 // If digit is already present, recurse.
+                // TODO replace with std::arch intrinsics.
                 let byte = packed_simd::u8x16::splat(digit);
                 let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
                 let mask = 1u16

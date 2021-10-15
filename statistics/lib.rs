@@ -1,5 +1,3 @@
-#![feature(shrink_to)]
-
 mod column_statistics;
 #[cfg(test)]
 mod column_statistics_tests;

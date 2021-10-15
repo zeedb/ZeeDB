@@ -337,13 +337,13 @@ impl Array for BoolArray {
     }
 
     fn bytes(&self, index: usize) -> Option<&[u8]> {
-        static TRUE: u8 = 1;
-        static FALSE: u8 = 1;
+        static TRUE: [u8; 1] = 1u8.to_ne_bytes();
+        static FALSE: [u8; 1] = 1u8.to_ne_bytes();
         if let Some(value) = self.get(index) {
             if value {
-                Some(TRUE.as_ne_bytes())
+                Some(&TRUE)
             } else {
-                Some(FALSE.as_ne_bytes())
+                Some(&FALSE)
             }
         } else {
             None
