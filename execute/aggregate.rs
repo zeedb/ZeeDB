@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::{BuildHasherDefault, Hash, Hasher},
 };
 
@@ -31,20 +31,29 @@ struct Key {
 enum Acc {
     AnyValue(Value),
     Count(i64),
+    CountDistinct(Distinct),
     LogicalAnd(Option<bool>),
     LogicalOr(Option<bool>),
     Max(Value),
     Min(Value),
     Sum(Value),
+    SumDistinct(Distinct),
+}
+
+#[derive(Clone)]
+enum Distinct {
+    Bool(HashSet<bool>),
+    I64(HashSet<i64>),
+    F64(HashSet<u64>),
+    Date(HashSet<i32>),
+    Timestamp(HashSet<i64>),
+    String(HashSet<String>),
 }
 
 impl SimpleAggregate {
     pub fn new(aggregate_fns: &Vec<AggregateExpr>) -> Self {
         Self {
-            aggregate_slots: aggregate_fns
-                .iter()
-                .map(|a| Acc::new(&a.function, a.input.data_type))
-                .collect(),
+            aggregate_slots: aggregate_fns.iter().map(|a| Acc::new(a)).collect(),
         }
     }
 
@@ -69,10 +78,7 @@ impl GroupByAggregate {
         Self {
             group_by_batches: vec![],
             aggregate_slots: HashMap::default(),
-            aggregate_slot_template: aggregate_fns
-                .iter()
-                .map(|a| Acc::new(&a.function, a.input.data_type))
-                .collect(),
+            aggregate_slot_template: aggregate_fns.iter().map(|a| Acc::new(a)).collect(),
         }
     }
 
@@ -231,15 +237,27 @@ impl PartialEq for Key {
 impl Eq for Key {}
 
 impl Acc {
-    fn new(operator: &AggregateFunction, data_type: DataType) -> Self {
-        match operator {
-            AggregateFunction::AnyValue => Self::AnyValue(Value::null(data_type)),
-            AggregateFunction::Count => Self::Count(0),
+    fn new(a: &AggregateExpr) -> Self {
+        match &a.function {
+            AggregateFunction::AnyValue => Self::AnyValue(Value::null(a.input.data_type)),
+            AggregateFunction::Count => {
+                if a.distinct {
+                    Self::CountDistinct(Distinct::new(a.input.data_type))
+                } else {
+                    Self::Count(0)
+                }
+            }
             AggregateFunction::LogicalAnd => Self::LogicalAnd(None),
             AggregateFunction::LogicalOr => Self::LogicalOr(None),
-            AggregateFunction::Max => Self::Max(Value::null(data_type)),
-            AggregateFunction::Min => Self::Min(Value::null(data_type)),
-            AggregateFunction::Sum => Self::Sum(Value::null(data_type)),
+            AggregateFunction::Max => Self::Max(Value::null(a.input.data_type)),
+            AggregateFunction::Min => Self::Min(Value::null(a.input.data_type)),
+            AggregateFunction::Sum => {
+                if a.distinct {
+                    Self::SumDistinct(Distinct::new(a.input.data_type))
+                } else {
+                    Self::Sum(Value::null(a.input.data_type))
+                }
+            }
         }
     }
 
@@ -293,6 +311,48 @@ impl Acc {
                     *value += 1
                 }
             }
+            (Acc::CountDistinct(Distinct::Bool(hash_set)), AnyArray::Bool(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
+            (Acc::CountDistinct(Distinct::I64(hash_set)), AnyArray::I64(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
+            (Acc::CountDistinct(Distinct::F64(hash_set)), AnyArray::F64(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i).map(as_u64) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
+            (Acc::CountDistinct(Distinct::Date(hash_set)), AnyArray::Date(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
+            (Acc::CountDistinct(Distinct::Timestamp(hash_set)), AnyArray::Timestamp(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
+            (Acc::CountDistinct(Distinct::String(hash_set)), AnyArray::String(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
             (Acc::LogicalAnd(value), AnyArray::Bool(column)) => {
                 let prev = value.unwrap_or(true);
                 if let Some(next) = column.get(tuple as usize) {
@@ -338,7 +398,7 @@ impl Acc {
             (Acc::Max(Value::String(value)), AnyArray::String(column)) => {
                 if let Some(next) = column.get_str(tuple as usize) {
                     if let Some(prev) = value {
-                        *value = Some(next.min(prev).to_string())
+                        *value = Some(next.max(prev).to_string())
                     } else {
                         *value = Some(next.to_string())
                     }
@@ -393,6 +453,20 @@ impl Acc {
                     *value = Some(value.unwrap_or(0.0) + next)
                 }
             }
+            (Acc::SumDistinct(Distinct::I64(hash_set)), AnyArray::I64(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
+            (Acc::SumDistinct(Distinct::F64(hash_set)), AnyArray::F64(column)) => {
+                for i in 0..column.len() {
+                    if let Some(next) = column.get(i).map(as_u64) {
+                        hash_set.insert(next);
+                    }
+                }
+            }
             (_, _) => panic!("unmatched aggregate / column"),
         }
     }
@@ -402,6 +476,13 @@ impl Acc {
             Acc::Count(value) => {
                 if let AnyArray::I64(builder) = builder {
                     builder.push(Some(*value))
+                } else {
+                    panic!("expected i64 but found {:?}", builder.data_type())
+                }
+            }
+            Acc::CountDistinct(distinct) => {
+                if let AnyArray::I64(builder) = builder {
+                    builder.push(Some(distinct.len()))
                 } else {
                     panic!("expected i64 but found {:?}", builder.data_type())
                 }
@@ -434,6 +515,27 @@ impl Acc {
                     ),
                 }
             }
+            Acc::SumDistinct(distinct) => match (distinct, builder) {
+                (Distinct::I64(hash_set), AnyArray::I64(builder)) => {
+                    let mut total = 0;
+                    for next in hash_set {
+                        total += next;
+                    }
+                    builder.push(Some(total))
+                }
+                (Distinct::F64(hash_set), AnyArray::F64(builder)) => {
+                    let mut total = 0.0;
+                    for next in hash_set {
+                        total += as_f64(*next);
+                    }
+                    builder.push(Some(total))
+                }
+                (value, builder) => panic!(
+                    "expected {:?} but found {:?}",
+                    value.data_type(),
+                    builder.data_type()
+                ),
+            },
         }
     }
 
@@ -445,13 +547,57 @@ impl Acc {
 
     fn data_type(&self) -> DataType {
         match self {
-            Acc::Count(_) => DataType::I64,
+            Acc::Count(_) | Acc::CountDistinct(_) => DataType::I64,
             Acc::LogicalAnd(_) | Acc::LogicalOr(_) => DataType::Bool,
             Acc::AnyValue(value) | Acc::Max(value) | Acc::Min(value) | Acc::Sum(value) => {
                 value.data_type()
             }
+            Acc::SumDistinct(value) => value.data_type(),
         }
     }
+}
+
+impl Distinct {
+    fn new(data_type: DataType) -> Self {
+        match data_type {
+            DataType::Bool => Distinct::Bool(HashSet::default()),
+            DataType::I64 => Distinct::I64(HashSet::default()),
+            DataType::F64 => Distinct::F64(HashSet::default()),
+            DataType::Date => Distinct::Date(HashSet::default()),
+            DataType::Timestamp => Distinct::Timestamp(HashSet::default()),
+            DataType::String => Distinct::String(HashSet::default()),
+        }
+    }
+
+    fn data_type(&self) -> DataType {
+        match self {
+            Distinct::Bool(_) => DataType::Bool,
+            Distinct::I64(_) => DataType::I64,
+            Distinct::F64(_) => DataType::F64,
+            Distinct::Date(_) => DataType::Date,
+            Distinct::Timestamp(_) => DataType::Timestamp,
+            Distinct::String(_) => DataType::String,
+        }
+    }
+
+    fn len(&self) -> i64 {
+        match self {
+            Distinct::Bool(hash_set) => hash_set.len() as i64,
+            Distinct::I64(hash_set) => hash_set.len() as i64,
+            Distinct::F64(hash_set) => hash_set.len() as i64,
+            Distinct::Date(hash_set) => hash_set.len() as i64,
+            Distinct::Timestamp(hash_set) => hash_set.len() as i64,
+            Distinct::String(hash_set) => hash_set.len() as i64,
+        }
+    }
+}
+
+fn as_u64(float: f64) -> u64 {
+    unsafe { std::mem::transmute(float) }
+}
+
+fn as_f64(int: u64) -> f64 {
+    unsafe { std::mem::transmute(int) }
 }
 
 fn push(into: &mut AnyArray, from: &AnyArray, i: usize) {

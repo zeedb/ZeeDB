@@ -672,6 +672,18 @@ pub async fn run_stdin(config: &RunConfig) -> Result<Outcomes, anyhow::Error> {
     run_string(config, "<stdin>", &input).await
 }
 
+pub async fn test(paths: Vec<&'static str>) {
+    let config = RunConfig {
+        verbosity: 2,
+        workers: 1,
+        no_fail: false,
+    };
+    for path in paths {
+        let outcomes = run_path(&config, &Path::new(path)).await.unwrap();
+        assert!(!outcomes.any_failed());
+    }
+}
+
 pub async fn rewrite_file(filename: &Path) -> Result<(), anyhow::Error> {
     let mut file = OpenOptions::new().read(true).write(true).open(filename)?;
 

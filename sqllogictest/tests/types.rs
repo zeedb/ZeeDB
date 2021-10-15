@@ -1,6 +1,4 @@
-use std::path::Path;
-
-use sqllogictest::runner::{run_path, RunConfig};
+use sqllogictest::runner::test;
 
 #[test]
 fn test_types_date() {
@@ -40,16 +38,4 @@ fn test_types_timestamp() {
         "./tests/duckdb/types/timestamp/timestamp_limits.test",
         "./tests/duckdb/types/timestamp/utc_offset.test",
     ]));
-}
-
-async fn test(paths: Vec<&'static str>) {
-    let config = RunConfig {
-        verbosity: 2,
-        workers: 1,
-        no_fail: false,
-    };
-    for path in paths {
-        let outcomes = run_path(&config, &Path::new(path)).await.unwrap();
-        assert!(!outcomes.any_failed());
-    }
 }
