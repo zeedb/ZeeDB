@@ -151,18 +151,8 @@ impl Node {
                 if key.is_empty() {
                     return node.value;
                 }
-                // TODO replace with std::arch intrinsics.
-                let byte = packed_simd::u8x16::splat(key[0]);
-                let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
-                let mask = 1u16
-                    .checked_shl(node.count as u32)
-                    .unwrap_or(0)
-                    .wrapping_sub(1);
-                let bitfield = cmp.bitmask() & mask;
-                if bitfield != 0 {
-                    return node.child[bitfield.trailing_zeros() as usize].get(&key[1..]);
-                }
-                None
+                let i = compare_16_keys(node.digit, node.count, key[0])?;
+                node.child[i].get(&key[1..])
             }
             Node::Node48(node) => {
                 let key = key.strip_prefix(&node.key[..])?;
@@ -209,18 +199,8 @@ impl Node {
                 if key.is_empty() {
                     return self.take();
                 }
-                // TODO replace with std::arch intrinsics.
-                let byte = packed_simd::u8x16::splat(key[0]);
-                let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
-                let mask = 1u16
-                    .checked_shl(node.count as u32)
-                    .unwrap_or(0)
-                    .wrapping_sub(1);
-                let bitfield = cmp.bitmask() & mask;
-                if bitfield != 0 {
-                    return node.child[bitfield.trailing_zeros() as usize].remove(&key[1..]);
-                }
-                None
+                let i = compare_16_keys(node.digit, node.count, key[0])?;
+                node.child[i].remove(&key[1..])
             }
             Node::Node48(node) => {
                 let key = key.strip_prefix(&node.key[..])?;
@@ -425,16 +405,8 @@ impl Node {
             }
             Node::Node16(node) => {
                 // If digit is already present, recurse.
-                // TODO replace with std::arch intrinsics.
-                let byte = packed_simd::u8x16::splat(digit);
-                let cmp = byte.eq(packed_simd::u8x16::from(node.digit));
-                let mask = 1u16
-                    .checked_shl(node.count as u32)
-                    .unwrap_or(0)
-                    .wrapping_sub(1);
-                let bitfield = cmp.bitmask() & mask;
-                if bitfield != 0 {
-                    return node.child[bitfield.trailing_zeros() as usize].insert(key, value);
+                if let Some(i) = compare_16_keys(node.digit, node.count, digit) {
+                    return node.child[i].insert(key, value);
                 }
                 // If space is available, add digit.
                 if node.count < 16 {
@@ -753,4 +725,32 @@ fn push_back(digit: u8, key: &[u8]) -> Vec<u8> {
     vec.push(digit);
     vec.extend_from_slice(key);
     vec
+}
+
+fn compare_16_keys(digit: [u8; 16], count: usize, key: u8) -> Option<usize> {
+    unsafe {
+        use core::arch::x86_64;
+
+        let byte = x86_64::_mm_set1_epi8(std::mem::transmute(key));
+        let cmp = x86_64::_mm_cmpeq_epi8(byte, std::mem::transmute(digit));
+        let mask = (1 << count) - 1;
+        let bitfield = x86_64::_mm_movemask_epi8(cmp) & mask;
+        if bitfield != 0 {
+            Some(bitfield.trailing_zeros() as usize)
+        } else {
+            None
+        }
+    }
+}
+
+#[test]
+fn test_compare_16_keys() {
+    for count in 0..16 {
+        for position in 0..count {
+            let mut digit = [0u8; 16];
+            digit[position] = 1;
+            assert_eq!(Some(position), compare_16_keys(digit, count, 1));
+            assert_eq!(None, compare_16_keys(digit, count, 2));
+        }
+    }
 }

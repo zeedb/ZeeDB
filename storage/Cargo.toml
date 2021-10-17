@@ -9,7 +9,6 @@ path = "lib.rs"
 
 [dependencies]
 kernel = { path = "../kernel" }
-packed_simd = { package = "packed_simd_2", version = "0.3.6" }
 statistics = { path = "../statistics" }
 twox-hash = { version = "1.6.0", features = [] }
 
