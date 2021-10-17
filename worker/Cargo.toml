@@ -18,7 +18,6 @@ globals = { path = "../globals" }
 kernel = { path = "../kernel" }
 log = { path = "../log" }
 rand = { version = "0.8.2", features = ["small_rng"]}
-rayon = "1.5"
 remote_execution = { path = "../remote_execution" }
 rpc = { path = "../rpc" }
 serde = { version = "1.0.123", features = ["derive"] }

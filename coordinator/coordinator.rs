@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicI64, Ordering},
-    Arc,
+use std::{
+    sync::{
+        atomic::{AtomicI64, Ordering},
+        Arc,
+    },
+    thread,
 };
 
 use ast::{Expr, Value};
@@ -31,7 +34,7 @@ impl Coordinator for CoordinatorNode {
             .txn
             .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
+        thread::spawn(move || sender.send(submit(request, txn)).unwrap());
         let batch = receiver.await.unwrap()?;
         Ok(Response::new(QueryResponse {
             txn,
@@ -48,7 +51,7 @@ impl Coordinator for CoordinatorNode {
             .txn
             .unwrap_or_else(|| self.txn.fetch_add(1, Ordering::Relaxed));
         let (sender, receiver) = tokio::sync::oneshot::channel();
-        rayon::spawn(move || sender.send(submit(request, txn)).unwrap());
+        thread::spawn(move || sender.send(submit(request, txn)).unwrap());
         let _batch = receiver.await.unwrap()?;
         Ok(Response::new(StatementResponse { txn }))
     }

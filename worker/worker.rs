@@ -1,6 +1,7 @@
 use std::{
     collections::{hash_map::Entry, HashMap},
     sync::{Arc, Mutex},
+    thread,
 };
 
 use ast::Expr;
@@ -65,7 +66,7 @@ impl Worker for WorkerNode {
         let storage = self.storage.clone();
         let worker = self.worker;
         let (sender, receiver) = tokio::sync::mpsc::channel(1);
-        rayon::spawn(move || gather(&storage, request.txn, request.stage, worker, expr, sender));
+        thread::spawn(move || gather(&storage, request.txn, request.stage, worker, expr, sender));
         Ok(Response::new(PageStream { receiver }))
     }
 
@@ -91,7 +92,7 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, _, _), topic) = occupied.remove_entry();
-                    rayon::spawn(move || {
+                    thread::spawn(move || {
                         broadcast(
                             &storage,
                             request.txn,
@@ -107,7 +108,7 @@ impl Worker for WorkerNode {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, _, _) = vacant.into_key();
-                    rayon::spawn(move || {
+                    thread::spawn(move || {
                         broadcast(
                             &storage,
                             request.txn,
@@ -153,7 +154,7 @@ impl Worker for WorkerNode {
                 // If we have reached the expected number of listeners, start the requested operation.
                 if occupied.get_mut().listeners.len() == listeners {
                     let ((expr, _, _), topic) = occupied.remove_entry();
-                    rayon::spawn(move || {
+                    thread::spawn(move || {
                         exchange(
                             &storage,
                             request.txn,
@@ -170,7 +171,7 @@ impl Worker for WorkerNode {
                 // If we only expect one listener, start the requested operation immediately.
                 if listeners == 1 {
                     let (expr, _, _) = vacant.into_key();
-                    rayon::spawn(move || {
+                    thread::spawn(move || {
                         exchange(
                             &storage,
                             request.txn,

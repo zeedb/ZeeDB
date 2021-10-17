@@ -19,7 +19,6 @@ log = { path = "../log" }
 parser = { path = "../parser" }
 planner = { path = "../planner" }
 rand = { version = "0.8.2", features = ["small_rng"] }
-rayon = "1.5"
 remote_execution = { path = "../remote_execution" }
 rpc = { path = "../rpc" }
 sequences = { path = "../sequences" }
