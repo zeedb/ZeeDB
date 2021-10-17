@@ -7,7 +7,7 @@ use std::{
 use ast::Expr;
 use execute::Node;
 use globals::Global;
-use kernel::{AnyArray, RecordBatch};
+use kernel::{AnyArray, Next, RecordBatch};
 use log::Session;
 use rpc::{
     page::Part, worker_server::Worker, BroadcastRequest, CheckRequest, CheckResponse,
@@ -228,9 +228,9 @@ fn gather(
     let mut query = Node::compile(expr.clone());
     loop {
         let result = match query.next(storage, txn) {
-            Ok(Some(batch)) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
-            Ok(None) => break,
-            Err(message) => Part::Error(message),
+            Next::Page(batch) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Next::End => break,
+            Next::Error(message) => Part::Error(message),
         };
         listener.blocking_send(Page { part: Some(result) }).unwrap();
     }
@@ -250,9 +250,9 @@ fn broadcast(
     let mut query = Node::compile(expr);
     loop {
         let result = match query.next(storage, txn) {
-            Ok(Some(batch)) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
-            Ok(None) => break,
-            Err(message) => Part::Error(message),
+            Next::Page(batch) => Part::RecordBatch(bincode::serialize(&batch).unwrap()),
+            Next::End => break,
+            Next::Error(message) => Part::Error(message),
         };
         for sink in &listeners {
             sink.blocking_send(Page {
@@ -280,7 +280,7 @@ fn exchange(
     let mut query = Node::compile(expr);
     loop {
         match query.next(storage, txn) {
-            Ok(Some(batch)) => {
+            Next::Page(batch) => {
                 let batches = partition(&batch, &hash_column, listeners.len());
                 for (hash_bucket, batch) in batches.iter().enumerate() {
                     let (_, sink) = &listeners[hash_bucket];
@@ -290,8 +290,8 @@ fn exchange(
                     .unwrap();
                 }
             }
-            Ok(None) => break,
-            Err(message) => {
+            Next::End => break,
+            Next::Error(message) => {
                 for (_, sink) in &listeners {
                     sink.blocking_send(Page {
                         part: Some(Part::Error(message.clone())),

@@ -394,31 +394,17 @@ impl Node {
     }
 }
 
-macro_rules! ok_some {
-    ($input:expr) => {
-        match $input {
-            Ok(Some(batch)) => batch,
-            Ok(None) => return Ok(None),
-            Err(err) => return Err(err),
-        }
-    };
-}
-
 impl Node {
-    pub fn next(
-        &mut self,
-        storage: &Mutex<Storage>,
-        txn: i64,
-    ) -> Result<Option<RecordBatch>, String> {
+    pub fn next(&mut self, storage: &Mutex<Storage>, txn: i64) -> Next {
         let _span = log::enter(self.name());
         match self {
             Node::TableFreeScan { worker, empty } => {
                 // Produce a single row on worker 0.
                 if *empty || globals::WORKER.get() != *worker {
-                    return Ok(None);
+                    return Next::End;
                 }
                 *empty = true;
-                Ok(Some(dummy_row()))
+                Next::Page(dummy_row())
             }
             Node::SeqScan {
                 projects,
@@ -431,7 +417,7 @@ impl Node {
                 }
                 let page = match scan.as_mut().unwrap().pop() {
                     Some(page) => page,
-                    None => return Ok(None),
+                    None => return Next::End,
                 };
                 let select_names = projects.iter().map(|c| c.name.clone()).collect();
                 let query_names = projects
@@ -440,7 +426,7 @@ impl Node {
                     .collect();
                 let input = page.select(&select_names).rename(&query_names);
                 let boolean = crate::eval::all(predicates, &input, txn)?;
-                Ok(Some(input.compress(&boolean)))
+                Next::Page(input.compress(&boolean))
             }
             Node::IndexScan {
                 include_existing,
@@ -451,7 +437,7 @@ impl Node {
                 table,
                 input,
             } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 // Perform a bitmap scan on the left side of the join.
                 let keys = evaluate_index_keys(lookup, &input, txn)?;
                 let sorted_tids = lookup_index_tids(keys, index, storage);
@@ -469,7 +455,7 @@ impl Node {
                     .collect();
                 let mut output = match RecordBatch::cat(filtered_pages) {
                     Some(batch) => batch,
-                    None => return Ok(None),
+                    None => return Next::End,
                 };
                 output = output.rename(&query_names);
                 // If requested, retain the right side of the join.
@@ -482,15 +468,15 @@ impl Node {
                     let boolean = crate::eval::all(predicates, &output, txn)?;
                     output = output.compress(&boolean);
                 }
-                Ok(Some(output))
+                Next::Page(output)
             }
             Node::Filter { predicates, input } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 let boolean = crate::eval::all(predicates, &input, txn)?;
-                Ok(Some(input.compress(&boolean)))
+                Next::Page(input.compress(&boolean))
             }
             Node::Out { projects, input } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 let mut columns = vec![];
                 for column in projects {
                     columns.push((
@@ -498,14 +484,14 @@ impl Node {
                         input.find(&column.canonical_name()).unwrap().clone(),
                     ));
                 }
-                Ok(Some(RecordBatch::new(columns)))
+                Next::Page(RecordBatch::new(columns))
             }
             Node::Map {
                 include_existing,
                 projects,
                 input,
             } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 let mut columns = vec![];
                 if *include_existing {
                     columns.extend(input.columns.clone());
@@ -516,7 +502,7 @@ impl Node {
                         crate::eval::eval(scalar, &input, txn)?,
                     ));
                 }
-                Ok(Some(RecordBatch::new(columns)))
+                Next::Page(RecordBatch::new(columns))
             }
             Node::NestedLoop {
                 join: Join::Outer(predicates),
@@ -529,16 +515,15 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a single batch.
                 if build_left.is_none() {
-                    let input = build(left, storage, txn)?
-                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
+                    let input = build_or_empty(left, storage, txn, left_schema)?;
                     let bits = BoolArray::trues(input.len());
                     *build_left = Some(input);
                     // Allocate a bit array to keep track of which rows on the left side never found join partners.
                     *unmatched_left = Some(bits);
                 }
-                match right.next(storage, txn)? {
+                match right.next(storage, txn) {
                     // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
-                    Some(right) => {
+                    Next::Page(right) => {
                         let filter = |input: &RecordBatch| crate::eval::all(predicates, input, txn);
                         let next = crate::join::nested_loop(
                             build_left.as_ref().unwrap(),
@@ -547,9 +532,9 @@ impl Node {
                             unmatched_left.as_mut(),
                             true,
                         )?;
-                        Ok(Some(next))
+                        Next::Page(next)
                     }
-                    None => match unmatched_left.take() {
+                    Next::End => match unmatched_left.take() {
                         // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
                         Some(unmatched_left) => {
                             let next = crate::join::unmatched_tuples(
@@ -557,11 +542,12 @@ impl Node {
                                 &unmatched_left,
                                 &right_schema,
                             )?;
-                            Ok(Some(next))
+                            Next::Page(next)
                         }
                         // The second time we receive 'Empty' from the right side, we are truly finished.
-                        None => Ok(None),
+                        None => Next::End,
                     },
+                    Next::Error(message) => Next::Error(message),
                 }
             }
             Node::NestedLoop {
@@ -574,12 +560,11 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a single batch.
                 if build_left.is_none() {
-                    let input = build(left, storage, txn)?
-                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
+                    let input = build_or_empty(left, storage, txn, left_schema)?;
                     *build_left = Some(input);
                 }
                 // Get the next batch of rows from the right (probe) side.
-                let right = ok_some!(right.next(storage, txn));
+                let right = right.next(storage, txn)?;
                 let filter = |input: &RecordBatch| crate::eval::all(join.predicates(), input, txn);
                 // Join a batch of rows to the left (build) side.
                 let next = match &join {
@@ -616,7 +601,7 @@ impl Node {
                         filter,
                     ),
                 };
-                Ok(Some(next?))
+                Next::Page(next?)
             }
             Node::HashJoin {
                 join: Join::Outer(predicates),
@@ -631,8 +616,7 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
-                    let left = build(left, storage, txn)?
-                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
+                    let left = build_or_empty(left, storage, txn, left_schema)?;
                     let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
                     {
                         AnyArray::I64(a) => a,
@@ -645,7 +629,7 @@ impl Node {
                 }
                 match right.next(storage, txn) {
                     // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
-                    Ok(Some(right)) => {
+                    Next::Page(right) => {
                         let partition_right =
                             match right.find(&partition_right.canonical_name()).unwrap() {
                                 AnyArray::I64(a) => a,
@@ -660,9 +644,9 @@ impl Node {
                             Some(unmatched_left.as_mut().unwrap()),
                             true,
                         )?;
-                        Ok(Some(next))
+                        Next::Page(next)
                     }
-                    Ok(None) => match unmatched_left.take() {
+                    Next::End => match unmatched_left.take() {
                         // The first time we receive 'Empty' from the right side, consume unmatched_left and release the unmatched left side rows.
                         Some(unmatched_left) => {
                             let next = crate::join::unmatched_tuples(
@@ -670,12 +654,12 @@ impl Node {
                                 &unmatched_left,
                                 &right_schema,
                             )?;
-                            Ok(Some(next))
+                            Next::Page(next)
                         }
                         // The second time we receive 'Empty' from the right side, we are truly finished.
-                        None => Ok(None),
+                        None => Next::End,
                     },
-                    Err(message) => Err(message),
+                    Next::Error(message) => Next::Error(message),
                 }
             }
             Node::HashJoin {
@@ -690,8 +674,7 @@ impl Node {
             } => {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
-                    let left = build(left, storage, txn)?
-                        .unwrap_or_else(|| RecordBatch::empty(left_schema.clone()));
+                    let left = build_or_empty(left, storage, txn, left_schema)?;
                     let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
                     {
                         AnyArray::I64(a) => a,
@@ -701,7 +684,7 @@ impl Node {
                     *build_left = Some(table);
                 }
                 // Get the next batch of rows from the right (probe) side.
-                let right = ok_some!(right.next(storage, txn));
+                let right = right.next(storage, txn)?;
                 let partition_right = match right.find(&partition_right.canonical_name()).unwrap() {
                     AnyArray::I64(a) => a,
                     _ => panic!(),
@@ -752,7 +735,7 @@ impl Node {
                         filter,
                     ),
                 };
-                Ok(Some(next?))
+                Next::Page(next?)
             }
             Node::CreateTempTable {
                 name,
@@ -767,10 +750,12 @@ impl Node {
                     .map(|c| (c.canonical_name(), c.name.clone()))
                     .collect();
                 loop {
-                    if let Some(batch) = input.next(storage, txn)? {
-                        heap.insert(&batch.rename(&renames), txn);
-                    } else {
-                        break;
+                    match input.next(storage, txn) {
+                        Next::Page(batch) => {
+                            heap.insert(&batch.rename(&renames), txn);
+                        }
+                        Next::Error(message) => return Next::Error(message),
+                        Next::End => break,
                     }
                 }
                 // Store the temp table.
@@ -779,7 +764,7 @@ impl Node {
                     .lock()
                     .unwrap()
                     .create_temp_table(txn, name.clone(), heap);
-                Ok(None)
+                Next::End
             }
             Node::GetTempTable {
                 name,
@@ -791,7 +776,7 @@ impl Node {
                 }
                 let page = match scan.as_mut().unwrap().pop() {
                     Some(page) => page,
-                    None => return Ok(None),
+                    None => return Next::End,
                 };
                 let select_names = columns.iter().map(|c| c.name.clone()).collect();
                 let query_names = columns
@@ -799,7 +784,7 @@ impl Node {
                     .map(|c| (c.name.clone(), c.canonical_name()))
                     .collect();
                 let next = page.select(&select_names).rename(&query_names);
-                Ok(Some(next))
+                Next::Page(next)
             }
             Node::SimpleAggregate {
                 worker,
@@ -808,33 +793,37 @@ impl Node {
                 input,
             } => {
                 if globals::WORKER.get() != *worker {
-                    return Ok(None);
+                    return Next::End;
                 }
                 if *finished {
-                    return Ok(None);
+                    return Next::End;
                 } else {
                     *finished = true;
                 }
                 let mut operator = crate::aggregate::SimpleAggregate::new(aggregate);
                 loop {
-                    if let Some(batch) = input.next(storage, txn)? {
-                        let aggregate_columns: Vec<AnyArray> = aggregate
-                            .iter()
-                            .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
-                            .collect();
-                        operator.insert(aggregate_columns);
-                    } else {
-                        let mut names = vec![];
-                        for e in aggregate {
-                            names.push(e.output.canonical_name());
+                    match input.next(storage, txn) {
+                        Next::Page(batch) => {
+                            let aggregate_columns: Vec<AnyArray> = aggregate
+                                .iter()
+                                .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
+                                .collect();
+                            operator.insert(aggregate_columns);
                         }
-                        let columns = operator
-                            .finish()
-                            .drain(..)
-                            .enumerate()
-                            .map(|(i, array)| (std::mem::take(&mut names[i]), array))
-                            .collect();
-                        return Ok(Some(RecordBatch::new(columns)));
+                        Next::End => {
+                            let mut names = vec![];
+                            for e in aggregate {
+                                names.push(e.output.canonical_name());
+                            }
+                            let columns = operator
+                                .finish()
+                                .drain(..)
+                                .enumerate()
+                                .map(|(i, array)| (std::mem::take(&mut names[i]), array))
+                                .collect();
+                            return Next::Page(RecordBatch::new(columns));
+                        }
+                        Next::Error(message) => return Next::Error(message),
                     }
                 }
             }
@@ -845,37 +834,41 @@ impl Node {
                 input,
             } => {
                 if *finished {
-                    return Ok(None);
+                    return Next::End;
                 } else {
                     *finished = true;
                 }
                 let mut operator = crate::aggregate::GroupByAggregate::new(aggregate);
                 loop {
-                    if let Some(batch) = input.next(storage, txn)? {
-                        let group_by_columns: Vec<AnyArray> = group_by
-                            .iter()
-                            .map(|c| batch.find(&c.canonical_name()).unwrap().clone())
-                            .collect();
-                        let aggregate_columns: Vec<AnyArray> = aggregate
-                            .iter()
-                            .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
-                            .collect();
-                        operator.insert(group_by_columns, aggregate_columns);
-                    } else {
-                        let mut names = vec![];
-                        for c in group_by {
-                            names.push(c.canonical_name());
+                    match input.next(storage, txn) {
+                        Next::Page(batch) => {
+                            let group_by_columns: Vec<AnyArray> = group_by
+                                .iter()
+                                .map(|c| batch.find(&c.canonical_name()).unwrap().clone())
+                                .collect();
+                            let aggregate_columns: Vec<AnyArray> = aggregate
+                                .iter()
+                                .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
+                                .collect();
+                            operator.insert(group_by_columns, aggregate_columns);
                         }
-                        for e in aggregate {
-                            names.push(e.output.canonical_name());
+                        Next::Error(message) => return Next::Error(message),
+                        Next::End => {
+                            let mut names = vec![];
+                            for c in group_by {
+                                names.push(c.canonical_name());
+                            }
+                            for e in aggregate {
+                                names.push(e.output.canonical_name());
+                            }
+                            let columns = operator
+                                .finish()
+                                .drain(..)
+                                .enumerate()
+                                .map(|(i, array)| (std::mem::take(&mut names[i]), array))
+                                .collect();
+                            return Next::Page(RecordBatch::new(columns));
                         }
-                        let columns = operator
-                            .finish()
-                            .drain(..)
-                            .enumerate()
-                            .map(|(i, array)| (std::mem::take(&mut names[i]), array))
-                            .collect();
-                        return Ok(Some(RecordBatch::new(columns)));
                     }
                 }
             }
@@ -886,9 +879,9 @@ impl Node {
                 input,
             } => {
                 if *cursor == *limit {
-                    return Ok(None);
+                    return Next::End;
                 }
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 let mut start_inclusive = 0;
                 while start_inclusive < input.len() && cursor < offset {
                     start_inclusive += 1;
@@ -899,10 +892,10 @@ impl Node {
                     end_exclusive += 1;
                     *cursor += 1;
                 }
-                Ok(Some(input.slice(start_inclusive..end_exclusive)))
+                Next::Page(input.slice(start_inclusive..end_exclusive))
             }
             Node::Sort { order_by, input } => {
-                let input = ok_some!(build(input, storage, txn));
+                let input = build(input, storage, txn)?;
                 let desc = order_by.iter().map(|o| o.descending).collect();
                 let columns = order_by
                     .iter()
@@ -915,15 +908,13 @@ impl Node {
                     .collect();
                 let indexes = RecordBatch::new(columns).sort(desc);
                 let output = input.gather(&indexes);
-                Ok(Some(output))
+                Next::Page(output)
             }
-            Node::Union { left, right } => {
-                if let Some(batch) = left.next(storage, txn)? {
-                    Ok(Some(batch))
-                } else {
-                    right.next(storage, txn)
-                }
-            }
+            Node::Union { left, right } => match left.next(storage, txn) {
+                Next::Page(batch) => Next::Page(batch),
+                Next::Error(message) => Next::Error(message),
+                Next::End => right.next(storage, txn),
+            },
             Node::Broadcast {
                 input,
                 stream,
@@ -959,7 +950,7 @@ impl Node {
                 stream,
             } => {
                 if globals::WORKER.get() != *worker {
-                    return Ok(None);
+                    return Next::End;
                 }
                 if let Some(expr) = input.take() {
                     *stream = Some(RemoteQuery::new(remote_execution::gather(
@@ -976,14 +967,15 @@ impl Node {
                 columns,
             } => {
                 if *finished {
-                    return Ok(None);
+                    return Next::End;
                 } else {
                     *finished = true;
                 }
                 loop {
-                    let input = match input.next(storage, txn)? {
-                        Some(next) => next,
-                        None => break,
+                    let input = match input.next(storage, txn) {
+                        Next::Page(batch) => batch,
+                        Next::Error(message) => return Next::Error(message),
+                        Next::End => break,
                     };
                     // Rename columns from query to match table.
                     let renames = columns
@@ -1009,14 +1001,14 @@ impl Node {
                     }
                 }
                 // Insert returns no values.
-                Ok(None)
+                Next::End
             }
             Node::Values {
                 columns,
                 values,
                 input,
             } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 let mut output = vec![];
                 for i in 0..columns.len() {
                     let mut builder = vec![];
@@ -1029,10 +1021,10 @@ impl Node {
                     }
                     output.push((columns[i].canonical_name(), AnyArray::cat(builder)));
                 }
-                Ok(Some(RecordBatch::new(output)))
+                Next::Page(RecordBatch::new(output))
             }
             Node::Delete { table, tid, input } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 // If no input, try next page.
                 if input.len() == 0 {
                     return self.next(storage, txn);
@@ -1058,26 +1050,26 @@ impl Node {
                         i += 1;
                     }
                 }
-                Ok(Some(input))
+                Next::Page(input)
             }
             Node::Script { offset, statements } => {
                 while *offset < statements.len() {
                     match statements[*offset].next(storage, txn) {
-                        Ok(Some(batch)) => {
+                        Next::Page(batch) => {
                             if *offset == statements.len() - 1 {
-                                return Ok(Some(batch));
+                                return Next::Page(batch);
                             }
                         }
-                        Ok(None) => {
+                        Next::End => {
                             *offset += 1;
                         }
-                        Err(message) => return Err(message),
+                        Next::Error(message) => return Next::Error(message),
                     }
                 }
-                Ok(None)
+                Next::End
             }
             Node::Call { procedure, input } => {
-                let input = ok_some!(input.next(storage, txn));
+                let input = input.next(storage, txn)?;
                 match procedure {
                     Procedure::CreateTable(id) => {
                         let ids = crate::eval::eval(id, &input, txn)?.as_i64();
@@ -1117,21 +1109,22 @@ impl Node {
                             .get(0)
                             .unwrap_or(false);
                         if !test {
-                            return Err(description.clone());
+                            return Next::Error(description.clone());
                         }
                     }
                 };
-                Ok(None)
+                Next::End
             }
             Node::Explain { finished, input } => {
                 if *finished || globals::WORKER.get() != 0 {
-                    return Ok(None);
+                    return Next::End;
                 }
                 *finished = true;
-                Ok(Some(RecordBatch::new(vec![(
+                let batch = RecordBatch::new(vec![(
                     "plan".to_string(),
                     AnyArray::String(StringArray::from_values(vec![input.to_string()])),
-                )])))
+                )]);
+                Next::Page(batch)
             }
         }
     }
@@ -1185,18 +1178,32 @@ fn dummy_row() -> RecordBatch {
     )])
 }
 
-fn build(
-    input: &mut Node,
+fn build_or_empty(
+    left: &mut Node,
     storage: &Mutex<Storage>,
     txn: i64,
-) -> Result<Option<RecordBatch>, String> {
+    left_schema: &Vec<(String, DataType)>,
+) -> Result<RecordBatch, String> {
+    match build(left, storage, txn) {
+        Next::Page(batch) => Ok(batch),
+        Next::Error(message) => Err(message),
+        Next::End => Ok(RecordBatch::empty(left_schema.clone())),
+    }
+}
+
+fn build(input: &mut Node, storage: &Mutex<Storage>, txn: i64) -> Next {
     let mut batches = vec![];
     loop {
-        if let Some(batch) = input.next(storage, txn)? {
-            batches.push(batch)
-        } else {
-            let batch = RecordBatch::cat(batches);
-            return Ok(batch);
+        match input.next(storage, txn) {
+            Next::Page(batch) => batches.push(batch),
+            Next::Error(message) => return Next::Error(message),
+            Next::End => {
+                if let Some(batch) = RecordBatch::cat(batches) {
+                    return Next::Page(batch);
+                } else {
+                    return Next::End;
+                }
+            }
         }
     }
 }

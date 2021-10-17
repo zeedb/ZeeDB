@@ -1,4 +1,7 @@
-use std::{pin::Pin, task::Poll};
+use std::{
+    pin::Pin,
+    task::{Context, Poll},
+};
 
 use futures::Stream;
 use tokio::sync::mpsc::Receiver;
@@ -13,10 +16,7 @@ pub struct PageStream {
 impl Stream for PageStream {
     type Item = Result<Page, Status>;
 
-    fn poll_next(
-        self: Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.get_mut().receiver.poll_recv(cx) {
             Poll::Ready(next) => match next {
                 Some(page) => Poll::Ready(Some(Ok(page))),

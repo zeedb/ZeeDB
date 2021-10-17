@@ -7,7 +7,7 @@ use std::{
 };
 
 use ast::{Expr, Value};
-use kernel::RecordBatch;
+use kernel::{Next, RecordBatch};
 use rpc::{
     coordinator_server::Coordinator, CheckRequest, CheckResponse, QueryRequest, QueryResponse,
     StatementResponse, TraceRequest, TraceResponse,
@@ -95,9 +95,9 @@ fn gather(expr: &Expr, txn: i64) -> Result<RecordBatch, Status> {
     let mut batches = vec![];
     loop {
         match stream.next() {
-            Ok(Some(batch)) => batches.push(batch),
-            Ok(None) => break,
-            Err(message) => return Err(Status::internal(message)),
+            Next::Page(batch) => batches.push(batch),
+            Next::Error(message) => return Err(Status::internal(message)),
+            Next::End => break,
         }
     }
     let batch = RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema));

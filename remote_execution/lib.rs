@@ -1,31 +1,35 @@
 use std::collections::HashMap;
 
 use ast::{Expr, Value};
-use futures::{Stream, StreamExt};
-use kernel::RecordBatch;
+use futures::{
+    stream::{select_all, SelectAll},
+    StreamExt,
+};
+use kernel::{Next, RecordBatch};
 use once_cell::sync::OnceCell;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, page::Part, worker_client::WorkerClient,
     BroadcastRequest, ExchangeRequest, GatherRequest, Page, QueryRequest,
 };
-use tonic::{transport::Channel, Status};
+use tonic::{transport::Channel, Streaming};
 
 pub struct RecordStream {
-    inner: Box<dyn Stream<Item = Result<RecordBatch, String>> + Send + Unpin>,
+    select: SelectAll<Streaming<Page>>,
 }
 
 impl RecordStream {
-    pub fn new(inner: Box<dyn Stream<Item = Result<RecordBatch, String>> + Send + Unpin>) -> Self {
-        Self { inner }
+    fn new(streams: Vec<Streaming<Page>>) -> Self {
+        Self {
+            select: select_all(streams),
+        }
     }
 
-    #[log::trace]
-    pub fn next(&mut self) -> Result<Option<RecordBatch>, String> {
-        match log::rpc(self.inner.next()) {
-            Some(Ok(batch)) => Ok(Some(batch)),
-            None => Ok(None),
-            Some(Err(message)) => Err(message),
+    pub fn next(&mut self) -> Next {
+        match log::rpc(self.select.next()) {
+            Some(Ok(page)) => Next::Page(unwrap_page(page)?),
+            Some(Err(status)) => Next::Error(status.message().to_string()),
+            None => Next::End,
         }
     }
 }
@@ -68,15 +72,10 @@ pub fn gather(expr: &Expr, txn: i64, stage: i32) -> RecordStream {
                 stage,
                 expr: bincode::serialize(expr).unwrap(),
             };
-            let response = worker
-                .gather(request)
-                .await
-                .unwrap()
-                .into_inner()
-                .map(unwrap_page);
+            let response = worker.gather(request).await.unwrap().into_inner();
             streams.push(response);
         }
-        RecordStream::new(Box::new(futures::stream::select_all(streams)))
+        RecordStream::new(streams)
     })
 }
 
@@ -91,15 +90,10 @@ pub fn broadcast(expr: &Expr, txn: i64, stage: i32) -> RecordStream {
                 stage,
                 expr: bincode::serialize(expr).unwrap(),
             };
-            let response = worker
-                .broadcast(request)
-                .await
-                .unwrap()
-                .into_inner()
-                .map(unwrap_page);
+            let response = worker.broadcast(request).await.unwrap().into_inner();
             streams.push(response);
         }
-        RecordStream::new(Box::new(futures::stream::select_all(streams)))
+        RecordStream::new(streams)
     })
 }
 
@@ -122,20 +116,15 @@ pub fn exchange(
                 hash_column: hash_column.clone(),
                 hash_bucket,
             };
-            let response = worker
-                .exchange(request)
-                .await
-                .unwrap()
-                .into_inner()
-                .map(unwrap_page);
+            let response = worker.exchange(request).await.unwrap().into_inner();
             streams.push(response);
         }
-        RecordStream::new(Box::new(futures::stream::select_all(streams)))
+        RecordStream::new(streams)
     })
 }
 
-fn unwrap_page(page: Result<Page, Status>) -> Result<RecordBatch, String> {
-    match page.unwrap().part.unwrap() {
+fn unwrap_page(page: Page) -> Result<RecordBatch, String> {
+    match page.part.unwrap() {
         Part::RecordBatch(bytes) => {
             let batch = bincode::deserialize(&bytes).unwrap();
             Ok(batch)

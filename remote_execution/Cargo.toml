@@ -10,7 +10,7 @@ path = "lib.rs"
 [dependencies]
 ast = { path = "../ast" }
 bincode = "1.3.1"
-futures = { version = "0.3.13", features = [] }
+futures = { version = "0.3.17", features = [] }
 kernel = { path = "../kernel" }
 log = { path = "../log" }
 once_cell = "1.7.2"
