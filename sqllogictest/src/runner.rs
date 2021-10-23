@@ -795,11 +795,7 @@ impl<'a> RewriteBuffer<'a> {
 }
 
 pub async fn connect_to_cluster() -> CoordinatorClient<Channel> {
-    static LOCK: OnceCell<Mutex<()>> = OnceCell::new();
-    let _lock = LOCK.get_or_init(|| Mutex::default()).lock().unwrap();
-    if !std::env::var("COORDINATOR").is_ok() {
-        create_cluster().await
-    }
+    maybe_create_cluster();
     let coordinator = std::env::var("COORDINATOR").unwrap();
     let mut client = CoordinatorClient::new(
         Endpoint::new(coordinator.clone())
@@ -819,7 +815,15 @@ pub async fn connect_to_cluster() -> CoordinatorClient<Channel> {
 
 const N_WORKERS: usize = 2;
 
-async fn create_cluster() {
+fn maybe_create_cluster() {
+    static LOCK: OnceCell<Mutex<()>> = OnceCell::new();
+    let _lock = LOCK.get_or_init(|| Mutex::default()).lock().unwrap();
+    if !std::env::var("COORDINATOR").is_ok() {
+        create_cluster()
+    }
+}
+
+fn create_cluster() {
     let (coordinator_port, worker_ports) = find_cluster_ports();
     set_common_env_variables(coordinator_port, &worker_ports);
     spawn_coordinator(coordinator_port);

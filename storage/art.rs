@@ -117,7 +117,7 @@ struct Node48 {
 struct Node256 {
     key: Vec<u8>,
     value: Option<i64>,
-    count: usize,
+    _count: usize,
     child: [Node; 256],
 }
 
@@ -496,7 +496,7 @@ impl Node {
                 Node::Node256(Box::new(Node256 {
                     key: node.key,
                     value: node.value,
-                    count: node.count,
+                    _count: node.count,
                     child,
                 }))
             }
