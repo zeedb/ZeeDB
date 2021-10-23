@@ -24,7 +24,7 @@ use std::{
 };
 
 use anyhow::{anyhow, bail};
-use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
+use catalog::{METADATA_CATALOG_ID, ROOT_CATALOG_ID};
 use chrono::{Date, DateTime, NaiveDate, TimeZone, Utc};
 use coordinator::CoordinatorNode;
 use kernel::{AnyArray, Array, RecordBatch};
@@ -900,21 +900,36 @@ fn free_port(min: u16) -> u16 {
 }
 
 async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
-    // Find the id of the next database.
-    // TODO this is an evil trick that just happens to match, we should query this value from the metadata schema.
-    static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(RESERVED_IDS));
-    let catalog_id = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
+    // Generate a number for the next database.
+    static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(0));
+    let next_catalog = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
     // Create a new, empty database.
     client
         .query(QueryRequest {
-            sql: format!("create database test{}", catalog_id),
+            sql: format!("create database test{}", next_catalog),
             catalog_id: ROOT_CATALOG_ID,
             txn: None,
             variables: HashMap::default(),
         })
         .await
         .unwrap();
-    catalog_id
+    // Query the ID of the database we just created.
+    let response = client
+        .query(QueryRequest {
+            sql: format!(
+                "select catalog_id from catalog where catalog_name = 'test{}'",
+                next_catalog
+            ),
+            catalog_id: METADATA_CATALOG_ID,
+            txn: None,
+            variables: HashMap::default(),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    let mut record_batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
+    let (_, column) = record_batch.columns.remove(0);
+    column.as_i64().get(0).unwrap()
 }
 
 fn date(value: i32) -> Date<Utc> {
