@@ -1,0 +1,54 @@
+steps:
+  - name: gcr.io/zeedeebee/zeedb-builder
+    id: 'Build Benchmarks'
+    entrypoint: sh
+    args: [-c, $_BUILD_BENCHMARKS]
+  - name: gcr.io/cloud-builders/gsutil
+    id: 'Restore Benchmarks Timing'
+    entrypoint: sh
+    args: [-c, 'gsutil cp gs://zeedb-build-cache/criterion-main-${_RELEASE}.zip criterion.zip && unzip criterion.zip -d / || true']
+  - name: gcr.io/zeedeebee/zeedb-builder
+    id: 'Run Benchmarks'
+    entrypoint: sh
+    args: [-c, $_RUN_BENCHMARKS]
+  - name: gcr.io/cloud-builders/gsutil
+    id: 'Save Benchmarks Timing'
+    entrypoint: sh
+    args: [-c, "find /cargo/target/criterion -name '*.json' | zip criterion.zip -@ && gsutil cp criterion.zip 'gs://zeedb-build-cache/criterion-${BRANCH_NAME}-${_DEVELOP}.zip'"]
+artifacts:
+  objects:
+    location: gs://zeedb-build-artifacts
+    paths:
+      - cargo-timing-bench.html
+      - benchmarks.tar.gz
+substitutions: 
+  _RELEASE: '1'
+  _DEVELOP: '1'
+  _BUILD_BENCHMARKS: |
+    set -eux
+    cargo bench -Z timings --no-run
+    sccache --show-stats
+    mv cargo-timing.html cargo-timing-bench.html
+  _RUN_BENCHMARKS: |
+    set -eux
+    zetasql_server & 
+    cargo bench --bench example
+    tar -zcf benchmarks.tar.gz /cargo/target/criterion
+timeout: 3600s
+options:
+  env:
+    - RUSTC_WRAPPER=sccache
+    - CMAKE_C_COMPILER_LAUNCHER=sccache
+    - CMAKE_CXX_COMPILER_LAUNCHER=sccache
+    - SCCACHE_GCS_BUCKET=zeedb-build-cache
+    - SCCACHE_GCS_OAUTH_URL=http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/697461006037@cloudbuild.gserviceaccount.com/token
+    - SCCACHE_GCS_RW_MODE=READ_WRITE
+    - CARGO_INCREMENTAL=0
+    - CARGO_HOME=/cargo/cache
+    - CARGO_TARGET_DIR=/cargo/target
+    - NO_RUSTFMT=1
+    - RUST_BACKTRACE=1
+  volumes: 
+    - name: cargo
+      path: /cargo
+  machineType: E2_HIGHCPU_8
