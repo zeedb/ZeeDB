@@ -1,5 +1,3 @@
-#![feature(is_sorted)]
-
 mod art;
 #[cfg(test)]
 mod art_tests;
