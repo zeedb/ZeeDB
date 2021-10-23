@@ -3,14 +3,14 @@ steps:
     id: 'Build Tests'
     entrypoint: sh
     args: [-c, $_BUILD_TESTS]
-    env: 
-      - RUSTFLAGS=-Z instrument-coverage
+    # env: 
+    #   - RUSTFLAGS=-Z instrument-coverage
   - name: gcr.io/zeedeebee/zeedb-builder
     id: 'Run Tests'
     entrypoint: sh
     args: [-c, $_RUN_TESTS]
     env: 
-      - RUSTFLAGS=-Z instrument-coverage
+      # - RUSTFLAGS=-Z instrument-coverage
       - COORDINATOR=http://127.0.0.1:50100
       - WORKER_0=http://127.0.0.1:50101
       - WORKER_1=http://127.0.0.1:50102
@@ -37,7 +37,7 @@ artifacts:
     paths:
       - cargo-timing-test.html
       - cargo-timing-bench.html
-      - coverage.tar.gz
+      # - coverage.tar.gz
       - benchmarks.tar.gz
 substitutions: 
   _RELEASE: '1'
@@ -54,8 +54,8 @@ substitutions:
     WORKER_PORT=50101 WORKER_ID=0 /cargo/target/debug/zeedb-worker &
     WORKER_PORT=50102 WORKER_ID=1 /cargo/target/debug/zeedb-worker &
     cargo test
-    grcov . --binary-path /cargo/target/debug/ -s . -t html --branch --ignore-not-existing -o ./coverage
-    tar -zcf coverage.tar.gz ./coverage
+    # grcov . --binary-path /cargo/target/debug/ -s . -t html --branch --ignore-not-existing -o ./coverage
+    # tar -zcf coverage.tar.gz ./coverage
   _BUILD_BENCHMARKS: |
     set -eux
     cargo bench -Z timings --no-run
