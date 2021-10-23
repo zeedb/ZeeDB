@@ -4,8 +4,8 @@ FROM mcr.microsoft.com/vscode/devcontainers/rust:1
 # RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
 #     && apt-get -y install --no-install-recommends <packages> 
 
-RUN rustup toolchain install nightly-2021-05-17 && \
-    rustup default nightly-2021-05-17 && \
+RUN rustup toolchain install nightly && \
+    rustup default nightly && \
     rustup component add llvm-tools-preview rustfmt rust-src
 
 USER vscode
