@@ -2,10 +2,15 @@
 # description: Test scalar aggregates with many different types
 # group: [aggregates]
 
-query IIIIII
-SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT(DATE '1992-02-02')
+statement ok
+CREATE TABLE t (i INT64);
+
+statement ok
+INSERT INTO t VALUES (1);
+
+query IIIII
+SELECT COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT(DATE '1992-02-02') FROM t
 ----
-1
 1
 1
 0
@@ -13,96 +18,100 @@ SELECT COUNT(), COUNT(1), COUNT(*), COUNT(NULL), COUNT('hello'), COUNT(DATE '199
 1
 
 statement error
-SELECT COUNT(1, 2)
+SELECT COUNT(1, 2) FROM t
 
 query RRR
-SELECT SUM(1), SUM(NULL), SUM(33.3)
+SELECT SUM(1), SUM(NULL), SUM(33.3) FROM t
 ----
-1.000000
+1
 NULL
-33.300000
+33.300
 
 statement error
-SELECT SUM(True)
+SELECT SUM(True) FROM t
 
 statement error
-SELECT SUM('hello')
+SELECT SUM('hello') FROM t
 
 statement error
-SELECT SUM(DATE '1992-02-02')
+SELECT SUM(DATE '1992-02-02') FROM t
 
 statement error
-SELECT SUM()
+SELECT SUM() FROM t
 
 statement error
-SELECT SUM(1, 2)
+SELECT SUM(1, 2) FROM t
 
 query IIRTTTT
-SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-02'), MIN(TIMESTAMP '2008-01-01 00:00:01')
+SELECT MIN(1), MIN(NULL), MIN(33.3), MIN('hello'), MIN(True), MIN(DATE '1992-02-02'), MIN(TIMESTAMP '2008-01-01 00:00:01') FROM t
 ----
-1	NULL	33.300000	hello	1	1992-02-02	2008-01-01 00:00:01
+1
+NULL
+33.300
+hello
+true
+1992-02-02
+2008-01-01 00:00:01
 
 statement error
-SELECT MIN()
+SELECT MIN() FROM t
 
 statement error
-SELECT MIN(1, 2)
+SELECT MIN(1, 2) FROM t
 
 query IIRTTTT
-SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01')
+SELECT MAX(1), MAX(NULL), MAX(33.3), MAX('hello'), MAX(True), MAX(DATE '1992-02-02'), MAX(TIMESTAMP '2008-01-01 00:00:01') FROM t
 ----
-1	NULL	33.300000	hello	1	1992-02-02	2008-01-01 00:00:01
+1
+NULL
+33.300
+hello
+true
+1992-02-02
+2008-01-01 00:00:01
 
 statement error
-SELECT MAX()
+SELECT MAX() FROM t
 
 statement error
-SELECT MAX(1, 2)
+SELECT MAX(1, 2) FROM t
 
 query IIRTTTT
-SELECT FIRST(1), FIRST(NULL), FIRST(33.3), FIRST('hello'), FIRST(True), FIRST(DATE '1992-02-02'), FIRST(TIMESTAMP '2008-01-01 00:00:01')
+SELECT ANY_VALUE(1), ANY_VALUE(NULL), ANY_VALUE(33.3), ANY_VALUE('hello'), ANY_VALUE(True), ANY_VALUE(DATE '1992-02-02'), ANY_VALUE(TIMESTAMP '2008-01-01 00:00:01') FROM t
 ----
-1	NULL	33.300000	hello	1	1992-02-02	2008-01-01 00:00:01
+1
+NULL
+33.300
+hello
+true
+1992-02-02
+2008-01-01 00:00:01
 
 statement error
-SELECT FIRST()
+SELECT ANY_VALUE() FROM t
 
 statement error
-SELECT FIRST(1, 2)
+SELECT ANY_VALUE(1, 2) FROM t
 
 query RRR
-SELECT AVG(1), AVG(NULL), AVG(33.3)
+SELECT AVG(1), AVG(NULL), AVG(33.3) FROM t
 ----
-1.000000	NULL	33.300000
+1.000
+NULL
+33.300
 
 statement error
-SELECT AVG(True)
+SELECT AVG(True) FROM t
 
 statement error
-SELECT AVG('hello')
+SELECT AVG('hello') FROM t
 
 statement error
-SELECT AVG(DATE '1992-02-02')
+SELECT AVG(DATE '1992-02-02') FROM t
 
 statement error
-SELECT AVG()
+SELECT AVG() FROM t
 
 statement error
-SELECT AVG(1, 2)
-
-query T
-SELECT STRING_AGG('hello')
-----
-hello
-
-query TTTTT
-SELECT STRING_AGG('hello', ' '), STRING_AGG('hello', NULL), STRING_AGG(NULL, ' '), STRING_AGG(NULL, NULL), STRING_AGG('', '')
-----
-hello	NULL	NULL	NULL	(empty)
-
-statement error
-SELECT STRING_AGG()
-
-statement error
-SELECT STRING_AGG(1, 2, 3)
+SELECT AVG(1, 2) FROM t
 
