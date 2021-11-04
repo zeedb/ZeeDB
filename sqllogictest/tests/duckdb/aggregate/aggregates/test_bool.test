@@ -2,94 +2,65 @@
 # description: Test Bool operator
 # group: [aggregates]
 
+statement ok
+create table u (i integer)
+
 # Corner Cases
 statement error
-select bool_or(0)
+select logical_or(0) from u
 
 statement error
-select bool_and(0)
+select logical_and(0) from u
 
 query I
-select bool_or(NULL)
+select logical_or(NULL) from u
 ----
 NULL
 
 query I
-select bool_and(NULL)
+select logical_and(NULL) from u
 ----
 NULL
 
 statement error
-select bool_or()
+select logical_or() from u
 
 statement error
-select bool_and()
+select logical_and() from u
 
 statement error
-select bool_or(*)
+select logical_or(*) from u
 
 statement error
-select bool_and(*)
-
-query I
-SELECT bool_or(True) FROM range(100);
-----
-1
-
-query I
-SELECT bool_and(True) FROM range(100);
-----
-1
-
-query I
-SELECT bool_or(True) FROM range(100) tbl(i) WHERE 1=0;
-----
-NULL
-
-query I
-SELECT bool_and(True) FROM range(100) tbl(i) WHERE 1=0;
-----
-NULL
+select logical_and(*) from u
 
 statement ok
 create table t (d date)
 
 statement ok
-insert into t values (DATE'2021-02-09'-1),(DATE'2021-02-09'+1),(NULL)
+insert into t values (date_sub(DATE'2021-02-09', interval -1 day)), (date_sub(DATE'2021-02-09', interval +1 day)), (NULL)
 
 query II
-select bool_or(d > '2021-02-09') AS or_result,
-       bool_and(d > '2021-02-09') AS and_result
+select logical_or(d > '2021-02-09') AS or_result,
+       logical_and(d > '2021-02-09') AS and_result
 from t;
 ----
-1	0
+1
+0
 
 query III
-select d,bool_or(d > '2021-02-09') AS or_result,
-       bool_and(d > '2021-02-09') AS and_result
+select d,logical_or(d > '2021-02-09') AS or_result,
+       logical_and(d > '2021-02-09') AS and_result
 from t
-group by d;
-----
-NULL	NULL	NULL
-2021-02-08	0	0
-2021-02-10	1	1
-
-# Window Function
-require vector_size 512
-
-query I
-select bool_or(d > '2021-02-09') over (partition by d)
-    from t order by d;
+group by d
+order by d;
 ----
 NULL
-0
-1
-
-query I
-select bool_and(d > '2021-02-09') over (partition by d)
-    from t order by d;
-----
 NULL
+NULL
+2021-02-08
 0
+0
+2021-02-10
 1
-
+1

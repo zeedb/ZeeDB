@@ -57,15 +57,15 @@ SELECT * FROM (SELECT NULL) tbl(i) UNION ALL SELECT NULL
 NULL
 NULL
 
-# bool_and
+# logical_and
 query I
-SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
+SELECT logical_and(i) FROM (SELECT * FROM (SELECT NULL) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
 ----
 True
 
 # this wouldn't work if we would upcast to integer
 statement error
-SELECT bool_and(i) FROM (SELECT * FROM (SELECT NULL::INTEGER) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
+SELECT logical_and(i) FROM (SELECT * FROM (SELECT NULL::INTEGER) tbl(i) UNION ALL SELECT CAST(1 as BOOLEAN)) tbl(i)
 
 # cross product
 query II
@@ -74,7 +74,7 @@ SELECT * FROM (SELECT NULL) tbl(i), (SELECT NULL) tbl2(j)
 NULL	NULL
 
 query II
-SELECT bool_and(i), bool_and(j) FROM (SELECT NULL) tbl(i), (SELECT NULL) tbl2(j)
+SELECT logical_and(i), logical_and(j) FROM (SELECT NULL) tbl(i), (SELECT NULL) tbl2(j)
 ----
 NULL	NULL
 

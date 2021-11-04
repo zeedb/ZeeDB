@@ -81,8 +81,8 @@ select regr_intercept(a, b) from t group by b%2;
 49995
 
 query II
-select bool_or(a) AS or_result,
-       bool_and(a) AS and_result
+select logical_or(a) AS or_result,
+       logical_and(a) AS and_result
 from bool;
 ----
 1	0
