@@ -329,7 +329,7 @@ impl Array for BoolArray {
     }
 
     fn get(&self, index: usize) -> Option<bool> {
-        if self.is_valid.get(index) {
+        if index < self.is_valid.len() && self.is_valid.get(index) {
             Some(self.values.get(index))
         } else {
             None

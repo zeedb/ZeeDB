@@ -48,7 +48,7 @@ macro_rules! array_like {
             }
 
             pub fn get(&self, index: usize) -> Option<$t> {
-                if self.is_valid.get(index) {
+                if index < self.is_valid.len() && self.is_valid.get(index) {
                     Some(self.values[index])
                 } else {
                     None

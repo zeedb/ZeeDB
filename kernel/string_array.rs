@@ -64,7 +64,7 @@ impl StringArray {
     }
 
     pub fn get_str(&self, index: usize) -> Option<&str> {
-        if self.is_valid.get(index) {
+        if index < self.is_valid.len() && self.is_valid.get(index) {
             let begin = self.offsets[index] as usize;
             let end = self.offsets[index + 1] as usize;
             Some(&self.buffer[begin..end])
@@ -198,7 +198,7 @@ impl Array for StringArray {
     }
 
     fn get(&self, index: usize) -> Option<Self::Element> {
-        if self.is_valid.get(index) {
+        if index < self.is_valid.len() && self.is_valid.get(index) {
             let begin = self.offsets[index] as usize;
             let end = self.offsets[index + 1] as usize;
             Some(self.buffer[begin..end].to_string())
@@ -208,7 +208,7 @@ impl Array for StringArray {
     }
 
     fn bytes(&self, index: usize) -> Option<&[u8]> {
-        if self.is_valid.get(index) {
+        if index < self.is_valid.len() && self.is_valid.get(index) {
             let begin = self.offsets[index] as usize;
             let end = self.offsets[index + 1] as usize;
             Some(self.buffer[begin..end].as_bytes())

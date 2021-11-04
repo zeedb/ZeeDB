@@ -51,7 +51,7 @@ macro_rules! impl_array {
             }
 
             fn get(&self, index: usize) -> Option<Self::Element> {
-                if self.is_valid.get(index) {
+                if index < self.is_valid.len() && self.is_valid.get(index) {
                     Some(self.values[index])
                 } else {
                     None
@@ -59,7 +59,7 @@ macro_rules! impl_array {
             }
 
             fn bytes(&self, index: usize) -> Option<&[u8]> {
-                if self.is_valid.get(index) {
+                if index < self.is_valid.len() && self.is_valid.get(index) {
                     Some(as_byte_slice(&self.values[index]))
                 } else {
                     None
