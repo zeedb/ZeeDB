@@ -6,5 +6,6 @@ fn test_aggregates() {
         "./tests/duckdb/aggregate/aggregates/test_aggr_string.test",
         "./tests/duckdb/aggregate/aggregates/test_aggregate_types_scalar.test",
         "./tests/duckdb/aggregate/aggregates/test_aggregate_types.test",
+        "./tests/duckdb/aggregate/aggregates/test_avg.test",
     ]));
 }

@@ -2,38 +2,24 @@
 # description: Test AVG operator
 # group: [aggregates]
 
+statement ok
+CREATE TABLE t (i int64);
+
+statement ok
+INSERT INTO t VALUES (1);
+
 # scalar average
 query RR
-SELECT AVG(3), AVG(NULL)
+SELECT AVG(3), AVG(NULL) FROM t
 ----
-3
+3.000
 NULL
 
 query RR
-SELECT AVG(3::SMALLINT), AVG(NULL::SMALLINT)
+SELECT AVG(cast(3 AS DOUBLE)), AVG(cast(NULL AS DOUBLE)) FROM t
 ----
-3
+3.000
 NULL
-
-query RR
-SELECT AVG(3::DOUBLE), AVG(NULL::DOUBLE)
-----
-3
-NULL
-
-# test average on sequence
-statement ok
-CREATE SEQUENCE seq;
-
-query R
-SELECT AVG(nextval('seq'))
-----
-1
-
-query R
-SELECT AVG(nextval('seq'))
-----
-2
 
 statement ok
 CREATE TABLE integers(i INTEGER);
@@ -44,9 +30,9 @@ INSERT INTO integers VALUES (1), (2), (3)
 query RRRR
 SELECT AVG(i), AVG(1), AVG(DISTINCT i), AVG(NULL) FROM integers
 ----
-2
-1
-2
+2.000
+1.000
+2.000
 NULL
 
 query R
@@ -56,17 +42,17 @@ NULL
 
 # invalid use of average
 statement error
-SELECT AVG()
+SELECT AVG() FROM t
 
 statement error
-SELECT AVG(1, 2, 3)
+SELECT AVG(1, 2, 3) FROM t
 
 statement error
-SELECT AVG(AVG(1))
+SELECT AVG(AVG(1)) FROM t
 
 # empty average
 statement ok
-CREATE TABLE vals(i INTEGER, j DOUBLE, k HUGEINT);
+CREATE TABLE vals(i INTEGER, j DOUBLE, k INTEGER);
 
 statement ok
 INSERT INTO vals VALUES (NULL, NULL, NULL)
@@ -74,4 +60,6 @@ INSERT INTO vals VALUES (NULL, NULL, NULL)
 query III
 SELECT AVG(i), AVG(j), AVG(k) FROM vals;
 ----
-NULL	NULL	NULL
+NULL
+NULL
+NULL
