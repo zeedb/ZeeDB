@@ -529,7 +529,7 @@ impl<'a> Converter<'a> {
         if output_projects.len() > 0 {
             assert!(!output_projects.is_empty());
             result = LogicalMap {
-                include_existing: false,
+                include_existing: true,
                 projects: output_projects,
                 input: Box::new(result),
             };

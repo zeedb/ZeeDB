@@ -11,6 +11,8 @@ INSERT INTO test VALUES ('helloworld', 22), ('thisisalongstring', 22), ('hellowo
 query TR
 SELECT a, SUM(b) FROM test GROUP BY a ORDER BY a
 ----
-helloworld	43.000000
-thisisalongstring	22.000000
+helloworld
+43
+thisisalongstring
+22
 

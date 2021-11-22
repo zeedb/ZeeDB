@@ -11,7 +11,19 @@ INSERT INTO integers VALUES (1, 1, 2), (1, 2, 2), (1, 1, 2), (2, 1, 2), (1, 2, 4
 query IIRII
 SELECT i, j, SUM(k), COUNT(*), COUNT(k) FROM integers GROUP BY i, j ORDER BY 1, 2
 ----
-1	1	4.000000	2	2
-1	2	6.000000	3	2
-2	1	2.000000	1	1
+1
+1
+4
+2
+2
+1
+2
+6
+3
+2
+2
+1
+2
+1
+1
 

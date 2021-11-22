@@ -26,3 +26,14 @@ fn test_distinct() {
         "./tests/duckdb/aggregate/distinct/test_distinct.test",
     ]));
 }
+
+#[test]
+fn test_group() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/aggregate/group/test_group_by_alias.test",
+        "./tests/duckdb/aggregate/group/test_group_by_large_string.test",
+        "./tests/duckdb/aggregate/group/test_group_by_multi_column.test",
+        "./tests/duckdb/aggregate/group/test_group_by.test",
+        "./tests/duckdb/aggregate/group/test_group_null.test",
+    ]));
+}
