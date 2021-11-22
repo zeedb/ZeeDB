@@ -20,22 +20,18 @@ SELECT CAST('  e1' AS DOUBLE);
 statement error
 SELECT CAST('  E1' AS DOUBLE);
 
-query I
+statement error
 SELECT CAST('1e1' AS INTEGER);
-----
-10
 
-query I
+statement error
 SELECT CAST('  1e1' AS INTEGER);
-----
-10
 
 query I
 SELECT CAST('1e1' AS DOUBLE);
 ----
-10.0
+10
 
 query I
 SELECT CAST('   1e1' AS DOUBLE);
 ----
-10.0
+10
