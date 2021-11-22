@@ -8,5 +8,9 @@ fn test_aggregates() {
         "./tests/duckdb/aggregate/aggregates/test_aggregate_types.test",
         "./tests/duckdb/aggregate/aggregates/test_avg.test",
         "./tests/duckdb/aggregate/aggregates/test_bool.test",
+        "./tests/duckdb/aggregate/aggregates/test_count_star.test",
+        "./tests/duckdb/aggregate/aggregates/test_count.test",
+        "./tests/duckdb/aggregate/aggregates/test_distinct_aggr.test",
+        "./tests/duckdb/aggregate/aggregates/test_empty_aggregate.test",
     ]));
 }

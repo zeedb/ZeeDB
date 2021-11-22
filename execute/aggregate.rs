@@ -517,18 +517,26 @@ impl Acc {
             }
             Acc::SumDistinct(distinct) => match (distinct, builder) {
                 (Distinct::I64(hash_set), AnyArray::I64(builder)) => {
-                    let mut total = 0;
-                    for next in hash_set {
-                        total += next;
+                    if hash_set.is_empty() {
+                        builder.push(None);
+                    } else {
+                        let mut total = 0;
+                        for next in hash_set {
+                            total += next;
+                        }
+                        builder.push(Some(total))
                     }
-                    builder.push(Some(total))
                 }
                 (Distinct::F64(hash_set), AnyArray::F64(builder)) => {
+                    if hash_set.is_empty() {
+                        builder.push(None);
+                    } else {
                     let mut total = 0.0;
-                    for next in hash_set {
-                        total += as_f64(*next);
+                        for next in hash_set {
+                            total += as_f64(*next);
+                        }
+                        builder.push(Some(total))
                     }
-                    builder.push(Some(total))
                 }
                 (value, builder) => panic!(
                     "expected {:?} but found {:?}",
