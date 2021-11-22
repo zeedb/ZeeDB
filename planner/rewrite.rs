@@ -31,7 +31,21 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
         LogicalCreateDatabase { name, reserved_id } => {
             let parent_catalog_id = catalog_id_query(&name);
             let catalog_name = format!("{:?}", name.path.last().unwrap());
-            Ok(LogicalRewrite { sql: format!("insert into catalog (parent_catalog_id, catalog_id, catalog_name) select {}, {}, {}", parent_catalog_id, reserved_id, catalog_name) })
+            let mut lines = vec![];
+            // Enforce UNIQUE (parent_catalog_id, catalog_name).
+            lines.push(format!(
+                "assert 0 = (select count(*) from catalog where parent_catalog_id = {parent_catalog_id} and catalog_name = {catalog_name}) as 'Catalog {catalog_name} already exists in parent catalog {parent_catalog_id}';",
+                parent_catalog_id = parent_catalog_id, catalog_name = catalog_name
+            ));
+            // Enforce UNIQUE (catalog_id).
+            lines.push(format!(
+                "assert 0 = (select count(*) from catalog where catalog_id = {reserved_id}) as 'Catalog ID {reserved_id} is already in use';",
+                reserved_id = reserved_id
+            ));
+            lines.push(format!("insert into catalog (parent_catalog_id, catalog_id, catalog_name) select {}, {}, {}", parent_catalog_id, reserved_id, catalog_name));
+            Ok(LogicalRewrite {
+                sql: lines.join("\n"),
+            })
         }
         LogicalCreateTable {
             name,
@@ -72,8 +86,19 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
         } => {
             let mut lines = vec![];
             let catalog_id = catalog_id_query(&name);
+            let index_name = format!("{:?}", name.path.last().unwrap());
+            // Enforce UNIQUE (catalog_id, index_name).
+            lines.push(format!(
+                "assert 0 = (select count(*) from index where catalog_id = {catalog_id} and index_name = {index_name}) as 'Index {index_name} already exists in catalog {catalog_id}';",
+                catalog_id = catalog_id, index_name = index_name
+            ));
+            // Enforce UNIQUE (index_id).
+            lines.push(format!(
+                "assert 0 = (select count(*) from index where index_id = {reserved_id}) as 'Index ID {reserved_id} is already in use';",
+                reserved_id = reserved_id
+            ));
             // TODO check that table is empty.
-            lines.push(format!("insert into index (catalog_id, index_id, table_id, index_name) values ({}, {}, {}, {:?});", catalog_id, reserved_id, table.id, name.path.last().unwrap()));
+            lines.push(format!("insert into index (catalog_id, index_id, table_id, index_name) values ({}, {}, {}, {});", catalog_id, reserved_id, table.id, index_name));
             for (index_order, column_name) in columns.iter().enumerate() {
                 let column_id = format!(
                     "(select column_id from column where table_id = {} and column_name = {:?})",
@@ -82,8 +107,9 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 lines.push(format!("insert into index_column (index_id, column_id, index_order) select {}, {}, {:?};", reserved_id, column_id, index_order));
             }
             lines.push(format!("call create_index({});", reserved_id));
-            let sql = lines.join("\n");
-            Ok(LogicalRewrite { sql })
+            Ok(LogicalRewrite {
+                sql: lines.join("\n"),
+            })
         }
         LogicalDrop { object, name } => {
             let mut lines = vec![];
