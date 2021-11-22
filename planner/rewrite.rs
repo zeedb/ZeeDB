@@ -41,6 +41,16 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             let mut lines = vec![];
             let catalog_id = catalog_id_query(&name);
             let table_name = format!("{:?}", name.path.last().unwrap());
+            // Enforce UNIQUE (catalog_id, table_name).
+            lines.push(format!(
+                "assert 0 = (select count(*) from table where catalog_id = {} and table_name = {}) as 'Table already exists';",
+                catalog_id, table_name
+            ));
+            // Enforce UNIQUE (table_id).
+            lines.push(format!(
+                "assert 0 = (select count(*) from table where table_id = {}) as 'Table ID is already in use';",
+                reserved_id
+            ));
             lines.push(format!(
                 "insert into table (catalog_id, table_id, table_name) select {}, {}, {};",
                 catalog_id, reserved_id, table_name
