@@ -1,5 +1,5 @@
-# name: test/sql/aggregate/aggregates/test_first_noninlined.test
-# description: Test FIRST with non-inlined strings
+# name: test/sql/aggregate/aggregates/test_ANY_VALUE_noninlined.test
+# description: Test ANY_VALUE with non-inlined strings
 # group: [aggregates]
 
 statement ok
@@ -10,38 +10,38 @@ INSERT INTO tbl VALUES (1, NULL), (2, 'thisisalongstring'), (3, 'thisisalsoalong
 
 # non-grouped aggregate
 query T
-SELECT FIRST(b) FROM tbl WHERE a=2
+SELECT ANY_VALUE(b) FROM tbl WHERE a=2
 ----
 thisisalongstring
 
-# Check if arbitraty alias works like FIRST
+# Check if arbitraty alias works like ANY_VALUE
 query T
-SELECT ARBITRARY(b) FROM tbl WHERE a=2
+SELECT ANY_VALUE(b) FROM tbl WHERE a=2
 ----
 thisisalongstring
 
 query T
-SELECT FIRST(b) FROM tbl WHERE a=1
+SELECT ANY_VALUE(b) FROM tbl WHERE a=1
 ----
 NULL
 
 query T
-SELECT FIRST(b) FROM tbl WHERE a=1 GROUP BY a
+SELECT ANY_VALUE(b) FROM tbl WHERE a=1 GROUP BY a
 ----
 NULL
 
 query T
-SELECT FIRST(b) FROM tbl WHERE a=0
+SELECT ANY_VALUE(b) FROM tbl WHERE a=0
 ----
 NULL
 
 query T
-SELECT FIRST(b) FROM tbl WHERE a=0 GROUP BY b
+SELECT ANY_VALUE(b) FROM tbl WHERE a=0 GROUP BY b
 ----
 
 # grouped aggregate
 query IT
-SELECT a, FIRST(b) FROM tbl GROUP BY a ORDER BY a
+SELECT a, ANY_VALUE(b) FROM tbl GROUP BY a ORDER BY a
 ----
 1
 NULL
@@ -51,6 +51,6 @@ thisisalongstring
 thisisalsoalongstring
 
 query I
-SELECT FIRST(i) FROM (VALUES (NULL::INT32)) tbl(i)
+SELECT ANY_VALUE(i) FROM (SELECT cast(NULL as INTEGER) AS i)
 ----
 NULL
