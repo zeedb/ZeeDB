@@ -15,7 +15,6 @@ fn test_aggregates() {
         "./tests/duckdb/aggregate/aggregates/test_first_noninlined.test",
         "./tests/duckdb/aggregate/aggregates/test_incorrect_aggregate.test",
         "./tests/duckdb/aggregate/aggregates/test_scalar_aggr.test",
-        "./tests/duckdb/aggregate/aggregates/test_sum.test",
     ]));
 }
 
