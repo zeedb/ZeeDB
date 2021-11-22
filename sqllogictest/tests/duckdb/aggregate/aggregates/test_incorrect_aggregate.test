@@ -9,15 +9,6 @@ statement error
 SELECT COUNT(COUNT(1))
 
 statement error
-SELECT STDDEV_SAMP()
-
-statement error
-SELECT STDDEV_SAMP(1, 2, 3)
-
-statement error
-SELECT STDDEV_SAMP(STDDEV_SAMP(1))
-
-statement error
 SELECT SUM()
 
 statement error
@@ -27,13 +18,13 @@ statement error
 SELECT SUM(SUM(1))
 
 statement error
-SELECT FIRST()
+SELECT ANY_VALUE()
 
 statement error
-SELECT FIRST(1, 2, 3)
+SELECT ANY_VALUE(1, 2, 3)
 
 statement error
-SELECT FIRST(FIRST(1))
+SELECT ANY_VALUE(ANY_VALUE(1))
 
 statement error
 SELECT MAX()
