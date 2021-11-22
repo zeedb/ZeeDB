@@ -18,3 +18,11 @@ fn test_aggregates() {
         "./tests/duckdb/aggregate/aggregates/test_sum.test",
     ]));
 }
+
+#[test]
+fn test_distinct() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/aggregate/distinct/test_distinct_order_by.test",
+        "./tests/duckdb/aggregate/distinct/test_distinct.test",
+    ]));
+}
