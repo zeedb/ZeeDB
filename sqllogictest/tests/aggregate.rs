@@ -37,3 +37,11 @@ fn test_group() {
         "./tests/duckdb/aggregate/group/test_group_null.test",
     ]));
 }
+
+#[test]
+fn test_having() {
+    rpc::runtime().block_on(test(vec![
+        "./tests/duckdb/aggregate/having/test_having.test",
+        "./tests/duckdb/aggregate/having/test_scalar_having.test",
+    ]));
+}
