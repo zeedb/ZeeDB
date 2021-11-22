@@ -30,7 +30,7 @@ use coordinator::CoordinatorNode;
 use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
 use md5::{Digest, Md5};
-use once_cell::sync::{Lazy, OnceCell};
+use once_cell::sync::OnceCell;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
@@ -900,10 +900,8 @@ fn free_port(min: u16) -> u16 {
 }
 
 async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
-    // Generate a number for the next database.
-    static NEXT_CATALOG: Lazy<AtomicI64> = Lazy::new(|| AtomicI64::new(0));
-    let next_catalog = NEXT_CATALOG.fetch_add(1, Ordering::Relaxed);
     // Create a new, empty database.
+    let next_catalog = next_database_name();
     client
         .query(QueryRequest {
             sql: format!("create database test{}", next_catalog),
@@ -930,6 +928,12 @@ async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
     let mut record_batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
     let (_, column) = record_batch.columns.remove(0);
     column.as_i64().get(0).unwrap()
+}
+
+static DATABASE_NAME: AtomicI64 = AtomicI64::new(0);
+
+fn next_database_name() -> i64 {
+    DATABASE_NAME.fetch_add(1, Ordering::Relaxed)
 }
 
 fn date(value: i32) -> Date<Utc> {
