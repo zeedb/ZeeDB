@@ -16,10 +16,7 @@ use std::{
     ops,
     path::Path,
     str,
-    sync::{
-        atomic::{AtomicI64, Ordering},
-        Mutex,
-    },
+    sync::Mutex,
     time::Duration,
 };
 
@@ -31,6 +28,7 @@ use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
 use md5::{Digest, Md5};
 use once_cell::sync::OnceCell;
+use rand::Rng;
 use regex::Regex;
 use rpc::{
     coordinator_client::CoordinatorClient, coordinator_server::CoordinatorServer,
@@ -901,10 +899,10 @@ fn free_port(min: u16) -> u16 {
 
 async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
     // Create a new, empty database.
-    let next_catalog = next_database_name();
+    let next_catalog: u32 = rand::thread_rng().gen();
     client
         .query(QueryRequest {
-            sql: format!("create database test{}", next_catalog),
+            sql: format!("create database test{:x}", next_catalog),
             catalog_id: ROOT_CATALOG_ID,
             txn: None,
             variables: HashMap::default(),
@@ -915,8 +913,8 @@ async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
     let response = client
         .query(QueryRequest {
             sql: format!(
-                "select catalog_id from catalog where catalog_name = 'test{}'",
-                next_catalog
+                "select catalog_id from catalog where parent_catalog_id = {} and catalog_name = 'test{:x}'",
+                ROOT_CATALOG_ID, next_catalog
             ),
             catalog_id: METADATA_CATALOG_ID,
             txn: None,
@@ -928,12 +926,6 @@ async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
     let mut record_batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
     let (_, column) = record_batch.columns.remove(0);
     column.as_i64().get(0).unwrap()
-}
-
-static DATABASE_NAME: AtomicI64 = AtomicI64::new(0);
-
-fn next_database_name() -> i64 {
-    DATABASE_NAME.fetch_add(1, Ordering::Relaxed)
 }
 
 fn date(value: i32) -> Date<Utc> {

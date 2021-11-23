@@ -1536,6 +1536,7 @@ dependencies = [
  "md-5",
  "once_cell",
  "parser",
+ "rand",
  "regex",
  "rpc",
  "serde_json",
