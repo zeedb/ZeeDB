@@ -145,6 +145,7 @@ dependencies = [
  "kernel",
  "pprof",
  "rand",
+ "serde_json",
  "tokio",
  "tonic",
 ]

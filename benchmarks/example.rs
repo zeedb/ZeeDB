@@ -3,64 +3,51 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use e2e_tests::TestRunner;
 
 fn bench(c: &mut Criterion) {
-    c.bench_function("insert into test values (@i)", |b| {
+    bench_query(
+        c,
+        vec!["create table test (i int64)"],
+        "insert into test values (@i)",
+    );
+    bench_query(
+        c,
+        vec![
+            "create table table_with_index (i int64)",
+            "create index index_i on table_with_index (i)",
+        ],
+        "insert into table_with_index values (@i)",
+    );
+    bench_query(
+        c,
+        vec![
+            "create table table_with_index (indexed_column int64)",
+            "create index index_indexed_column on table_with_index (indexed_column)",
+            "insert into table_with_index values (0)",
+        ],
+        "update table_with_index set indexed_column = @i where indexed_column = @i - 1",
+    );
+}
+
+fn bench_query(c: &mut Criterion, preamble: Vec<&str>, query: &str) {
+    c.bench_function(query, |b| {
         let mut t = TestRunner::default();
-        t.test("create table test (i int64)", vec![]);
+        for stmt in &preamble {
+            t.test(stmt, vec![]);
+        }
         let mut i = 0;
-        let mut timing = vec![];
         b.iter(|| {
-            timing.push(t.test(
-                "insert into test values (@i)",
-                vec![("i".to_string(), Value::I64(Some(i)))],
-            ));
+            t.test(query, vec![("i".to_string(), Value::I64(Some(i)))]);
             i += 1;
         });
+        let json = t.bench(query, vec![("i".to_string(), Value::I64(Some(i)))]);
+        let path = format!("../target/criterion/{}/trace.json", query);
+        let contents = serde_json::to_string(&json).unwrap();
+        std::fs::write(path, contents).unwrap();
     });
-
-    c.bench_function("insert into table_with_index values (@i)", |b| {
-        let mut t = TestRunner::default();
-        t.test("create table table_with_index (i int64)", vec![]);
-        t.test("create index index_i on table_with_index (i)", vec![]);
-        let mut i = 0;
-        let mut timing = vec![];
-        b.iter(|| {
-            timing.push(t.test(
-                "insert into table_with_index values (@i)",
-                vec![("i".to_string(), Value::I64(Some(i)))],
-            ));
-            i += 1;
-        })
-    });
-
-    c.bench_function(
-        "update table_with_index set indexed_column = @i where indexed_column = @i - 1",
-        |b| {
-            let mut t = TestRunner::default();
-            t.test(
-                "create table table_with_index (indexed_column int64)",
-                vec![],
-            );
-            t.test(
-                "create index index_indexed_column on table_with_index (indexed_column)",
-                vec![],
-            );
-            t.test("insert into table_with_index values (0)", vec![]);
-            let mut i = 1;
-            let mut timing = vec![];
-            b.iter(|| {
-                timing.push(t.test(
-                    "update table_with_index set indexed_column = @i where indexed_column = @i - 1",
-                    vec![("i".to_string(), Value::I64(Some(i)))],
-                ));
-                i += 1;
-            })
-        },
-    );
 }
 
 criterion_group! {
     name = benches;
-    config = Criterion::default();
+    config = Criterion::default().sample_size(20);
     targets = bench
 }
 criterion_main!(benches);
