@@ -56,6 +56,7 @@ pub enum Expr {
     // The with-subquery is always on the left.
     LogicalWith {
         name: String,
+        // Matches 1:1 position-wise with LogicalGetWith.columns.
         columns: Vec<Column>,
         left: Box<Expr>,
         right: Box<Expr>,
@@ -68,6 +69,7 @@ pub enum Expr {
     // LogicalGetWith { table } reads the subquery that was created by With.
     LogicalGetWith {
         name: String,
+        // Matches 1:1 position-wise with LogicalWith.columns.
         columns: Vec<Column>,
     },
     // LogicalAggregate { group_by, aggregate } implements the GROUP BY clause.
@@ -200,11 +202,13 @@ pub enum Expr {
     },
     CreateTempTable {
         name: String,
+        // Matches 1:1 position-wise with GetTempTable.columns.
         columns: Vec<Column>,
         input: Box<Expr>,
     },
     GetTempTable {
         name: String,
+        // Matches 1:1 position-wise with CreateTempTable.columns.
         columns: Vec<Column>,
     },
     SimpleAggregate {

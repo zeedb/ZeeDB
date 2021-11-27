@@ -272,15 +272,22 @@ impl Page {
                     }
                     find => match self.columns.iter().find(|(name, _)| find == name) {
                         Some((_, data)) => data.slice(len),
-                        None => panic!(
-                            "{} is not a column of {}",
-                            find,
-                            self.column_names().join(", ")
-                        ),
+                        None => panic!("{} is not a column of {}", find, self.star().join(", ")),
                     },
                 };
                 (find.clone(), array)
             })
+            .collect();
+        RecordBatch::new(columns)
+    }
+
+    pub fn with_names(&self, column_names: &Vec<String>) -> RecordBatch {
+        assert_eq!(self.columns.len(), column_names.len());
+        let len = self.len.load(Ordering::Relaxed);
+        let columns = column_names
+            .iter()
+            .zip(self.columns.iter())
+            .map(|(name, (_, data))| (name.clone(), data.slice(len)))
             .collect();
         RecordBatch::new(columns)
     }
@@ -293,12 +300,8 @@ impl Page {
         AnyArray::I64(array)
     }
 
-    fn column_names(&self) -> Vec<String> {
-        self.columns.iter().map(|(name, _)| name.clone()).collect()
-    }
-
     pub fn star(&self) -> Vec<String> {
-        self.columns.iter().map(|(n, _)| format!("{}", n)).collect()
+        self.columns.iter().map(|(n, _)| n.clone()).collect()
     }
 
     pub fn insert(&self, records: &RecordBatch, txn: i64, tids: &mut I64Array, offset: &mut usize) {

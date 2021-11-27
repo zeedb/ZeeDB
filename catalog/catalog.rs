@@ -31,13 +31,14 @@ pub fn simple_catalog(
             catalog = find_or_push_catalog(catalog, catalog_name);
         }
         let table_name = &name[name.len() - 1];
-        let table_id = table_name_to_id(catalog_id, table_name, txn);
-        catalog.table.push(SimpleTableProto {
-            name: Some(table_name.clone()),
-            serialization_id: Some(table_id),
-            column: table_columns(table_id, txn),
-            ..Default::default()
-        })
+        if let Some(table_id) = table_name_to_id(catalog_id, table_name, txn) {
+            catalog.table.push(SimpleTableProto {
+                name: Some(table_name.clone()),
+                serialization_id: Some(table_id),
+                column: table_columns(table_id, txn),
+                ..Default::default()
+            })
+        }
     }
     root_catalog
 }
@@ -91,7 +92,7 @@ fn catalog_name_to_id(parent_catalog_id: i64, catalog_name: &String, txn: i64) -
 }
 
 #[log::trace]
-fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> i64 {
+fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> Option<i64> {
     let mut variables = HashMap::new();
     variables.insert("catalog_id".to_string(), Value::I64(Some(catalog_id)));
     variables.insert(
@@ -102,7 +103,7 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> i64 {
         "select table_id from table where catalog_id = @catalog_id and table_name = @table_name";
     let mut batch = remote_execution::submit(sql, &variables, METADATA_CATALOG_ID, Some(txn));
     let (_, column) = batch.columns.remove(0);
-    column.as_i64().get(0).unwrap()
+    column.as_i64().get(0)
 }
 
 #[log::trace]

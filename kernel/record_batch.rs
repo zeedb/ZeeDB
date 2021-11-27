@@ -216,6 +216,15 @@ impl RecordBatch {
         assert_eq!(renames.len(), columns.len());
         Self::new(columns)
     }
+
+    pub fn with_names(mut self, column_names: &Vec<String>) -> Self {
+        let columns = column_names
+            .iter()
+            .zip(self.columns.drain(..))
+            .map(|(name, (_, array))| (name.clone(), array))
+            .collect();
+        Self::new(columns)
+    }
 }
 
 impl Debug for RecordBatch {

@@ -745,14 +745,11 @@ impl Node {
                 // Create a new temp table.
                 let mut heap = Heap::default();
                 // Temp table uses different column names.
-                let renames = columns
-                    .iter()
-                    .map(|c| (c.canonical_name(), c.name.clone()))
-                    .collect();
+                let column_names = columns.iter().map(|c| c.canonical_name()).collect();
                 loop {
                     match input.next(storage, txn) {
                         Next::Page(batch) => {
-                            heap.insert(&batch.rename(&renames), txn);
+                            heap.insert(&batch.with_names(&column_names), txn);
                         }
                         Next::Error(message) => return Next::Error(message),
                         Next::End => break,
@@ -778,12 +775,8 @@ impl Node {
                     Some(page) => page,
                     None => return Next::End,
                 };
-                let select_names = columns.iter().map(|c| c.name.clone()).collect();
-                let query_names = columns
-                    .iter()
-                    .map(|c| (c.name.clone(), c.canonical_name()))
-                    .collect();
-                let next = page.select(&select_names).rename(&query_names);
+                let column_names = columns.iter().map(|c| c.canonical_name()).collect();
+                let next = page.with_names(&column_names);
                 Next::Page(next)
             }
             Node::SimpleAggregate {

@@ -399,6 +399,13 @@ impl<'a> Converter<'a> {
                     ..
                 } => {
                     let left = self.any_resolved_scan(&query);
+                    // Strangely, if you rename a column in a CTE, for example
+                    //   with cte as (select i as j from t) select * from cte
+                    // these are the original names (i), not the renamed names (j).
+                    // The renamed names are not present in with_subquery.
+                    // The renamed names will reappear later in ResolvedWithRefScanProto.
+                    // Since the columns of a CTE are matched by position rather than name,
+                    // this is OK, just kind of weird.
                     let columns = self.columns(column_list(&query));
                     right = LogicalWith {
                         name: name.clone(),

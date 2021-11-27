@@ -36,6 +36,7 @@ pub fn enabled_language_features() -> Vec<i32> {
         LanguageFeature::FeatureV12WeekWithWeekday as i32,
         LanguageFeature::FeatureV13OmitInsertColumnList as i32,
         LanguageFeature::FeatureV13ConcatMixedTypes as i32,
+        LanguageFeature::FeatureV11WithOnSubquery as i32,
     ]
 }
 
