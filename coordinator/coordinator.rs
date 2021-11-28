@@ -78,18 +78,19 @@ fn submit(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
         .iter()
         .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter)))
         .collect();
-    let expr = match parser::analyze(&request.sql, &variables, request.catalog_id, txn) {
+    let analyzed = match parser::analyze(&request.sql, &variables, request.catalog_id, txn) {
         Ok(expr) => expr,
         Err(message) => {
             return Err(Status::invalid_argument(message));
         }
     };
+    let expr = parser::convert(analyzed, variables, request.catalog_id);
     let expr = planner::optimize(expr, txn);
-    gather(&expr, txn)
+    execute(&expr, txn)
 }
 
 #[log::trace]
-fn gather(expr: &Expr, txn: i64) -> Result<RecordBatch, Status> {
+fn execute(expr: &Expr, txn: i64) -> Result<RecordBatch, Status> {
     let schema = expr.schema();
     let mut stream = remote_execution::gather(expr, txn, 0);
     let mut batches = vec![];

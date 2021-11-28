@@ -11,8 +11,6 @@ use zetasql::{
     *,
 };
 
-use crate::convert::convert;
-
 pub const MAX_QUERY: usize = 4_194_304;
 
 #[log::trace]
@@ -65,27 +63,22 @@ pub fn analyze(
     variables: &HashMap<String, Value>,
     catalog_id: i64,
     txn: i64,
-) -> Result<Expr, String> {
+) -> Result<Vec<AnyResolvedStatementProto>, String> {
     // Extract table names from script.
     let table_names = extract_table_names_from_stmt(sql);
     // Construct a minimal catalog containing just the referenced tables.
     let simple_catalog = catalog::simple_catalog(table_names, catalog_id, txn);
     // Parse each statement in the script, one at a time, in a loop.
     let mut offset = 0;
-    let mut exprs = vec![];
+    let mut stmts = vec![];
     loop {
         // Parse the next statement.
         let (stmt, next_offset) = analyze_next_statement(sql, offset, variables, &simple_catalog)?;
-        let expr = convert(&stmt, variables, catalog_id);
         offset = next_offset;
-        exprs.push(expr);
+        stmts.push(stmt);
         // If we've parsed the entire expression, return.
         if offset as usize == sql.as_bytes().len() {
-            if exprs.len() == 1 {
-                return Ok(exprs.pop().unwrap());
-            } else {
-                return Ok(Expr::LogicalScript { statements: exprs });
-            }
+            return Ok(stmts);
         }
     }
 }

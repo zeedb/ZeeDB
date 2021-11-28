@@ -12,26 +12,31 @@ use zetasql::{
 };
 
 #[log::trace]
-pub fn convert<'a>(
-    q: &AnyResolvedStatementProto,
-    variables: &'a HashMap<String, Value>,
+pub fn convert(
+    analyzed: Vec<AnyResolvedStatementProto>,
+    variables: HashMap<String, Value>,
     catalog_id: i64,
 ) -> Expr {
-    Converter {
+    let mut converter = Converter {
         catalog_id,
         variables,
         known_columns: HashMap::new(),
+    };
+    let mut statements: Vec<Expr> = analyzed.iter().map(|s| converter.any_stmt(s)).collect();
+    if statements.len() == 1 {
+        statements.pop().unwrap()
+    } else {
+        LogicalScript { statements }
     }
-    .any_stmt(q)
 }
 
-struct Converter<'a> {
+struct Converter {
     catalog_id: i64,
-    variables: &'a HashMap<String, Value>,
+    variables: HashMap<String, Value>,
     known_columns: HashMap<i64, Column>,
 }
 
-impl<'a> Converter<'a> {
+impl Converter {
     fn any_stmt(&mut self, q: &AnyResolvedStatementProto) -> Expr {
         match q.node.get() {
             ResolvedQueryStmtNode(q) => self.query(q),
