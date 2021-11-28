@@ -138,7 +138,7 @@ pub fn to_json(stages: Vec<TraceStage>) -> Vec<JsonTraceEvent> {
             .worker
             .map(|i| format!("Worker-{}", i))
             .unwrap_or("Coordinator".to_string());
-        let pid = stage.worker.unwrap_or(-1);
+        let pid = stage.worker.unwrap_or(-1) + 1;
         let tid = stage.stage;
         events.push(JsonTraceEvent::process_name(pid, process_name));
         for e in stage.spans {
