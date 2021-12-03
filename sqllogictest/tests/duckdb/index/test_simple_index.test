@@ -1,0 +1,8 @@
+statement ok
+create table table_with_index (i int64)
+
+statement ok
+create index index_i on table_with_index (i)
+
+statement ok
+insert into table_with_index values (@i)
