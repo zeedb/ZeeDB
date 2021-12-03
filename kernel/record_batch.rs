@@ -126,6 +126,17 @@ impl RecordBatch {
             .map(|(_, array)| array)
     }
 
+    pub fn find_always(&self, column: &str) -> &AnyArray {
+        match self.columns.iter().find(|(name, _)| name == column) {
+            Some((_, array)) => array,
+            None => {
+                let column_names: Vec<_> =
+                    self.columns.iter().map(|(name, _)| name.clone()).collect();
+                panic!("{} is not in {}", column, column_names.join(", "))
+            }
+        }
+    }
+
     pub fn slice(&self, range: Range<usize>) -> Self {
         Self::new(
             self.columns

@@ -107,7 +107,7 @@ pub(crate) fn compute_logical_props(mid: MultiExprID, ss: &SearchSpace) -> Logic
 }
 
 fn scan(projects: &Vec<Column>, table: &Table) -> LogicalProps {
-    let stats = |c: &Column| statistics::column_statistics(c.table_id?, &c.name);
+    let stats = |c: &Column| statistics::column_statistics(table.id, &c.name);
     LogicalProps {
         cardinality: statistics::approx_cardinality(table.id),
         columns: projects.iter().map(|c| (c.clone(), stats(c))).collect(),

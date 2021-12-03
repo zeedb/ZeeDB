@@ -3,10 +3,8 @@ use storage::*;
 
 pub(crate) fn insert(index: &mut Art, columns: &Vec<String>, input: &RecordBatch, tids: &I64Array) {
     // Convert each row into bytes that match the lexicographic order of rows.
-    let index_columns: Vec<&AnyArray> = columns
-        .iter()
-        .map(|name| input.find(name).unwrap())
-        .collect();
+    let index_columns: Vec<&AnyArray> =
+        columns.iter().map(|name| input.find_always(name)).collect();
     let keys = byte_keys(index_columns, tids);
     // Insert the keys into the index.
     for i in 0..keys.len() {

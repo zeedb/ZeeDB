@@ -6,6 +6,7 @@ use std::{
     fmt,
     hash::Hash,
 };
+use zetasql::TableRefProto;
 
 use crate::{AggregateExpr, Column, Index, Procedure, Scalar};
 
@@ -1121,21 +1122,10 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn from(table: &zetasql::ResolvedTableScanProto) -> Self {
-        match table {
-            zetasql::ResolvedTableScanProto {
-                table:
-                    Some(zetasql::TableRefProto {
-                        serialization_id: Some(id),
-                        name: Some(name),
-                        ..
-                    }),
-                ..
-            } => Table {
-                id: *id,
-                name: name.clone(),
-            },
-            other => panic!("{:?}", other),
+    pub fn from(table: &TableRefProto) -> Self {
+        Table {
+            id: table.serialization_id.unwrap(),
+            name: table.name.as_ref().unwrap().clone(),
         }
     }
 }

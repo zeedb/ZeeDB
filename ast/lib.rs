@@ -1,7 +1,5 @@
 mod aggregate_expr;
 mod column;
-#[cfg(test)]
-mod column_tests;
 mod date_part;
 mod expr;
 #[cfg(test)]

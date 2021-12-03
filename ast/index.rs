@@ -19,7 +19,8 @@ impl Index {
                         F::Equal(Scalar::Column(column), lookup)
                         | F::Equal(lookup, Scalar::Column(column))
                             if column_name == &column.name
-                                && Some(self.table_id) == column.table_id =>
+                                && column.table.is_some()
+                                && column.table.as_ref().unwrap().id == self.table_id =>
                         {
                             index_predicates.push(lookup.clone());
                         }

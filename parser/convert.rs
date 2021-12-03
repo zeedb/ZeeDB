@@ -20,7 +20,6 @@ pub fn convert(
     let mut converter = Converter {
         catalog_id,
         variables,
-        known_columns: HashMap::new(),
     };
     let mut statements: Vec<Expr> = analyzed.iter().map(|s| converter.any_stmt(s)).collect();
     if statements.len() == 1 {
@@ -33,7 +32,6 @@ pub fn convert(
 struct Converter {
     catalog_id: i64,
     variables: HashMap<String, Value>,
-    known_columns: HashMap<i64, Column>,
 }
 
 impl Converter {
@@ -59,7 +57,7 @@ impl Converter {
             projects: q
                 .output_column_list
                 .iter()
-                .map(|c| self.column(c.column.get()))
+                .map(|c| Column::from(c.column.get()))
                 .collect(),
             input: Box::new(input),
         }
@@ -90,18 +88,16 @@ impl Converter {
     }
 
     fn table_scan(&mut self, q: &ResolvedTableScanProto) -> Expr {
-        self.register_columns(q);
-
         let mut projects: Vec<Column> = q
             .parent
             .get()
             .column_list
             .iter()
-            .map(|c| self.column(c))
+            .map(|c| Column::table(c, q.table.get()))
             .collect();
-        let table = Table::from(q);
-        let xmin = Column::computed("$xmin", &None, DataType::I64);
-        let xmax = Column::computed("$xmax", &None, DataType::I64);
+        let table = Table::from(q.table.get());
+        let xmin = Column::fresh("$xmin", DataType::I64);
+        let xmax = Column::fresh("$xmax", DataType::I64);
         let predicates = vec![
             Scalar::Call(Box::new(F::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -122,19 +118,17 @@ impl Converter {
     }
 
     fn table_scan_for_update(&mut self, q: &ResolvedTableScanProto) -> (Expr, Column) {
-        self.register_columns(q);
-
         let mut projects: Vec<Column> = q
             .parent
             .get()
             .column_list
             .iter()
-            .map(|c| self.column(c))
+            .map(|c| Column::table(c, q.table.get()))
             .collect();
-        let table = Table::from(q);
-        let xmin = Column::computed("$xmin", &None, DataType::I64);
-        let xmax = Column::computed("$xmax", &None, DataType::I64);
-        let tid = Column::computed("$tid", &None, DataType::I64);
+        let table = Table::from(q.table.get());
+        let xmin = Column::fresh("$xmin", DataType::I64);
+        let xmax = Column::fresh("$xmax", DataType::I64);
+        let tid = Column::fresh("$tid", DataType::I64);
         let predicates = vec![
             Scalar::Call(Box::new(F::LessOrEqual(
                 Scalar::Column(xmin.clone()),
@@ -272,9 +266,7 @@ impl Converter {
             0 => panic!(),
             1 => {
                 let input = self.any_resolved_scan(items[0].scan.get());
-                let columns = self.columns(&items[0].output_column_list);
-                let outputs = self.columns(outputs);
-                self.rename_columns(outputs, columns, input)
+                self.rename_columns(outputs, &items[0].output_column_list, input)
             }
             _ => {
                 let left = self.union(outputs, &items[0..1]);
@@ -287,13 +279,22 @@ impl Converter {
         }
     }
 
-    fn rename_columns(&mut self, outputs: Vec<Column>, inputs: Vec<Column>, input: Expr) -> Expr {
-        let mut projects = vec![];
-        for i in 0..outputs.len() {
-            let input = Scalar::Column(inputs[i].clone());
-            let output = outputs[i].clone();
-            projects.push((input, output))
-        }
+    fn rename_columns(
+        &mut self,
+        outputs: &Vec<ResolvedColumnProto>,
+        inputs: &Vec<ResolvedColumnProto>,
+        input: Expr,
+    ) -> Expr {
+        let projects: Vec<_> = inputs
+            .iter()
+            .zip(outputs)
+            .map(|(input, output)| {
+                (
+                    Scalar::Column(Column::reference(input)),
+                    Column::reference(output),
+                )
+            })
+            .collect();
         assert!(!projects.is_empty());
         LogicalMap {
             include_existing: false,
@@ -314,7 +315,7 @@ impl Converter {
             //     _ => panic!(),
             // };
             order_by.push(OrderBy {
-                column: self.column_ref(x.column_ref.get()),
+                column: Column::reference(x.column_ref.get().column.get()),
                 descending,
             });
         }
@@ -373,7 +374,7 @@ impl Converter {
             {
                 continue;
             }
-            let column = self.column(&c);
+            let column = Column::reference(&c);
             projects.push((Scalar::Column(column.clone()), column))
         }
         assert!(!projects.is_empty());
@@ -390,7 +391,7 @@ impl Converter {
         input: &mut Expr,
     ) -> (Scalar, Column) {
         let value = self.expr(x.expr.get(), input);
-        let column = self.column(x.column.get());
+        let column = Column::computed(x);
         (value, column)
     }
 
@@ -411,7 +412,11 @@ impl Converter {
                     // The renamed names will reappear later in ResolvedWithRefScanProto.
                     // Since the columns of a CTE are matched by position rather than name,
                     // this is OK, just kind of weird.
-                    let columns = self.columns(column_list(&query));
+                    let columns = parent(&query)
+                        .column_list
+                        .iter()
+                        .map(Column::reference)
+                        .collect();
                     right = LogicalWith {
                         name: name.clone(),
                         columns,
@@ -427,7 +432,13 @@ impl Converter {
 
     fn with_ref(&mut self, q: &ResolvedWithRefScanProto) -> Expr {
         let name = q.with_query_name.get().clone();
-        let columns = self.columns(&q.parent.get().column_list);
+        let columns = q
+            .parent
+            .get()
+            .column_list
+            .iter()
+            .map(Column::reference)
+            .collect();
         LogicalGetWith { name, columns }
     }
 
@@ -439,7 +450,7 @@ impl Converter {
         let mut group_by_columns: Vec<Column> = vec![];
         for compute in &q.group_by_list {
             let scalar = self.expr(compute.expr.get(), &mut input);
-            let column = self.column(compute.column.get());
+            let column = Column::computed(compute);
             input_projects.push((scalar, column.clone()));
             group_by_columns.push(column);
         }
@@ -472,10 +483,10 @@ impl Converter {
                 assert!(arguments.len() == 1);
 
                 let input_expr = self.expr(&arguments[0], &mut input);
-                let input_column = Column::computed("$avg", &None, input_expr.data_type());
+                let input_column = Column::fresh("$avg", input_expr.data_type());
                 input_projects.push((input_expr.clone(), input_column.clone()));
-                let sum_column = Column::computed("$avg$sum", &None, input_expr.data_type());
-                let count_column = Column::computed("$avg$count", &None, input_expr.data_type());
+                let sum_column = Column::fresh("$avg$sum", input_expr.data_type());
+                let count_column = Column::fresh("$avg$count", input_expr.data_type());
                 aggregate_operators.push(AggregateExpr {
                     function: AggregateFunction::Sum,
                     distinct,
@@ -492,15 +503,15 @@ impl Converter {
                     Scalar::Cast(Box::new(Scalar::Column(sum_column)), DataType::F64),
                     Scalar::Cast(Box::new(Scalar::Column(count_column)), DataType::F64),
                 )));
-                let avg_column = self.column(aggregate.column.get());
+                let avg_column = Column::computed(aggregate);
                 output_projects.push((avg_expr, avg_column));
             } else if &function == "ZetaSQL:$count_star" {
                 assert!(arguments.len() == 0);
 
                 let input_expr = Scalar::Literal(Value::I64(Some(1)));
-                let input_column = Column::computed("$star", &None, DataType::I64);
+                let input_column = Column::fresh("$star", DataType::I64);
                 input_projects.push((input_expr, input_column.clone()));
-                let count_column = self.column(aggregate.column.get());
+                let count_column = Column::computed(aggregate);
                 aggregate_operators.push(AggregateExpr {
                     function: AggregateFunction::Count,
                     distinct,
@@ -511,10 +522,9 @@ impl Converter {
                 assert!(arguments.len() == 1);
 
                 let input_expr = self.expr(&arguments[0], &mut input);
-                let input_column =
-                    Column::computed(&function_name(&function), &None, input_expr.data_type());
+                let input_column = Column::fresh(&function_name(&function), input_expr.data_type());
                 input_projects.push((input_expr, input_column.clone()));
-                let aggregate_column = self.column(aggregate.column.get());
+                let aggregate_column = Column::computed(aggregate);
                 aggregate_operators.push(AggregateExpr {
                     function: AggregateFunction::from(&function),
                     distinct,
@@ -567,7 +577,7 @@ impl Converter {
             catalog_id: self.catalog_id,
             path: q.parent.get().name_path.clone(),
         };
-        let table = Table::from(q.table_scan.get());
+        let table = Table::from(q.table_scan.get().table.get());
         if q.is_unique == Some(true) {
             panic!("unique index is not supported")
         }
@@ -644,7 +654,7 @@ impl Converter {
                 columns: (0..q.query_output_column_list.len())
                     .map(|i| {
                         (
-                            self.column(&q.query_output_column_list[i]),
+                            Column::reference(&q.query_output_column_list[i]),
                             q.insert_column_list[i].name.get().clone(),
                         )
                     })
@@ -657,16 +667,14 @@ impl Converter {
                 columns: q
                     .insert_column_list
                     .iter()
-                    .map(|c| (self.column(c), c.name.get().clone()))
+                    .map(|c| (Column::reference(c), c.name.get().clone()))
                     .collect(),
             }
         }
     }
 
     fn table_scan_for_insert(&mut self, q: &ResolvedTableScanProto) -> Table {
-        self.register_columns(q);
-
-        Table::from(q)
+        Table::from(q.table.get())
     }
 
     fn rows(&mut self, q: &ResolvedInsertStmtProto) -> Expr {
@@ -682,30 +690,19 @@ impl Converter {
                 ));
             }
         }
+        let columns = q.insert_column_list.iter().map(Column::reference).collect();
         LogicalValues {
-            columns: self.columns(&q.insert_column_list),
+            columns,
             values,
             input: Box::new(input),
         }
-    }
-
-    fn columns(&mut self, xs: &Vec<ResolvedColumnProto>) -> Vec<Column> {
-        let mut cs = vec![];
-        for x in xs {
-            cs.push(self.column(x));
-        }
-        cs
-    }
-
-    fn column_ref(&mut self, x: &ResolvedColumnRefProto) -> Column {
-        self.column(x.column.get())
     }
 
     fn delete(&mut self, q: &ResolvedDeleteStmtProto) -> Expr {
         let (mut input, tid) = self.table_scan_for_update(q.table_scan.get());
         let predicates = self.predicate(q.where_expr.get(), &mut input);
         LogicalDelete {
-            table: Table::from(q.table_scan.get()),
+            table: Table::from(q.table_scan.get().table.get()),
             tid,
             input: Box::new(LogicalFilter {
                 predicates,
@@ -715,7 +712,7 @@ impl Converter {
     }
 
     fn update(&mut self, q: &ResolvedUpdateStmtProto) -> Expr {
-        let table = Table::from(q.table_scan.get());
+        let table = Table::from(q.table_scan.get().table.get());
         let (mut input, tid) = self.table_scan_for_update(q.table_scan.get());
         if let Some(from) = &q.from_scan {
             let from = self.any_resolved_scan(from);
@@ -736,7 +733,7 @@ impl Converter {
         let column_list = &q.table_scan.get().parent.get().column_list;
         let mut projects = vec![];
         for column in column_list {
-            let as_column = self.column(column);
+            let as_column = Column::reference(column);
             let value = self
                 .updated_column(q, column, &mut input)
                 .unwrap_or(Scalar::Column(as_column.clone()));
@@ -753,7 +750,7 @@ impl Converter {
             }),
             columns: column_list
                 .iter()
-                .map(|c| (self.column(c), c.name.get().clone()))
+                .map(|c| (Column::reference(c), c.name.get().clone()))
                 .collect(),
         }
     }
@@ -846,7 +843,7 @@ impl Converter {
                 let data_type = x.value.get().r#type.get();
                 Scalar::Literal(literal(value, data_type))
             }
-            ResolvedColumnRefNode(x) => Scalar::Column(self.column_ref(x)),
+            ResolvedColumnRefNode(x) => Scalar::Column(Column::reference(x.column.get())),
             ResolvedFunctionCallBaseNode(x) => self.function_call(x, outer),
             ResolvedCastNode(x) => self.cast(x, outer),
             ResolvedParameterNode(x) => self.parameter(x),
@@ -900,7 +897,7 @@ impl Converter {
         let parameters: Vec<Column> = x
             .parameter_list
             .iter()
-            .map(|c| self.column(c.column.get()))
+            .map(|c| Column::reference(c.column.get()))
             .collect();
         let subquery = self.any_resolved_scan(x.subquery.get());
         let (join, scalar) = match x.subquery_type.get() {
@@ -914,14 +911,14 @@ impl Converter {
             1 => unimplemented!(),
             // Exists
             2 => {
-                let mark = Column::computed("$exists", &None, DataType::Bool);
+                let mark = Column::fresh("$exists", DataType::Bool);
                 let join = Join::Mark(mark.clone(), vec![]);
                 let scalar = Scalar::Column(mark);
                 (join, scalar)
             }
             // In
             3 => {
-                let mark = Column::computed("$in", &None, DataType::Bool);
+                let mark = Column::fresh("$in", DataType::Bool);
                 let find = match x {
                     ResolvedSubqueryExprProto {
                         in_expr: Some(x), ..
@@ -995,7 +992,7 @@ impl Converter {
         //
         let rename_subquery_parameters: Vec<Column> = subquery_parameters
             .iter()
-            .map(|p| Column::computed(&p.name, &None, p.data_type))
+            .map(|c| Column::fresh(&c.name, c.data_type))
             .collect();
         let map_subquery_parameters: HashMap<Column, Column> = (0..subquery_parameters.len())
             .map(|i| {
@@ -1050,43 +1047,13 @@ impl Converter {
     }
 
     fn single_column(&mut self, q: &AnyResolvedScanProto) -> Scalar {
-        Scalar::Column(self.column(&column_list(q)[0]))
-    }
-
-    /// Register a column as belonging to a table.
-    fn register_columns(&mut self, q: &ResolvedTableScanProto) {
-        for c in &q.parent.get().column_list {
-            if !self.known_columns.contains_key(&c.column_id.unwrap()) {
-                self.known_columns.insert(
-                    c.column_id.unwrap(),
-                    Column::table(
-                        c.name.get(),
-                        q.table.get().serialization_id.unwrap(),
-                        q.table.get().name.get(),
-                        DataType::from(c.r#type.as_ref().unwrap()),
-                    ),
-                );
-            }
-        }
-    }
-
-    fn column(&mut self, c: &ResolvedColumnProto) -> Column {
-        if !self.known_columns.contains_key(&c.column_id.unwrap()) {
-            self.known_columns.insert(
-                c.column_id.unwrap(),
-                Column::computed(
-                    c.name.get(),
-                    &c.table_name,
-                    DataType::from(c.r#type.as_ref().unwrap()),
-                ),
-            );
-        }
-        self.known_columns[&c.column_id.unwrap()].clone()
+        let c = &parent(q).column_list[0];
+        Scalar::Column(Column::reference(c))
     }
 }
 
-fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
-    let q = match q.node.get() {
+fn parent(q: &AnyResolvedScanProto) -> &ResolvedScanProto {
+    match q.node.get() {
         ResolvedSingleRowScanNode(q) => q.parent.get(),
         ResolvedTableScanNode(q) => q.parent.get(),
         ResolvedJoinScanNode(q) => q.parent.get(),
@@ -1108,8 +1075,7 @@ fn column_list(q: &AnyResolvedScanProto) -> &Vec<ResolvedColumnProto> {
         }
         ResolvedPivotScanNode(_) | ResolvedUnpivotScanNode(_) => panic!("PIVOT not supported"),
         ResolvedGroupRowsScanNode(_) => panic!("GROUP_ROWS not supported"),
-    };
-    &q.column_list
+    }
 }
 
 fn single_column_aggregate(q: &AnyResolvedAggregateScanBaseProto) -> &ResolvedScanProto {

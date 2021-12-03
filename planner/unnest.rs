@@ -251,7 +251,10 @@ fn push_both(
     domain: Box<Expr>,
 ) -> Expr {
     // Substitute fresh column names for the left side subquery.
-    let left_parameters: Vec<_> = parameters.iter().map(Column::fresh).collect();
+    let left_parameters: Vec<_> = parameters
+        .iter()
+        .map(|c| Column::fresh(&c.name, c.data_type))
+        .collect();
     let left_parameters_map: HashMap<_, _> = (0..parameters.len())
         .map(|i| (parameters[i].clone(), left_parameters[i].clone()))
         .collect();

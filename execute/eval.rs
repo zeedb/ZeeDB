@@ -22,7 +22,7 @@ pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, txn: i64) -> Result<Any
         Scalar::Literal(value) => value.repeat(input.len()),
         Scalar::Column(column) => {
             let find = column.canonical_name();
-            input.find(&find).expect(&find).clone()
+            input.find_always(&find).clone()
         }
         Scalar::Call(function) => eval_function(function.as_ref(), input, txn)?,
         Scalar::Cast(scalar, data_type) => eval(scalar, input, txn)?.cast(*data_type),

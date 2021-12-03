@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use ast::{Expr, Value};
+use ast::Value;
 use catalog::{enabled_language_features, supported_statement_kinds};
 use tonic::{transport::Channel, Request};
 use zetasql::{

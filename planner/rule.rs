@@ -687,7 +687,7 @@ fn contains_all(group: &Group, columns: HashSet<Column>) -> bool {
 }
 
 fn create_hash_column(partition_by: Vec<Scalar>, input: Expr) -> (Column, Expr) {
-    let column = Column::computed("$hash", &None, DataType::I64);
+    let column = Column::fresh("$hash", DataType::I64);
     let scalar = Scalar::Call(Box::new(F::Hash(partition_by)));
     let expr = LogicalMap {
         projects: vec![(scalar, column.clone())],

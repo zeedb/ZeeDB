@@ -481,7 +481,7 @@ impl Node {
                 for column in projects {
                     columns.push((
                         column.name.clone(),
-                        input.find(&column.canonical_name()).unwrap().clone(),
+                        input.find_always(&column.canonical_name()).clone(),
                     ));
                 }
                 Next::Page(RecordBatch::new(columns))
@@ -617,8 +617,7 @@ impl Node {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
                     let left = build_or_empty(left, storage, txn, left_schema)?;
-                    let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
-                    {
+                    let partition_left = match left.find_always(&partition_left.canonical_name()) {
                         AnyArray::I64(a) => a,
                         _ => panic!(),
                     };
@@ -631,7 +630,7 @@ impl Node {
                     // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
                     Next::Page(right) => {
                         let partition_right =
-                            match right.find(&partition_right.canonical_name()).unwrap() {
+                            match right.find_always(&partition_right.canonical_name()) {
                                 AnyArray::I64(a) => a,
                                 _ => panic!(),
                             };
@@ -675,8 +674,7 @@ impl Node {
                 // If this is the first iteration, build the left side of the join into a hash table.
                 if build_left.is_none() {
                     let left = build_or_empty(left, storage, txn, left_schema)?;
-                    let partition_left = match left.find(&partition_left.canonical_name()).unwrap()
-                    {
+                    let partition_left = match left.find_always(&partition_left.canonical_name()) {
                         AnyArray::I64(a) => a,
                         _ => panic!(),
                     };
@@ -685,7 +683,7 @@ impl Node {
                 }
                 // Get the next batch of rows from the right (probe) side.
                 let right = right.next(storage, txn)?;
-                let partition_right = match right.find(&partition_right.canonical_name()).unwrap() {
+                let partition_right = match right.find_always(&partition_right.canonical_name()) {
                     AnyArray::I64(a) => a,
                     _ => panic!(),
                 };
@@ -799,7 +797,7 @@ impl Node {
                         Next::Page(batch) => {
                             let aggregate_columns: Vec<AnyArray> = aggregate
                                 .iter()
-                                .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
+                                .map(|a| batch.find_always(&a.input.canonical_name()).clone())
                                 .collect();
                             operator.insert(aggregate_columns);
                         }
@@ -837,11 +835,11 @@ impl Node {
                         Next::Page(batch) => {
                             let group_by_columns: Vec<AnyArray> = group_by
                                 .iter()
-                                .map(|c| batch.find(&c.canonical_name()).unwrap().clone())
+                                .map(|c| batch.find_always(&c.canonical_name()).clone())
                                 .collect();
                             let aggregate_columns: Vec<AnyArray> = aggregate
                                 .iter()
-                                .map(|a| batch.find(&a.input.canonical_name()).unwrap().clone())
+                                .map(|a| batch.find_always(&a.input.canonical_name()).clone())
                                 .collect();
                             operator.insert(group_by_columns, aggregate_columns);
                         }
@@ -895,7 +893,7 @@ impl Node {
                     .map(|o| {
                         (
                             o.column.canonical_name(),
-                            input.find(&o.column.canonical_name()).unwrap().clone(),
+                            input.find_always(&o.column.canonical_name()).clone(),
                         )
                     })
                     .collect();
@@ -1023,8 +1021,8 @@ impl Node {
                     return self.next(storage, txn);
                 }
                 // Identify rows to be updated by tid and sort them.
-                let tids = match input.find(&tid.canonical_name()) {
-                    Some(AnyArray::I64(tids)) => tids,
+                let tids = match input.find_always(&tid.canonical_name()) {
+                    AnyArray::I64(tids) => tids,
                     _ => panic!(),
                 };
                 let tids = tids.gather(&tids.sort());

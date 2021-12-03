@@ -5,83 +5,79 @@ use std::{
     fmt,
     fmt::{Debug, Display},
     hash::Hash,
-    sync::atomic::AtomicU64,
+    sync::atomic::AtomicI64,
 };
+use zetasql::{ResolvedColumnProto, ResolvedComputedColumnProto, TableRefProto};
+
+use crate::Table;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Column {
-    pub id: u64,
+    pub id: i64,
     pub name: String,
-    pub table_id: Option<i64>,
-    pub table_name: Option<String>,
+    pub table: Option<Table>,
     pub data_type: DataType,
     pub created_late: bool,
 }
 
 impl Column {
-    pub fn computed(name: &str, table_name: &Option<String>, data_type: DataType) -> Self {
+    // Create a new Column with a unique ID that is different than any ID assigned by ZetaSQL.
+    // This Column will only match itself. Any references to this Column must be created by cloning it.
+    pub fn fresh(name: &str, data_type: DataType) -> Self {
         Self {
             id: next_column_id(),
             name: name.to_string(),
-            table_id: None,
-            table_name: table_name.clone(),
-            data_type: data_type.clone(),
+            table: None,
+            data_type,
             created_late: false,
         }
     }
 
-    pub fn table(name: &str, table_id: i64, table_name: &str, data_type: DataType) -> Self {
+    // Convert a ZetaSQL reference to a Column.
+    pub fn reference(c: &ResolvedColumnProto) -> Self {
         Self {
-            id: next_column_id(),
-            name: name.to_string(),
-            table_id: Some(table_id),
-            table_name: Some(table_name.to_string()),
-            data_type: data_type.clone(),
+            id: c.column_id.unwrap(),
+            name: c.name.clone().unwrap(),
+            table: None,
+            data_type: DataType::from(c.r#type.as_ref().unwrap()),
             created_late: false,
         }
     }
 
-    pub fn fresh(copy: &Column) -> Self {
+    // Convert a ZetaSQL computed column to a Column.
+    pub fn computed(c: &ResolvedComputedColumnProto) -> Self {
+        Self::reference(c.column.as_ref().unwrap())
+    }
+
+    // Convert a ZetaSQL table scan column to a Column.
+    pub fn table(c: &ResolvedColumnProto, table: &TableRefProto) -> Self {
         Self {
-            id: next_column_id(),
-            name: copy.name.clone(),
-            table_id: copy.table_id.clone(),
-            table_name: copy.table_name.clone(),
-            data_type: copy.data_type.clone(),
-            created_late: true,
+            id: c.column_id.unwrap(),
+            name: c.name.clone().unwrap(),
+            table: Some(Table::from(table)),
+            data_type: DataType::from(c.r#type.as_ref().unwrap()),
+            created_late: false,
         }
     }
 
     pub fn canonical_name(&self) -> String {
-        if let Some(table) = &self.table_name {
-            format!("{}.{}#{:#x}", table, self.escape_name(), self.id)
-        } else {
-            format!("{}#{:#x}", self.escape_name(), self.id)
-        }
-    }
-
-    pub fn parse_canonical_name(name: &str) -> String {
-        let i = match name.find('.') {
-            Some(i) => {
-                if name.as_bytes().get(i + 1) == Some(&('.' as u8)) {
-                    0
-                } else {
-                    i + 1
-                }
-            }
-            _ => 0,
-        };
-        let j = name.find('#').unwrap();
-        let name = &name[i..j];
-        Self::unescape_name(name)
+        format!("{}#{}", self.escape_name(), self.id)
     }
 
     fn escape_name(&self) -> String {
         self.name.replace('.', "..")
     }
+}
 
-    fn unescape_name(name: &str) -> String {
-        name.replace("..", ".")
+impl From<&ResolvedColumnProto> for Column {
+    fn from(c: &ResolvedColumnProto) -> Self {
+        Self {
+            id: c.column_id.unwrap(),
+            name: c.name.clone().unwrap(),
+            table: None,
+            data_type: DataType::from(c.r#type.as_ref().unwrap()),
+            created_late: false,
+        }
     }
 }
 
@@ -94,7 +90,7 @@ impl Eq for Column {}
 
 impl Hash for Column {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        state.write_u64(self.id)
+        state.write_i64(self.id)
     }
 }
 
@@ -112,12 +108,8 @@ impl Ord for Column {
 
 impl Debug for Column {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (&self.table_name, self.table_id) {
-            (Some(table_name), Some(table_id)) => {
-                write!(f, "{}#{}.{}", table_name, table_id, &self.name)?
-            }
-            (Some(table_name), _) => write!(f, "{}.{}", table_name, &self.name)?,
-            (_, _) => write!(f, "{}", &self.name)?,
+        if let Some(table) = &self.table {
+            write!(f, "{}.{}", table, &self.name)?
         }
         if self.created_late {
             write!(f, "'")?;
@@ -128,7 +120,7 @@ impl Debug for Column {
 
 impl Display for Column {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Some(table) = &self.table_name {
+        if let Some(table) = &self.table {
             write!(f, "{}.", table)?;
         }
         write!(f, "{}", self.name)?;
@@ -139,7 +131,7 @@ impl Display for Column {
     }
 }
 
-fn next_column_id() -> u64 {
-    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
-    SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+fn next_column_id() -> i64 {
+    static SEQUENCE: AtomicI64 = AtomicI64::new(0);
+    -SEQUENCE.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
 }

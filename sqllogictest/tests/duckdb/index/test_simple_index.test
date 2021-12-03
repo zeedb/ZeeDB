@@ -5,4 +5,4 @@ statement ok
 create index index_i on table_with_index (i)
 
 statement ok
-insert into table_with_index values (@i)
+insert into table_with_index values (1)
