@@ -127,9 +127,19 @@ fn analyze_with_catalog(
     Ok(stmts)
 }
 
+// TODO this should be an LRU cache.
+static TABLE_NAMES_CACHE: Lazy<Mutex<HashMap<String, Vec<Vec<String>>>>> =
+    Lazy::new(Default::default);
+
 #[log::trace]
 fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
-    log::rpc(async move {
+    // Check if we have already cached this request.
+    let mut cache = TABLE_NAMES_CACHE.lock().unwrap();
+    if let Some(table_names) = cache.get(sql) {
+        return table_names.clone();
+    }
+    // Cache the request.
+    let table_names: Vec<Vec<String>> = log::rpc(async move {
         parser()
             .await
             .extract_table_names_from_statement(Request::new(
@@ -146,7 +156,11 @@ fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
             .drain(..)
             .map(|name| name.table_name_segment)
             .collect()
-    })
+    });
+    // Cache the request.
+    cache.insert(sql.to_string(), table_names.clone());
+    // Return the newly-cached table names.
+    table_names
 }
 
 #[log::trace]
