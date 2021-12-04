@@ -1,7 +1,9 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
 use ast::Value;
 use defaults::{enabled_language_features, supported_statement_kinds};
+use kernel::DataType;
+use once_cell::sync::Lazy;
 use tonic::{transport::Channel, Request};
 use zetasql::{
     analyze_request::Target::ParseResumeLocation,
@@ -10,6 +12,8 @@ use zetasql::{
     zeta_sql_local_service_client::ZetaSqlLocalServiceClient,
     *,
 };
+
+use crate::catalog::SimpleCatalogProvider;
 
 pub const MAX_QUERY: usize = 4_194_304;
 
@@ -68,7 +72,43 @@ pub fn analyze(
     let table_names = extract_table_names_from_stmt(sql);
     // Construct a minimal catalog containing just the referenced tables.
     let simple_catalog = crate::catalog::simple_catalog(table_names, catalog_id, txn);
+    // Analyze the sql statement, or use the cache.
+    analyze_with_catalog(sql, variables, simple_catalog)
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct Key {
+    sql: String,
+    variables: Vec<(String, DataType)>,
+    catalog: SimpleCatalogProvider,
+}
+
+// TODO this should be an LRU cache.
+static ANALYZE_CACHE: Lazy<Mutex<HashMap<Key, Vec<AnyResolvedStatementProto>>>> =
+    Lazy::new(Default::default);
+
+fn analyze_with_catalog(
+    sql: &str,
+    variables: &HashMap<String, Value>,
+    catalog: SimpleCatalogProvider,
+) -> Result<Vec<AnyResolvedStatementProto>, String> {
+    // Check if we have already cached this request.
+    let mut cache = ANALYZE_CACHE.lock().unwrap();
+    let mut key = Key {
+        sql: sql.to_string(),
+        variables: variables
+            .iter()
+            .map(|(name, value)| (name.clone(), value.data_type()))
+            .collect(),
+        catalog,
+    };
+    key.variables
+        .sort_by(|(left, _), (right, _)| left.cmp(right));
+    if let Some(stmts) = cache.get(&key) {
+        return Ok(stmts.clone());
+    }
     // Parse each statement in the script, one at a time, in a loop.
+    let simple_catalog = key.catalog.to_proto();
     let mut offset = 0;
     let mut stmts = vec![];
     loop {
@@ -78,9 +118,13 @@ pub fn analyze(
         stmts.push(stmt);
         // If we've parsed the entire expression, return.
         if offset as usize == sql.as_bytes().len() {
-            return Ok(stmts);
+            break;
         }
     }
+    // Cache the request.
+    cache.insert(key, stmts.clone());
+    // Return the newly-cached statements.
+    Ok(stmts)
 }
 
 #[log::trace]

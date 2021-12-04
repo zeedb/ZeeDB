@@ -6,21 +6,88 @@ use kernel::{Array, DataType, Next, RecordBatch};
 use once_cell::sync::OnceCell;
 use zetasql::{AnyResolvedStatementProto, SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
+#[derive(Hash, PartialEq, Eq)]
+pub enum SimpleCatalogProvider {
+    MetadataCatalog,
+    UserCatalog(UserCatalog),
+}
+
+#[derive(Hash, PartialEq, Eq, Default)]
+pub struct UserCatalog {
+    name: String,
+    tables: Vec<UserTable>,
+    catalogs: Vec<UserCatalog>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct UserTable {
+    id: i64,
+    name: String,
+    columns: Vec<UserColumn>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct UserColumn {
+    name: String,
+    data_type: DataType,
+}
+
+impl SimpleCatalogProvider {
+    pub fn to_proto(&self) -> SimpleCatalogProto {
+        match self {
+            SimpleCatalogProvider::MetadataCatalog => {
+                crate::bootstrap::bootstrap_metadata_catalog()
+            }
+            SimpleCatalogProvider::UserCatalog(catalog) => catalog.to_proto(),
+        }
+    }
+}
+
+impl UserCatalog {
+    fn to_proto(&self) -> SimpleCatalogProto {
+        SimpleCatalogProto {
+            name: Some(self.name.clone()),
+            catalog: self.catalogs.iter().map(UserCatalog::to_proto).collect(),
+            table: self.tables.iter().map(UserTable::to_proto).collect(),
+            builtin_function_options: Some(builtin_function_options()),
+            named_type: builtin_named_types(),
+            ..Default::default()
+        }
+    }
+}
+
+impl UserTable {
+    fn to_proto(&self) -> SimpleTableProto {
+        SimpleTableProto {
+            name: Some(self.name.clone()),
+            serialization_id: Some(self.id),
+            column: self.columns.iter().map(UserColumn::to_proto).collect(),
+            ..Default::default()
+        }
+    }
+}
+
+impl UserColumn {
+    fn to_proto(&self) -> SimpleColumnProto {
+        SimpleColumnProto {
+            name: Some(self.name.clone()),
+            r#type: Some(self.data_type.to_proto()),
+            ..Default::default()
+        }
+    }
+}
+
 #[log::trace]
 pub fn simple_catalog(
     table_names: Vec<Vec<String>>,
     catalog_id: i64,
     txn: i64,
-) -> SimpleCatalogProto {
+) -> SimpleCatalogProvider {
     if catalog_id == METADATA_CATALOG_ID {
-        return crate::bootstrap::bootstrap_metadata_catalog();
+        return SimpleCatalogProvider::MetadataCatalog;
     }
     let mut catalog_id_cache = HashMap::new();
-    let mut root_catalog = SimpleCatalogProto {
-        builtin_function_options: Some(builtin_function_options()),
-        named_type: builtin_named_types(),
-        ..Default::default()
-    };
+    let mut root_catalog = UserCatalog::default();
     for name in &table_names {
         let mut catalog_id = catalog_id;
         let mut catalog = &mut root_catalog;
@@ -32,17 +99,17 @@ pub fn simple_catalog(
         }
         let table_name = &name[name.len() - 1];
         if let Some(table_id) = table_name_to_id(catalog_id, table_name, txn) {
-            catalog.table.push(SimpleTableProto {
-                name: Some(table_name.clone()),
-                serialization_id: Some(table_id),
-                column: table_columns(table_id, txn),
-                ..Default::default()
+            catalog.tables.push(UserTable {
+                id: table_id,
+                name: table_name.clone(),
+                columns: table_columns(table_id, txn),
             })
         }
     }
-    root_catalog
+    SimpleCatalogProvider::UserCatalog(root_catalog)
 }
 
+// TODO ideally this would include the convert and optimize phase, but it can't because right now we inline variables.
 macro_rules! analyze_once {
     ($sql:literal, $variables:expr, $txn:expr) => {{
         static STATEMENTS: OnceCell<Vec<AnyResolvedStatementProto>> = OnceCell::new();
@@ -125,7 +192,7 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> Option<i6
 }
 
 #[log::trace]
-fn table_columns(table_id: i64, txn: i64) -> Vec<SimpleColumnProto> {
+fn table_columns(table_id: i64, txn: i64) -> Vec<UserColumn> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
     let statements = analyze_once!(
@@ -140,29 +207,28 @@ fn table_columns(table_id: i64, txn: i64) -> Vec<SimpleColumnProto> {
     let (_, column_type) = batch.columns.remove(0);
     let column_type = column_type.as_string();
     for i in 0..column_name.len() {
-        columns.push(SimpleColumnProto {
-            name: Some(column_name.get(i).unwrap()),
-            r#type: Some(DataType::from(column_type.get_str(i).unwrap()).to_proto()),
-            ..Default::default()
+        columns.push(UserColumn {
+            name: column_name.get(i).unwrap(),
+            data_type: DataType::from(column_type.get_str(i).unwrap()),
         })
     }
     columns
 }
 
 fn find_or_push_catalog<'a>(
-    parent_catalog: &'a mut SimpleCatalogProto,
+    parent_catalog: &'a mut UserCatalog,
     catalog_name: &String,
-) -> &'a mut SimpleCatalogProto {
-    for i in 0..parent_catalog.catalog.len() {
-        if parent_catalog.catalog[i].name.as_ref() == Some(catalog_name) {
-            return &mut parent_catalog.catalog[i];
+) -> &'a mut UserCatalog {
+    for i in 0..parent_catalog.catalogs.len() {
+        if &parent_catalog.catalogs[i].name == catalog_name {
+            return &mut parent_catalog.catalogs[i];
         }
     }
-    parent_catalog.catalog.push(SimpleCatalogProto {
-        name: Some(catalog_name.clone()),
+    parent_catalog.catalogs.push(UserCatalog {
+        name: catalog_name.clone(),
         ..Default::default()
     });
-    parent_catalog.catalog.last_mut().unwrap()
+    parent_catalog.catalogs.last_mut().unwrap()
 }
 
 /// Catalog acts as its own little coordinator to avoid once RPC hop and to make caching metadata queries straightforward.
