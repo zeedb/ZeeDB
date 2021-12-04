@@ -13,7 +13,7 @@ use zetasql::{
 
 #[log::trace]
 pub fn convert(
-    analyzed: Vec<AnyResolvedStatementProto>,
+    analyzed: &Vec<AnyResolvedStatementProto>,
     variables: HashMap<String, Value>,
     catalog_id: i64,
 ) -> Expr {

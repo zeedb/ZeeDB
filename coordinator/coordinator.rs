@@ -78,14 +78,8 @@ fn submit(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
         .iter()
         .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter)))
         .collect();
-    let analyzed = match parser::analyze(&request.sql, &variables, request.catalog_id, txn) {
-        Ok(expr) => expr,
-        Err(message) => {
-            return Err(Status::invalid_argument(message));
-        }
-    };
-    let expr = parser::convert(analyzed, variables, request.catalog_id);
-    let expr = planner::optimize(expr, txn);
+    let expr = planner::plan(&request.sql, variables, request.catalog_id, txn)
+        .map_err(Status::invalid_argument)?;
     execute(&expr, txn)
 }
 

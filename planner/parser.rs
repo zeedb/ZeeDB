@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use ast::Value;
-use catalog::{enabled_language_features, supported_statement_kinds};
+use defaults::{enabled_language_features, supported_statement_kinds};
 use tonic::{transport::Channel, Request};
 use zetasql::{
     analyze_request::Target::ParseResumeLocation,
@@ -67,7 +67,7 @@ pub fn analyze(
     // Extract table names from script.
     let table_names = extract_table_names_from_stmt(sql);
     // Construct a minimal catalog containing just the referenced tables.
-    let simple_catalog = catalog::simple_catalog(table_names, catalog_id, txn);
+    let simple_catalog = crate::catalog::simple_catalog(table_names, catalog_id, txn);
     // Parse each statement in the script, one at a time, in a loop.
     let mut offset = 0;
     let mut stmts = vec![];

@@ -379,7 +379,7 @@ impl Rule {
                 } = bind
                 {
                     let mut results = vec![];
-                    for index in catalog::indexes(table.id, ss.txn) {
+                    for index in crate::catalog::indexes(table.id, ss.txn) {
                         if let Some((lookup, predicates)) = index.matches(&predicates) {
                             results.push(IndexScan {
                                 include_existing: true,
@@ -442,7 +442,7 @@ impl Rule {
                     } = *left
                     {
                         let mut results = vec![];
-                        for index in catalog::indexes(table.id, ss.txn) {
+                        for index in crate::catalog::indexes(table.id, ss.txn) {
                             if let Some((lookup, mut predicates)) = index.matches(join.predicates())
                             {
                                 predicates.extend(table_predicates.clone());
@@ -521,7 +521,7 @@ impl Rule {
                     columns,
                 } = bind
                 {
-                    let indexes = catalog::indexes(table.id, ss.txn);
+                    let indexes = crate::catalog::indexes(table.id, ss.txn);
                     return single(Insert {
                         table,
                         indexes,

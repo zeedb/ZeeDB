@@ -214,17 +214,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "catalog"
-version = "0.1.0"
-dependencies = [
- "ast",
- "kernel",
- "log 0.1.0",
- "remote_execution",
- "zetasql",
-]
-
-[[package]]
 name = "cc"
 version = "1.0.71"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -266,10 +255,9 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "bincode",
- "catalog",
+ "defaults",
  "kernel",
  "log 0.1.0",
- "parser",
  "planner",
  "rand",
  "remote_execution",
@@ -402,6 +390,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "defaults"
+version = "0.1.0"
+dependencies = [
+ "ast",
+ "kernel",
+ "log 0.1.0",
+ "remote_execution",
+ "zetasql",
+]
+
+[[package]]
 name = "difference"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -422,8 +421,8 @@ version = "0.1.0"
 dependencies = [
  "ast",
  "bincode",
- "catalog",
  "coordinator",
+ "defaults",
  "difference",
  "kernel",
  "log 0.1.0",
@@ -1044,24 +1043,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "parser"
-version = "0.1.0"
-dependencies = [
- "ast",
- "catalog",
- "chrono",
- "kernel",
- "log 0.1.0",
- "prost-types",
- "rpc",
- "sequences",
- "time",
- "tokio",
- "tonic",
- "zetasql",
-]
-
-[[package]]
 name = "percent-encoding"
 version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1114,16 +1095,19 @@ name = "planner"
 version = "0.1.0"
 dependencies = [
  "ast",
- "catalog",
  "chrono",
+ "defaults",
  "kernel",
  "log 0.1.0",
- "parser",
+ "once_cell",
+ "prost-types",
  "rand",
  "remote_execution",
  "rpc",
  "sequences",
  "statistics",
+ "tokio",
+ "tonic",
  "zetasql",
 ]
 
@@ -1529,14 +1513,13 @@ dependencies = [
  "anyhow",
  "ast",
  "bincode",
- "catalog",
  "chrono",
  "coordinator",
+ "defaults",
  "kernel",
  "lazy_static",
  "md-5",
  "once_cell",
- "parser",
  "rand",
  "regex",
  "rpc",

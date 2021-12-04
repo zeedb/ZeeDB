@@ -21,9 +21,9 @@ use std::{
 };
 
 use anyhow::{anyhow, bail};
-use catalog::{METADATA_CATALOG_ID, ROOT_CATALOG_ID};
 use chrono::{Date, DateTime, NaiveDate, TimeZone, Utc};
 use coordinator::CoordinatorNode;
+use defaults::{METADATA_CATALOG_ID, ROOT_CATALOG_ID};
 use kernel::{AnyArray, Array, RecordBatch};
 use lazy_static::lazy_static;
 use md5::{Digest, Md5};

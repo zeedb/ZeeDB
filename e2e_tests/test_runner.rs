@@ -10,8 +10,8 @@ use std::{
 };
 
 use ast::Value;
-use catalog::{RESERVED_IDS, ROOT_CATALOG_ID};
 use coordinator::CoordinatorNode;
+use defaults::{RESERVED_IDS, ROOT_CATALOG_ID};
 use difference::Changeset;
 use fs::File;
 use kernel::RecordBatch;

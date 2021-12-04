@@ -1,6 +1,6 @@
 use zetasql::{function_enums::*, *};
 
-use crate::{builtin_function_options, builtin_named_types};
+use defaults::{builtin_function_options, builtin_named_types};
 
 pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
     let mut count = 0;

@@ -2,7 +2,7 @@
 members = [
     "ast",
     "benchmarks",
-    "catalog",
+    "defaults",
     "coordinator",
     "e2e_tests",
     "encoding",
@@ -11,7 +11,6 @@ members = [
     "kernel",
     "log",
     "log_attrs",
-    "parser",
     "planner",
     "rpc",
     "remote_execution",
