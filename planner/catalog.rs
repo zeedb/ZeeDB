@@ -176,15 +176,19 @@ fn execute_on_coordinator(
     let expr = crate::convert::convert(statements, variables, catalog_id);
     let expr = crate::optimize::optimize(expr, txn);
     let schema = expr.schema();
+    let batches = execute(expr, txn);
+    RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema))
+}
+
+#[log::trace]
+fn execute(expr: Expr, txn: i64) -> Vec<RecordBatch> {
     let mut stream = remote_execution::gather(&expr, txn, 0);
     let mut batches = vec![];
     loop {
         match stream.next() {
             Next::Page(batch) => batches.push(batch),
             Next::Error(message) => panic!("{}", message),
-            Next::End => break,
+            Next::End => return batches,
         }
     }
-    let batch = RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema));
-    batch
 }
