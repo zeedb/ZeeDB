@@ -111,7 +111,7 @@ pub fn simple_catalog(
 
 // TODO ideally this would include the convert and optimize phase, but it can't because right now we inline variables.
 macro_rules! analyze_once {
-    ($sql:literal, $variables:expr, $txn:expr) => {{
+    ($sql:ident, $variables:expr, $txn:expr) => {{
         static STATEMENTS: OnceCell<Vec<AnyResolvedStatementProto>> = OnceCell::new();
         STATEMENTS.get_or_init(|| analyze($sql, $variables, $txn))
     }};
@@ -132,8 +132,9 @@ pub fn indexes(table_id: i64, txn: i64) -> Vec<Index> {
     }
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
-    let statements = analyze_once!("select index_id, column_name from index join index_column using (index_id) join column using (table_id, column_id) where table_id = @table_id order by index_id, index_order", &variables, txn);
-    let mut batch = execute_on_coordinator(statements, variables, METADATA_CATALOG_ID, txn);
+    let sql = "select index_id, column_name from index join index_column using (index_id) join column using (table_id, column_id) where table_id = @table_id order by index_id, index_order";
+    let statements = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
     let mut indexes: Vec<Index> = vec![];
     let (_, index_id) = batch.columns.remove(0);
     let index_id = index_id.as_i64();
@@ -167,8 +168,9 @@ fn catalog_name_to_id(parent_catalog_id: i64, catalog_name: &String, txn: i64) -
         "catalog_name".to_string(),
         Value::String(Some(catalog_name.clone())),
     );
-    let statements = analyze_once!("select catalog_id from catalog where parent_catalog_id = @parent_catalog_id and catalog_name = @catalog_name", &variables, txn);
-    let mut batch = execute_on_coordinator(statements, variables, METADATA_CATALOG_ID, txn);
+    let sql = "select catalog_id from catalog where parent_catalog_id = @parent_catalog_id and catalog_name = @catalog_name";
+    let statements = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
     let (_, column) = batch.columns.remove(0);
     column.as_i64().get(0).unwrap()
 }
@@ -181,12 +183,10 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> Option<i6
         "table_name".to_string(),
         Value::String(Some(table_name.clone())),
     );
-    let statements = analyze_once!(
-        "select table_id from table where catalog_id = @catalog_id and table_name = @table_name",
-        &variables,
-        txn
-    );
-    let mut batch = execute_on_coordinator(statements, variables, METADATA_CATALOG_ID, txn);
+    let sql =
+        "select table_id from table where catalog_id = @catalog_id and table_name = @table_name";
+    let statements = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
     let (_, column) = batch.columns.remove(0);
     column.as_i64().get(0)
 }
@@ -195,12 +195,9 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> Option<i6
 fn table_columns(table_id: i64, txn: i64) -> Vec<UserColumn> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
-    let statements = analyze_once!(
-        "select column_name, column_type from column where table_id = @table_id",
-        &variables,
-        txn
-    );
-    let mut batch = execute_on_coordinator(statements, variables, METADATA_CATALOG_ID, txn);
+    let sql = "select column_name, column_type from column where table_id = @table_id";
+    let statements = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
     let mut columns = vec![];
     let (_, column_name) = batch.columns.remove(0);
     let column_name = column_name.as_string();
@@ -232,13 +229,14 @@ fn find_or_push_catalog<'a>(
 }
 
 /// Catalog acts as its own little coordinator to avoid once RPC hop and to make caching metadata queries straightforward.
-#[log::trace]
 fn execute_on_coordinator(
+    sql: &str,
     statements: &Vec<AnyResolvedStatementProto>,
     variables: HashMap<String, Value>,
     catalog_id: i64,
     txn: i64,
 ) -> RecordBatch {
+    let _span = log::enter(sql);
     let expr = crate::convert::convert(statements, variables, catalog_id);
     let expr = crate::optimize::optimize(expr, txn);
     let schema = expr.schema();
