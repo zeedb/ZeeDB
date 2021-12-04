@@ -39,6 +39,7 @@ fn bench_query(c: &mut Criterion, preamble: Vec<&str>, query: &str) {
             i += 1;
         });
         let json = t.bench(query, vec![("i".to_string(), Value::I64(Some(i)))]);
+        std::fs::create_dir_all(format!("../target/criterion/{}", query)).unwrap();
         let path = format!("../target/criterion/{}/trace.json", query);
         let contents = serde_json::to_string(&json).unwrap();
         std::fs::write(path, contents).unwrap();
