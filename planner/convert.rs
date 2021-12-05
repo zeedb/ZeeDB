@@ -12,16 +12,9 @@ use zetasql::{
 };
 
 #[log::trace]
-pub fn convert(
-    analyzed: &Vec<AnyResolvedStatementProto>,
-    variables: HashMap<String, Value>,
-    catalog_id: i64,
-) -> Expr {
-    let mut converter = Converter {
-        catalog_id,
-        variables,
-    };
-    let mut statements: Vec<Expr> = analyzed.iter().map(|s| converter.any_stmt(s)).collect();
+pub fn convert(stmts: &Vec<AnyResolvedStatementProto>, catalog_id: i64) -> Expr {
+    let mut converter = Converter { catalog_id };
+    let mut statements: Vec<Expr> = stmts.iter().map(|s| converter.any_stmt(s)).collect();
     if statements.len() == 1 {
         statements.pop().unwrap()
     } else {
@@ -31,7 +24,6 @@ pub fn convert(
 
 struct Converter {
     catalog_id: i64,
-    variables: HashMap<String, Value>,
 }
 
 impl Converter {
@@ -890,7 +882,7 @@ impl Converter {
     }
 
     fn parameter(&mut self, x: &ResolvedParameterProto) -> Scalar {
-        Scalar::Literal(self.variables[x.name.get()].clone())
+        Scalar::Parameter(x.name.get().clone(), x.parent.get().r#type.get().into())
     }
 
     fn subquery_expr(&mut self, x: &ResolvedSubqueryExprProto, outer: &mut Expr) -> Scalar {

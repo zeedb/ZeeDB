@@ -1,8 +1,11 @@
 #![allow(dead_code)]
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Mutex};
 
-use ast::{Expr, Value};
+use ast::Expr;
+use catalog::SimpleCatalogProvider;
+use kernel::DataType;
+use once_cell::sync::Lazy;
 
 mod bootstrap;
 mod cardinality_estimation;
@@ -20,13 +23,69 @@ mod search_space;
 mod unnest;
 
 pub fn plan(
-    sql: &str,
-    variables: HashMap<String, Value>,
+    sql: String,
+    variables: HashMap<String, DataType>,
     catalog_id: i64,
     txn: i64,
 ) -> Result<Expr, String> {
-    let analyzed = crate::parser::analyze(sql, &variables, catalog_id, txn)?;
-    let expr = crate::convert::convert(&analyzed, variables, catalog_id);
-    let optimized = crate::optimize::optimize(expr, txn);
-    Ok(optimized)
+    // Calling ZetaSQL is expensive so we cache it.
+    let table_names = cached_table_names(&sql);
+    // This step is not cached because the catalog changes when a DDL statement is executed.
+    let catalog = crate::catalog::simple_catalog(table_names, catalog_id, txn);
+    // Calling ZetaSQL and optimizing the expression is expensive so we cache it.
+    cached_analyze_optimize(sql, variables, catalog, txn)
+}
+
+fn cached_table_names(sql: &str) -> Vec<Vec<String>> {
+    // TODO this should be an LRU cache.
+    static TABLE_NAMES_CACHE: Lazy<Mutex<HashMap<String, Vec<Vec<String>>>>> =
+        Lazy::new(Default::default);
+    TABLE_NAMES_CACHE
+        .lock()
+        .unwrap()
+        .entry(sql.to_string())
+        .or_insert_with(|| crate::parser::extract_table_names_from_stmt(&sql))
+        .clone()
+}
+
+fn cached_analyze_optimize(
+    sql: String,
+    variables: HashMap<String, DataType>,
+    catalog: SimpleCatalogProvider,
+    txn: i64,
+) -> Result<Expr, String> {
+    // TODO hack, get rid of reserved_id's.
+    if sql.starts_with("CREATE") || sql.starts_with("create") {
+        let expr = crate::parser::analyze(&sql, &variables, &catalog)?;
+        return Ok(crate::optimize::optimize(expr, txn));
+    }
+    // TODO this should be an LRU cache.
+    static ANALYZE_CACHE: Lazy<Mutex<HashMap<Key, Result<Expr, String>>>> =
+        Lazy::new(Default::default);
+    let mut key = Key {
+        sql,
+        variables: variables
+            .iter()
+            .map(|(name, data_type)| (name.clone(), data_type.clone()))
+            .collect(),
+        catalog,
+    };
+    key.variables
+        .sort_by(|(left, _), (right, _)| left.cmp(right));
+    ANALYZE_CACHE
+        .lock()
+        .unwrap()
+        .entry(key)
+        .or_insert_with_key(|key| {
+            let expr = crate::parser::analyze(&key.sql, &variables, &key.catalog)?;
+            Ok(crate::optimize::optimize(expr, txn))
+        })
+        .clone()
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct Key {
+    sql: String,
+    variables: Vec<(String, DataType)>,
+    catalog: SimpleCatalogProvider,
 }

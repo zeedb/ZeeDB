@@ -4,17 +4,17 @@ use ast::{Index, *};
 use defaults::{builtin_function_options, builtin_named_types, METADATA_CATALOG_ID, RESERVED_IDS};
 use kernel::{Array, DataType, Next, RecordBatch};
 use once_cell::sync::OnceCell;
-use zetasql::{AnyResolvedStatementProto, SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
+use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 
 #[derive(Hash, PartialEq, Eq)]
 pub enum SimpleCatalogProvider {
     MetadataCatalog,
-    UserCatalog(UserCatalog),
+    UserCatalog(i64, UserCatalog),
 }
 
 #[derive(Hash, PartialEq, Eq, Default)]
 pub struct UserCatalog {
-    name: String,
+    name: Option<String>,
     tables: Vec<UserTable>,
     catalogs: Vec<UserCatalog>,
 }
@@ -38,7 +38,14 @@ impl SimpleCatalogProvider {
             SimpleCatalogProvider::MetadataCatalog => {
                 crate::bootstrap::bootstrap_metadata_catalog()
             }
-            SimpleCatalogProvider::UserCatalog(catalog) => catalog.to_proto(),
+            SimpleCatalogProvider::UserCatalog(_, catalog) => catalog.to_proto(),
+        }
+    }
+
+    pub fn id(&self) -> i64 {
+        match self {
+            SimpleCatalogProvider::MetadataCatalog => METADATA_CATALOG_ID,
+            SimpleCatalogProvider::UserCatalog(id, _) => *id,
         }
     }
 }
@@ -46,7 +53,7 @@ impl SimpleCatalogProvider {
 impl UserCatalog {
     fn to_proto(&self) -> SimpleCatalogProto {
         SimpleCatalogProto {
-            name: Some(self.name.clone()),
+            name: self.name.clone(),
             catalog: self.catalogs.iter().map(UserCatalog::to_proto).collect(),
             table: self.tables.iter().map(UserTable::to_proto).collect(),
             builtin_function_options: Some(builtin_function_options()),
@@ -106,23 +113,24 @@ pub fn simple_catalog(
             })
         }
     }
-    SimpleCatalogProvider::UserCatalog(root_catalog)
+    SimpleCatalogProvider::UserCatalog(catalog_id, root_catalog)
 }
 
-// TODO ideally this would include the convert and optimize phase, but it can't because right now we inline variables.
 macro_rules! analyze_once {
     ($sql:ident, $variables:expr, $txn:expr) => {{
-        static STATEMENTS: OnceCell<Vec<AnyResolvedStatementProto>> = OnceCell::new();
-        STATEMENTS.get_or_init(|| analyze($sql, $variables, $txn))
+        static CACHE: OnceCell<Expr> = OnceCell::new();
+        CACHE.get_or_init(|| analyze($sql, $variables, $txn))
     }};
 }
 
-fn analyze(
-    sql: &str,
-    variables: &HashMap<String, Value>,
-    txn: i64,
-) -> Vec<AnyResolvedStatementProto> {
-    crate::parser::analyze(sql, variables, METADATA_CATALOG_ID, txn).unwrap()
+fn analyze(sql: &str, variables: &HashMap<String, Value>, txn: i64) -> Expr {
+    let variables = variables
+        .iter()
+        .map(|(name, value)| (name.clone(), value.data_type()))
+        .collect();
+    let expr =
+        crate::parser::analyze(sql, &variables, &SimpleCatalogProvider::MetadataCatalog).unwrap();
+    crate::optimize::optimize(expr, txn)
 }
 
 #[log::trace]
@@ -133,8 +141,8 @@ pub fn indexes(table_id: i64, txn: i64) -> Vec<Index> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
     let sql = "select index_id, column_name from index join index_column using (index_id) join column using (table_id, column_id) where table_id = @table_id order by index_id, index_order";
-    let statements = analyze_once!(sql, &variables, txn);
-    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
+    let expr = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let mut indexes: Vec<Index> = vec![];
     let (_, index_id) = batch.columns.remove(0);
     let index_id = index_id.as_i64();
@@ -169,8 +177,8 @@ fn catalog_name_to_id(parent_catalog_id: i64, catalog_name: &String, txn: i64) -
         Value::String(Some(catalog_name.clone())),
     );
     let sql = "select catalog_id from catalog where parent_catalog_id = @parent_catalog_id and catalog_name = @catalog_name";
-    let statements = analyze_once!(sql, &variables, txn);
-    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
+    let expr = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let (_, column) = batch.columns.remove(0);
     column.as_i64().get(0).unwrap()
 }
@@ -185,8 +193,8 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> Option<i6
     );
     let sql =
         "select table_id from table where catalog_id = @catalog_id and table_name = @table_name";
-    let statements = analyze_once!(sql, &variables, txn);
-    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
+    let expr = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let (_, column) = batch.columns.remove(0);
     column.as_i64().get(0)
 }
@@ -196,8 +204,8 @@ fn table_columns(table_id: i64, txn: i64) -> Vec<UserColumn> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
     let sql = "select column_name, column_type from column where table_id = @table_id";
-    let statements = analyze_once!(sql, &variables, txn);
-    let mut batch = execute_on_coordinator(sql, statements, variables, METADATA_CATALOG_ID, txn);
+    let expr = analyze_once!(sql, &variables, txn);
+    let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let mut columns = vec![];
     let (_, column_name) = batch.columns.remove(0);
     let column_name = column_name.as_string();
@@ -217,12 +225,12 @@ fn find_or_push_catalog<'a>(
     catalog_name: &String,
 ) -> &'a mut UserCatalog {
     for i in 0..parent_catalog.catalogs.len() {
-        if &parent_catalog.catalogs[i].name == catalog_name {
+        if parent_catalog.catalogs[i].name.as_ref() == Some(catalog_name) {
             return &mut parent_catalog.catalogs[i];
         }
     }
     parent_catalog.catalogs.push(UserCatalog {
-        name: catalog_name.clone(),
+        name: Some(catalog_name.clone()),
         ..Default::default()
     });
     parent_catalog.catalogs.last_mut().unwrap()
@@ -231,22 +239,21 @@ fn find_or_push_catalog<'a>(
 /// Catalog acts as its own little coordinator to avoid once RPC hop and to make caching metadata queries straightforward.
 fn execute_on_coordinator(
     sql: &str,
-    statements: &Vec<AnyResolvedStatementProto>,
-    variables: HashMap<String, Value>,
-    catalog_id: i64,
+    expr: &Expr,
+    variables: &HashMap<String, Value>,
     txn: i64,
 ) -> RecordBatch {
     let _span = log::enter(sql);
-    let expr = crate::convert::convert(statements, variables, catalog_id);
-    let expr = crate::optimize::optimize(expr, txn);
+    let mut expr = expr.clone();
+    expr.replace(variables);
     let schema = expr.schema();
-    let batches = execute(expr, txn);
+    let batches = execute(&expr, txn);
     RecordBatch::cat(batches).unwrap_or_else(|| RecordBatch::empty(schema))
 }
 
 #[log::trace]
-fn execute(expr: Expr, txn: i64) -> Vec<RecordBatch> {
-    let mut stream = remote_execution::gather(&expr, txn, 0);
+fn execute(expr: &Expr, txn: i64) -> Vec<RecordBatch> {
+    let mut stream = remote_execution::gather(expr, txn, 0);
     let mut batches = vec![];
     loop {
         match stream.next() {

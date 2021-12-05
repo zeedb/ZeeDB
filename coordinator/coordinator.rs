@@ -76,10 +76,16 @@ fn submit(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
     let variables = request
         .variables
         .iter()
+        .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter).data_type()))
+        .collect();
+    let mut expr = planner::plan(request.sql, variables, request.catalog_id, txn)
+        .map_err(Status::invalid_argument)?;
+    let variables = request
+        .variables
+        .iter()
         .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter)))
         .collect();
-    let expr = planner::plan(&request.sql, variables, request.catalog_id, txn)
-        .map_err(Status::invalid_argument)?;
+    expr.replace(&variables);
     execute(&expr, txn)
 }
 

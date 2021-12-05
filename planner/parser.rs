@@ -1,9 +1,8 @@
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
 
-use ast::Value;
+use ast::Expr;
 use defaults::{enabled_language_features, supported_statement_kinds};
 use kernel::DataType;
-use once_cell::sync::Lazy;
 use tonic::{transport::Channel, Request};
 use zetasql::{
     analyze_request::Target::ParseResumeLocation,
@@ -64,51 +63,11 @@ pub fn split(sql: &str) -> Vec<String> {
 #[log::trace]
 pub fn analyze(
     sql: &str,
-    variables: &HashMap<String, Value>,
-    catalog_id: i64,
-    txn: i64,
-) -> Result<Vec<AnyResolvedStatementProto>, String> {
-    // Extract table names from script.
-    let table_names = extract_table_names_from_stmt(sql);
-    // Construct a minimal catalog containing just the referenced tables.
-    let simple_catalog = crate::catalog::simple_catalog(table_names, catalog_id, txn);
-    // Analyze the sql statement, or use the cache.
-    analyze_with_catalog(sql, variables, simple_catalog)
-}
-
-#[derive(PartialEq, Eq, Hash)]
-struct Key {
-    sql: String,
-    variables: Vec<(String, DataType)>,
-    catalog: SimpleCatalogProvider,
-}
-
-// TODO this should be an LRU cache.
-static ANALYZE_CACHE: Lazy<Mutex<HashMap<Key, Vec<AnyResolvedStatementProto>>>> =
-    Lazy::new(Default::default);
-
-fn analyze_with_catalog(
-    sql: &str,
-    variables: &HashMap<String, Value>,
-    catalog: SimpleCatalogProvider,
-) -> Result<Vec<AnyResolvedStatementProto>, String> {
-    // Check if we have already cached this request.
-    let mut cache = ANALYZE_CACHE.lock().unwrap();
-    let mut key = Key {
-        sql: sql.to_string(),
-        variables: variables
-            .iter()
-            .map(|(name, value)| (name.clone(), value.data_type()))
-            .collect(),
-        catalog,
-    };
-    key.variables
-        .sort_by(|(left, _), (right, _)| left.cmp(right));
-    if let Some(stmts) = cache.get(&key) {
-        return Ok(stmts.clone());
-    }
+    variables: &HashMap<String, DataType>,
+    catalog: &SimpleCatalogProvider,
+) -> Result<Expr, String> {
     // Parse each statement in the script, one at a time, in a loop.
-    let simple_catalog = key.catalog.to_proto();
+    let simple_catalog = catalog.to_proto();
     let mut offset = 0;
     let mut stmts = vec![];
     loop {
@@ -121,25 +80,12 @@ fn analyze_with_catalog(
             break;
         }
     }
-    // Cache the request.
-    cache.insert(key, stmts.clone());
-    // Return the newly-cached statements.
-    Ok(stmts)
+    Ok(crate::convert::convert(&stmts, catalog.id()))
 }
 
-// TODO this should be an LRU cache.
-static TABLE_NAMES_CACHE: Lazy<Mutex<HashMap<String, Vec<Vec<String>>>>> =
-    Lazy::new(Default::default);
-
 #[log::trace]
-fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
-    // Check if we have already cached this request.
-    let mut cache = TABLE_NAMES_CACHE.lock().unwrap();
-    if let Some(table_names) = cache.get(sql) {
-        return table_names.clone();
-    }
-    // Cache the request.
-    let table_names: Vec<Vec<String>> = log::rpc(async move {
+pub fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
+    log::rpc(async move {
         parser()
             .await
             .extract_table_names_from_statement(Request::new(
@@ -156,18 +102,14 @@ fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
             .drain(..)
             .map(|name| name.table_name_segment)
             .collect()
-    });
-    // Cache the request.
-    cache.insert(sql.to_string(), table_names.clone());
-    // Return the newly-cached table names.
-    table_names
+    })
 }
 
 #[log::trace]
 fn analyze_next_statement(
     sql: &str,
     offset: i32,
-    variables: &HashMap<String, Value>,
+    variables: &HashMap<String, DataType>,
     simple_catalog: &SimpleCatalogProto,
 ) -> Result<(AnyResolvedStatementProto, i32), String> {
     let request = AnalyzeRequest {
@@ -178,9 +120,9 @@ fn analyze_next_statement(
             prune_unused_columns: Some(true),
             query_parameters: variables
                 .iter()
-                .map(|(name, value)| QueryParameterProto {
+                .map(|(name, data_type)| QueryParameterProto {
                     name: Some(name.clone()),
-                    r#type: Some(value.data_type().to_proto()),
+                    r#type: Some(data_type.to_proto()),
                 })
                 .collect(),
             ..Default::default()

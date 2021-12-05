@@ -2,9 +2,8 @@ use std::collections::HashMap;
 
 use ast::*;
 use chrono::{NaiveDate, TimeZone, Utc};
-use defaults::METADATA_CATALOG_ID;
 
-use crate::unnest::unnest_dependent_joins;
+use crate::{catalog::SimpleCatalogProvider, unnest::unnest_dependent_joins};
 
 #[log::trace]
 pub fn rewrite_plan(expr: Expr) -> Expr {
@@ -751,8 +750,7 @@ fn rewrite_logical_rewrite(expr: Expr) -> Result<Expr, Expr> {
 
 fn analyze_bootstrap(sql: &str) -> Expr {
     let variables = HashMap::default();
-    let analyzed = crate::parser::analyze(sql, &variables, METADATA_CATALOG_ID, i64::MAX).unwrap();
-    crate::convert::convert(&analyzed, variables, METADATA_CATALOG_ID)
+    crate::parser::analyze(sql, &variables, &SimpleCatalogProvider::MetadataCatalog).unwrap()
 }
 
 fn bottom_up_rewrite(mut expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {
