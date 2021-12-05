@@ -449,6 +449,7 @@ impl Display for Scalar {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Scalar::Literal(value) => write!(f, "{}", value),
+            Scalar::Parameter(name, _) => write!(f, "@{}", name),
             Scalar::Column(column) => write!(f, "{}", column),
             Scalar::Call(function) => {
                 if function.arguments().is_empty() {

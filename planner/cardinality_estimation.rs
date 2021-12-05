@@ -256,6 +256,7 @@ fn selectivity(scalar: &Scalar, input: &LogicalProps) -> Option<f64> {
             | Value::Timestamp(_)
             | Value::EnumValue(_) => panic!("Bad bool value {}", value),
         },
+        Scalar::Parameter(_, _) => None,
         Scalar::Column(column) => match input.columns[column].as_ref()? {
             ColumnStatistics::Bool(statistics) => Some(statistics.probability_density(true)),
             ColumnStatistics::I64(_) => {

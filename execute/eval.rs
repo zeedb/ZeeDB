@@ -20,6 +20,7 @@ pub(crate) fn all(
 pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, txn: i64) -> Result<AnyArray, String> {
     let a = match scalar {
         Scalar::Literal(value) => value.repeat(input.len()),
+        Scalar::Parameter(name, _) => panic!("@{} should have been removed before execution", name),
         Scalar::Column(column) => {
             let find = column.canonical_name();
             input.find_always(&find).clone()

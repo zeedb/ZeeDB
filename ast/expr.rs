@@ -8,7 +8,7 @@ use std::{
 };
 use zetasql::TableRefProto;
 
-use crate::{AggregateExpr, Column, Index, Procedure, Scalar};
+use crate::{AggregateExpr, Column, Index, Procedure, Scalar, Value};
 
 // Expr plan nodes combine inputs in a Plan tree.
 #[derive(Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
@@ -646,6 +646,88 @@ impl Expr {
         }
         for i in 0..self.len() {
             self[i].collect_references(set)
+        }
+    }
+
+    pub fn replace(&mut self, variables: &HashMap<String, Value>) {
+        match self {
+            Expr::LogicalGet { predicates, .. }
+            | Expr::LogicalFilter { predicates, .. }
+            | Expr::LogicalDependentJoin { predicates, .. }
+            | Expr::SeqScan { predicates, .. }
+            | Expr::Filter { predicates, .. } => {
+                for scalar in predicates {
+                    scalar.replace(variables)
+                }
+            }
+            Expr::LogicalMap { projects, .. } | Expr::Map { projects, .. } => {
+                for (scalar, _) in projects {
+                    scalar.replace(variables)
+                }
+            }
+            Expr::LogicalValues { values, .. } | Expr::Values { values, .. } => {
+                for values in values {
+                    for scalar in values {
+                        scalar.replace(variables)
+                    }
+                }
+            }
+            Expr::IndexScan {
+                predicates, lookup, ..
+            } => {
+                for scalar in predicates {
+                    scalar.replace(variables)
+                }
+                for scalar in lookup {
+                    scalar.replace(variables)
+                }
+            }
+            Expr::Leaf { .. }
+            | Expr::LogicalSingleGet { .. }
+            | Expr::LogicalOut { .. }
+            | Expr::LogicalJoin { .. }
+            | Expr::LogicalWith { .. }
+            | Expr::LogicalCreateTempTable { .. }
+            | Expr::LogicalGetWith { .. }
+            | Expr::LogicalAggregate { .. }
+            | Expr::LogicalLimit { .. }
+            | Expr::LogicalSort { .. }
+            | Expr::LogicalUnion { .. }
+            | Expr::LogicalInsert { .. }
+            | Expr::LogicalUpdate { .. }
+            | Expr::LogicalDelete { .. }
+            | Expr::LogicalCreateDatabase { .. }
+            | Expr::LogicalCreateTable { .. }
+            | Expr::LogicalCreateIndex { .. }
+            | Expr::LogicalDrop { .. }
+            | Expr::LogicalScript { .. }
+            | Expr::LogicalCall { .. }
+            | Expr::LogicalExplain { .. }
+            | Expr::LogicalRewrite { .. }
+            | Expr::TableFreeScan { .. }
+            | Expr::Out { .. }
+            | Expr::NestedLoop { .. }
+            | Expr::HashJoin { .. }
+            | Expr::CreateTempTable { .. }
+            | Expr::GetTempTable { .. }
+            | Expr::SimpleAggregate { .. }
+            | Expr::GroupByAggregate { .. }
+            | Expr::Limit { .. }
+            | Expr::Sort { .. }
+            | Expr::Union { .. }
+            | Expr::Broadcast { .. }
+            | Expr::Exchange { .. }
+            | Expr::Gather { .. }
+            | Expr::Insert { .. }
+            | Expr::Delete { .. }
+            | Expr::Script { .. }
+            | Expr::Call { .. }
+            | Expr::Explain { .. } => {
+                // No scalars.
+            }
+        }
+        for i in 0..self.len() {
+            self[i].replace(variables)
         }
     }
 
