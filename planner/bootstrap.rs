@@ -72,45 +72,33 @@ pub fn bootstrap_metadata_catalog() -> SimpleCatalogProto {
         ],
         builtin_function_options: Some(builtin_function_options()),
         named_type: builtin_named_types(),
+        custom_function: vec![
+            simple_function("next_catalog_id", vec![], TypeKind::TypeInt64),
+            simple_function("next_table_id", vec![], TypeKind::TypeInt64),
+            simple_function("next_index_id", vec![], TypeKind::TypeInt64),
+        ],
         procedure: vec![
-            simple_procedure(
-                "create_table".to_string(),
-                vec![TypeKind::TypeInt64],
-                TypeKind::TypeBool,
-            ),
-            simple_procedure(
-                "drop_table".to_string(),
-                vec![TypeKind::TypeInt64],
-                TypeKind::TypeBool,
-            ),
-            simple_procedure(
-                "create_index".to_string(),
-                vec![TypeKind::TypeInt64],
-                TypeKind::TypeBool,
-            ),
-            simple_procedure(
-                "drop_index".to_string(),
-                vec![TypeKind::TypeInt64],
-                TypeKind::TypeBool,
-            ),
+            simple_procedure("create_catalog", vec![], TypeKind::TypeBool),
+            simple_procedure("create_table", vec![], TypeKind::TypeBool),
+            simple_procedure("create_index", vec![], TypeKind::TypeBool),
         ],
         ..Default::default()
     }
 }
 
-// fn simple_function(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {
-//     FunctionProto {
-//         name_path: vec![name],
-//         group: Some("system".to_string()),
-//         signature: vec![simple_signature(arguments, returns)],
-//         mode: Some(Mode::Scalar as i32),
-//         ..Default::default()
-//     }
-// }
+fn simple_function(name: &str, arguments: Vec<TypeKind>, returns: TypeKind) -> FunctionProto {
+    FunctionProto {
+        name_path: vec![name.to_string()],
+        group: Some("System".to_string()),
+        signature: vec![simple_signature(arguments, returns)],
+        mode: Some(Mode::Scalar as i32),
+        ..Default::default()
+    }
+}
 
-fn simple_procedure(name: String, arguments: Vec<TypeKind>, returns: TypeKind) -> ProcedureProto {
+fn simple_procedure(name: &str, arguments: Vec<TypeKind>, returns: TypeKind) -> ProcedureProto {
     ProcedureProto {
-        name_path: vec![name],
+        name_path: vec![name.to_string()],
         signature: Some(simple_signature(arguments, returns)),
         ..Default::default()
     }

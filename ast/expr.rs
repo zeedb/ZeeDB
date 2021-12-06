@@ -125,20 +125,17 @@ pub enum Expr {
     // LogicalCreateDatabase { database } implements the CREATE DATABASE operation.
     LogicalCreateDatabase {
         name: Name,
-        reserved_id: i64,
     },
     // LogicalCreateTable implements the CREATE TABLE operation.
     LogicalCreateTable {
         name: Name,
         columns: Vec<(String, DataType)>,
-        reserved_id: i64,
     },
     // LogicalCreateIndex implements the CREATE INDEX operation.
     LogicalCreateIndex {
         name: Name,
         table: Table,
         columns: Vec<String>,
-        reserved_id: i64,
     },
     // LogicalDrop implements the DROP DATABASE/TABLE/INDEX operation.
     LogicalDrop {

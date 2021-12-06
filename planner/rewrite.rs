@@ -28,7 +28,7 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
         catalog_id
     }
     match expr {
-        LogicalCreateDatabase { name, reserved_id } => {
+        LogicalCreateDatabase { name } => {
             let parent_catalog_id = catalog_id_query(&name);
             let catalog_name = format!("{:?}", name.path.last().unwrap());
             let mut lines = vec![];
@@ -37,21 +37,13 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 "assert 0 = (select count(*) from catalog where parent_catalog_id = {parent_catalog_id} and catalog_name = {catalog_name}) as 'Catalog {catalog_name} already exists in parent catalog {parent_catalog_id}';",
                 parent_catalog_id = parent_catalog_id, catalog_name = catalog_name
             ));
-            // Enforce UNIQUE (catalog_id).
-            lines.push(format!(
-                "assert 0 = (select count(*) from catalog where catalog_id = {reserved_id}) as 'Catalog ID {reserved_id} is already in use';",
-                reserved_id = reserved_id
-            ));
-            lines.push(format!("insert into catalog (parent_catalog_id, catalog_id, catalog_name) select {}, {}, {}", parent_catalog_id, reserved_id, catalog_name));
+            lines.push(format!("insert into catalog (parent_catalog_id, catalog_id, catalog_name) select {}, next_catalog_id(), {};", parent_catalog_id, catalog_name));
+            lines.push(format!("call create_catalog();"));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
         }
-        LogicalCreateTable {
-            name,
-            columns,
-            reserved_id,
-        } => {
+        LogicalCreateTable { name, columns } => {
             let mut lines = vec![];
             let catalog_id = catalog_id_query(&name);
             let table_name = format!("{:?}", name.path.last().unwrap());
@@ -60,20 +52,15 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 "assert 0 = (select count(*) from table where catalog_id = {catalog_id} and table_name = {table_name}) as 'Table {table_name} already exists in catalog {catalog_id}';",
                 catalog_id = catalog_id, table_name = table_name
             ));
-            // Enforce UNIQUE (table_id).
             lines.push(format!(
-                "assert 0 = (select count(*) from table where table_id = {reserved_id}) as 'Table ID {reserved_id} is already in use';",
-                reserved_id = reserved_id
-            ));
-            lines.push(format!(
-                "insert into table (catalog_id, table_id, table_name) select {}, {}, {};",
-                catalog_id, reserved_id, table_name
+                "insert into table (catalog_id, table_id, table_name) select {}, next_table_id(), {};",
+                catalog_id, table_name
             ));
             for (column_id, (column_name, column_type)) in columns.iter().enumerate() {
                 let column_type = column_type.to_string();
-                lines.push(format!("insert into column (table_id, column_id, column_name, column_type) select {}, {}, {:?}, {:?};", reserved_id, column_id, column_name, column_type));
+                lines.push(format!("insert into column (table_id, column_id, column_name, column_type) select next_table_id(), {}, {:?}, {:?};", column_id, column_name, column_type));
             }
-            lines.push(format!("call create_table({});", reserved_id));
+            lines.push(format!("call create_table();"));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
@@ -82,7 +69,6 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
             name,
             table,
             columns,
-            reserved_id,
         } => {
             let mut lines = vec![];
             let catalog_id = catalog_id_query(&name);
@@ -92,21 +78,16 @@ fn rewrite_ddl(expr: Expr) -> Result<Expr, Expr> {
                 "assert 0 = (select count(*) from index where catalog_id = {catalog_id} and index_name = {index_name}) as 'Index {index_name} already exists in catalog {catalog_id}';",
                 catalog_id = catalog_id, index_name = index_name
             ));
-            // Enforce UNIQUE (index_id).
-            lines.push(format!(
-                "assert 0 = (select count(*) from index where index_id = {reserved_id}) as 'Index ID {reserved_id} is already in use';",
-                reserved_id = reserved_id
-            ));
             // TODO check that table is empty.
-            lines.push(format!("insert into index (catalog_id, index_id, table_id, index_name) values ({}, {}, {}, {});", catalog_id, reserved_id, table.id, index_name));
+            lines.push(format!("insert into index (catalog_id, index_id, table_id, index_name) select {}, next_index_id(), {}, {};", catalog_id, table.id, index_name));
             for (index_order, column_name) in columns.iter().enumerate() {
                 let column_id = format!(
                     "(select column_id from column where table_id = {} and column_name = {:?})",
                     table.id, column_name
                 );
-                lines.push(format!("insert into index_column (index_id, column_id, index_order) select {}, {}, {:?};", reserved_id, column_id, index_order));
+                lines.push(format!("insert into index_column (index_id, column_id, index_order) select next_index_id(), {}, {:?};", column_id, index_order));
             }
-            lines.push(format!("call create_index({});", reserved_id));
+            lines.push(format!("call create_index();"));
             Ok(LogicalRewrite {
                 sql: lines.join("\n"),
             })
@@ -228,11 +209,8 @@ pub fn rewrite_scalars(mut expr: Expr) -> Result<Expr, Expr> {
         | Join::Mark(_, predicates) => visit_predicates(predicates),
     };
     let visit_procedure = |procedure: &mut Procedure| match procedure {
-        Procedure::CreateTable(x)
-        | Procedure::DropTable(x)
-        | Procedure::CreateIndex(x)
-        | Procedure::DropIndex(x)
-        | Procedure::Assert(x, _) => visit(x),
+        Procedure::Assert(x, _) => visit(x),
+        Procedure::CreateCatalog | Procedure::CreateTable | Procedure::CreateIndex => false,
     };
     let did_rewrite = match &mut expr {
         Expr::LogicalGet { predicates, .. }

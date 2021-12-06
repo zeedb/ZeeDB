@@ -54,11 +54,6 @@ fn cached_analyze_optimize(
     catalog: SimpleCatalogProvider,
     txn: i64,
 ) -> Result<Expr, String> {
-    // TODO hack, get rid of reserved_id's.
-    if sql.starts_with("CREATE") || sql.starts_with("create") {
-        let expr = crate::parser::analyze(&sql, &variables, &catalog)?;
-        return Ok(crate::optimize::optimize(expr, txn));
-    }
     // TODO this should be an LRU cache.
     static ANALYZE_CACHE: Lazy<Mutex<HashMap<Key, Result<Expr, String>>>> =
         Lazy::new(Default::default);
@@ -88,4 +83,5 @@ struct Key {
     sql: String,
     variables: Vec<(String, DataType)>,
     catalog: SimpleCatalogProvider,
+    // TODO indexes need to be part of this.
 }

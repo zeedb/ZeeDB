@@ -425,7 +425,7 @@ impl Node {
                     .map(|c| (c.name.clone(), c.canonical_name()))
                     .collect();
                 let input = page.select(&select_names).rename(&query_names);
-                let boolean = crate::eval::all(predicates, &input, txn)?;
+                let boolean = crate::eval::all(predicates, &input, storage, txn)?;
                 Next::Page(input.compress(&boolean))
             }
             Node::IndexScan {
@@ -439,7 +439,7 @@ impl Node {
             } => {
                 let input = input.next(storage, txn)?;
                 // Perform a bitmap scan on the left side of the join.
-                let keys = evaluate_index_keys(lookup, &input, txn)?;
+                let keys = evaluate_index_keys(lookup, &input, storage, txn)?;
                 let sorted_tids = lookup_index_tids(keys, index, storage);
                 let matching_pages = storage
                     .lock()
@@ -465,14 +465,14 @@ impl Node {
                 }
                 // Apply remaining predicates.
                 if !predicates.is_empty() {
-                    let boolean = crate::eval::all(predicates, &output, txn)?;
+                    let boolean = crate::eval::all(predicates, &output, storage, txn)?;
                     output = output.compress(&boolean);
                 }
                 Next::Page(output)
             }
             Node::Filter { predicates, input } => {
                 let input = input.next(storage, txn)?;
-                let boolean = crate::eval::all(predicates, &input, txn)?;
+                let boolean = crate::eval::all(predicates, &input, storage, txn)?;
                 Next::Page(input.compress(&boolean))
             }
             Node::Out { projects, input } => {
@@ -499,7 +499,7 @@ impl Node {
                 for (scalar, column) in projects {
                     columns.push((
                         column.canonical_name(),
-                        crate::eval::eval(scalar, &input, txn)?,
+                        crate::eval::eval(scalar, &input, storage, txn)?,
                     ));
                 }
                 Next::Page(RecordBatch::new(columns))
@@ -524,7 +524,8 @@ impl Node {
                 match right.next(storage, txn) {
                     // If the right side has more rows, perform a right outer join on those rows, keeping track of unmatched left rows in the bit array.
                     Next::Page(right) => {
-                        let filter = |input: &RecordBatch| crate::eval::all(predicates, input, txn);
+                        let filter =
+                            |input: &RecordBatch| crate::eval::all(predicates, input, storage, txn);
                         let next = crate::join::nested_loop(
                             build_left.as_ref().unwrap(),
                             &right,
@@ -565,7 +566,8 @@ impl Node {
                 }
                 // Get the next batch of rows from the right (probe) side.
                 let right = right.next(storage, txn)?;
-                let filter = |input: &RecordBatch| crate::eval::all(join.predicates(), input, txn);
+                let filter =
+                    |input: &RecordBatch| crate::eval::all(join.predicates(), input, storage, txn);
                 // Join a batch of rows to the left (build) side.
                 let next = match &join {
                     Join::Inner(_) => crate::join::nested_loop(
@@ -634,7 +636,8 @@ impl Node {
                                 AnyArray::I64(a) => a,
                                 _ => panic!(),
                             };
-                        let filter = |input: &RecordBatch| crate::eval::all(predicates, input, txn);
+                        let filter =
+                            |input: &RecordBatch| crate::eval::all(predicates, input, storage, txn);
                         let next = crate::join::hash_join(
                             build_left.as_ref().unwrap(),
                             &right,
@@ -687,7 +690,8 @@ impl Node {
                     AnyArray::I64(a) => a,
                     _ => panic!(),
                 };
-                let filter = |input: &RecordBatch| crate::eval::all(join.predicates(), input, txn);
+                let filter =
+                    |input: &RecordBatch| crate::eval::all(join.predicates(), input, storage, txn);
                 // Join a batch of rows to the left (build) side.
                 let next = match &join {
                     Join::Inner(_) => crate::join::hash_join(
@@ -1004,7 +1008,7 @@ impl Node {
                 for i in 0..columns.len() {
                     let mut builder = vec![];
                     for value in &values[i] {
-                        let value = crate::eval::eval(value, &input, txn)?;
+                        let value = crate::eval::eval(value, &input, storage, txn)?;
                         if value.len() != 1 {
                             panic!("input to values produced {} rows", value.len());
                         }
@@ -1062,40 +1066,17 @@ impl Node {
             Node::Call { procedure, input } => {
                 let input = input.next(storage, txn)?;
                 match procedure {
-                    Procedure::CreateTable(id) => {
-                        let ids = crate::eval::eval(id, &input, txn)?.as_i64();
-                        for i in 0..ids.len() {
-                            if let Some(id) = ids.get(i) {
-                                storage.lock().unwrap().create_table(id);
-                            }
-                        }
+                    Procedure::CreateCatalog => {
+                        storage.lock().unwrap().create_catalog();
                     }
-                    Procedure::DropTable(id) => {
-                        let ids = crate::eval::eval(id, &input, txn)?.as_i64();
-                        for i in 0..ids.len() {
-                            if let Some(id) = ids.get(i) {
-                                storage.lock().unwrap().drop_table(id);
-                            }
-                        }
+                    Procedure::CreateTable => {
+                        storage.lock().unwrap().create_table();
                     }
-                    Procedure::CreateIndex(id) => {
-                        let ids = crate::eval::eval(id, &input, txn)?.as_i64();
-                        for i in 0..ids.len() {
-                            if let Some(id) = ids.get(i) {
-                                storage.lock().unwrap().create_index(id);
-                            }
-                        }
-                    }
-                    Procedure::DropIndex(id) => {
-                        let ids = crate::eval::eval(id, &input, txn)?.as_i64();
-                        for i in 0..ids.len() {
-                            if let Some(id) = ids.get(i) {
-                                storage.lock().unwrap().drop_index(id);
-                            }
-                        }
+                    Procedure::CreateIndex => {
+                        storage.lock().unwrap().create_index();
                     }
                     Procedure::Assert(test, description) => {
-                        let test = crate::eval::eval(test, &input, txn)?
+                        let test = crate::eval::eval(test, &input, storage, txn)?
                             .as_bool()
                             .get(0)
                             .unwrap_or(false);
@@ -1202,11 +1183,12 @@ fn build(input: &mut Node, storage: &Mutex<Storage>, txn: i64) -> Next {
 fn evaluate_index_keys(
     lookup: &Vec<Scalar>,
     input: &RecordBatch,
+    storage: &Mutex<Storage>,
     txn: i64,
 ) -> Result<PackedBytes, String> {
     let columns: Result<Vec<_>, _> = lookup
         .iter()
-        .map(|scalar| crate::eval::eval(scalar, &input, txn))
+        .map(|scalar| crate::eval::eval(scalar, &input, storage, txn))
         .collect();
     let keys = crate::index::byte_key_prefix(columns?.iter().map(|c| c).collect());
     Ok(keys)

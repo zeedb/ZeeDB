@@ -18,7 +18,6 @@ prost-types = "0.7.0"
 rand = { version = "0.8.2", features = ["small_rng"]}
 remote_execution = { path = "../remote_execution" }
 rpc = { path = "../rpc" }
-sequences = { path = "../sequences" }
 statistics = { path = "../statistics" }
 tokio = { version = "1.7.1", features = ["rt-multi-thread"] }
 tonic = "0.4.3"

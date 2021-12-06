@@ -1,23 +1,32 @@
+use std::sync::Mutex;
+
 use ast::*;
 use chrono::*;
 use kernel::*;
 use regex::{Captures, Regex};
+use storage::Storage;
 
 use crate::map::ArrayExt;
 
 pub(crate) fn all(
     predicates: &Vec<Scalar>,
     input: &RecordBatch,
+    storage: &Mutex<Storage>,
     txn: i64,
 ) -> Result<BoolArray, String> {
     let mut mask = BoolArray::trues(input.len());
     for p in predicates {
-        mask = eval(p, &input, txn)?.as_bool().and(&mask);
+        mask = eval(p, &input, storage, txn)?.as_bool().and(&mask);
     }
     Ok(mask)
 }
 
-pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, txn: i64) -> Result<AnyArray, String> {
+pub(crate) fn eval(
+    scalar: &Scalar,
+    input: &RecordBatch,
+    storage: &Mutex<Storage>,
+    txn: i64,
+) -> Result<AnyArray, String> {
     let a = match scalar {
         Scalar::Literal(value) => value.repeat(input.len()),
         Scalar::Parameter(name, _) => panic!("@{} should have been removed before execution", name),
@@ -25,18 +34,23 @@ pub(crate) fn eval(scalar: &Scalar, input: &RecordBatch, txn: i64) -> Result<Any
             let find = column.canonical_name();
             input.find_always(&find).clone()
         }
-        Scalar::Call(function) => eval_function(function.as_ref(), input, txn)?,
-        Scalar::Cast(scalar, data_type) => eval(scalar, input, txn)?.cast(*data_type),
+        Scalar::Call(function) => eval_function(function.as_ref(), input, storage, txn)?,
+        Scalar::Cast(scalar, data_type) => eval(scalar, input, storage, txn)?.cast(*data_type),
     };
     Ok(a)
 }
 
-fn eval_function(function: &F, input: &RecordBatch, txn: i64) -> Result<AnyArray, String> {
-    let e = |scalar| eval(scalar, input, txn);
+fn eval_function(
+    function: &F,
+    input: &RecordBatch,
+    storage: &Mutex<Storage>,
+    txn: i64,
+) -> Result<AnyArray, String> {
+    let e = |scalar| eval(scalar, input, storage, txn);
     let es = |scalars: &Vec<Scalar>| -> Result<Vec<AnyArray>, String> {
         let mut arrays = vec![];
         for scalar in scalars {
-            arrays.push(eval(scalar, input, txn)?)
+            arrays.push(eval(scalar, input, storage, txn)?)
         }
         Ok(arrays)
     };
@@ -48,6 +62,22 @@ fn eval_function(function: &F, input: &RecordBatch, txn: i64) -> Result<AnyArray
         F::Xid => Ok(I64Array::from_values(vec![txn])
             .repeat(input.len())
             .as_any()),
+        F::NextCatalogID => Ok(I64Array::from_values(vec![storage
+            .lock()
+            .unwrap()
+            .next_catalog_id()])
+        .repeat(input.len())
+        .as_any()),
+        F::NextTableID => Ok(
+            I64Array::from_values(vec![storage.lock().unwrap().next_table_id()])
+                .repeat(input.len())
+                .as_any(),
+        ),
+        F::NextIndexID => Ok(
+            I64Array::from_values(vec![storage.lock().unwrap().next_index_id()])
+                .repeat(input.len())
+                .as_any(),
+        ),
         F::Coalesce(varargs) => {
             let mut tail = e(varargs.last().unwrap())?;
             for head in &varargs[..varargs.len() - 1] {

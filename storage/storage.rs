@@ -7,6 +7,7 @@ use crate::{art::Art, heap::*};
 
 #[derive(Clone)]
 pub struct Storage {
+    catalog_count: i64,
     tables: Vec<Heap>,
     indexes: Vec<Art>,
     temp_tables: HashMap<(i64, String), Heap>,
@@ -21,9 +22,20 @@ impl Storage {
         &mut self.tables[id as usize]
     }
 
-    pub fn create_table(&mut self, id: i64) {
-        let new_len = self.tables.len().max(id as usize + 1);
-        self.tables.resize_with(new_len, Heap::default);
+    pub fn next_catalog_id(&self) -> i64 {
+        self.catalog_count
+    }
+
+    pub fn create_catalog(&mut self) {
+        self.catalog_count += 1;
+    }
+
+    pub fn next_table_id(&self) -> i64 {
+        self.tables.len() as i64
+    }
+
+    pub fn create_table(&mut self) {
+        self.tables.push(Heap::default())
     }
 
     pub fn temp_table(&self, txn: i64, name: String) -> &Heap {
@@ -46,9 +58,12 @@ impl Storage {
         &mut self.indexes[id as usize]
     }
 
-    pub fn create_index(&mut self, id: i64) {
-        let new_len = self.indexes.len().max(id as usize + 1);
-        self.indexes.resize_with(new_len, Art::empty);
+    pub fn next_index_id(&self) -> i64 {
+        self.indexes.len() as i64
+    }
+
+    pub fn create_index(&mut self) {
+        self.indexes.push(Art::empty());
     }
 
     pub fn drop_index(&mut self, id: i64) {
@@ -62,6 +77,8 @@ impl Storage {
 
 impl Default for Storage {
     fn default() -> Self {
+        // First 100 catalogs are reserved for system use.
+        let catalog_count = 100;
         // First 100 tables are reserved for system use.
         let mut tables = Vec::with_capacity(0);
         tables.resize_with(100, Heap::default);
@@ -77,6 +94,7 @@ impl Default for Storage {
             statistics.insert(table_id, table_statistics);
         }
         Self {
+            catalog_count,
             tables,
             indexes,
             temp_tables: HashMap::default(),

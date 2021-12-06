@@ -584,7 +584,6 @@ impl Converter {
             name,
             table,
             columns,
-            reserved_id: sequences::next_index_id(),
         }
     }
 
@@ -604,12 +603,7 @@ impl Converter {
             path: q.parent.get().name_path.clone(),
         };
         let columns = self.column_definitions(&q.column_definition_list);
-        let reserved_id = sequences::next_table_id();
-        LogicalCreateTable {
-            name,
-            columns,
-            reserved_id,
-        }
+        LogicalCreateTable { name, columns }
     }
 
     fn column_definitions(
@@ -778,22 +772,19 @@ impl Converter {
                 catalog_id: self.catalog_id,
                 path: q.name_path.clone(),
             },
-            reserved_id: sequences::next_catalog_id(),
         }
     }
 
     fn call(&mut self, q: &ResolvedCallStmtProto) -> Expr {
-        let mut input = LogicalSingleGet;
         let procedure = match q.procedure.get().name.get().as_str() {
-            "create_table" => Procedure::CreateTable(self.expr(&q.argument_list[0], &mut input)),
-            "drop_table" => Procedure::DropTable(self.expr(&q.argument_list[0], &mut input)),
-            "create_index" => Procedure::CreateIndex(self.expr(&q.argument_list[0], &mut input)),
-            "drop_index" => Procedure::DropIndex(self.expr(&q.argument_list[0], &mut input)),
+            "create_catalog" => Procedure::CreateCatalog,
+            "create_table" => Procedure::CreateTable,
+            "create_index" => Procedure::CreateIndex,
             other => panic!("{}", other),
         };
         LogicalCall {
             procedure,
-            input: Box::new(input),
+            input: Box::new(LogicalSingleGet),
         }
     }
 

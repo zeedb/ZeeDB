@@ -10,6 +10,9 @@ pub enum F {
     CurrentDate,
     CurrentTimestamp,
     Xid,
+    NextCatalogID,
+    NextTableID,
+    NextIndexID,
     Coalesce(Vec<Scalar>),
     ConcatString(Vec<Scalar>),
     Hash(Vec<Scalar>),
@@ -133,7 +136,12 @@ pub enum F {
 impl F {
     pub fn len(&self) -> usize {
         match self {
-            F::CurrentDate | F::CurrentTimestamp | F::Xid => 0,
+            F::CurrentDate
+            | F::CurrentTimestamp
+            | F::Xid
+            | F::NextCatalogID
+            | F::NextTableID
+            | F::NextIndexID => 0,
             F::AbsDouble(_)
             | F::AbsInt64(_)
             | F::AcosDouble(_)
@@ -265,7 +273,12 @@ impl std::ops::Index<usize> for F {
 
     fn index(&self, index: usize) -> &Self::Output {
         match self {
-            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!("{}", index),
+            F::CurrentDate
+            | F::CurrentTimestamp
+            | F::Xid
+            | F::NextCatalogID
+            | F::NextTableID
+            | F::NextIndexID => panic!("{}", index),
             F::AbsDouble(a)
             | F::AbsInt64(a)
             | F::AcosDouble(a)
@@ -438,7 +451,12 @@ impl std::ops::Index<usize> for F {
 impl std::ops::IndexMut<usize> for F {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         match self {
-            F::CurrentDate | F::CurrentTimestamp | F::Xid => panic!("{}", index),
+            F::CurrentDate
+            | F::CurrentTimestamp
+            | F::Xid
+            | F::NextCatalogID
+            | F::NextTableID
+            | F::NextIndexID => panic!("{}", index),
             F::AbsDouble(a)
             | F::AbsInt64(a)
             | F::AcosDouble(a)
@@ -895,6 +913,9 @@ impl F {
             "ZetaSQL:atanh" => unary(args, |a| F::AtanhDouble(a)),
             "ZetaSQL:atan2" => binary(args, |a, b| F::Atan2Double(a, b)),
             "ZetaSQL:error" => unary(args, |a| F::Error(a)),
+            "System:next_catalog_id" => thunk(args, || F::NextCatalogID),
+            "System:next_table_id" => thunk(args, || F::NextTableID),
+            "System:next_index_id" => thunk(args, || F::NextIndexID),
             other => panic!("{} is not a known function name", other),
         }
     }
@@ -904,6 +925,9 @@ impl F {
             F::CurrentDate => "CurrentDate",
             F::CurrentTimestamp => "CurrentTimestamp",
             F::Xid => "Xid",
+            F::NextCatalogID => "NextCatalogID",
+            F::NextTableID => "NextTableID",
+            F::NextIndexID => "NextIndexID",
             F::Coalesce(_) => "Coalesce",
             F::ConcatString(_) => "ConcatString",
             F::Hash(_) => "Hash",
@@ -1027,7 +1051,12 @@ impl F {
 
     pub fn arguments(&self) -> Vec<&Scalar> {
         match self {
-            F::CurrentDate | F::CurrentTimestamp | F::Xid => vec![],
+            F::CurrentDate
+            | F::CurrentTimestamp
+            | F::Xid
+            | F::NextCatalogID
+            | F::NextTableID
+            | F::NextIndexID => vec![],
             F::Coalesce(varargs)
             | F::ConcatString(varargs)
             | F::Hash(varargs)
@@ -1274,7 +1303,10 @@ impl F {
             | F::UnixDate { .. }
             | F::UnixMicrosFromTimestamp { .. }
             | F::UnixMillisFromTimestamp { .. }
-            | F::Xid { .. } => DataType::I64,
+            | F::Xid { .. }
+            | F::NextCatalogID
+            | F::NextTableID
+            | F::NextIndexID => DataType::I64,
             F::ChrString { .. }
             | F::ConcatString { .. }
             | F::FormatDate { .. }
@@ -1309,9 +1341,12 @@ impl F {
 
     pub fn map(self, f: impl Fn(Scalar) -> Scalar) -> Self {
         match self {
-            F::CurrentDate => F::CurrentDate,
-            F::CurrentTimestamp => F::CurrentTimestamp,
-            F::Xid => F::Xid,
+            F::CurrentDate
+            | F::CurrentTimestamp
+            | F::Xid
+            | F::NextCatalogID
+            | F::NextTableID
+            | F::NextIndexID => self,
             F::Coalesce(mut varargs) => F::Coalesce(varargs.drain(..).map(f).collect()),
             F::ConcatString(mut varargs) => F::ConcatString(varargs.drain(..).map(f).collect()),
             F::Hash(mut varargs) => F::Hash(varargs.drain(..).map(f).collect()),
