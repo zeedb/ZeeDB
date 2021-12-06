@@ -569,8 +569,8 @@ impl Rule {
                 }
             }
             Rule::LogicalScriptToScript => {
-                if let LogicalScript { statements } = bind {
-                    return single(Script { statements });
+                if let LogicalScript { stmts } = bind {
+                    return single(Script { stmts });
                 }
             }
         }

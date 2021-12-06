@@ -98,8 +98,8 @@ impl TestRunner {
         }
     }
 
-    pub fn test(&mut self, sql: &str, variables: Vec<(String, Value)>) -> String {
-        match self.query(sql, &variables) {
+    pub fn test(&mut self, sql: &str, params: Vec<(String, Value)>) -> String {
+        match self.query(sql, &params) {
             Ok(response) => {
                 let batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
                 if batch.len() == 0 {
@@ -112,8 +112,8 @@ impl TestRunner {
         }
     }
 
-    pub fn bench(&mut self, sql: &str, variables: Vec<(String, Value)>) -> Vec<JsonTraceEvent> {
-        let query_response = self.query(sql, &variables).unwrap();
+    pub fn bench(&mut self, sql: &str, params: Vec<(String, Value)>) -> Vec<JsonTraceEvent> {
+        let query_response = self.query(sql, &params).unwrap();
         let trace_request = TraceRequest {
             txn: query_response.txn,
         };
@@ -127,11 +127,11 @@ impl TestRunner {
     pub fn query(
         &mut self,
         sql: &str,
-        variables: &Vec<(String, Value)>,
+        params: &Vec<(String, Value)>,
     ) -> Result<QueryResponse, Status> {
         let request = QueryRequest {
             sql: sql.to_string(),
-            variables: variables
+            params: params
                 .iter()
                 .map(|(k, v)| (k.clone(), v.into_proto()))
                 .collect(),

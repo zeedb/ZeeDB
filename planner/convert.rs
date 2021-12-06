@@ -14,11 +14,11 @@ use zetasql::{
 #[log::trace]
 pub fn convert(stmts: &Vec<AnyResolvedStatementProto>, catalog_id: i64) -> Expr {
     let mut converter = Converter { catalog_id };
-    let mut statements: Vec<Expr> = stmts.iter().map(|s| converter.any_stmt(s)).collect();
-    if statements.len() == 1 {
-        statements.pop().unwrap()
+    let mut stmts: Vec<Expr> = stmts.iter().map(|s| converter.any_stmt(s)).collect();
+    if stmts.len() == 1 {
+        stmts.pop().unwrap()
     } else {
-        LogicalScript { statements }
+        LogicalScript { stmts }
     }
 }
 

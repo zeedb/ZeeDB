@@ -73,19 +73,19 @@ impl Coordinator for CoordinatorNode {
 fn submit(request: QueryRequest, txn: i64) -> Result<RecordBatch, Status> {
     let _session = log::session(txn, 0, None);
     let _span = log::enter(&request.sql);
-    let variables = request
-        .variables
+    let params = request
+        .params
         .iter()
         .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter).data_type()))
         .collect();
-    let mut expr = planner::plan(request.sql, variables, request.catalog_id, txn)
+    let mut expr = planner::plan(request.sql, params, request.catalog_id, txn)
         .map_err(Status::invalid_argument)?;
-    let variables = request
-        .variables
+    let params = request
+        .params
         .iter()
         .map(|(name, parameter)| (name.clone(), Value::from_proto(parameter)))
         .collect();
-    expr.replace(&variables);
+    expr.replace(&params);
     execute(&expr, txn)
 }
 

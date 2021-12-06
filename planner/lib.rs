@@ -24,7 +24,7 @@ mod unnest;
 
 pub fn plan(
     sql: String,
-    variables: HashMap<String, DataType>,
+    params: HashMap<String, DataType>,
     catalog_id: i64,
     txn: i64,
 ) -> Result<Expr, String> {
@@ -33,7 +33,7 @@ pub fn plan(
     // This step is not cached because the catalog changes when a DDL statement is executed.
     let catalog = crate::catalog::simple_catalog(table_names, catalog_id, txn);
     // Calling ZetaSQL and optimizing the expression is expensive so we cache it.
-    cached_analyze_optimize(sql, variables, catalog)
+    cached_analyze_optimize(sql, params, catalog)
 }
 
 fn cached_table_names(sql: &str) -> Vec<Vec<String>> {
@@ -50,7 +50,7 @@ fn cached_table_names(sql: &str) -> Vec<Vec<String>> {
 
 fn cached_analyze_optimize(
     sql: String,
-    variables: HashMap<String, DataType>,
+    params: HashMap<String, DataType>,
     catalog: SimpleCatalogProvider,
 ) -> Result<Expr, String> {
     // TODO this should be an LRU cache.
@@ -58,20 +58,19 @@ fn cached_analyze_optimize(
         Lazy::new(Default::default);
     let mut key = Key {
         sql,
-        variables: variables
+        params: params
             .iter()
             .map(|(name, data_type)| (name.clone(), data_type.clone()))
             .collect(),
         catalog,
     };
-    key.variables
-        .sort_by(|(left, _), (right, _)| left.cmp(right));
+    key.params.sort_by(|(left, _), (right, _)| left.cmp(right));
     ANALYZE_CACHE
         .lock()
         .unwrap()
         .entry(key)
         .or_insert_with_key(|key| {
-            let expr = crate::parser::analyze(&key.sql, &variables, &key.catalog)?;
+            let expr = crate::parser::analyze(&key.sql, &params, &key.catalog)?;
             Ok(crate::optimize::optimize(expr, key.catalog.indexes()))
         })
         .clone()
@@ -80,6 +79,6 @@ fn cached_analyze_optimize(
 #[derive(PartialEq, Eq, Hash)]
 struct Key {
     sql: String,
-    variables: Vec<(String, DataType)>,
+    params: Vec<(String, DataType)>,
     catalog: SimpleCatalogProvider,
 }

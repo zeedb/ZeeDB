@@ -555,7 +555,7 @@ impl Runner {
             sql: sql.to_string(),
             catalog_id: self.catalog_id,
             txn: None,
-            variables: HashMap::default(),
+            params: HashMap::default(),
         };
         let _response = self.client.statement(request).await?.into_inner();
         Ok(0) // TODO
@@ -566,7 +566,7 @@ impl Runner {
             sql: sql.to_string(),
             catalog_id: self.catalog_id,
             txn: None,
-            variables: HashMap::default(),
+            params: HashMap::default(),
         };
         let response = self.client.query(request).await?.into_inner();
         let record_batch: RecordBatch = bincode::deserialize(&response.record_batch).unwrap();
@@ -905,7 +905,7 @@ async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
             sql: format!("create database test{:x}", next_catalog),
             catalog_id: ROOT_CATALOG_ID,
             txn: None,
-            variables: HashMap::default(),
+            params: HashMap::default(),
         })
         .await
         .unwrap();
@@ -918,7 +918,7 @@ async fn next_catalog(client: &mut CoordinatorClient<Channel>) -> i64 {
             ),
             catalog_id: METADATA_CATALOG_ID,
             txn: None,
-            variables: HashMap::default(),
+            params: HashMap::default(),
         })
         .await
         .unwrap()

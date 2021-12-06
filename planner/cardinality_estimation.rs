@@ -59,8 +59,8 @@ pub(crate) fn compute_logical_props(mid: MultiExprID, ss: &SearchSpace) -> Logic
         } => limit_offset(*limit, *offset, &ss[leaf(input)].props),
         LogicalSort { input, .. } => ss[leaf(input)].props.clone(),
         LogicalUnion { left, right } => union(&ss[leaf(left)].props, &ss[leaf(right)].props),
-        LogicalScript { statements } => {
-            let last = statements.last().unwrap();
+        LogicalScript { stmts } => {
+            let last = stmts.last().unwrap();
             ss[leaf(last)].props.clone()
         }
         LogicalExplain { input, .. } => ss[leaf(input)].props.clone(),

@@ -339,9 +339,9 @@ impl IndentPrint for Expr {
                 newline(f, indent)?;
                 right.indent_print(f, indent + 1)
             }
-            Expr::LogicalScript { statements } | Expr::Script { statements } => {
+            Expr::LogicalScript { stmts } | Expr::Script { stmts } => {
                 write!(f, "{}", self.name())?;
-                for expr in statements {
+                for expr in stmts {
                     newline(f, indent)?;
                     expr.indent_print(f, indent + 1)?;
                 }

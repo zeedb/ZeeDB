@@ -11,7 +11,7 @@ service Coordinator {
 
 message QueryRequest {
   required string sql = 1;
-  map<string, Parameter> variables = 2;
+  map<string, Parameter> params = 2;
   required int64 catalog_id = 3;
   optional int64 txn = 4;
 }

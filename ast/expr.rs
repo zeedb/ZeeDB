@@ -143,7 +143,7 @@ pub enum Expr {
         name: Name,
     },
     LogicalScript {
-        statements: Vec<Expr>,
+        stmts: Vec<Expr>,
     },
     LogicalCall {
         procedure: Procedure,
@@ -265,7 +265,7 @@ pub enum Expr {
         input: Box<Expr>,
     },
     Script {
-        statements: Vec<Expr>,
+        stmts: Vec<Expr>,
     },
     Call {
         procedure: Procedure,
@@ -391,7 +391,7 @@ impl Expr {
             | Expr::SeqScan { .. }
             | Expr::GetTempTable { .. }
             | Expr::LogicalRewrite { .. } => 0,
-            Expr::LogicalScript { statements } | Expr::Script { statements } => statements.len(),
+            Expr::LogicalScript { stmts } | Expr::Script { stmts } => stmts.len(),
         }
     }
 
@@ -642,7 +642,7 @@ impl Expr {
         }
     }
 
-    pub fn replace(&mut self, variables: &HashMap<String, Value>) {
+    pub fn replace(&mut self, params: &HashMap<String, Value>) {
         match self {
             Expr::LogicalGet { predicates, .. }
             | Expr::LogicalFilter { predicates, .. }
@@ -650,18 +650,18 @@ impl Expr {
             | Expr::SeqScan { predicates, .. }
             | Expr::Filter { predicates, .. } => {
                 for scalar in predicates {
-                    scalar.replace(variables)
+                    scalar.replace(params)
                 }
             }
             Expr::LogicalMap { projects, .. } | Expr::Map { projects, .. } => {
                 for (scalar, _) in projects {
-                    scalar.replace(variables)
+                    scalar.replace(params)
                 }
             }
             Expr::LogicalValues { values, .. } | Expr::Values { values, .. } => {
                 for values in values {
                     for scalar in values {
-                        scalar.replace(variables)
+                        scalar.replace(params)
                     }
                 }
             }
@@ -669,10 +669,10 @@ impl Expr {
                 predicates, lookup, ..
             } => {
                 for scalar in predicates {
-                    scalar.replace(variables)
+                    scalar.replace(params)
                 }
                 for scalar in lookup {
-                    scalar.replace(variables)
+                    scalar.replace(params)
                 }
             }
             Expr::Leaf { .. }
@@ -720,7 +720,7 @@ impl Expr {
             }
         }
         for i in 0..self.len() {
-            self[i].replace(variables)
+            self[i].replace(params)
         }
     }
 
@@ -957,7 +957,7 @@ impl Expr {
                 .iter()
                 .map(|column| (column.canonical_name(), column.data_type))
                 .collect(),
-            Script { statements, .. } => statements.last().unwrap().schema(),
+            Script { stmts, .. } => stmts.last().unwrap().schema(),
             Explain { .. } => vec![("plan".to_string(), DataType::String)],
             CreateTempTable { .. } | Insert { .. } | Call { .. } => dummy_schema(),
             Leaf { .. }
@@ -1059,7 +1059,7 @@ impl std::ops::Index<usize> for Expr {
             | Expr::SeqScan { .. }
             | Expr::GetTempTable { .. }
             | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
-            Expr::LogicalScript { statements } | Expr::Script { statements } => &statements[index],
+            Expr::LogicalScript { stmts } | Expr::Script { stmts } => &stmts[index],
         }
     }
 }
@@ -1127,9 +1127,7 @@ impl std::ops::IndexMut<usize> for Expr {
             | Expr::SeqScan { .. }
             | Expr::GetTempTable { .. }
             | Expr::LogicalRewrite { .. } => panic!("{} has no inputs", self.name()),
-            Expr::LogicalScript { statements } | Expr::Script { statements } => {
-                &mut statements[index]
-            }
+            Expr::LogicalScript { stmts } | Expr::Script { stmts } => &mut stmts[index],
         }
     }
 }

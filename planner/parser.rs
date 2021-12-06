@@ -36,7 +36,7 @@ pub fn format(sql: &str) -> String {
 pub fn split(sql: &str) -> Vec<String> {
     log::rpc(async move {
         let mut parser = parser().await;
-        let mut statements = vec![];
+        let mut stmts = vec![];
         let mut offset = 0usize;
         while offset < sql.len() {
             let request = ExtractTableNamesFromNextStatementRequest {
@@ -53,17 +53,17 @@ pub fn split(sql: &str) -> Vec<String> {
                 .unwrap()
                 .into_inner();
             let next_offset = response.resume_byte_position.unwrap() as usize;
-            statements.push(sql[offset..next_offset].to_string());
+            stmts.push(sql[offset..next_offset].to_string());
             offset = next_offset;
         }
-        statements
+        stmts
     })
 }
 
 #[log::trace]
 pub fn analyze(
     sql: &str,
-    variables: &HashMap<String, DataType>,
+    params: &HashMap<String, DataType>,
     catalog: &SimpleCatalogProvider,
 ) -> Result<Expr, String> {
     // Parse each statement in the script, one at a time, in a loop.
@@ -72,7 +72,7 @@ pub fn analyze(
     let mut stmts = vec![];
     loop {
         // Parse the next statement.
-        let (stmt, next_offset) = analyze_next_statement(sql, offset, variables, &simple_catalog)?;
+        let (stmt, next_offset) = analyze_next_statement(sql, offset, params, &simple_catalog)?;
         offset = next_offset;
         stmts.push(stmt);
         // If we've parsed the entire expression, return.
@@ -109,7 +109,7 @@ pub fn extract_table_names_from_stmt(sql: &str) -> Vec<Vec<String>> {
 fn analyze_next_statement(
     sql: &str,
     offset: i32,
-    variables: &HashMap<String, DataType>,
+    params: &HashMap<String, DataType>,
     simple_catalog: &SimpleCatalogProto,
 ) -> Result<(AnyResolvedStatementProto, i32), String> {
     let request = AnalyzeRequest {
@@ -118,7 +118,7 @@ fn analyze_next_statement(
             default_timezone: Some("UTC".to_string()),
             language_options: Some(language_options()),
             prune_unused_columns: Some(true),
-            query_parameters: variables
+            query_parameters: params
                 .iter()
                 .map(|(name, data_type)| QueryParameterProto {
                     name: Some(name.clone()),

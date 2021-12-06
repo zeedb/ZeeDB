@@ -150,7 +150,7 @@ fn rewrite_with(expr: Expr) -> Result<Expr, Expr> {
             left,
             right,
         } => Ok(LogicalScript {
-            statements: vec![
+            stmts: vec![
                 LogicalCreateTempTable {
                     name: name,
                     columns,
@@ -727,8 +727,8 @@ fn rewrite_logical_rewrite(expr: Expr) -> Result<Expr, Expr> {
 }
 
 fn analyze_bootstrap(sql: &str) -> Expr {
-    let variables = HashMap::default();
-    crate::parser::analyze(sql, &variables, &SimpleCatalogProvider::MetadataCatalog).unwrap()
+    let params = HashMap::default();
+    crate::parser::analyze(sql, &params, &SimpleCatalogProvider::MetadataCatalog).unwrap()
 }
 
 fn bottom_up_rewrite(mut expr: Expr, f: impl Fn(Expr) -> Result<Expr, Expr> + Copy) -> Expr {

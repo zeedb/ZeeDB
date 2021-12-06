@@ -74,13 +74,13 @@ impl Scalar {
         }
     }
 
-    pub fn replace(&mut self, variables: &HashMap<String, Value>) {
+    pub fn replace(&mut self, params: &HashMap<String, Value>) {
         if let Scalar::Parameter(name, _) = self {
-            let value = variables.get(name).unwrap().clone();
+            let value = params.get(name).unwrap().clone();
             *self = Scalar::Literal(value)
         }
         for i in 0..self.len() {
-            self[i].replace(variables)
+            self[i].replace(params)
         }
     }
 

@@ -134,7 +134,7 @@ pub enum Node {
     },
     Script {
         offset: usize,
-        statements: Vec<Node>,
+        stmts: Vec<Node>,
     },
     Call {
         procedure: Procedure,
@@ -330,14 +330,14 @@ impl Node {
                 tid,
                 input: Box::new(Node::compile(*input)),
             },
-            Script { statements } => {
+            Script { stmts } => {
                 let mut compiled = vec![];
-                for expr in statements {
+                for expr in stmts {
                     compiled.push(Node::compile(expr))
                 }
                 Node::Script {
                     offset: 0,
-                    statements: compiled,
+                    stmts: compiled,
                 }
             }
             Call { procedure, input } => Node::Call {
@@ -1030,11 +1030,11 @@ impl Node {
                 }
                 Next::Page(input)
             }
-            Node::Script { offset, statements } => {
-                while *offset < statements.len() {
-                    match statements[*offset].next(storage, txn) {
+            Node::Script { offset, stmts } => {
+                while *offset < stmts.len() {
+                    match stmts[*offset].next(storage, txn) {
                         Next::Page(batch) => {
-                            if *offset == statements.len() - 1 {
+                            if *offset == stmts.len() - 1 {
                                 return Next::Page(batch);
                             }
                         }

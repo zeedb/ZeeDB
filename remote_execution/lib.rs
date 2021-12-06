@@ -37,14 +37,14 @@ impl RecordStream {
 /// Submit a query to the coordinator.
 pub fn submit(
     sql: &str,
-    variables: &HashMap<String, Value>,
+    params: &HashMap<String, Value>,
     catalog_id: i64,
     txn: Option<i64>,
 ) -> RecordBatch {
     log::rpc(async move {
         let request = QueryRequest {
             sql: sql.to_string(),
-            variables: variables
+            params: params
                 .iter()
                 .map(|(name, value)| (name.clone(), value.into_proto()))
                 .collect(),
