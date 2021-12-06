@@ -1100,7 +1100,6 @@ dependencies = [
  "log 0.1.0",
  "once_cell",
  "prost-types",
- "rand",
  "remote_execution",
  "rpc",
  "statistics",

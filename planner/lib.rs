@@ -33,7 +33,7 @@ pub fn plan(
     // This step is not cached because the catalog changes when a DDL statement is executed.
     let catalog = crate::catalog::simple_catalog(table_names, catalog_id, txn);
     // Calling ZetaSQL and optimizing the expression is expensive so we cache it.
-    cached_analyze_optimize(sql, variables, catalog, txn)
+    cached_analyze_optimize(sql, variables, catalog)
 }
 
 fn cached_table_names(sql: &str) -> Vec<Vec<String>> {
@@ -52,7 +52,6 @@ fn cached_analyze_optimize(
     sql: String,
     variables: HashMap<String, DataType>,
     catalog: SimpleCatalogProvider,
-    txn: i64,
 ) -> Result<Expr, String> {
     // TODO this should be an LRU cache.
     static ANALYZE_CACHE: Lazy<Mutex<HashMap<Key, Result<Expr, String>>>> =
@@ -73,7 +72,7 @@ fn cached_analyze_optimize(
         .entry(key)
         .or_insert_with_key(|key| {
             let expr = crate::parser::analyze(&key.sql, &variables, &key.catalog)?;
-            Ok(crate::optimize::optimize(expr, txn))
+            Ok(crate::optimize::optimize(expr, key.catalog.indexes()))
         })
         .clone()
 }
@@ -83,5 +82,4 @@ struct Key {
     sql: String,
     variables: Vec<(String, DataType)>,
     catalog: SimpleCatalogProvider,
-    // TODO indexes need to be part of this.
 }

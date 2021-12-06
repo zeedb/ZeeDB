@@ -15,8 +15,8 @@ pub(crate) struct SearchSpace {
     pub mexprs: Vec<MultiExpr>,
     pub memo_first: HashMap<Expr, MultiExprID>,
     pub memo_all: HashMap<(GroupID, Expr), MultiExprID>,
-    pub txn: i64,
     pub temp_tables: HashMap<String, LogicalProps>,
+    pub indexes: Vec<ast::Index>,
 }
 
 #[derive(Copy, Clone, Hash, Eq, Ord, PartialOrd, PartialEq)]
@@ -90,9 +90,9 @@ pub(crate) enum PhysicalProp {
 }
 
 impl SearchSpace {
-    pub fn empty(txn: i64) -> Self {
+    pub fn empty(indexes: Vec<ast::Index>) -> Self {
         Self {
-            txn,
+            indexes,
             ..Default::default()
         }
     }

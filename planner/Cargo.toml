@@ -15,7 +15,6 @@ kernel = { path = "../kernel" }
 log = { path = "../log" }
 once_cell = "1.7.2"
 prost-types = "0.7.0"
-rand = { version = "0.8.2", features = ["small_rng"]}
 remote_execution = { path = "../remote_execution" }
 rpc = { path = "../rpc" }
 statistics = { path = "../statistics" }

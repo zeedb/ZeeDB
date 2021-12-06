@@ -9,7 +9,11 @@ use zetasql::{SimpleCatalogProto, SimpleColumnProto, SimpleTableProto};
 #[derive(Hash, PartialEq, Eq)]
 pub enum SimpleCatalogProvider {
     MetadataCatalog,
-    UserCatalog(i64, UserCatalog),
+    UserCatalog {
+        catalog_id: i64,
+        root_catalog: UserCatalog,
+        all_indexes: Vec<Index>,
+    },
 }
 
 #[derive(Hash, PartialEq, Eq, Default)]
@@ -38,14 +42,21 @@ impl SimpleCatalogProvider {
             SimpleCatalogProvider::MetadataCatalog => {
                 crate::bootstrap::bootstrap_metadata_catalog()
             }
-            SimpleCatalogProvider::UserCatalog(_, catalog) => catalog.to_proto(),
+            SimpleCatalogProvider::UserCatalog { root_catalog, .. } => root_catalog.to_proto(),
         }
     }
 
     pub fn id(&self) -> i64 {
         match self {
             SimpleCatalogProvider::MetadataCatalog => METADATA_CATALOG_ID,
-            SimpleCatalogProvider::UserCatalog(id, _) => *id,
+            SimpleCatalogProvider::UserCatalog { catalog_id, .. } => *catalog_id,
+        }
+    }
+
+    pub fn indexes(&self) -> Vec<Index> {
+        match self {
+            SimpleCatalogProvider::MetadataCatalog => vec![],
+            SimpleCatalogProvider::UserCatalog { all_indexes, .. } => all_indexes.clone(),
         }
     }
 }
@@ -95,6 +106,7 @@ pub fn simple_catalog(
     }
     let mut catalog_id_cache = HashMap::new();
     let mut root_catalog = UserCatalog::default();
+    let mut all_indexes = vec![];
     for name in &table_names {
         let mut catalog_id = catalog_id;
         let mut catalog = &mut root_catalog;
@@ -110,27 +122,32 @@ pub fn simple_catalog(
                 id: table_id,
                 name: table_name.clone(),
                 columns: table_columns(table_id, txn),
-            })
+            });
+            all_indexes.append(&mut indexes(table_id, txn));
         }
     }
-    SimpleCatalogProvider::UserCatalog(catalog_id, root_catalog)
+    SimpleCatalogProvider::UserCatalog {
+        catalog_id,
+        root_catalog,
+        all_indexes,
+    }
 }
 
 macro_rules! analyze_once {
-    ($sql:ident, $variables:expr, $txn:expr) => {{
+    ($sql:ident, $variables:expr) => {{
         static CACHE: OnceCell<Expr> = OnceCell::new();
-        CACHE.get_or_init(|| analyze($sql, $variables, $txn))
+        CACHE.get_or_init(|| analyze($sql, $variables))
     }};
 }
 
-fn analyze(sql: &str, variables: &HashMap<String, Value>, txn: i64) -> Expr {
+fn analyze(sql: &str, variables: &HashMap<String, Value>) -> Expr {
     let variables = variables
         .iter()
         .map(|(name, value)| (name.clone(), value.data_type()))
         .collect();
-    let expr =
-        crate::parser::analyze(sql, &variables, &SimpleCatalogProvider::MetadataCatalog).unwrap();
-    crate::optimize::optimize(expr, txn)
+    let catalog = SimpleCatalogProvider::MetadataCatalog;
+    let expr = crate::parser::analyze(sql, &variables, &catalog).unwrap();
+    crate::optimize::optimize(expr, catalog.indexes())
 }
 
 #[log::trace]
@@ -141,7 +158,7 @@ pub fn indexes(table_id: i64, txn: i64) -> Vec<Index> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
     let sql = "select index_id, column_name from index join index_column using (index_id) join column using (table_id, column_id) where table_id = @table_id order by index_id, index_order";
-    let expr = analyze_once!(sql, &variables, txn);
+    let expr = analyze_once!(sql, &variables);
     let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let mut indexes: Vec<Index> = vec![];
     let (_, index_id) = batch.columns.remove(0);
@@ -177,7 +194,7 @@ fn catalog_name_to_id(parent_catalog_id: i64, catalog_name: &String, txn: i64) -
         Value::String(Some(catalog_name.clone())),
     );
     let sql = "select catalog_id from catalog where parent_catalog_id = @parent_catalog_id and catalog_name = @catalog_name";
-    let expr = analyze_once!(sql, &variables, txn);
+    let expr = analyze_once!(sql, &variables);
     let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let (_, column) = batch.columns.remove(0);
     column.as_i64().get(0).unwrap()
@@ -193,7 +210,7 @@ fn table_name_to_id(catalog_id: i64, table_name: &String, txn: i64) -> Option<i6
     );
     let sql =
         "select table_id from table where catalog_id = @catalog_id and table_name = @table_name";
-    let expr = analyze_once!(sql, &variables, txn);
+    let expr = analyze_once!(sql, &variables);
     let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let (_, column) = batch.columns.remove(0);
     column.as_i64().get(0)
@@ -204,7 +221,7 @@ fn table_columns(table_id: i64, txn: i64) -> Vec<UserColumn> {
     let mut variables = HashMap::new();
     variables.insert("table_id".to_string(), Value::I64(Some(table_id)));
     let sql = "select column_name, column_type from column where table_id = @table_id";
-    let expr = analyze_once!(sql, &variables, txn);
+    let expr = analyze_once!(sql, &variables);
     let mut batch = execute_on_coordinator(sql, expr, &variables, txn);
     let mut columns = vec![];
     let (_, column_name) = batch.columns.remove(0);

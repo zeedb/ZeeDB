@@ -379,17 +379,19 @@ impl Rule {
                 } = bind
                 {
                     let mut results = vec![];
-                    for index in crate::catalog::indexes(table.id, ss.txn) {
-                        if let Some((lookup, predicates)) = index.matches(&predicates) {
-                            results.push(IndexScan {
-                                include_existing: true,
-                                projects: projects.clone(),
-                                predicates,
-                                lookup,
-                                index: index.clone(),
-                                table: table.clone(),
-                                input: Box::new(LogicalSingleGet),
-                            });
+                    for index in &ss.indexes {
+                        if index.table_id == table.id {
+                            if let Some((lookup, predicates)) = index.matches(&predicates) {
+                                results.push(IndexScan {
+                                    include_existing: true,
+                                    projects: projects.clone(),
+                                    predicates,
+                                    lookup,
+                                    index: index.clone(),
+                                    table: table.clone(),
+                                    input: Box::new(LogicalSingleGet),
+                                });
+                            }
                         }
                     }
                     return results;
@@ -442,19 +444,22 @@ impl Rule {
                     } = *left
                     {
                         let mut results = vec![];
-                        for index in crate::catalog::indexes(table.id, ss.txn) {
-                            if let Some((lookup, mut predicates)) = index.matches(join.predicates())
-                            {
-                                predicates.extend(table_predicates.clone());
-                                results.push(IndexScan {
-                                    include_existing: true,
-                                    projects: projects.clone(),
-                                    predicates,
-                                    lookup,
-                                    index: index.clone(),
-                                    table: table.clone(),
-                                    input: right.clone(),
-                                });
+                        for index in &ss.indexes {
+                            if index.table_id == table.id {
+                                if let Some((lookup, mut predicates)) =
+                                    index.matches(join.predicates())
+                                {
+                                    predicates.extend(table_predicates.clone());
+                                    results.push(IndexScan {
+                                        include_existing: true,
+                                        projects: projects.clone(),
+                                        predicates,
+                                        lookup,
+                                        index: index.clone(),
+                                        table: table.clone(),
+                                        input: right.clone(),
+                                    });
+                                }
                             }
                         }
                         return results;
@@ -521,7 +526,12 @@ impl Rule {
                     columns,
                 } = bind
                 {
-                    let indexes = crate::catalog::indexes(table.id, ss.txn);
+                    let indexes = ss
+                        .indexes
+                        .iter()
+                        .filter(|index| index.table_id == table.id)
+                        .cloned()
+                        .collect();
                     return single(Insert {
                         table,
                         indexes,

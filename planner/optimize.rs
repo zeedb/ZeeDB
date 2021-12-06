@@ -5,18 +5,18 @@ use crate::{cost::*, rule::*, search_space::*};
 const TRACE: bool = false;
 
 #[log::trace]
-pub fn optimize(expr: Expr, txn: i64) -> Expr {
+pub fn optimize(expr: Expr, indexes: Vec<Index>) -> Expr {
     let expr = crate::rewrite::rewrite_plan(expr);
-    let mut expr = search_for_best_plan(expr, txn);
+    let mut expr = search_for_best_plan(expr, indexes);
     crate::distribution::set_hash_columns(&mut expr);
     crate::distribution::set_stages(&mut expr);
-    crate::distribution::set_workers(&mut expr, txn);
+    crate::distribution::set_workers(&mut expr);
     expr
 }
 
 #[log::trace]
-fn search_for_best_plan(mut expr: Expr, txn: i64) -> Expr {
-    let mut ss = SearchSpace::empty(txn);
+fn search_for_best_plan(mut expr: Expr, indexes: Vec<Index>) -> Expr {
+    let mut ss = SearchSpace::empty(indexes);
     ss.copy_in_new(&mut expr);
     let gid = match expr {
         Leaf { gid } => GroupID(gid),
