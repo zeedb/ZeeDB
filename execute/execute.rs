@@ -14,7 +14,6 @@ use crate::{hash_table::HashTable, index::PackedBytes};
 #[derive(Debug)]
 pub enum Node {
     TableFreeScan {
-        worker: i32,
         empty: bool,
     },
     SeqScan {
@@ -76,7 +75,6 @@ pub enum Node {
         scan: Option<Vec<Arc<Page>>>,
     },
     SimpleAggregate {
-        worker: i32,
         finished: bool,
         aggregate: Vec<AggregateExpr>,
         input: Box<Node>,
@@ -112,7 +110,6 @@ pub enum Node {
         stream: Option<RemoteQuery>,
     },
     Gather {
-        worker: i32,
         stage: i32,
         input: Option<Expr>,
         stream: Option<RemoteQuery>,
@@ -156,10 +153,7 @@ pub struct RemoteQuery {
 impl Node {
     pub fn compile(expr: Expr) -> Self {
         match expr {
-            TableFreeScan { worker } => Node::TableFreeScan {
-                worker: worker.unwrap(),
-                empty: false,
-            },
+            TableFreeScan => Node::TableFreeScan { empty: false },
             SeqScan {
                 projects,
                 predicates,
@@ -256,12 +250,8 @@ impl Node {
                 scan: None,
             },
             SimpleAggregate {
-                worker,
-                aggregate,
-                input,
-                ..
+                aggregate, input, ..
             } => Node::SimpleAggregate {
-                worker: worker.unwrap(),
                 finished: false,
                 aggregate,
                 input: Box::new(Node::compile(*input)),
@@ -309,12 +299,7 @@ impl Node {
                 stream: None,
                 stage: stage.unwrap(),
             },
-            Gather {
-                input,
-                worker,
-                stage,
-            } => Node::Gather {
-                worker: worker.unwrap(),
+            Gather { input, stage } => Node::Gather {
                 stage: stage.unwrap(),
                 input: Some(*input),
                 stream: None,
@@ -398,9 +383,9 @@ impl Node {
     pub fn next(&mut self, storage: &Mutex<Storage>, txn: i64) -> Next {
         let _span = log::enter(self.name());
         match self {
-            Node::TableFreeScan { worker, empty } => {
+            Node::TableFreeScan { empty } => {
                 // Produce a single row on worker 0.
-                if *empty || globals::WORKER.get() != *worker {
+                if *empty || globals::WORKER.get() != leader(txn) {
                     return Next::End;
                 }
                 *empty = true;
@@ -782,12 +767,11 @@ impl Node {
                 Next::Page(next)
             }
             Node::SimpleAggregate {
-                worker,
                 finished,
                 aggregate,
                 input,
             } => {
-                if globals::WORKER.get() != *worker {
+                if globals::WORKER.get() != leader(txn) {
                     return Next::End;
                 }
                 if *finished {
@@ -939,12 +923,11 @@ impl Node {
                 stream.as_mut().unwrap().inner.next()
             }
             Node::Gather {
-                worker,
                 stage,
                 input,
                 stream,
             } => {
-                if globals::WORKER.get() != *worker {
+                if globals::WORKER.get() != leader(txn) {
                     return Next::End;
                 }
                 if let Some(expr) = input.take() {
@@ -1248,4 +1231,11 @@ fn rids(tids: &[i64], pid: usize) -> I32Array {
         rids.push(Some(rid as i32));
     }
     rids
+}
+
+/// We select a single worker as the "leader" for each transaction in a round-robin manner.
+/// The leader is responsible for executing operations that take place on a single node.
+fn leader(txn: i64) -> i32 {
+    let n: i64 = std::env::var("WORKER_COUNT").unwrap().parse().unwrap();
+    (txn % n) as i32
 }

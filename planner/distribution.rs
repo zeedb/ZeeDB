@@ -50,18 +50,3 @@ pub fn set_stages(expr: &mut Expr) {
     let mut next_stage = 1;
     top_down_rewrite(expr, &mut next_stage);
 }
-
-pub fn set_workers(expr: &mut Expr) {
-    fn top_down_rewrite(expr: &mut Expr) {
-        if let TableFreeScan { worker } | Gather { worker, .. } | SimpleAggregate { worker, .. } =
-            expr
-        {
-            // TODO decide this in the execution module instead.
-            *worker = Some(0)
-        }
-        for i in 0..expr.len() {
-            top_down_rewrite(&mut expr[i])
-        }
-    }
-    top_down_rewrite(expr);
-}

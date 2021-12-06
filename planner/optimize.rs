@@ -10,7 +10,6 @@ pub fn optimize(expr: Expr, indexes: Vec<Index>) -> Expr {
     let mut expr = search_for_best_plan(expr, indexes);
     crate::distribution::set_hash_columns(&mut expr);
     crate::distribution::set_stages(&mut expr);
-    crate::distribution::set_workers(&mut expr);
     expr
 }
 

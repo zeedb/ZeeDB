@@ -347,14 +347,13 @@ impl Rule {
             }
             Rule::InsertGather => {
                 return single(Gather {
-                    worker: None,
                     stage: None,
                     input: Box::new(bind),
                 });
             }
             Rule::LogicalGetToTableFreeScan => {
                 if let LogicalSingleGet = bind {
-                    return single(TableFreeScan { worker: None });
+                    return single(TableFreeScan);
                 }
             }
             Rule::LogicalGetToSeqScan => {
@@ -613,11 +612,7 @@ impl Rule {
 
 fn to_aggregate(group_by: Vec<Column>, aggregate: Vec<AggregateExpr>, input: Box<Expr>) -> Expr {
     if group_by.is_empty() {
-        SimpleAggregate {
-            worker: None,
-            aggregate,
-            input,
-        }
+        SimpleAggregate { aggregate, input }
     } else {
         let partition_by = group_by.iter().map(|c| Scalar::Column(c.clone())).collect();
         let (partition_by, input) = create_hash_column(partition_by, *input);

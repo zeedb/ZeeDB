@@ -155,9 +155,7 @@ pub enum Expr {
     LogicalRewrite {
         sql: String,
     },
-    TableFreeScan {
-        worker: Option<i32>,
-    },
+    TableFreeScan,
     SeqScan {
         projects: Vec<Column>,
         predicates: Vec<Scalar>,
@@ -210,7 +208,6 @@ pub enum Expr {
         columns: Vec<Column>,
     },
     SimpleAggregate {
-        worker: Option<i32>,
         aggregate: Vec<AggregateExpr>,
         input: Box<Expr>,
     },
@@ -247,7 +244,6 @@ pub enum Expr {
     },
     /// Gather input on a single node for sorting.
     Gather {
-        worker: Option<i32>,
         stage: Option<i32>,
         input: Box<Expr>,
     },
